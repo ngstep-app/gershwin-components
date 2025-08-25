@@ -4,6 +4,8 @@
 //
 
 #import "BhyveController.h"
+#import <unistd.h>
+#import <sys/socket.h>
 #import "BhyveISOSelectionStep.h"
 #import "BhyveConfigurationStep.h"
 #import "BhyveRunningStep.h"
