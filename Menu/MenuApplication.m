@@ -55,16 +55,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL _cmd, NSRect dirtyRect);
 
 @implementation MenuApplication
 
-// Method swizzling to remove bottom line from menus
-+ (void)load
-{
-    static BOOL hasSwizzled = NO;
-    if (!hasSwizzled) {
-        NSLog(@"MenuApplication: Setting up method swizzling to remove menu bottom line");
-        [self swizzleMenuViewDrawing];
-        hasSwizzled = YES;
-    }
-}
+// Method swizzling moved from +load to avoid runtime initialization conflicts
 
 + (void)swizzleMenuViewDrawing
 {
@@ -204,6 +195,14 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
 - (void)finishLaunching
 {
     NSLog(@"MenuApplication: ===== FINISH LAUNCHING CALLED =====");
+    
+    // Set up method swizzling after runtime is fully initialized
+    static BOOL hasSwizzled = NO;
+    if (!hasSwizzled) {
+        NSLog(@"MenuApplication: Setting up method swizzling to remove menu bottom line");
+        [MenuApplication swizzleMenuViewDrawing];
+        hasSwizzled = YES;
+    }
     
     // Check for existing menu applications before proceeding
     [self checkForExistingMenuApplication];
