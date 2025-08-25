@@ -27,3 +27,9 @@ EOF
 
 sudo pkg install -y gershwin-components
 ```
+
+Then, add near the top of `/usr/local/bin/gershwin-x11`:
+
+```
+export SUDO_ASKPASS=$(which SudoAskPass)
+```
