@@ -8,16 +8,22 @@
 #import <pwd.h>
 #import <unistd.h>
 #import <sys/wait.h>
+#if !defined(__linux__)
 #import <login_cap.h>
+#import <sys/sysctl.h>
+#import <sys/user.h>
+#import <libutil.h>
+#endif
 #import <string.h>
 #import <grp.h>
 #import <errno.h>
 #import <signal.h>
-#import <sys/sysctl.h>
-#import <sys/user.h>
-#import <libutil.h>
 #import <fcntl.h>
 #import <X11/Xlib.h>
+#if defined(__linux__)
+#import <dirent.h>
+#import <ctype.h>
+#endif
 
 #ifdef HAVE_SHADOW
 #import <shadow.h>
@@ -155,6 +161,22 @@ void signalHandler(int sig) {
             NSLog(@"[DEBUG] Added MATE session");
         }
         */
+    }
+    
+    // Check if /System/Library/Scripts/Gershwin-X11 exists and add it if found
+    if ([[NSFileManager defaultManager] fileExistsAtPath:@"/System/Library/Scripts/Gershwin-X11"]) {
+        // Check if "Gershwin" is already in the list to avoid duplicates
+        NSUInteger gershwinIndex = [sessions indexOfObject:@"Gershwin"];
+        if (gershwinIndex != NSNotFound) {
+            // Replace existing Gershwin entry with the /System version
+            [execs replaceObjectAtIndex:gershwinIndex withObject:@"/System/Library/Scripts/Gershwin-X11"];
+            NSLog(@"[DEBUG] Replaced existing Gershwin session with /System/Library/Scripts/Gershwin-X11");
+        } else {
+            // Add new Gershwin entry
+            [sessions addObject:@"Gershwin"];
+            [execs addObject:@"/System/Library/Scripts/Gershwin-X11"];
+            NSLog(@"[DEBUG] Added Gershwin session: /System/Library/Scripts/Gershwin-X11");
+        }
     }
     
     availableSessions = [sessions copy];
@@ -611,6 +633,10 @@ void signalHandler(int sig) {
         
         NSLog(@"[DEBUG] Basic environment set");
         
+#if defined(__linux__)
+        // Linux: No login_cap, skip BSD-specific login class logic
+        NSLog(@"[DEBUG] Skipping BSD login_cap logic on Linux");
+#else
         // Set login class environment variables
         login_cap_t *lc = login_getpwclass(pwd);
         if (lc != NULL) {
@@ -630,6 +656,7 @@ void signalHandler(int sig) {
         } else {
             NSLog(@"[DEBUG] No login class found for user");
         }
+#endif
         
         // Set PAM environment variables
         if (pam_envlist) {
@@ -650,6 +677,10 @@ void signalHandler(int sig) {
         const char *kb_variant = NULL;
         const char *kb_options = NULL;
         
+#if defined(__linux__)
+        // Linux: Skip login_cap, use environment variables only
+        NSLog(@"[DEBUG] Skipping BSD login_cap keyboard config on Linux");
+#else
         // Get login capabilities for this user in child process
         login_cap_t *child_lc = login_getpwclass(pwd);
         if (child_lc != NULL) {
@@ -658,6 +689,7 @@ void signalHandler(int sig) {
             kb_options = login_getcapstr(child_lc, "keyboard.options", NULL, NULL);
             NSLog(@"[DEBUG] Checked login.conf for keyboard settings");
         }
+#endif
         
         // If no keyboard layout specified in login.conf, check environment
         if (!kb_layout) {
@@ -717,10 +749,12 @@ void signalHandler(int sig) {
             }
         }
         
+#if !defined(__linux__)
         // Close login capabilities if we opened them
         if (child_lc != NULL) {
             login_close(child_lc);
         }
+#endif
         
         // Default to US layout if nothing found
         if (!kb_layout) {
@@ -1070,6 +1104,10 @@ void signalHandler(int sig) {
         
         NSLog(@"[DEBUG] Basic environment set for auto-login");
         
+#if defined(__linux__)
+        // Linux: No login_cap, skip BSD-specific login class logic for auto-login
+        NSLog(@"[DEBUG] Skipping BSD login_cap logic for auto-login on Linux");
+#else
         // Set login class environment variables
         login_cap_t *lc = login_getpwclass(pwd);
         if (lc != NULL) {
@@ -1108,6 +1146,7 @@ void signalHandler(int sig) {
         } else {
             NSLog(@"[DEBUG] No login class found for auto-login user");
         }
+#endif
         
         // Set PAM environment variables
         if (pam_envlist) {
@@ -1128,6 +1167,10 @@ void signalHandler(int sig) {
         const char *kb_variant = NULL;
         const char *kb_options = NULL;
         
+#if defined(__linux__)
+        // Linux: Skip login_cap, use environment variables only
+        NSLog(@"[DEBUG] Skipping BSD login_cap keyboard config for auto-login on Linux");
+#else
         // Get login capabilities for this user in child process
         login_cap_t *child_lc = login_getpwclass(pwd);
         if (child_lc != NULL) {
@@ -1136,6 +1179,7 @@ void signalHandler(int sig) {
             kb_options = login_getcapstr(child_lc, "keyboard.options", NULL, NULL);
             NSLog(@"[DEBUG] Checked login.conf for keyboard settings");
         }
+#endif
         
         // If no keyboard layout specified in login.conf, check environment
         if (!kb_layout) {
@@ -1195,10 +1239,12 @@ void signalHandler(int sig) {
             }
         }
         
+#if !defined(__linux__)
         // Close login capabilities if we opened them
         if (child_lc != NULL) {
             login_close(child_lc);
         }
+#endif
         
         // Default to US layout if nothing found
         if (!kb_layout) {
@@ -1407,6 +1453,80 @@ void signalHandler(int sig) {
     // Step 4: Additional cleanup - find any processes that might still be in the same session
     NSLog(@"[DEBUG] Looking for remaining processes in session %d", sessionPid);
     
+#if defined(__linux__)
+    // Linux implementation using /proc filesystem
+    DIR *proc_dir = opendir("/proc");
+    if (!proc_dir) {
+        NSLog(@"[DEBUG] Failed to open /proc directory: %s", strerror(errno));
+        return;
+    }
+    
+    struct dirent *entry;
+    int sessionRelatedKilled = 0;
+    
+    NSLog(@"[DEBUG] Checking /proc for session cleanup");
+    
+    while ((entry = readdir(proc_dir)) != NULL) {
+        // Skip non-numeric entries
+        if (!isdigit(entry->d_name[0])) {
+            continue;
+        }
+        
+        pid_t pid = atoi(entry->d_name);
+        
+        // Skip kernel processes, init, and our own process
+        if (pid <= 1 || pid == getpid()) {
+            continue;
+        }
+        
+        // Read /proc/PID/stat to get process information
+        char stat_path[256];
+        snprintf(stat_path, sizeof(stat_path), "/proc/%d/stat", pid);
+        
+        FILE *stat_file = fopen(stat_path, "r");
+        if (!stat_file) {
+            continue; // Process might have disappeared
+        }
+        
+        // Parse the stat file - format: pid (comm) state ppid pgrp session ...
+        pid_t parsed_pid, ppid, pgrp, session;
+        char comm[256];
+        char state;
+        
+        if (fscanf(stat_file, "%d %s %c %d %d %d", 
+                   &parsed_pid, comm, &state, &ppid, &pgrp, &session) == 6) {
+            
+            bool isSessionRelated = false;
+            
+            // Check if this process is related to our session
+            if (ppid == sessionPid) {
+                NSLog(@"[DEBUG] Found child process: PID=%d, Command=%s", pid, comm);
+                isSessionRelated = true;
+            } else if (session == sessionPid) {
+                NSLog(@"[DEBUG] Found session process: PID=%d, SID=%d, Command=%s", pid, session, comm);
+                isSessionRelated = true;
+            } else if (pgrp == sessionPid) {
+                NSLog(@"[DEBUG] Found process group member: PID=%d, PGID=%d, Command=%s", pid, pgrp, comm);
+                isSessionRelated = true;
+            }
+            
+            if (isSessionRelated) {
+                NSLog(@"[DEBUG] Killing session-related process: PID=%d, Command=%s", pid, comm);
+                if (kill(pid, SIGKILL) == 0) {
+                    sessionRelatedKilled++;
+                } else if (errno != ESRCH) {
+                    NSLog(@"[DEBUG] Failed to kill session process %d: %s", pid, strerror(errno));
+                }
+            }
+        }
+        
+        fclose(stat_file);
+    }
+    
+    closedir(proc_dir);
+    
+#else
+    // BSD implementation using sysctl
     int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_UID, uid};
     size_t size = 0;
     
@@ -1467,6 +1587,7 @@ void signalHandler(int sig) {
     }
     
     free(procs);
+#endif
     
     NSLog(@"[DEBUG] Session cleanup complete: killed %d session-related processes", sessionRelatedKilled);
     
