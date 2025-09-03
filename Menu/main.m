@@ -8,17 +8,33 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
 {
     NSLog(@"Menu.app: Starting application initialization...");
     
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    @autoreleasepool {
+        @try {
+            // Create MenuApplication directly as the main application instance
+            MenuApplication *app = [[MenuApplication alloc] init];
+            
+            // Set it as the shared application instance manually
+            NSApp = app;
+            
+            NSLog(@"Menu.app: About to start main run loop...");
+            
+            // Run the application with better exception handling
+            @try {
+                [app run];
+            } @catch (NSException *runException) {
+                NSLog(@"Menu.app: Exception in run loop: %@", runException);
+                NSLog(@"Menu.app: Run loop exception reason: %@", [runException reason]);
+            }
+            
+            NSLog(@"Menu.app: Main run loop exited normally");
+        } @catch (NSException *exception) {
+            NSLog(@"Menu.app: Caught exception in main: %@", exception);
+            NSLog(@"Menu.app: Exception reason: %@", [exception reason]);
+            NSLog(@"Menu.app: Exception stack: %@", [exception callStackSymbols]);
+            return 1;
+        }
+    }
     
-    // Create MenuApplication directly as the main application instance
-    MenuApplication *app = [[MenuApplication alloc] init];
-    
-    // Set it as the shared application instance manually
-    NSApp = app;
-    
-    // Run the application
-    [app run];
-    
-    [pool drain];
+    NSLog(@"Menu.app: Application exiting normally");
     return 0;
 }

@@ -11,21 +11,33 @@
 
 // Global reference for cleanup in signal handlers
 static MenuController *g_controller = nil;
+static volatile sig_atomic_t cleanup_in_progress = 0;
 
 // Cleanup function for atexit
 static void cleanup_on_exit(void)
 {
-    NSLog(@"Menu.app: atexit cleanup...");
-    [[X11ShortcutManager sharedManager] cleanup];
-    [DBusMenuParser cleanup];
+    if (cleanup_in_progress) return;
+    cleanup_in_progress = 1;
     
-    // Log final cache statistics
-    [[MenuCacheManager sharedManager] logCacheStatistics];
+    NSLog(@"Menu.app: atexit cleanup...");
+    
+    @try {
+        [[X11ShortcutManager sharedManager] cleanup];
+        [DBusMenuParser cleanup];
+        
+        // Log final cache statistics
+        [[MenuCacheManager sharedManager] logCacheStatistics];
+    } @catch (NSException *exception) {
+        NSLog(@"Menu.app: Exception during atexit cleanup: %@", exception);
+    }
 }
 
 // Signal handler for graceful shutdown
 static void signalHandler(int sig)
 {
+    if (cleanup_in_progress) return;
+    cleanup_in_progress = 1;
+    
     const char *signame = "UNKNOWN";
     switch(sig) {
         case SIGTERM: signame = "SIGTERM"; break;
@@ -35,12 +47,16 @@ static void signalHandler(int sig)
     
     NSLog(@"Menu.app: Received signal %d (%s), performing cleanup...", sig, signame);
     
-    // Clean up global shortcuts
-    [[X11ShortcutManager sharedManager] cleanup];
-    [DBusMenuParser cleanup];
-    
-    // Log final cache statistics
-    [[MenuCacheManager sharedManager] logCacheStatistics];
+    @try {
+        // Clean up global shortcuts
+        [[X11ShortcutManager sharedManager] cleanup];
+        [DBusMenuParser cleanup];
+        
+        // Log final cache statistics
+        [[MenuCacheManager sharedManager] logCacheStatistics];
+    } @catch (NSException *exception) {
+        NSLog(@"Menu.app: Exception during signal cleanup: %@", exception);
+    }
     
     // Reset signal handlers to default to avoid infinite loops
     signal(sig, SIG_DFL);
@@ -166,7 +182,6 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
         
         NSLog(@"MenuApplication: Showing conflict alert...");
         [alert runModal];
-        [alert release];
         
         NSLog(@"MenuApplication: Exiting due to service conflict");
         exit(1);
@@ -184,9 +199,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     
     // If NSApp is not a MenuApplication instance, replace it
     if (![NSApp isKindOfClass:[MenuApplication class]]) {
-        NSApplication *oldApp = NSApp;
         NSApp = [[MenuApplication alloc] init];
-        [oldApp release];
     }
     
     return (MenuApplication *)NSApp;
@@ -278,6 +291,10 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     [self activateIgnoringOtherApps:YES];
     
     NSLog(@"MenuApplication: Initialization complete");
+    
+    // Add a brief delay to let everything settle before entering main run loop
+    NSLog(@"MenuApplication: Allowing brief settling period...");
+    [NSThread sleepForTimeInterval:0.1];
 }
 
 - (void)sendEvent:(NSEvent *)event
@@ -295,12 +312,28 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
 
 - (void)terminate:(id)sender
 {
-    NSLog(@"MenuApplication: Application terminating");
+    NSLog(@"MenuApplication: Application terminating gracefully");
     
-    // Ensure global shortcuts are cleaned up before termination
-    NSLog(@"MenuApplication: Cleaning up global shortcuts...");
-    [[X11ShortcutManager sharedManager] cleanup];
-    [DBusMenuParser cleanup];
+    if (cleanup_in_progress) {
+        NSLog(@"MenuApplication: Cleanup already in progress, calling super terminate");
+        [super terminate:sender];
+        return;
+    }
+    cleanup_in_progress = 1;
+    
+    @try {
+        // Ensure global shortcuts are cleaned up before termination
+        NSLog(@"MenuApplication: Cleaning up global shortcuts...");
+        [[X11ShortcutManager sharedManager] cleanup];
+        [DBusMenuParser cleanup];
+        
+        // Log final cache statistics
+        [[MenuCacheManager sharedManager] logCacheStatistics];
+        
+        NSLog(@"MenuApplication: Graceful cleanup completed");
+    } @catch (NSException *exception) {
+        NSLog(@"MenuApplication: Exception during graceful termination: %@", exception);
+    }
     
     [super terminate:sender];
 }

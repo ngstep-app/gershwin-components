@@ -53,7 +53,6 @@ static NSMutableSet *loadedGroups = nil;
     // Store the delegate to prevent it from being deallocated
     NSString *submenuKey = [NSString stringWithFormat:@"gtk_submenu_%p", submenu];
     [gtkSubmenuDelegates setObject:delegate forKey:submenuKey];
-    [delegate release]; // The dictionary retains it
     
     NSLog(@"GTKSubmenuManager: Stored GTK delegate with key '%@' for lazy loading (groupId=%@)", submenuKey, groupId);
     
@@ -91,26 +90,16 @@ static NSMutableSet *loadedGroups = nil;
         NSLog(@"GTKSubmenuDelegate: Menu path: %@", menuPath);
         NSLog(@"GTKSubmenuDelegate: Action path: %@", actionPath);
         
-        _serviceName = [serviceName retain];
-        _menuPath = [menuPath retain];
-        _actionPath = [actionPath retain];
-        _dbusConnection = dbusConnection; // Weak reference
-        _groupId = [groupId retain];
-        _menuDict = [menuDict retain]; // Keep reference to shared menu dictionary
+        self.serviceName = serviceName;
+        self.menuPath = menuPath;
+        self.actionPath = actionPath;
+        self.dbusConnection = dbusConnection; // Weak reference
+        self.groupId = groupId;
+        self.menuDict = menuDict; // Keep reference to shared menu dictionary
         
-        NSLog(@"GTKSubmenuDelegate: GTK delegate initialization complete for group ID %@", _groupId);
+        NSLog(@"GTKSubmenuDelegate: GTK delegate initialization complete for group ID %@", self.groupId);
     }
     return self;
-}
-
-- (void)dealloc
-{
-    [_serviceName release];
-    [_menuPath release];
-    [_actionPath release];
-    [_groupId release];
-    [_menuDict release];
-    [super dealloc];
 }
 
 - (void)menuWillOpen:(NSMenu *)menu
@@ -118,17 +107,17 @@ static NSMutableSet *loadedGroups = nil;
     NSLog(@"GTKSubmenuDelegate: ===== GTK MENU WILL OPEN =====");
     NSLog(@"GTKSubmenuDelegate: GTK menuWillOpen called for menu: '%@'", [menu title] ?: @"(no title)");
     NSLog(@"GTKSubmenuDelegate: Menu has %lu items currently", (unsigned long)[[menu itemArray] count]);
-    NSLog(@"GTKSubmenuDelegate: Delegate group ID: %@", _groupId);
-    NSLog(@"GTKSubmenuDelegate: Delegate service: %@", _serviceName);
-    NSLog(@"GTKSubmenuDelegate: Delegate menu path: %@", _menuPath);
+    NSLog(@"GTKSubmenuDelegate: Delegate group ID: %@", self.groupId);
+    NSLog(@"GTKSubmenuDelegate: Delegate service: %@", self.serviceName);
+    NSLog(@"GTKSubmenuDelegate: Delegate menu path: %@", self.menuPath);
     
-    if (!_serviceName || !_menuPath || !_dbusConnection || !_groupId) {
+    if (!self.serviceName || !self.menuPath || !self.dbusConnection || !self.groupId) {
         NSLog(@"GTKSubmenuDelegate: ERROR: Missing GTK submenu info, cannot load submenu");
         return;
     }
     
     // Check if this group was already loaded
-    NSString *groupKey = [NSString stringWithFormat:@"group_%@_%@", _serviceName, _groupId];
+    NSString *groupKey = [NSString stringWithFormat:@"group_%@_%@", self.serviceName, self.groupId];
     if ([loadedGroups containsObject:groupKey]) {
         NSLog(@"GTKSubmenuDelegate: Group already loaded, skipping duplicate load");
         return;
@@ -141,22 +130,22 @@ static NSMutableSet *loadedGroups = nil;
     }
     
     NSLog(@"GTKSubmenuDelegate: ===== LOADING GTK MENU GROUP =====");
-    NSLog(@"GTKSubmenuDelegate: Loading GTK menu group %@ from service %@", _groupId, _serviceName);
+    NSLog(@"GTKSubmenuDelegate: Loading GTK menu group %@ from service %@", self.groupId, self.serviceName);
     
     // Load the additional group using GTK Start method
-    NSArray *subscriptionIds = @[_groupId];
+    NSArray *subscriptionIds = @[self.groupId];
     
-    id result = [_dbusConnection callMethod:@"Start"
-                                  onService:_serviceName
-                                 objectPath:_menuPath
+    id result = [self.dbusConnection callMethod:@"Start"
+                                  onService:self.serviceName
+                                 objectPath:self.menuPath
                                   interface:@"org.gtk.Menus"
                                   arguments:@[subscriptionIds]];
     
     if (result && [result isKindOfClass:[NSArray class]]) {
-        NSLog(@"GTKSubmenuDelegate: Successfully loaded GTK menu group %@", _groupId);
+        NSLog(@"GTKSubmenuDelegate: Successfully loaded GTK menu group %@", self.groupId);
         
         // Parse and add the new menu data to our menu dictionary
-        [GTKMenuParser parseMenuData:(NSArray *)result intoDict:_menuDict];
+        [GTKMenuParser parseMenuData:(NSArray *)result intoDict:self.menuDict];
         
         // Mark this group as loaded
         [loadedGroups addObject:groupKey];
@@ -165,7 +154,7 @@ static NSMutableSet *loadedGroups = nil;
         [self refreshSubmenu:menu];
         
     } else {
-        NSLog(@"GTKSubmenuDelegate: Failed to load GTK menu group %@", _groupId);
+        NSLog(@"GTKSubmenuDelegate: Failed to load GTK menu group %@", self.groupId);
     }
     
     NSLog(@"GTKSubmenuDelegate: ===== GTK MENU WILL OPEN COMPLETE =====");
@@ -174,16 +163,16 @@ static NSMutableSet *loadedGroups = nil;
 - (void)refreshSubmenu:(NSMenu *)submenu
 {
     NSLog(@"GTKSubmenuDelegate: ===== REFRESHING GTK SUBMENU =====");
-    NSLog(@"GTKSubmenuDelegate: Refreshing GTK submenu for group %@", _groupId);
+    NSLog(@"GTKSubmenuDelegate: Refreshing GTK submenu for group %@", self.groupId);
     
     // Look up the menu items for this group in the menu dictionary
-    NSArray *menuId = @[_groupId, @0]; // GTK menus use (group_id, revision) as key
-    NSArray *menuItems = [_menuDict objectForKey:menuId];
+    NSArray *menuId = @[self.groupId, @0]; // GTK menus use (group_id, revision) as key
+    NSArray *menuItems = [self.menuDict objectForKey:menuId];
     
     if (!menuItems) {
         // Try with revision 1 if revision 0 doesn't exist
-        menuId = @[_groupId, @1];
-        menuItems = [_menuDict objectForKey:menuId];
+        menuId = @[self.groupId, @1];
+        menuItems = [self.menuDict objectForKey:menuId];
     }
     
     if (!menuItems) {
@@ -241,7 +230,6 @@ static NSMutableSet *loadedGroups = nil;
             }
             
             [submenu addItem:item];
-            [item release];
             itemCount++;
         }
     }
@@ -284,9 +272,9 @@ static NSMutableSet *loadedGroups = nil;
     // Use the GTK Actions interface to trigger the action
     NSArray *arguments = @[action, @[], @{}]; // action, parameters, platform_data
     
-    id result = [_dbusConnection callMethod:@"Activate"
-                                  onService:_serviceName
-                                 objectPath:_actionPath
+    id result = [self.dbusConnection callMethod:@"Activate"
+                                  onService:self.serviceName
+                                 objectPath:self.actionPath
                                   interface:@"org.gtk.Actions"
                                   arguments:arguments];
     

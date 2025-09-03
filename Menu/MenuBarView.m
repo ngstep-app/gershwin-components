@@ -7,7 +7,7 @@
     self = [super initWithFrame:frameRect];
     if (self) {
         // Use the theme's menubar background color instead of hardcoded values
-        _backgroundColor = [[[GSTheme theme] menuItemBackgroundColor] retain];
+        self.backgroundColor = [[GSTheme theme] menuItemBackgroundColor];
     }
     return self;
 }
@@ -18,10 +18,10 @@
           dirtyRect.origin.x, dirtyRect.origin.y, dirtyRect.size.width, dirtyRect.size.height);
     
     // Fill with theme background color (no gradient)
-    if (_backgroundColor) {
-        [_backgroundColor set];
+    if (self.backgroundColor) {
+        [self.backgroundColor set];
         NSRectFill([self bounds]);
-        NSLog(@"MenuBarView: Drew theme background color: %@", _backgroundColor);
+        NSLog(@"MenuBarView: Drew theme background color: %@", self.backgroundColor);
     } else {
         // Fallback to light gray if theme color is unavailable
         [[NSColor colorWithCalibratedWhite:0.95 alpha:1.0] set];
@@ -39,12 +39,6 @@
 - (BOOL)isOpaque
 {
     return NO;
-}
-
-- (void)dealloc
-{
-    [_backgroundColor release];
-    [super dealloc];
 }
 
 @end

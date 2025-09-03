@@ -49,7 +49,6 @@ static NSMutableSet *refreshedByAboutToShow = nil;
     // Store the delegate to prevent it from being deallocated
     NSString *submenuKey = [NSString stringWithFormat:@"submenu_%p", submenu];
     [submenuDelegates setObject:delegate forKey:submenuKey];
-    [delegate release]; // The dictionary retains it
     
     NSLog(@"DBusSubmenuManager: Stored delegate with key '%@' for lazy loading (itemId=%@)", submenuKey, itemId);
     
@@ -94,24 +93,15 @@ static NSMutableSet *refreshedByAboutToShow = nil;
         NSLog(@"DBusSubmenuDelegate: Object path: %@", objectPath);
         NSLog(@"DBusSubmenuDelegate: DBus connection: %@", dbusConnection ? @"available" : @"nil");
         
-        _serviceName = [serviceName retain];
-        _objectPath = [objectPath retain];
-        _dbusConnection = dbusConnection; // Weak reference
-        _itemId = [itemId retain];
+        self.serviceName = serviceName;
+        self.objectPath = objectPath;
+        self.dbusConnection = dbusConnection; // Weak reference
+        self.itemId = itemId;
         
-        NSLog(@"DBusSubmenuDelegate: Delegate initialization complete for item ID %@", _itemId);
+        NSLog(@"DBusSubmenuDelegate: Delegate initialization complete for item ID %@", self.itemId);
         NSLog(@"DBusSubmenuDelegate: ===== DELEGATE READY FOR ABOUTTOSHOW =====");
     }
     return self;
-}
-
-- (void)dealloc
-{
-    [_serviceName release];
-    [_objectPath release];
-    [_dbusConnection release];
-    [_itemId release];
-    [super dealloc];
 }
 
 - (void)menuWillOpen:(NSMenu *)menu
@@ -120,22 +110,22 @@ static NSMutableSet *refreshedByAboutToShow = nil;
     NSLog(@"DBusSubmenuDelegate: menuWillOpen called for menu: '%@'", [menu title] ?: @"(no title)");
     NSLog(@"DBusSubmenuDelegate: Menu object: %@", menu);
     NSLog(@"DBusSubmenuDelegate: Menu has %lu items currently", (unsigned long)[[menu itemArray] count]);
-    NSLog(@"DBusSubmenuDelegate: Delegate item ID: %@", _itemId);
-    NSLog(@"DBusSubmenuDelegate: Delegate service: %@", _serviceName);
-    NSLog(@"DBusSubmenuDelegate: Delegate path: %@", _objectPath);
-    NSLog(@"DBusSubmenuDelegate: Delegate connection: %@", _dbusConnection ? @"available" : @"nil");
+    NSLog(@"DBusSubmenuDelegate: Delegate item ID: %@", self.itemId);
+    NSLog(@"DBusSubmenuDelegate: Delegate service: %@", self.serviceName);
+    NSLog(@"DBusSubmenuDelegate: Delegate path: %@", self.objectPath);
+    NSLog(@"DBusSubmenuDelegate: Delegate connection: %@", self.dbusConnection ? @"available" : @"nil");
     
-    if (!_serviceName || !_objectPath || !_dbusConnection || !_itemId) {
+    if (!self.serviceName || !self.objectPath || !self.dbusConnection || !self.itemId) {
         NSLog(@"DBusSubmenuDelegate: ERROR: Missing DBus info, cannot call AboutToShow");
-        NSLog(@"DBusSubmenuDelegate:   serviceName: %@", _serviceName ?: @"MISSING");
-        NSLog(@"DBusSubmenuDelegate:   objectPath: %@", _objectPath ?: @"MISSING");
-        NSLog(@"DBusSubmenuDelegate:   dbusConnection: %@", _dbusConnection ? @"available" : @"MISSING");
-        NSLog(@"DBusSubmenuDelegate:   itemId: %@", _itemId ?: @"MISSING");
+        NSLog(@"DBusSubmenuDelegate:   serviceName: %@", self.serviceName ?: @"MISSING");
+        NSLog(@"DBusSubmenuDelegate:   objectPath: %@", self.objectPath ?: @"MISSING");
+        NSLog(@"DBusSubmenuDelegate:   dbusConnection: %@", self.dbusConnection ? @"available" : @"MISSING");
+        NSLog(@"DBusSubmenuDelegate:   itemId: %@", self.itemId ?: @"MISSING");
         return;
     }
     
     // Check if this menu was already refreshed by AboutToShow to avoid duplicate calls
-    NSString *itemIdKey = [NSString stringWithFormat:@"refreshed_%@", _itemId];
+    NSString *itemIdKey = [NSString stringWithFormat:@"refreshed_%@", self.itemId];
     if ([refreshedByAboutToShow containsObject:itemIdKey]) {
         NSLog(@"DBusSubmenuDelegate: Menu already refreshed by AboutToShow, skipping duplicate refresh");
         [refreshedByAboutToShow removeObject:itemIdKey];
@@ -144,16 +134,16 @@ static NSMutableSet *refreshedByAboutToShow = nil;
     
     NSLog(@"DBusSubmenuDelegate: ===== CALLING ABOUTTOSHOW =====");
     NSLog(@"DBusSubmenuDelegate: Calling AboutToShow for menu item ID %@ (service=%@, path=%@)", 
-          _itemId, _serviceName, _objectPath);
+          self.itemId, self.serviceName, self.objectPath);
     
     // Call AboutToShow method to notify the application that this submenu is about to be displayed
-    NSArray *arguments = [NSArray arrayWithObjects:_itemId, nil];
+    NSArray *arguments = [NSArray arrayWithObjects:self.itemId, nil];
     NSLog(@"DBusSubmenuDelegate: AboutToShow arguments: %@", arguments);
     
     NSLog(@"DBusSubmenuDelegate: Making DBus call...");
-    id result = [_dbusConnection callMethod:@"AboutToShow"
-                                  onService:_serviceName
-                                 objectPath:_objectPath
+    id result = [self.dbusConnection callMethod:@"AboutToShow"
+                                  onService:self.serviceName
+                                 objectPath:self.objectPath
                                   interface:@"com.canonical.dbusmenu"
                                   arguments:arguments];
     
@@ -225,18 +215,18 @@ static NSMutableSet *refreshedByAboutToShow = nil;
 - (void)refreshSubmenu:(NSMenu *)submenu
 {
     NSLog(@"DBusSubmenuDelegate: ===== REFRESHING SUBMENU CONTENT =====");
-    NSLog(@"DBusSubmenuDelegate: Refreshing submenu content for item ID %@", _itemId);
+    NSLog(@"DBusSubmenuDelegate: Refreshing submenu content for item ID %@", self.itemId);
     NSLog(@"DBusSubmenuDelegate: Submenu object: %@", submenu);
     NSLog(@"DBusSubmenuDelegate: Submenu title: '%@'", [submenu title] ?: @"(no title)");
     NSLog(@"DBusSubmenuDelegate: Submenu current item count: %lu", (unsigned long)[[submenu itemArray] count]);
-    NSLog(@"DBusSubmenuDelegate: Service: %@", _serviceName);
-    NSLog(@"DBusSubmenuDelegate: Object path: %@", _objectPath);
-    NSLog(@"DBusSubmenuDelegate: DBus connection: %@", _dbusConnection);
+    NSLog(@"DBusSubmenuDelegate: Service: %@", self.serviceName);
+    NSLog(@"DBusSubmenuDelegate: Object path: %@", self.objectPath);
+    NSLog(@"DBusSubmenuDelegate: DBus connection: %@", self.dbusConnection);
     
     // Call GetLayout specifically for this submenu item with optimized property filtering
     NSArray *essentialProperties = [NSArray arrayWithObjects:@"label", @"enabled", @"visible", @"type", nil];
     NSArray *arguments = [NSArray arrayWithObjects:
-                         _itemId,                   // parentId (this submenu's ID)
+                         self.itemId,                   // parentId (this submenu's ID)
                          [NSNumber numberWithInt:2], // recursionDepth (2 levels for lazy loading)
                          essentialProperties,       // propertyNames (filtered for performance)
                          nil];
@@ -244,21 +234,21 @@ static NSMutableSet *refreshedByAboutToShow = nil;
     NSLog(@"DBusSubmenuDelegate: Calling GetLayout with optimized arguments: %@", arguments);
     NSLog(@"DBusSubmenuDelegate: GetLayout call details:");
     NSLog(@"DBusSubmenuDelegate:   method: GetLayout");
-    NSLog(@"DBusSubmenuDelegate:   service: %@", _serviceName);
-    NSLog(@"DBusSubmenuDelegate:   path: %@", _objectPath);
+    NSLog(@"DBusSubmenuDelegate:   service: %@", self.serviceName);
+    NSLog(@"DBusSubmenuDelegate:   path: %@", self.objectPath);
     NSLog(@"DBusSubmenuDelegate:   interface: com.canonical.dbusmenu");
     NSLog(@"DBusSubmenuDelegate:   using filtered properties for performance");
     
-    id result = [_dbusConnection callMethod:@"GetLayout"
-                                  onService:_serviceName
-                                 objectPath:_objectPath
+    id result = [self.dbusConnection callMethod:@"GetLayout"
+                                  onService:self.serviceName
+                                 objectPath:self.objectPath
                                   interface:@"com.canonical.dbusmenu"
                                   arguments:arguments];
     
     NSLog(@"DBusSubmenuDelegate: GetLayout call completed");
     
     if (!result) {
-        NSLog(@"DBusSubmenuDelegate: ERROR: Failed to refresh submenu layout from %@%@ - result is nil", _serviceName, _objectPath);
+        NSLog(@"DBusSubmenuDelegate: ERROR: Failed to refresh submenu layout from %@%@ - result is nil", self.serviceName, self.objectPath);
         return;
     }
     
@@ -317,9 +307,9 @@ static NSMutableSet *refreshedByAboutToShow = nil;
                       childIndex, childItem, [childItem class]);
                 
                 NSMenuItem *childMenuItem = [DBusMenuParser createMenuItemFromLayoutItem:childItem 
-                                                                             serviceName:_serviceName 
-                                                                              objectPath:_objectPath 
-                                                                          dbusConnection:_dbusConnection];
+                                                                             serviceName:self.serviceName 
+                                                                              objectPath:self.objectPath 
+                                                                          dbusConnection:self.dbusConnection];
                 if (childMenuItem) {
                     [submenu addItem:childMenuItem];
                     newItemCount++;

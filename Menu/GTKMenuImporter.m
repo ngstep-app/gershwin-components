@@ -9,44 +9,23 @@
 
 @implementation GTKMenuImporter
 
-@synthesize appMenuWidget = _appMenuWidget;
-
 - (id)init
 {
     self = [super init];
     if (self) {
-        _dbusConnection = nil;
-        _registeredWindows = [[NSMutableDictionary alloc] init];
-        _windowMenuPaths = [[NSMutableDictionary alloc] init];
-        _windowActionPaths = [[NSMutableDictionary alloc] init];
-        _menuCache = [[NSMutableDictionary alloc] init];
-        _actionGroupCache = [[NSMutableDictionary alloc] init];
+        self.dbusConnection = nil;
+        self.registeredWindows = [[NSMutableDictionary alloc] init];
+        self.windowMenuPaths = [[NSMutableDictionary alloc] init];
+        self.windowActionPaths = [[NSMutableDictionary alloc] init];
+        self.menuCache = [[NSMutableDictionary alloc] init];
+        self.actionGroupCache = [[NSMutableDictionary alloc] init];
         
-        // Set up cleanup timer
-        _cleanupTimer = [NSTimer scheduledTimerWithTimeInterval:30.0
-                                                        target:self
-                                                      selector:@selector(cleanupStaleEntries:)
-                                                      userInfo:nil
-                                                       repeats:YES];
+        // Don't set up the cleanup timer during init - do it later when the run loop is ready
+        self.cleanupTimer = nil;
         
         NSLog(@"GTKMenuImporter: Initialized GTK menu protocol handler");
     }
     return self;
-}
-
-- (void)dealloc
-{
-    [self cleanup];
-    [_registeredWindows release];
-    [_windowMenuPaths release];
-    [_windowActionPaths release];
-    [_menuCache release];
-    [_actionGroupCache release];
-    if (_cleanupTimer) {
-        [_cleanupTimer invalidate];
-        _cleanupTimer = nil;
-    }
-    [super dealloc];
 }
 
 #pragma mark - MenuProtocolHandler Implementation
@@ -55,14 +34,29 @@
 {
     NSLog(@"GTKMenuImporter: Attempting to connect to DBus session bus...");
     
-    _dbusConnection = [GNUDBusConnection sessionBus];
+    self.dbusConnection = [GNUDBusConnection sessionBus];
     
-    if (![_dbusConnection isConnected]) {
+    if (![self.dbusConnection isConnected]) {
         NSLog(@"GTKMenuImporter: Failed to get DBus connection");
         return NO;
     }
     
     NSLog(@"GTKMenuImporter: Successfully connected to DBus session bus");
+    
+    // Now that we're connected and the run loop is running, set up the cleanup timer
+    if (!self.cleanupTimer) {
+        NSLog(@"GTKMenuImporter: Setting up cleanup timer...");
+        self.cleanupTimer = [NSTimer scheduledTimerWithTimeInterval:30.0
+                                                        target:self
+                                                      selector:@selector(cleanupStaleEntries:)
+                                                      userInfo:nil
+                                                       repeats:YES];
+        NSLog(@"GTKMenuImporter: Cleanup timer scheduled");
+    }
+    
+    NSLog(@"GTKMenuImporter: About to call scanForExistingMenuServices");
+    [self scanForExistingMenuServices];
+    NSLog(@"GTKMenuImporter: Finished calling scanForExistingMenuServices");
     
     // Note: GTK applications don't require us to register as a specific service
     // They expose their menus directly via org.gtk.Menus and org.gtk.Actions
@@ -331,6 +325,8 @@
 
 - (void)scanForExistingMenuServices
 {
+    NSLog(@"GTKMenuImporter: scanForExistingMenuServices STARTED");
+    
     static int gtkScans = 0;
     gtkScans++;
     
@@ -341,24 +337,31 @@
     
     // GTK applications set X11 properties when they export menus
     // Use a more comprehensive scanning approach
+    NSLog(@"GTKMenuImporter: About to open X11 display");
     Display *display = XOpenDisplay(NULL);
     if (!display) {
         if (gtkScans <= 2) {
             NSLog(@"GTKMenuImporter: Cannot open X11 display for scanning");
         }
+        NSLog(@"GTKMenuImporter: scanForExistingMenuServices FAILED (no display)");
         return;
     }
+    NSLog(@"GTKMenuImporter: X11 display opened successfully");
     
     NSUInteger gtkWindows = 0;
     NSUInteger newWindows = 0;
     
     // Create atoms once for efficiency
+    NSLog(@"GTKMenuImporter: Creating X11 atoms");
     Atom busNameAtom = XInternAtom(display, "_GTK_UNIQUE_BUS_NAME", False);
     Atom objectPathAtom = XInternAtom(display, "_GTK_MENUBAR_OBJECT_PATH", False);
+    NSLog(@"GTKMenuImporter: X11 atoms created");
     
     // Get all windows on the display using _NET_CLIENT_LIST
+    NSLog(@"GTKMenuImporter: Getting root window");
     Window root = DefaultRootWindow(display);
     Atom clientListAtom = XInternAtom(display, "_NET_CLIENT_LIST", False);
+    NSLog(@"GTKMenuImporter: About to query window property");
     
     Atom actualType;
     int actualFormat;
@@ -369,11 +372,17 @@
                           &actualType, &actualFormat, &numClientWindows, &bytesAfter,
                           (unsigned char**)&clientWindows) == Success && clientWindows) {
         
+        NSLog(@"GTKMenuImporter: Successfully got client window list");
         if (gtkScans <= 2) {
             NSLog(@"GTKMenuImporter: Found %lu client windows to scan", numClientWindows);
         }
         
+        NSLog(@"GTKMenuImporter: About to iterate through %lu client windows", numClientWindows);
         for (unsigned long i = 0; i < numClientWindows; i++) {
+            if (i % 100 == 0 && i > 0) {
+                NSLog(@"GTKMenuImporter: Processed %lu of %lu windows", i, numClientWindows);
+            }
+            
             Window window = clientWindows[i];
             
             // Debug: log the window ID we're checking (only for first few scans)
@@ -430,8 +439,10 @@
             }
         }
         XFree(clientWindows);
+        NSLog(@"GTKMenuImporter: Finished processing client windows, freed memory");
     } else {
         // Fallback to root window children if _NET_CLIENT_LIST is not available
+        NSLog(@"GTKMenuImporter: Client list query failed, using fallback method");
         if (gtkScans <= 2) {
             NSLog(@"GTKMenuImporter: _NET_CLIENT_LIST not available, falling back to root children");
         }
@@ -481,12 +492,16 @@
         }
     }
     
+    NSLog(@"GTKMenuImporter: About to close X11 display");
     XCloseDisplay(display);
+    NSLog(@"GTKMenuImporter: X11 display closed");
     
     // Only log when we find new windows or on initial scans
     if (gtkScans <= 3 || newWindows > 0) {
         NSLog(@"GTKMenuImporter: Found %lu GTK windows with menus", (unsigned long)gtkWindows);
     }
+    
+    NSLog(@"GTKMenuImporter: scanForExistingMenuServices COMPLETED");
 }
 
 - (NSString *)getMenuServiceForWindow:(unsigned long)windowId
@@ -627,10 +642,9 @@
                                                keyEquivalent:@""];
         [item setEnabled:NO];
         [menu addItem:item];
-        [item release];
     }
     
-    return [menu autorelease];
+    return menu;
 }
 
 - (void)reregisterShortcutsForMenu:(NSMenu *)menu windowId:(unsigned long)windowId

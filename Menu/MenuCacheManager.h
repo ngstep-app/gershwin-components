@@ -2,23 +2,14 @@
 #import <AppKit/AppKit.h>
 
 @interface MenuCacheEntry : NSObject
-{
-    NSMenu *_menu;
-    NSTimeInterval _lastAccessed;
-    NSTimeInterval _cached;
-    NSUInteger _accessCount;
-    NSString *_serviceName;
-    NSString *_objectPath;
-    NSString *_applicationName;
-}
 
-@property (nonatomic, retain) NSMenu *menu;
+@property (nonatomic, strong) NSMenu *menu;
 @property (nonatomic, assign) NSTimeInterval lastAccessed;
 @property (nonatomic, assign) NSTimeInterval cached;
 @property (nonatomic, assign) NSUInteger accessCount;
-@property (nonatomic, retain) NSString *serviceName;
-@property (nonatomic, retain) NSString *objectPath;
-@property (nonatomic, retain) NSString *applicationName;
+@property (nonatomic, strong) NSString *serviceName;
+@property (nonatomic, strong) NSString *objectPath;
+@property (nonatomic, strong) NSString *applicationName;
 
 - (id)initWithMenu:(NSMenu *)menu 
        serviceName:(NSString *)serviceName 
@@ -31,18 +22,17 @@
 @end
 
 @interface MenuCacheManager : NSObject
-{
-    NSMutableDictionary *_cache;               // windowId -> MenuCacheEntry
-    NSMutableArray *_lruOrder;                 // Array of window IDs in LRU order
-    NSUInteger _maxCacheSize;
-    NSTimeInterval _maxCacheAge;
-    NSTimer *_cleanupTimer;
-    
-    // Statistics
-    NSUInteger _cacheHits;
-    NSUInteger _cacheMisses;
-    NSUInteger _cacheEvictions;
-}
+
+@property (nonatomic, strong) NSMutableDictionary *cache;               // windowId -> MenuCacheEntry
+@property (nonatomic, strong) NSMutableArray *lruOrder;                 // Array of window IDs in LRU order
+@property (nonatomic, assign) NSUInteger maxCacheSize;
+@property (nonatomic, assign) NSTimeInterval maxCacheAge;
+@property (nonatomic, strong) NSTimer *cleanupTimer;
+
+// Statistics
+@property (nonatomic, assign) NSUInteger cacheHits;
+@property (nonatomic, assign) NSUInteger cacheMisses;
+@property (nonatomic, assign) NSUInteger cacheEvictions;
 
 + (MenuCacheManager *)sharedManager;
 

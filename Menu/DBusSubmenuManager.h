@@ -6,12 +6,11 @@
 // MARK: - DBusSubmenuDelegate Interface
 
 @interface DBusSubmenuDelegate : NSObject <NSMenuDelegate>
-{
-    NSString *_serviceName;
-    NSString *_objectPath;
-    GNUDBusConnection *_dbusConnection;
-    NSNumber *_itemId;
-}
+
+@property (nonatomic, strong) NSString *serviceName;
+@property (nonatomic, strong) NSString *objectPath;
+@property (nonatomic, strong) GNUDBusConnection *dbusConnection;
+@property (nonatomic, strong) NSNumber *itemId;
 
 - (id)initWithServiceName:(NSString *)serviceName 
                objectPath:(NSString *)objectPath 

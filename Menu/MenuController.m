@@ -14,6 +14,12 @@
 
 @implementation MenuController
 
+// DBus file descriptor monitoring using NSFileHandle
+- (void)dbusFileDescriptorReady:(NSNotification *)notification {
+    NSLog(@"MenuController: DBus file descriptor ready for reading");
+    [[MenuProtocolManager sharedManager] processDBusMessages];
+}
+
 - (id)init
 {
     NSLog(@"MenuController: Initializing controller...");
@@ -40,7 +46,7 @@
 {
     NSLog(@"MenuController: Application did finish launching");
     
-    [_menuBar orderFront:self];
+    [self.menuBar orderFront:self];
     [self setupWindowMonitoring];
     
     NSLog(@"MenuController: Application setup complete");
@@ -55,36 +61,33 @@
     [[X11ShortcutManager sharedManager] cleanup];
     
     // Signal the X11 monitoring thread to stop
-    _shouldStopMonitoring = YES;
+    self.shouldStopMonitoring = YES;
     
     // Wait for the thread to finish (with timeout to avoid hanging)
-    if (_x11Thread && ![_x11Thread isFinished]) {
+    if (self.x11Thread && ![self.x11Thread isFinished]) {
         // Give the thread a chance to exit gracefully
         [NSThread sleepForTimeInterval:0.1];
         
-        if (![_x11Thread isFinished]) {
+        if (![self.x11Thread isFinished]) {
             NSLog(@"MenuController: X11 thread did not exit gracefully");
         }
     }
     
-    [_x11Thread release];
-    _x11Thread = nil;
+    self.x11Thread = nil;
     
     // Close X11 display
-    if (_display) {
-        XCloseDisplay(_display);
-        _display = NULL;
+    if (self.display) {
+        XCloseDisplay(self.display);
+        self.display = NULL;
     }
     
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     
     [[MenuProtocolManager sharedManager] cleanup];
     
-    [_protocolManager release];
-    _protocolManager = nil;
+    self.protocolManager = nil;
     
-    [_roundedCornersView release];
-    _roundedCornersView = nil;
+    self.roundedCornersView = nil;
 }
 
 - (void)createMenuBar
@@ -101,66 +104,84 @@
     attributes = [NSMutableDictionary new];
     [attributes setObject:menuFont forKey:NSFontAttributeName];
     
-    _screenFrame = [[NSScreen mainScreen] frame];
-    _screenSize = _screenFrame.size;
+    self.screenFrame = [[NSScreen mainScreen] frame];
+    self.screenSize = self.screenFrame.size;
     NSLog(@"MenuController: Screen frame: %.0f,%.0f %.0fx%.0f", 
-          _screenFrame.origin.x, _screenFrame.origin.y, _screenSize.width, _screenSize.height);
+          self.screenFrame.origin.x, self.screenFrame.origin.y, self.screenSize.width, self.screenSize.height);
     
     color = [self backgroundColor];
     NSLog(@"MenuController: Background color: %@", color);
         
     // Creation of the menuBar at the TOP of the screen (GNUstep coordinates: bottom-left origin)
-    rect = NSMakeRect(0, _screenSize.height - menuBarHeight, _screenSize.width, menuBarHeight);
+    rect = NSMakeRect(0, self.screenSize.height - menuBarHeight, self.screenSize.width, menuBarHeight);
     NSLog(@"MenuController: Menu bar rect: %.0f,%.0f %.0fx%.0f", 
           rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
     
-    _menuBar = [[NSWindow alloc] initWithContentRect:rect
+    self.menuBar = [[NSWindow alloc] initWithContentRect:rect
                                           styleMask:NSBorderlessWindowMask
                                             backing:NSBackingStoreBuffered
                                               defer:NO];
-    NSLog(@"MenuController: Created NSWindow: %@", _menuBar);
+    NSLog(@"MenuController: Created NSWindow: %@", self.menuBar);
     
-    [_menuBar setTitle:@"MenuBar"];
-    [_menuBar setBackgroundColor:color];
-    [_menuBar setAlphaValue:1.0];
-    [_menuBar setLevel:NSFloatingWindowLevel]; // Keep higher level
-    [_menuBar setCanHide:NO];
-    [_menuBar setHidesOnDeactivate:NO];
-    [_menuBar setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
+    [self.menuBar setTitle:@"MenuBar"];
+    [self.menuBar setBackgroundColor:color];
+    [self.menuBar setAlphaValue:1.0];
+    [self.menuBar setLevel:NSFloatingWindowLevel]; // Keep higher level
+    [self.menuBar setCanHide:NO];
+    [self.menuBar setHidesOnDeactivate:NO];
+    [self.menuBar setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
                                    NSWindowCollectionBehaviorStationary];
     
     NSLog(@"MenuController: Configured window properties");
     
     // Make the window visible immediately
-    [_menuBar makeKeyAndOrderFront:self];
-    [_menuBar orderFront:self];
+    [self.menuBar makeKeyAndOrderFront:self];
+    [self.menuBar orderFront:self];
     NSLog(@"MenuController: Ordered window front");
     
     // Create the main menu bar view that draws the background
-    _menuBarView = [[MenuBarView alloc] initWithFrame:NSMakeRect(0, 0, _screenSize.width, menuBarHeight)];
-    NSLog(@"MenuController: Created MenuBarView: %@", _menuBarView);
+    self.menuBarView = [[MenuBarView alloc] initWithFrame:NSMakeRect(0, 0, self.screenSize.width, menuBarHeight)];
+    NSLog(@"MenuController: Created MenuBarView: %@", self.menuBarView);
     
     // Create app menu widget for displaying menus - use larger width to accommodate more menu items
-    CGFloat menuWidgetWidth = _screenSize.width - 140; // Leave space for time menu and margins
-    _appMenuWidget = [[AppMenuWidget alloc] initWithFrame:NSMakeRect(20, 0, menuWidgetWidth, menuBarHeight)];
-    [_appMenuWidget setProtocolManager:[MenuProtocolManager sharedManager]];
-    NSLog(@"MenuController: Created AppMenuWidget with width %.0f: %@", menuWidgetWidth, _appMenuWidget);
+    CGFloat menuWidgetWidth = self.screenSize.width - 140; // Leave space for time menu and margins
+    self.appMenuWidget = [[AppMenuWidget alloc] initWithFrame:NSMakeRect(20, 0, menuWidgetWidth, menuBarHeight)];
+    NSLog(@"MenuController: AppMenuWidget created successfully");
+    
+    NSLog(@"MenuController: Setting up protocol manager connection");
+    // Set up the AppMenuWidget with the protocol manager
+    [self.appMenuWidget setProtocolManager:[MenuProtocolManager sharedManager]];
+    NSLog(@"MenuController: Protocol manager connected to AppMenuWidget");
+    
+    // Update all protocol handlers with the AppMenuWidget reference
+    [[MenuProtocolManager sharedManager] updateAllHandlersWithAppMenuWidget:self.appMenuWidget];
+    NSLog(@"MenuController: All protocol handlers notified of AppMenuWidget");
+    
+    NSLog(@"MenuController: Checking appMenuWidget before NSLog...");
+    if (self.appMenuWidget) {
+        NSLog(@"MenuController: appMenuWidget is valid");
+    } else {
+        NSLog(@"MenuController: appMenuWidget is nil!");
+    }
+    
+    // NSLog(@"MenuController: Created AppMenuWidget with width %.0f at address %p", menuWidgetWidth, self.appMenuWidget);
+    NSLog(@"MenuController: Skipping potentially problematic NSLog");
     
     // Create time/date menu bar
+    NSLog(@"MenuController: About to create time menu");
     [self createTimeMenu];
+    NSLog(@"MenuController: Time menu created");
     
     // probono: Create rounded corners view for black top corners like in old/src/mainwindow.cpp
     // Position it at the top of the menu bar, with height enough for the corner radius effect
     CGFloat cornerHeight = 10.0; // 2 * corner radius (5px)
-    _roundedCornersView = [[RoundedCornersView alloc] initWithFrame:NSMakeRect(0, menuBarHeight - cornerHeight, _screenSize.width, cornerHeight)];
+    self.roundedCornersView = [[RoundedCornersView alloc] initWithFrame:NSMakeRect(0, menuBarHeight - cornerHeight, self.screenSize.width, cornerHeight)];
     
     // Add subviews in the correct order (background first, then content, then corners on top)
-    [[_menuBar contentView] addSubview:_menuBarView];
-    [[_menuBar contentView] addSubview:_appMenuWidget];
-    [[_menuBar contentView] addSubview:_timeMenuView];
-    [[_menuBar contentView] addSubview:_roundedCornersView];
-    
-    [attributes release];
+    [[self.menuBar contentView] addSubview:self.menuBarView];
+    [[self.menuBar contentView] addSubview:self.appMenuWidget];
+    [[self.menuBar contentView] addSubview:self.timeMenuView];
+    [[self.menuBar contentView] addSubview:self.roundedCornersView];
 }
 
 - (void)setupMenuBar
@@ -169,7 +190,7 @@
     [self createMenuBar];
     
     NSLog(@"MenuController: Menu bar setup complete at %.0f,%.0f %.0fx%.0f", 
-          _screenFrame.origin.x, _screenFrame.origin.y, _screenSize.width, [[GSTheme theme] menuBarHeight]);
+          self.screenFrame.origin.x, self.screenFrame.origin.y, self.screenSize.width, [[GSTheme theme] menuBarHeight]);
     
     // Set up X11 window monitoring
     NSLog(@"MenuController: Setting up X11 window monitoring");
@@ -183,10 +204,10 @@
 - (void)updateActiveWindow
 {
     // Get the currently active window and update app menu
-    if (_appMenuWidget) {
-        [_appMenuWidget updateForActiveWindow];
+    if (self.appMenuWidget) {
+        [self.appMenuWidget updateForActiveWindow];
     } else {
-        NSLog(@"MenuController: _appMenuWidget is nil");
+        NSLog(@"MenuController: self.appMenuWidget is nil");
     }
 }
 
@@ -194,24 +215,43 @@
 {
     NSLog(@"MenuController: Initializing all menu protocols...");
     
+    NSLog(@"MenuController: About to call initializeAllProtocols...");
     if (![[MenuProtocolManager sharedManager] initializeAllProtocols]) {
         NSLog(@"MenuController: Failed to initialize menu protocols - continuing anyway");
-        _dbusFileDescriptor = -1;
+        self.dbusFileDescriptor = -1;
     } else {
         NSLog(@"MenuController: Menu protocols initialized successfully");
         
         // Get the DBus file descriptor for X11 event loop integration
-        _dbusFileDescriptor = [[MenuProtocolManager sharedManager] getDBusFileDescriptor];
-        if (_dbusFileDescriptor >= 0) {
-            NSLog(@"MenuController: Got DBus file descriptor %d for event loop integration", _dbusFileDescriptor);
+        self.dbusFileDescriptor = [[MenuProtocolManager sharedManager] getDBusFileDescriptor];
+        if (self.dbusFileDescriptor >= 0) {
+            NSLog(@"MenuController: Got DBus file descriptor %d for event loop integration", self.dbusFileDescriptor);
+            
+            // Create NSFileHandle for DBus file descriptor monitoring
+            NSFileHandle *dbusFileHandle = [[NSFileHandle alloc] initWithFileDescriptor:self.dbusFileDescriptor];
+            if (dbusFileHandle) {
+                [[NSNotificationCenter defaultCenter] addObserver:self
+                                                         selector:@selector(dbusFileDescriptorReady:)
+                                                             name:NSFileHandleReadCompletionNotification
+                                                           object:dbusFileHandle];
+                [dbusFileHandle readInBackgroundAndNotify];
+                NSLog(@"MenuController: DBus file descriptor integrated into notification system");
+            } else {
+                NSLog(@"MenuController: Failed to create NSFileHandle for DBus file descriptor");
+            }
+    
+    // Add a small delay to ensure everything is properly settled
+    [NSThread sleepForTimeInterval:0.05];
+    
+    NSLog(@"MenuController: Event loop integration setup complete");
         } else {
             NSLog(@"MenuController: Failed to get DBus file descriptor");
         }
     }
     
     // Set the app menu widget reference
-    if (_appMenuWidget) {
-        [[MenuProtocolManager sharedManager] setAppMenuWidget:_appMenuWidget];
+    if (self.appMenuWidget) {
+        [[MenuProtocolManager sharedManager] setAppMenuWidget:self.appMenuWidget];
         NSLog(@"MenuController: Set up connection between MenuProtocolManager and AppMenuWidget");
     }
 }
@@ -219,25 +259,23 @@
 - (void)createProtocolManager
 {
     NSLog(@"MenuController: Creating MenuProtocolManager...");
-    _protocolManager = [[MenuProtocolManager sharedManager] retain];
+    self.protocolManager = [MenuProtocolManager sharedManager];
     
     // Register both Canonical and GTK protocol handlers
     DBusMenuImporter *canonicalHandler = [[DBusMenuImporter alloc] init];
     GTKMenuImporter *gtkHandler = [[GTKMenuImporter alloc] init];
     
-    [_protocolManager registerProtocolHandler:canonicalHandler forType:MenuProtocolTypeCanonical];
-    [_protocolManager registerProtocolHandler:gtkHandler forType:MenuProtocolTypeGTK];
-    
-    [canonicalHandler release];
-    [gtkHandler release];
+    [self.protocolManager registerProtocolHandler:canonicalHandler forType:MenuProtocolTypeCanonical];
+    [self.protocolManager registerProtocolHandler:gtkHandler forType:MenuProtocolTypeGTK];
     
     NSLog(@"MenuController: Registered both Canonical and GTK protocol handlers");
+    NSLog(@"MenuController: createProtocolManager COMPLETED");
 }
 
 - (void)setupWindowMonitoring
 {
     // Prevent setting up monitoring multiple times
-    if (_x11Thread && ![_x11Thread isFinished]) {
+    if (self.x11Thread && ![self.x11Thread isFinished]) {
         NSLog(@"MenuController: X11 monitoring already set up, skipping");
         return;
     }
@@ -245,33 +283,33 @@
     NSLog(@"MenuController: Setting up X11 _NET_ACTIVE_WINDOW monitoring");
     
     // Initialize monitoring flag
-    _shouldStopMonitoring = NO;
+    self.shouldStopMonitoring = NO;
     
     // Open X11 display connection
-    _display = XOpenDisplay(NULL);
-    if (!_display) {
+    self.display = XOpenDisplay(NULL);
+    if (!self.display) {
         NSLog(@"MenuController: Cannot open X11 display for window monitoring");
         return;
     }
     
-    _rootWindow = DefaultRootWindow(_display);
-    _netActiveWindowAtom = XInternAtom(_display, "_NET_ACTIVE_WINDOW", False);
-    Atom netClientListAtom = XInternAtom(_display, "_NET_CLIENT_LIST", False);
+    self.rootWindow = DefaultRootWindow(self.display);
+    self.netActiveWindowAtom = XInternAtom(self.display, "_NET_ACTIVE_WINDOW", False);
+    Atom netClientListAtom = XInternAtom(self.display, "_NET_CLIENT_LIST", False);
     
     // Select PropertyNotify events on the root window to detect both active window and client list changes
-    XSelectInput(_display, _rootWindow, PropertyChangeMask);
+    XSelectInput(self.display, self.rootWindow, PropertyChangeMask);
     
     // Store the client list atom for monitoring
-    _netClientListAtom = netClientListAtom;
+    self.netClientListAtom = netClientListAtom;
     
     NSLog(@"MenuController: X11 display opened, monitoring _NET_ACTIVE_WINDOW and _NET_CLIENT_LIST property changes");
     
     // Start X11 event loop in a separate NSThread
-    _x11Thread = [[NSThread alloc] initWithTarget:self
+    self.x11Thread = [[NSThread alloc] initWithTarget:self
                                          selector:@selector(x11ActiveWindowMonitor)
                                            object:nil];
-    [_x11Thread setName:@"X11ActiveWindowMonitor"];
-    [_x11Thread start];
+    [self.x11Thread setName:@"X11ActiveWindowMonitor"];
+    [self.x11Thread start];
     
     NSLog(@"MenuController: X11 monitoring thread started successfully");
     
@@ -302,8 +340,8 @@
     
     // Use our menu bar window as the supporting window
     Window menuBarWindow = 0;
-    if (_menuBar) {
-        menuBarWindow = (Window)[_menuBar windowNumber];
+    if (self.menuBar) {
+        menuBarWindow = (Window)[self.menuBar windowNumber];
     }
     
     if (menuBarWindow) {
@@ -357,151 +395,131 @@
     [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
     
     // Force an immediate update of the current window to check if it now has a menu
-    if (_appMenuWidget) {
-        [_appMenuWidget updateForActiveWindow];
+    if (self.appMenuWidget) {
+        [self.appMenuWidget updateForActiveWindow];
     }
-}
-
-- (AppMenuWidget *)appMenuWidget
-{
-    return _appMenuWidget;
 }
 
 - (void)x11ActiveWindowMonitor
 {
     NSLog(@"MenuController: X11 _NET_ACTIVE_WINDOW monitor thread started");
     
-    // Create an autorelease pool for this thread
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
-    // Do initial scan once when thread starts
-    [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
-    
-    // Get X11 connection file descriptor
-    int x11_fd = ConnectionNumber(_display);
-    NSLog(@"MenuController: X11 file descriptor: %d, DBus file descriptor: %d", x11_fd, _dbusFileDescriptor);
-    
-    while (!_shouldStopMonitoring) {
-        // Process X11 events - simpler approach from working commit
-        if (XPending(_display) > 0) {
-            XEvent event;
-            XNextEvent(_display, &event);
-            
-            // Check if this is a PropertyNotify event for _NET_ACTIVE_WINDOW
-            if (event.type == PropertyNotify && 
-                event.xproperty.window == _rootWindow &&
-                event.xproperty.atom == _netActiveWindowAtom) {
-                
-                NSLog(@"MenuController: _NET_ACTIVE_WINDOW property changed - active window changed");
-                
-                // Update the app menu widget for the new active window
-                if (_appMenuWidget) {
-                    [_appMenuWidget updateForActiveWindow];
-                }
-            }
-            // Check if this is a PropertyNotify event for _NET_CLIENT_LIST (new windows)
-            else if (event.type == PropertyNotify && 
-                     event.xproperty.window == _rootWindow &&
-                     event.xproperty.atom == _netClientListAtom) {
-                
-                NSLog(@"MenuController: _NET_CLIENT_LIST property changed - new window created/destroyed");
-                
-                // Scan for new GTK menu services when windows are created/destroyed
-                [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
-            }
-        } else {
-            // No events pending, sleep briefly to avoid busy waiting
-            [NSThread sleepForTimeInterval:0.01];
-        }
+    @autoreleasepool {
+        // Do initial scan once when thread starts
+        [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
         
-        // Process DBus messages (non-blocking check)
-        if (_dbusFileDescriptor >= 0) {
-            id<MenuProtocolHandler> canonicalHandler = [[MenuProtocolManager sharedManager] handlerForType:MenuProtocolTypeCanonical];
-            if (canonicalHandler && [canonicalHandler respondsToSelector:@selector(processDBusMessages)]) {
-                [(id)canonicalHandler processDBusMessages];
+        // Get X11 connection file descriptor
+        int x11_fd = ConnectionNumber(self.display);
+        NSLog(@"MenuController: X11 file descriptor: %d, DBus file descriptor: %d", x11_fd, self.dbusFileDescriptor);
+        
+        while (!self.shouldStopMonitoring) {
+            // Process X11 events - simpler approach from working commit
+            if (XPending(self.display) > 0) {
+                XEvent event;
+                XNextEvent(self.display, &event);
+                
+                // Check if this is a PropertyNotify event for _NET_ACTIVE_WINDOW
+                if (event.type == PropertyNotify && 
+                    event.xproperty.window == self.rootWindow &&
+                    event.xproperty.atom == self.netActiveWindowAtom) {
+                    
+                    NSLog(@"MenuController: _NET_ACTIVE_WINDOW property changed - active window changed");
+                    
+                    // Update the app menu widget for the new active window
+                    if (self.appMenuWidget) {
+                        [self.appMenuWidget updateForActiveWindow];
+                    }
+                }
+                // Check if this is a PropertyNotify event for _NET_CLIENT_LIST (new windows)
+                else if (event.type == PropertyNotify && 
+                         event.xproperty.window == self.rootWindow &&
+                         event.xproperty.atom == self.netClientListAtom) {
+                    
+                    NSLog(@"MenuController: _NET_CLIENT_LIST property changed - new window created/destroyed");
+                    
+                    // Scan for new GTK menu services when windows are created/destroyed
+                    [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
+                }
+            } else {
+                // No events pending, sleep briefly to avoid busy waiting
+                [NSThread sleepForTimeInterval:0.01];
+            }
+            
+            // Process DBus messages (non-blocking check)
+            if (self.dbusFileDescriptor >= 0) {
+                id<MenuProtocolHandler> canonicalHandler = [[MenuProtocolManager sharedManager] handlerForType:MenuProtocolTypeCanonical];
+                if (canonicalHandler && [canonicalHandler respondsToSelector:@selector(processDBusMessages)]) {
+                    [(id)canonicalHandler processDBusMessages];
+                }
             }
         }
     }
     
     NSLog(@"MenuController: X11 monitor thread exiting");
-    [pool release];
 }
 
 - (void)createTimeMenu
 {
+    NSLog(@"MenuController: createTimeMenu - ENTRY");
+    
     NSLog(@"MenuController: Creating time menu");
     
+    NSLog(@"MenuController: Creating time formatters...");
     // Create formatters
-    _timeFormatter = [[NSDateFormatter alloc] init];
-    [_timeFormatter setDateFormat:@"HH:mm"];
-    _dateFormatter = [[NSDateFormatter alloc] init];
-    [_dateFormatter setDateFormat:@"EEEE, MMMM d, yyyy"];
+    self.timeFormatter = [[NSDateFormatter alloc] init];
+    NSLog(@"MenuController: Created timeFormatter");
+    [self.timeFormatter setDateFormat:@"HH:mm"];
+    NSLog(@"MenuController: Set time format");
+    self.dateFormatter = [[NSDateFormatter alloc] init];
+    NSLog(@"MenuController: Created dateFormatter");
+    [self.dateFormatter setDateFormat:@"EEEE, MMMM d, yyyy"];
+    NSLog(@"MenuController: Set date format");
 
+    NSLog(@"MenuController: Creating menu and items...");
     // Create the menu and items
-    _timeMenu = [[NSMenu alloc] initWithTitle:@""];
-    [_timeMenu setAutoenablesItems:NO];
-    _timeMenuItem = [[NSMenuItem alloc] initWithTitle:@"00:00" action:nil keyEquivalent:@""];
+    self.timeMenu = [[NSMenu alloc] initWithTitle:@""];
+    NSLog(@"MenuController: Created timeMenu");
+    [self.timeMenu setAutoenablesItems:NO];
+    NSLog(@"MenuController: Set autoenablesItems");
+    self.timeMenuItem = [[NSMenuItem alloc] initWithTitle:@"00:00" action:nil keyEquivalent:@""];
+    NSLog(@"MenuController: Created timeMenuItem");
     /*
     NSMenu *timeSubMenu = [[NSMenu alloc] initWithTitle:@"TimeSubMenu"];
-    _dateMenuItem = [[NSMenuItem alloc] initWithTitle:@"Loading..." action:nil keyEquivalent:@""];
-    [_dateMenuItem setEnabled:NO];
-    [timeSubMenu addItem:_dateMenuItem];
-    [_timeMenuItem setSubmenu:timeSubMenu];
-    [timeSubMenu release];
+    self.dateMenuItem = [[NSMenuItem alloc] initWithTitle:@"Loading..." action:nil keyEquivalent:@""];
+    [self.dateMenuItem setEnabled:NO];
+    [timeSubMenu addItem:self.dateMenuItem];
+    [self.timeMenuItem setSubmenu:timeSubMenu];
     */
-    [_timeMenu addItem:_timeMenuItem];
+    [self.timeMenu addItem:self.timeMenuItem];
     
     // Create the menu view at the right edge
     CGFloat timeMenuWidth = 60;
-    CGFloat timeMenuX = _screenSize.width - timeMenuWidth;
+    CGFloat timeMenuX = self.screenSize.width - timeMenuWidth;
     const CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight];
-    _timeMenuView = [[NSMenuView alloc] initWithFrame:NSMakeRect(timeMenuX, 0, timeMenuWidth, menuBarHeight)];
-    [_timeMenuView setMenu:_timeMenu];
-    [_timeMenuView setHorizontal:YES];
-    [_timeMenuView setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin | NSViewMinYMargin];
+    self.timeMenuView = [[NSMenuView alloc] initWithFrame:NSMakeRect(timeMenuX, 0, timeMenuWidth, menuBarHeight)];
+    [self.timeMenuView setMenu:self.timeMenu];
+    [self.timeMenuView setHorizontal:YES];
+    [self.timeMenuView setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin | NSViewMinYMargin];
 
+    NSLog(@"MenuController: About to schedule time update timer");
     // Start timer to update time
-    _timeUpdateTimer = [[NSTimer scheduledTimerWithTimeInterval:1.0
+    self.timeUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
                                                         target:self
                                                       selector:@selector(updateTimeMenu)
                                                       userInfo:nil
-                                                       repeats:YES] retain];
+                                                       repeats:YES];
+    NSLog(@"MenuController: Timer scheduled successfully");
     [self updateTimeMenu];
+    NSLog(@"MenuController: Initial time update called");
 }
 
 - (void)updateTimeMenu
 {
     NSDate *now = [NSDate date];
-    NSString *timeString = [_timeFormatter stringFromDate:now];
-    [_timeMenuItem setTitle:timeString];
-    NSString *dateString = [_dateFormatter stringFromDate:now];
-    [_dateMenuItem setTitle:dateString];
-}
-
-- (void)dealloc
-{
-    // Ensure shortcuts are cleaned up if dealloc is called
-    NSLog(@"MenuController: dealloc - cleaning up global shortcuts...");
-    [[X11ShortcutManager sharedManager] cleanup];
-    
-    // Clean up time display resources
-    if (_timeUpdateTimer) {
-        [_timeUpdateTimer invalidate];
-        [_timeUpdateTimer release];
-        _timeUpdateTimer = nil;
-    }
-    [_timeFormatter release];
-    [_dateFormatter release];
-    [_timeMenuView release];
-    [_timeMenu release];
-    [_timeMenuItem release];
-    [_dateMenuItem release];
-    
-    [_menuBar release];
-    [_menuBarView release];
-    [_appMenuWidget release];
-    [_protocolManager release];
-    [super dealloc];
+    NSString *timeString = [self.timeFormatter stringFromDate:now];
+    [self.timeMenuItem setTitle:timeString];
+    NSString *dateString = [self.dateFormatter stringFromDate:now];
+    [self.dateMenuItem setTitle:dateString];
 }
 
 @end

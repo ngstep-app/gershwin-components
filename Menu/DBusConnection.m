@@ -11,15 +11,16 @@ typedef struct DBusConnection DBusConnectionStruct;
 - (id)parseDBusMessageIterator:(DBusMessageIter *)iter;
 @end
 
-static GNUDBusConnection *sharedSessionBus = nil;
-
 @implementation GNUDBusConnection
 
 + (GNUDBusConnection *)sessionBus
 {
-    if (!sharedSessionBus) {
-        sharedSessionBus = [[GNUDBusConnection alloc] init];
-        [sharedSessionBus connect];
+    static GNUDBusConnection *sharedSessionBus = nil;
+    @synchronized(self) {
+        if (!sharedSessionBus) {
+            sharedSessionBus = [[GNUDBusConnection alloc] init];
+            [sharedSessionBus connect];
+        }
     }
     return sharedSessionBus;
 }
@@ -28,9 +29,9 @@ static GNUDBusConnection *sharedSessionBus = nil;
 {
     self = [super init];
     if (self) {
-        _connection = NULL;
-        _connected = NO;
-        _messageHandlers = [[NSMutableDictionary alloc] init];
+        self.connection = NULL;
+        self.connected = NO;
+        self.messageHandlers = [[NSMutableDictionary alloc] init];
     }
     return self;
 }
@@ -40,47 +41,47 @@ static GNUDBusConnection *sharedSessionBus = nil;
     DBusError error;
     dbus_error_init(&error);
     
-    _connection = dbus_bus_get(DBUS_BUS_SESSION, &error);
+    self.connection = dbus_bus_get(DBUS_BUS_SESSION, &error);
     if (dbus_error_is_set(&error)) {
         NSLog(@"DBusConnection: Failed to connect to session bus: %s", error.message);
         dbus_error_free(&error);
         return NO;
     }
     
-    if (!_connection) {
+    if (!self.connection) {
         NSLog(@"DBusConnection: Failed to get session bus connection");
         return NO;
     }
     
-    _connected = YES;
+    self.connected = YES;
     NSLog(@"DBusConnection: Successfully connected to session bus");
     return YES;
 }
 
 - (void)disconnect
 {
-    if (_connection) {
-        dbus_connection_unref((DBusConnectionStruct *)_connection);
-        _connection = NULL;
+    if (self.connection) {
+        dbus_connection_unref((DBusConnectionStruct *)self.connection);
+        self.connection = NULL;
     }
-    _connected = NO;
+    self.connected = NO;
 }
 
 - (BOOL)isConnected
 {
-    return _connected;
+    return self.connected;
 }
 
 - (BOOL)registerService:(NSString *)serviceName
 {
-    if (!_connected || !_connection) {
+    if (!self.connected || !self.connection) {
         return NO;
     }
     
     DBusError error;
     dbus_error_init(&error);
     
-    int result = dbus_bus_request_name((DBusConnectionStruct *)_connection, 
+    int result = dbus_bus_request_name((DBusConnectionStruct *)self.connection, 
                                       [serviceName UTF8String],
                                       DBUS_NAME_FLAG_REPLACE_EXISTING | DBUS_NAME_FLAG_ALLOW_REPLACEMENT,
                                       &error);
@@ -125,13 +126,13 @@ static GNUDBusConnection *sharedSessionBus = nil;
                  interface:(NSString *)interfaceName 
                    handler:(id)handler
 {
-    if (!_connected || !_connection) {
+    if (!self.connected || !self.connection) {
         return NO;
     }
     
     // Store the handler for this object path
     NSString *key = [NSString stringWithFormat:@"%@:%@", objectPath, interfaceName];
-    [_messageHandlers setObject:handler forKey:key];
+    [self.messageHandlers setObject:handler forKey:key];
     
     NSLog(@"DBusConnection: Registered handler for %@ on %@", interfaceName, objectPath);
     return YES;
@@ -143,7 +144,7 @@ static GNUDBusConnection *sharedSessionBus = nil;
      interface:(NSString *)interfaceName
      arguments:(NSArray *)arguments
 {
-    if (!_connected || !_connection) {
+    if (!self.connected || !self.connection) {
         return nil;
     }
     
@@ -309,7 +310,7 @@ static GNUDBusConnection *sharedSessionBus = nil;
     DBusError error;
     dbus_error_init(&error);
     
-    DBusMessage *reply = dbus_connection_send_with_reply_and_block((DBusConnectionStruct *)_connection, 
+    DBusMessage *reply = dbus_connection_send_with_reply_and_block((DBusConnectionStruct *)self.connection, 
                                                                   message, 250, &error);
     dbus_message_unref(message);
     
@@ -397,7 +398,7 @@ static GNUDBusConnection *sharedSessionBus = nil;
                   onService:(NSString *)serviceName
                  objectPath:(NSString *)objectPath
 {
-    if (!_connected || !_connection) {
+    if (!self.connected || !self.connection) {
         return nil;
     }
     
@@ -492,7 +493,7 @@ static GNUDBusConnection *sharedSessionBus = nil;
     DBusError error;
     dbus_error_init(&error);
     
-    DBusMessage *reply = dbus_connection_send_with_reply_and_block((DBusConnectionStruct *)_connection, 
+    DBusMessage *reply = dbus_connection_send_with_reply_and_block((DBusConnectionStruct *)self.connection, 
                                                                   message, 250, &error);
     dbus_message_unref(message);
     
@@ -669,16 +670,16 @@ static GNUDBusConnection *sharedSessionBus = nil;
 
 - (void)processMessages
 {
-    if (!_connected || !_connection) {
+    if (!self.connected || !self.connection) {
         return;
     }
     
     // Process pending messages with timeout
-    dbus_connection_read_write_dispatch((DBusConnectionStruct *)_connection, 0);
+    dbus_connection_read_write_dispatch((DBusConnectionStruct *)self.connection, 0);
     
     // Check for incoming messages
     DBusMessage *message;
-    while ((message = dbus_connection_pop_message((DBusConnectionStruct *)_connection)) != NULL) {
+    while ((message = dbus_connection_pop_message((DBusConnectionStruct *)self.connection)) != NULL) {
         [self handleIncomingMessage:message];
         dbus_message_unref(message);
     }
@@ -686,33 +687,44 @@ static GNUDBusConnection *sharedSessionBus = nil;
 
 - (void *)rawConnection
 {
-    return (void *)_connection;
+    return (void *)self.connection;
 }
 
 - (int)getFileDescriptor
 {
-    if (!_connected || !_connection) {
+    if (!self.connected || !self.connection) {
+        NSLog(@"DBusConnection: Cannot get file descriptor - not connected");
         return -1;
     }
     
-    // Get the Unix file descriptor from the DBus connection
-    int fd = -1;
-    if (dbus_connection_get_unix_fd((DBusConnectionStruct *)_connection, &fd)) {
-        NSLog(@"DBusConnection: Got file descriptor: %d", fd);
-        return fd;
-    } else {
-        NSLog(@"DBusConnection: Failed to get file descriptor");
+    @try {
+        // Get the Unix file descriptor from the DBus connection
+        int fd = -1;
+        if (dbus_connection_get_unix_fd((DBusConnectionStruct *)self.connection, &fd)) {
+            NSLog(@"DBusConnection: Got file descriptor: %d", fd);
+            // Validate file descriptor
+            if (fd < 0) {
+                NSLog(@"DBusConnection: Invalid file descriptor: %d", fd);
+                return -1;
+            }
+            return fd;
+        } else {
+            NSLog(@"DBusConnection: Failed to get file descriptor");
+            return -1;
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"DBusConnection: Exception getting file descriptor: %@", exception);
         return -1;
     }
 }
 
 - (BOOL)sendReply:(void *)reply
 {
-    if (!_connected || !_connection || !reply) {
+    if (!self.connected || !self.connection || !reply) {
         return NO;
     }
     
-    dbus_bool_t result = dbus_connection_send((DBusConnectionStruct *)_connection, (DBusMessage *)reply, NULL);
+    dbus_bool_t result = dbus_connection_send((DBusConnectionStruct *)self.connection, (DBusMessage *)reply, NULL);
     return result == TRUE;
 }
 
@@ -743,7 +755,7 @@ static GNUDBusConnection *sharedSessionBus = nil;
     
     // Find and call the appropriate handler
     NSString *key = [NSString stringWithFormat:@"%@:%@", pathStr, interfaceStr];
-    id handler = [_messageHandlers objectForKey:key];
+    id handler = [self.messageHandlers objectForKey:key];
     
     if (handler && [handler respondsToSelector:@selector(handleDBusMethodCall:)]) {
         NSDictionary *callInfo = @{
@@ -768,7 +780,7 @@ static GNUDBusConnection *sharedSessionBus = nil;
         const char *xmlStr = [introspectionXML UTF8String];
         dbus_message_append_args(reply, DBUS_TYPE_STRING, &xmlStr, DBUS_TYPE_INVALID);
         
-        dbus_connection_send((DBusConnectionStruct *)_connection, reply, NULL);
+        dbus_connection_send((DBusConnectionStruct *)self.connection, reply, NULL);
         dbus_message_unref(reply);
         
         NSLog(@"DBusConnection: Sent introspection XML for path %s", path);
@@ -820,13 +832,6 @@ static GNUDBusConnection *sharedSessionBus = nil;
 - (DBusConnectionStruct *)connection
 {
     return (DBusConnectionStruct *)_connection;
-}
-
-- (void)dealloc
-{
-    [self disconnect];
-    [_messageHandlers release];
-    [super dealloc];
 }
 
 @end

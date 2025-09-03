@@ -20,6 +20,7 @@
 @optional
 - (void)setAppMenuWidget:(AppMenuWidget *)widget;
 - (void)cleanup;
+- (void)processDBusMessages;
 
 @end
 
@@ -35,13 +36,10 @@ typedef NS_ENUM(NSInteger, MenuProtocolType) {
  * Provides a unified interface while maintaining clear separation between implementations.
  */
 @interface MenuProtocolManager : NSObject
-{
-    NSMutableArray *_protocolHandlers;  // Array of protocol handlers
-    AppMenuWidget *_appMenuWidget;      // Reference to the menu widget
-    NSMutableDictionary *_windowToProtocolMap; // windowId -> protocol type that handles it
-}
 
-@property (nonatomic, assign) AppMenuWidget *appMenuWidget;
+@property (nonatomic, strong) NSMutableArray *protocolHandlers;  // Array of protocol handlers
+@property (nonatomic, weak) AppMenuWidget *appMenuWidget;        // Reference to the menu widget
+@property (nonatomic, strong) NSMutableDictionary *windowToProtocolMap; // windowId -> protocol type that handles it
 
 // Singleton instance
 + (instancetype)sharedManager;
@@ -68,6 +66,10 @@ typedef NS_ENUM(NSInteger, MenuProtocolType) {
 
 // DBus integration
 - (int)getDBusFileDescriptor;
+- (void)processDBusMessages;
+
+// AppMenuWidget management
+- (void)updateAllHandlersWithAppMenuWidget:(AppMenuWidget *)appMenuWidget;
 
 // Cleanup
 - (void)cleanup;

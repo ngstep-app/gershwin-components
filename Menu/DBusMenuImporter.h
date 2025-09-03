@@ -6,16 +6,13 @@
 @class AppMenuWidget;
 
 @interface DBusMenuImporter : NSObject <MenuProtocolHandler>
-{
-    GNUDBusConnection *_dbusConnection;
-    NSMutableDictionary *_registeredWindows; // windowId -> service name
-    NSMutableDictionary *_windowMenuPaths;   // windowId -> object path
-    NSMutableDictionary *_menuCache;         // windowId -> NSMenu
-    NSTimer *_cleanupTimer;
-    AppMenuWidget *_appMenuWidget;  // Reference to AppMenuWidget for immediate menu display
-}
 
-@property (nonatomic, assign) AppMenuWidget *appMenuWidget;
+@property (nonatomic, strong) GNUDBusConnection *dbusConnection;
+@property (nonatomic, strong) NSMutableDictionary *registeredWindows; // windowId -> service name
+@property (nonatomic, strong) NSMutableDictionary *windowMenuPaths;   // windowId -> object path
+@property (nonatomic, strong) NSMutableDictionary *menuCache;         // windowId -> NSMenu
+@property (nonatomic, strong) NSTimer *cleanupTimer;
+@property (nonatomic, weak) AppMenuWidget *appMenuWidget;  // Reference to AppMenuWidget for immediate menu display
 
 - (BOOL)connectToDBus;
 - (void)showDBusErrorAndExit;

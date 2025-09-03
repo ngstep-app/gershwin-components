@@ -6,20 +6,17 @@
 @class MenuProtocolManager;
 
 @interface AppMenuWidget : NSView <NSMenuDelegate>
-{
-    MenuProtocolManager *_protocolManager;
-    NSMenuView *_menuView;
-    NSString *_currentApplicationName;
-    unsigned long _currentWindowId;
-    NSMenu *_currentMenu;
-    NSTimer *_updateTimer;
-    
-    // Anti-flicker support - keep old menu visible until new one is ready
-    NSMenuView *_oldMenuView;
-    NSTimer *_antiFlickerTimer;
-}
 
-@property (nonatomic, assign) MenuProtocolManager *protocolManager;
+@property (nonatomic, weak) MenuProtocolManager *protocolManager;
+@property (nonatomic, strong) NSMenuView *menuView;
+@property (nonatomic, strong) NSString *currentApplicationName;
+@property (nonatomic, assign) unsigned long currentWindowId;
+@property (nonatomic, strong) NSMenu *currentMenu;
+@property (nonatomic, strong) NSTimer *updateTimer;
+
+// Anti-flicker support - keep old menu visible until new one is ready
+@property (nonatomic, strong) NSMenuView *oldMenuView;
+@property (nonatomic, strong) NSTimer *antiFlickerTimer;
 
 - (void)updateForActiveWindow;
 - (void)clearMenu;

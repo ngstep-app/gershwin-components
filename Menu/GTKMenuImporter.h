@@ -14,18 +14,15 @@
  * This is separate from the Canonical dbusmenu implementation to maintain clean separation.
  */
 @interface GTKMenuImporter : NSObject <MenuProtocolHandler>
-{
-    GNUDBusConnection *_dbusConnection;
-    NSMutableDictionary *_registeredWindows;     // windowId -> service name
-    NSMutableDictionary *_windowMenuPaths;      // windowId -> menu object path
-    NSMutableDictionary *_windowActionPaths;    // windowId -> action group object path
-    NSMutableDictionary *_menuCache;            // windowId -> NSMenu
-    NSMutableDictionary *_actionGroupCache;     // windowId -> action group info
-    NSTimer *_cleanupTimer;
-    AppMenuWidget *_appMenuWidget;
-}
 
-@property (nonatomic, assign) AppMenuWidget *appMenuWidget;
+@property (nonatomic, strong) GNUDBusConnection *dbusConnection;
+@property (nonatomic, strong) NSMutableDictionary *registeredWindows;     // windowId -> service name
+@property (nonatomic, strong) NSMutableDictionary *windowMenuPaths;      // windowId -> menu object path
+@property (nonatomic, strong) NSMutableDictionary *windowActionPaths;    // windowId -> action group object path
+@property (nonatomic, strong) NSMutableDictionary *menuCache;            // windowId -> NSMenu
+@property (nonatomic, strong) NSMutableDictionary *actionGroupCache;     // windowId -> action group info
+@property (nonatomic, strong) NSTimer *cleanupTimer;
+@property (nonatomic, weak) AppMenuWidget *appMenuWidget;
 
 // MenuProtocolHandler conformance
 - (BOOL)connectToDBus;

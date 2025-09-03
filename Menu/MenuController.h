@@ -10,30 +10,28 @@
 @class RoundedCornersView;
 
 @interface MenuController : NSObject <NSApplicationDelegate>
-{
-@public
-    NSWindow *_menuBar;
-    NSRect _screenFrame;
-    NSSize _screenSize;
-    MenuBarView *_menuBarView;
-    AppMenuWidget *_appMenuWidget;
-    MenuProtocolManager *_protocolManager;
-    RoundedCornersView *_roundedCornersView;
-    NSMenuView *_timeMenuView;
-    NSMenu *_timeMenu;
-    NSMenuItem *_timeMenuItem;
-    NSMenuItem *_dateMenuItem;
-    NSTimer *_timeUpdateTimer;
-    NSDateFormatter *_timeFormatter;
-    NSDateFormatter *_dateFormatter;
-    Display *_display;
-    Window _rootWindow;
-    Atom _netActiveWindowAtom;
-    Atom _netClientListAtom;
-    NSThread *_x11Thread;
-    BOOL _shouldStopMonitoring;
-    int _dbusFileDescriptor;
-}
+
+@property (nonatomic, strong) NSWindow *menuBar;
+@property (nonatomic, assign) NSRect screenFrame;
+@property (nonatomic, assign) NSSize screenSize;
+@property (nonatomic, strong) MenuBarView *menuBarView;
+@property (nonatomic, strong) AppMenuWidget *appMenuWidget;
+@property (nonatomic, strong) MenuProtocolManager *protocolManager;
+@property (nonatomic, strong) RoundedCornersView *roundedCornersView;
+@property (nonatomic, strong) NSMenuView *timeMenuView;
+@property (nonatomic, strong) NSMenu *timeMenu;
+@property (nonatomic, strong) NSMenuItem *timeMenuItem;
+@property (nonatomic, strong) NSMenuItem *dateMenuItem;
+@property (nonatomic, strong) NSTimer *timeUpdateTimer;
+@property (nonatomic, strong) NSDateFormatter *timeFormatter;
+@property (nonatomic, strong) NSDateFormatter *dateFormatter;
+@property (nonatomic, assign) Display *display;
+@property (nonatomic, assign) Window rootWindow;
+@property (nonatomic, assign) Atom netActiveWindowAtom;
+@property (nonatomic, assign) Atom netClientListAtom;
+@property (nonatomic, strong) NSThread *x11Thread;
+@property (nonatomic, assign) BOOL shouldStopMonitoring;
+@property (nonatomic, assign) int dbusFileDescriptor;
 
 - (id)init;
 - (NSColor *)backgroundColor;

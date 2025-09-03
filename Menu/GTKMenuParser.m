@@ -61,7 +61,6 @@
     if (!rootMenu) {
         NSLog(@"GTKMenuParser: Could not create root menu, creating placeholder");
         rootMenu = [[NSMenu alloc] initWithTitle:@"GTK App Menu"];
-        [rootMenu autorelease];
     }
     
     return rootMenu;
@@ -147,7 +146,7 @@
                     
                     // Add all items from the section to our menu
                     for (NSMenuItem *item in [sectionMenu itemArray]) {
-                        [menu addItem:[[item copy] autorelease]];
+                        [menu addItem:[item copy]];
                     }
                 } else {
                     NSLog(@"GTKMenuParser: Section menu %@ not found", sectionMenuId);
@@ -262,7 +261,6 @@
                                                   dbusConnection:dbusConnection
                                                          groupId:groupId
                                                         menuDict:menuDict];
-                                [lazySubmenu release];
                             }
                         } else {
                             NSLog(@"GTKMenuParser: Failed to load additional menu group %@, setting up lazy loading", groupId);
@@ -276,7 +274,6 @@
                                               dbusConnection:dbusConnection
                                                      groupId:groupId
                                                     menuDict:menuDict];
-                            [lazySubmenu release];
                             NSLog(@"GTKMenuParser: Set up lazy-loaded submenu for item '%@'", displayLabel);
                         }
                     }
@@ -284,14 +281,13 @@
             }
             
             [menu addItem:item];
-            [item release];
             
             NSLog(@"GTKMenuParser: Added GTK menu item: '%@' (action: %@)", displayLabel, action ?: @"none");
         }
     }
     
     NSLog(@"GTKMenuParser: Created GTK menu '%@' with %lu items", menuTitle, (unsigned long)[menu numberOfItems]);
-    return [menu autorelease];
+    return menu;
 }
 
 + (void)parseMenuData:(NSArray *)menuData intoDict:(NSMutableDictionary *)menuDict
@@ -342,7 +338,7 @@
     }
     
     NSLog(@"GTKMenuParser: Created GMenuModel menu with %lu items", (unsigned long)[menu numberOfItems]);
-    return [menu autorelease];
+    return menu;
 }
 
 + (NSMenuItem *)createMenuItemFromGModelItem:(id)modelItem 
@@ -472,13 +468,12 @@
         if (!submenu) {
             // Create placeholder submenu
             submenu = [[NSMenu alloc] initWithTitle:label];
-            [submenu autorelease];
         }
         
         [menuItem setSubmenu:submenu];
     }
     
-    return [menuItem autorelease];
+    return menuItem;
 }
 
 + (NSDictionary *)parseActionGroupFromResult:(id)result

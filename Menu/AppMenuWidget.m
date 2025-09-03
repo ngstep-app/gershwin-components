@@ -11,16 +11,14 @@
 
 @implementation AppMenuWidget
 
-@synthesize protocolManager = _protocolManager;
-
 - (id)initWithFrame:(NSRect)frameRect
 {
     self = [super initWithFrame:frameRect];
     if (self) {
-        _menuView = nil;
-        _currentApplicationName = nil;
-        _currentWindowId = 0;
-        _currentMenu = nil;
+        self.menuView = nil;
+        self.currentApplicationName = nil;
+        self.currentWindowId = 0;
+        self.currentMenu = nil;
         
         NSLog(@"AppMenuWidget: Initialized with frame %.0f,%.0f %.0fx%.0f", 
               frameRect.origin.x, frameRect.origin.y, frameRect.size.width, frameRect.size.height);
@@ -31,7 +29,7 @@
 - (void)updateForActiveWindow
 {
     
-    if (!_protocolManager) {
+    if (!self.protocolManager) {
         NSLog(@"AppMenuWidget: No protocol manager available");
         return;
     }
@@ -62,13 +60,13 @@
     
     XCloseDisplay(display);
     
-    if (activeWindow != _currentWindowId) {
-        NSLog(@"AppMenuWidget: Active window changed from %lu to %lu", _currentWindowId, activeWindow);
+    if (activeWindow != self.currentWindowId) {
+        NSLog(@"AppMenuWidget: Active window changed from %lu to %lu", self.currentWindowId, activeWindow);
         
         // Notify cache manager about window changes
         MenuCacheManager *cacheManager = [MenuCacheManager sharedManager];
-        if (_currentWindowId != 0) {
-            [cacheManager windowBecameInactive:_currentWindowId];
+        if (self.currentWindowId != 0) {
+            [cacheManager windowBecameInactive:self.currentWindowId];
         }
         if (activeWindow != 0) {
             [cacheManager windowBecameActive:activeWindow];
@@ -76,15 +74,15 @@
         
         // Check if this is a different application by comparing application names
         NSString *newAppName = [MenuUtils getApplicationNameForWindow:activeWindow];
-        BOOL isDifferentApp = !_currentApplicationName || 
-                             ![_currentApplicationName isEqualToString:newAppName];
+        BOOL isDifferentApp = !self.currentApplicationName || 
+                             ![self.currentApplicationName isEqualToString:newAppName];
         
         // Notify cache manager about application switch
-        if (isDifferentApp && newAppName && _currentApplicationName) {
-            [cacheManager applicationSwitched:_currentApplicationName toApp:newAppName];
+        if (isDifferentApp && newAppName && self.currentApplicationName) {
+            [cacheManager applicationSwitched:self.currentApplicationName toApp:newAppName];
         }
         
-        _currentWindowId = activeWindow;
+        self.currentWindowId = activeWindow;
         [self displayMenuForWindow:activeWindow isDifferentApp:isDifferentApp];
         
         // For complex applications, try to pre-warm cache for other windows of same app
@@ -115,11 +113,9 @@
     [self startAntiFlickerProtection];
     
     // Clear the current menu reference (but keep the view visible for now)
-    [_currentMenu release];
-    _currentMenu = nil;
+    self.currentMenu = nil;
     
-    [_currentApplicationName release];
-    _currentApplicationName = nil;
+    self.currentApplicationName = nil;
     
     // Don't call setNeedsDisplay here - we want to preserve the old menu visually
 }
@@ -140,22 +136,21 @@
     // Get application name for this window
     NSString *appName = [MenuUtils getApplicationNameForWindow:windowId];
     if (appName && [appName length] > 0) {
-        [_currentApplicationName release];
-        _currentApplicationName = [appName retain];
+        self.currentApplicationName = appName;
         NSLog(@"AppMenuWidget: Window %lu belongs to application: %@", windowId, appName);
     }
     
     NSLog(@"AppMenuWidget: Displaying menu for window %lu", windowId);
     
     // Check if this window has a DBus menu registered
-    if (![_protocolManager hasMenuForWindow:windowId]) {
+    if (![self.protocolManager hasMenuForWindow:windowId]) {
         NSLog(@"AppMenuWidget: No registered menu for window %lu, triggering immediate scan", windowId);
         
         // Trigger immediate scan for new menu services
-        [_protocolManager scanForExistingMenuServices];
+        [self.protocolManager scanForExistingMenuServices];
         
         // Check again after immediate scan
-        if (![_protocolManager hasMenuForWindow:windowId]) {
+        if (![self.protocolManager hasMenuForWindow:windowId]) {
             NSLog(@"AppMenuWidget: Still no registered menu for window %lu after immediate scan, providing fallback menu", windowId);
             
             // Create fallback File->Close menu for windows without exported menus
@@ -169,7 +164,7 @@
     NSLog(@"AppMenuWidget: This is where AboutToShow events should be triggered for submenus");
     
     // Get the menu from protocol manager for registered windows
-    NSMenu *menu = [_protocolManager getMenuForWindow:windowId];
+    NSMenu *menu = [self.protocolManager getMenuForWindow:windowId];
     if (!menu) {
         NSLog(@"AppMenuWidget: Failed to get menu for window %lu, providing fallback menu", windowId);
         
@@ -204,14 +199,14 @@
     
     // Create a new horizontal menu view that fits within our widget frame
     NSRect menuViewFrame = NSMakeRect(0, 0, [self bounds].size.width, [self bounds].size.height);
-    _menuView = [[NSMenuView alloc] initWithFrame:menuViewFrame];
+    self.menuView = [[NSMenuView alloc] initWithFrame:menuViewFrame];
     
     // Configure the menu view for horizontal display (like a menu bar)
-    [_menuView setHorizontal:YES];
-    [_menuView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+    [self.menuView setHorizontal:YES];
+    [self.menuView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     
     // Set the menu for the menu view
-    [_menuView setMenu:menu];
+    [self.menuView setMenu:menu];
     
     // Set ourselves as the delegate of the main menu to catch AboutToShow events
     [menu setDelegate:self];
@@ -233,7 +228,7 @@
     }
     
     // Add the menu view to our widget (this makes it visible)
-    [self addSubview:_menuView];
+    [self addSubview:self.menuView];
     
     // Finish the anti-flicker transition now that the new menu is ready
     [self finishAntiFlickerTransition];
@@ -247,16 +242,16 @@
 - (void)drawRect:(NSRect)dirtyRect
 {
     // Draw application name if we have one
-    if (_currentApplicationName && [_currentApplicationName length] > 0) {
+    if (self.currentApplicationName && [self.currentApplicationName length] > 0) {
         NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
                                    [NSFont boldSystemFontOfSize:11.0], NSFontAttributeName,
                                    [NSColor colorWithCalibratedWhite:0.3 alpha:1.0], NSForegroundColorAttributeName,
                                    nil];
         
-        NSSize textSize = [_currentApplicationName sizeWithAttributes:attributes];
+        NSSize textSize = [self.currentApplicationName sizeWithAttributes:attributes];
         NSPoint textPoint = NSMakePoint(4, ([self bounds].size.height - textSize.height) / 2);
         
-        [_currentApplicationName drawAtPoint:textPoint withAttributes:attributes];
+        [self.currentApplicationName drawAtPoint:textPoint withAttributes:attributes];
     }
     
     // Draw drop shadow below the menu bar (GNUstep compatible)
@@ -298,7 +293,7 @@
     // If the newly registered window is the currently active window, display its menu immediately
     if (activeWindow == windowId) {
         NSLog(@"AppMenuWidget: Newly registered window %lu is currently active, displaying menu immediately", windowId);
-        _currentWindowId = activeWindow;
+        self.currentWindowId = activeWindow;
         [self displayMenuForWindow:activeWindow isDifferentApp:YES];
     } else {
         NSLog(@"AppMenuWidget: Newly registered window %lu is not currently active (active: %lu)", windowId, activeWindow);
@@ -315,12 +310,12 @@
     NSLog(@"AppMenuWidget: menuWillOpen called for main menu: '%@'", [menu title] ?: @"(no title)");
     NSLog(@"AppMenuWidget: Main menu object: %@", menu);
     NSLog(@"AppMenuWidget: Main menu has %lu items", (unsigned long)[[menu itemArray] count]);
-    NSLog(@"AppMenuWidget: Current window ID: %lu", _currentWindowId);
-    NSLog(@"AppMenuWidget: Current application: %@", _currentApplicationName ?: @"(none)");
+    NSLog(@"AppMenuWidget: Current window ID: %lu", self.currentWindowId);
+    NSLog(@"AppMenuWidget: Current application: %@", self.currentApplicationName ?: @"(none)");
     // Log coordinates of the submenu itself
-    if (_menuView) {
-        NSRect menuViewFrame = [_menuView frame];
-        NSRect menuViewFrameInWindow = [_menuView convertRect:menuViewFrame toView:nil];
+    if (self.menuView) {
+        NSRect menuViewFrame = [self.menuView frame];
+        NSRect menuViewFrameInWindow = [self.menuView convertRect:menuViewFrame toView:nil];
         NSPoint menuViewOriginScreen = [self.window convertBaseToScreen:menuViewFrameInWindow.origin];
         NSLog(@"AppMenuWidget: Submenu view frame: %@, screen origin: %@", NSStringFromRect(menuViewFrame), NSStringFromPoint(menuViewOriginScreen));
     }
@@ -400,13 +395,13 @@
     NSLog(@"AppMenuWidget: Mouse moved to: %@ (local: %@)", NSStringFromPoint(location), NSStringFromPoint(localPoint));
     
     // Check if we're over a specific menu item
-    if (_menuView) {
-        NSPoint menuViewPoint = [_menuView convertPoint:location fromView:nil];
+    if (self.menuView) {
+        NSPoint menuViewPoint = [self.menuView convertPoint:location fromView:nil];
         NSLog(@"AppMenuWidget: Menu view point: %@", NSStringFromPoint(menuViewPoint));
         
         // Try to determine which menu item we're over
-        if ([_menuView respondsToSelector:@selector(itemAtPoint:)]) {
-            NSMenuItem *item = [(id)_menuView performSelector:@selector(itemAtPoint:) withObject:[NSValue valueWithPoint:menuViewPoint]];
+        if ([self.menuView respondsToSelector:@selector(itemAtPoint:)]) {
+            NSMenuItem *item = [(id)self.menuView performSelector:@selector(itemAtPoint:) withObject:[NSValue valueWithPoint:menuViewPoint]];
             if (item) {
                 NSLog(@"AppMenuWidget: Mouse over menu item: '%@'", [item title]);
             }
@@ -423,12 +418,12 @@
     NSPoint localPoint = [self convertPoint:location fromView:nil];
     NSLog(@"AppMenuWidget: Mouse down at: %@ (local: %@)", NSStringFromPoint(location), NSStringFromPoint(localPoint));
     
-    if (_menuView) {
-        NSPoint menuViewPoint = [_menuView convertPoint:location fromView:nil];
+    if (self.menuView) {
+        NSPoint menuViewPoint = [self.menuView convertPoint:location fromView:nil];
         NSLog(@"AppMenuWidget: Menu view click point: %@", NSStringFromPoint(menuViewPoint));
         
         // Check if we clicked on a menu item
-        NSArray *items = [_currentMenu itemArray];
+        NSArray *items = [self.currentMenu itemArray];
         for (NSUInteger i = 0; i < [items count]; i++) {
             NSMenuItem *item = [items objectAtIndex:i];
             // Try to get the menu item's frame (this is a bit of a hack)
@@ -456,7 +451,7 @@
         }
         
         // Let the menu view handle the click
-        [_menuView mouseDown:theEvent];
+        [self.menuView mouseDown:theEvent];
         NSLog(@"AppMenuWidget: Forwarded mouse down to menu view");
     }
     
@@ -468,8 +463,8 @@
     NSLog(@"AppMenuWidget: ===== MOUSE UP IN MENU =====");
     NSLog(@"AppMenuWidget: Mouse up at: %@", NSStringFromPoint([theEvent locationInWindow]));
     
-    if (_menuView) {
-        [_menuView mouseUp:theEvent];
+    if (self.menuView) {
+        [self.menuView mouseUp:theEvent];
         NSLog(@"AppMenuWidget: Forwarded mouse up to menu view");
     }
     
@@ -497,13 +492,13 @@
 - (void)debugLogCurrentMenuState
 {
     NSLog(@"AppMenuWidget: ===== DEBUG MENU STATE =====");
-    NSLog(@"AppMenuWidget: Current window ID: %lu", _currentWindowId);
-    NSLog(@"AppMenuWidget: Current application: %@", _currentApplicationName ?: @"(none)");
-    NSLog(@"AppMenuWidget: Current menu: %@", _currentMenu ? [_currentMenu title] : @"(none)");
+    NSLog(@"AppMenuWidget: Current window ID: %lu", self.currentWindowId);
+    NSLog(@"AppMenuWidget: Current application: %@", self.currentApplicationName ?: @"(none)");
+    NSLog(@"AppMenuWidget: Current menu: %@", self.currentMenu ? [self.currentMenu title] : @"(none)");
     
-    if (_currentMenu) {
-        NSLog(@"AppMenuWidget: Current menu has %lu items", (unsigned long)[[_currentMenu itemArray] count]);
-        NSArray *items = [_currentMenu itemArray];
+    if (self.currentMenu) {
+        NSLog(@"AppMenuWidget: Current menu has %lu items", (unsigned long)[[self.currentMenu itemArray] count]);
+        NSArray *items = [self.currentMenu itemArray];
         for (NSUInteger i = 0; i < [items count]; i++) {
             NSMenuItem *item = [items objectAtIndex:i];
             NSLog(@"AppMenuWidget: Item %lu: '%@' (submenu: %@)", 
@@ -511,8 +506,8 @@
         }
     }
     
-    NSLog(@"AppMenuWidget: Menu view: %@", _menuView);
-    NSLog(@"AppMenuWidget: Protocol manager: %@", _protocolManager);
+    NSLog(@"AppMenuWidget: Menu view: %@", self.menuView);
+    NSLog(@"AppMenuWidget: Protocol manager: %@", self.protocolManager);
     NSLog(@"AppMenuWidget: ===== END DEBUG MENU STATE =====");
 }
 
@@ -544,17 +539,13 @@
     [closeItem setTarget:self];
     [closeItem setRepresentedObject:[NSNumber numberWithUnsignedLong:windowId]];
     [fileMenu addItem:closeItem];
-    [closeItem release];
     
     NSMenu *mainMenu = [[NSMenu alloc] initWithTitle:@"Main Menu"];
     NSMenuItem *fileMenuItem = [[NSMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
     [fileMenuItem setSubmenu:fileMenu];
     [mainMenu addItem:fileMenuItem];
-    [fileMenuItem release];
-    [fileMenuItem release];
-    [fileMenu release];
     
-    return [mainMenu autorelease];
+    return mainMenu;
 }
 
 - (void)closeWindow:(NSMenuItem *)sender
@@ -652,7 +643,7 @@
             Window window = windows[i];
             
             // Skip current window (already loaded)
-            if (window == _currentWindowId) {
+            if (window == self.currentWindowId) {
                 continue;
             }
             
@@ -668,12 +659,12 @@
             }
             
             // Check if protocol manager has a menu for this window
-            if ([_protocolManager hasMenuForWindow:(unsigned long)window]) {
+            if ([self.protocolManager hasMenuForWindow:(unsigned long)window]) {
                 NSLog(@"AppMenuWidget: Pre-warming cache for window %lu (%@)", 
                       (unsigned long)window, applicationName);
                 
                 // Load menu in background (this will cache it)
-                NSMenu *menu = [_protocolManager getMenuForWindow:(unsigned long)window];
+                NSMenu *menu = [self.protocolManager getMenuForWindow:(unsigned long)window];
                 if (menu) {
                     warmedCount++;
                     NSLog(@"AppMenuWidget: Successfully pre-warmed cache for window %lu", 
@@ -702,7 +693,7 @@
     
     NSLog(@"AppMenuWidget: Loading menu for window %lu", windowId);
     
-    _currentMenu = [menu retain];
+    self.currentMenu = menu;
     
     NSLog(@"AppMenuWidget: ===== MENU LOADED, SETTING UP VIEW =====");
     NSLog(@"AppMenuWidget: Menu has %lu top-level items", (unsigned long)[[menu itemArray] count]);
@@ -740,7 +731,6 @@
                                                                     target:self
                                                                     action:@selector(closeActiveWindow:)];
     
-    [altWMenuItem release];
 }
 
 - (void)closeActiveWindow:(NSMenuItem *)sender
@@ -820,32 +810,30 @@
     NSLog(@"AppMenuWidget: Starting anti-flicker protection");
     
     // Cancel any existing anti-flicker timer
-    if (_antiFlickerTimer) {
-        [_antiFlickerTimer invalidate];
-        [_antiFlickerTimer release];
-        _antiFlickerTimer = nil;
+    if (self.antiFlickerTimer) {
+        [self.antiFlickerTimer invalidate];
+        self.antiFlickerTimer = nil;
     }
     
     // Clean up any previous old menu view
-    if (_oldMenuView) {
-        [_oldMenuView removeFromSuperview];
-        [_oldMenuView release];
-        _oldMenuView = nil;
+    if (self.oldMenuView) {
+        [self.oldMenuView removeFromSuperview];
+        self.oldMenuView = nil;
     }
     
     // Move current menu view to old menu view (keep it visible)
-    if (_menuView) {
-        _oldMenuView = _menuView;  // Transfer ownership
-        _menuView = nil;
+    if (self.menuView) {
+        self.oldMenuView = self.menuView;  // Transfer ownership
+        self.menuView = nil;
         NSLog(@"AppMenuWidget: Preserved old menu view to prevent flicker");
     }
     
     // Start 2-second timeout timer
-    _antiFlickerTimer = [[NSTimer scheduledTimerWithTimeInterval:2.0
+    self.antiFlickerTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
                                                           target:self
                                                         selector:@selector(antiFlickerTimeoutExpired:)
                                                         userInfo:nil
-                                                         repeats:NO] retain];
+                                                         repeats:NO];
     NSLog(@"AppMenuWidget: Started 2-second anti-flicker timeout");
 }
 
@@ -854,17 +842,15 @@
     NSLog(@"AppMenuWidget: Finishing anti-flicker transition");
     
     // Cancel the timeout timer
-    if (_antiFlickerTimer) {
-        [_antiFlickerTimer invalidate];
-        [_antiFlickerTimer release];
-        _antiFlickerTimer = nil;
+    if (self.antiFlickerTimer) {
+        [self.antiFlickerTimer invalidate];
+        self.antiFlickerTimer = nil;
     }
     
     // Remove the old menu view now that new one is ready
-    if (_oldMenuView) {
-        [_oldMenuView removeFromSuperview];
-        [_oldMenuView release];
-        _oldMenuView = nil;
+    if (self.oldMenuView) {
+        [self.oldMenuView removeFromSuperview];
+        self.oldMenuView = nil;
         NSLog(@"AppMenuWidget: Removed old menu view, new menu is now visible");
     }
 }
@@ -874,40 +860,17 @@
     NSLog(@"AppMenuWidget: Anti-flicker timeout expired, removing old menu view");
     
     // Clean up the timer
-    if (_antiFlickerTimer) {
-        [_antiFlickerTimer release];
-        _antiFlickerTimer = nil;
+    if (self.antiFlickerTimer) {
+        self.antiFlickerTimer = nil;
     }
     
     // Remove the old menu view even if no new menu was loaded
-    if (_oldMenuView) {
-        [_oldMenuView removeFromSuperview];
-        [_oldMenuView release];
-        _oldMenuView = nil;
+    if (self.oldMenuView) {
+        [self.oldMenuView removeFromSuperview];
+        self.oldMenuView = nil;
         [self setNeedsDisplay:YES];
         NSLog(@"AppMenuWidget: Forced removal of old menu view due to timeout");
     }
-}
-
-- (void)dealloc
-{
-    // Clean up anti-flicker resources
-    if (_antiFlickerTimer) {
-        [_antiFlickerTimer invalidate];
-        [_antiFlickerTimer release];
-        _antiFlickerTimer = nil;
-    }
-    
-    if (_oldMenuView) {
-        [_oldMenuView removeFromSuperview];
-        [_oldMenuView release];
-        _oldMenuView = nil;
-    }
-    
-    [_currentApplicationName release];
-    [_currentMenu release];
-    [_menuView release];
-    [super dealloc];
 }
 
 @end

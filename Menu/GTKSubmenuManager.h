@@ -20,14 +20,13 @@
 
 // GTK Submenu Delegate for handling menu events
 @interface GTKSubmenuDelegate : NSObject <NSMenuDelegate>
-{
-    NSString *_serviceName;
-    NSString *_menuPath;
-    NSString *_actionPath;
-    GNUDBusConnection *_dbusConnection;
-    NSNumber *_groupId;
-    NSMutableDictionary *_menuDict;
-}
+
+@property (nonatomic, strong) NSString *serviceName;
+@property (nonatomic, strong) NSString *menuPath;
+@property (nonatomic, strong) NSString *actionPath;
+@property (nonatomic, strong) GNUDBusConnection *dbusConnection;
+@property (nonatomic, strong) NSNumber *groupId;
+@property (nonatomic, strong) NSMutableDictionary *menuDict;
 
 - (id)initWithServiceName:(NSString *)serviceName
                  menuPath:(NSString *)menuPath

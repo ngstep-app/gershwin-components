@@ -191,7 +191,7 @@
         return nil;
     }
     
-    return [menu autorelease];
+    return menu;
 }
 
 + (NSMenu *)parseLayoutItem:(id)layoutItem 
@@ -286,7 +286,7 @@
         return nil;
     }
     
-    return [menu autorelease];
+    return menu;
 }
 
 + (NSMenuItem *)createMenuItemFromLayoutItem:(id)layoutItem
@@ -522,7 +522,6 @@
                           dbusConnection:dbusConnection
                                   itemId:itemId];
         
-        [submenu release];
         NSLog(@"DBusMenuParser: ===== SUBMENU CREATION COMPLETE FOR '%@' =====", label ?: @"(no label)");
     } else {
         NSLog(@"DBusMenuParser: Item '%@' is NOT a submenu (children=%lu, children-display=%@)", 
@@ -534,7 +533,7 @@
           ([keyEquivalent length] > 0) ? [NSString stringWithFormat:@"%@+%@", 
            [DBusMenuShortcutParser modifierMaskToString:modifierMask], keyEquivalent] : @"none");
     
-    return [menuItem autorelease];
+    return menuItem;
 }
 
 + (NSDictionary *)convertPropertiesToDictionary:(id)propertiesObj
@@ -587,8 +586,14 @@
 + (void)cleanup
 {
     NSLog(@"DBusMenuParser: Performing cleanup...");
-    [DBusMenuActionHandler cleanup];
-    [DBusSubmenuManager cleanup];
+    
+    @try {
+        [DBusMenuActionHandler cleanup];
+        [DBusSubmenuManager cleanup];
+        NSLog(@"DBusMenuParser: Cleanup completed successfully");
+    } @catch (NSException *exception) {
+        NSLog(@"DBusMenuParser: Exception during cleanup: %@", exception);
+    }
 }
 
 @end

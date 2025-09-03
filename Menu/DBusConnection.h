@@ -3,11 +3,10 @@
 
 // DBus connection wrapper for GNUstep
 @interface GNUDBusConnection : NSObject
-{
-    void *_connection; // DBusConnection pointer (opaque)
-    BOOL _connected;
-    NSMutableDictionary *_messageHandlers;
-}
+
+@property (nonatomic, assign) void *connection; // DBusConnection pointer (opaque)
+@property (nonatomic, assign) BOOL connected;
+@property (nonatomic, strong) NSMutableDictionary *messageHandlers;
 
 + (GNUDBusConnection *)sessionBus;
 - (BOOL)connect;
