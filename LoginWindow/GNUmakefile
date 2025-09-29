@@ -41,8 +41,12 @@ install:: all
 		mkdir -p $(DESTDIR)/usr/local/etc/rc.d; \
 		install -m 555 loginwindow $(DESTDIR)/usr/local/etc/rc.d/loginwindow; \
 	else \
-		echo "Installing to /usr/local/etc/rc.d/loginwindow (system install)"; \
-		sudo -A install -m 555 loginwindow /usr/local/etc/rc.d/loginwindow; \
+		if [ -d "/usr/local/etc/rc.d" ]; then \
+			echo "Installing to /usr/local/etc/rc.d/loginwindow (system install)"; \
+			sudo -A install -m 555 loginwindow /usr/local/etc/rc.d/loginwindow; \
+		else \
+			echo "/usr/local/etc/rc.d does not exist, skipping rc.d script install."; \
+		fi; \
 	fi
 	@echo "Installation complete."
 
