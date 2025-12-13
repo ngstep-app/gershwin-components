@@ -1,0 +1,147 @@
+#!/bin/sh
+
+# Configure script for Menu application
+# Detects DBUS paths and generates GNUmakefile from GNUmakefile.in
+
+echo "Configuring Menu application..."
+
+# Function to check if a header file exists
+check_header() {
+    local header="$1"
+    local include_dir="$2"
+    if [ -f "${include_dir}/${header}" ]; then
+        return 0
+    fi
+    return 1
+}
+
+# Function to test compilation
+test_compile() {
+    local cflags="$1"
+    local libs="$2"
+    cat > conftest.c << EOF
+#include <dbus/dbus.h>
+int main() {
+    DBusConnection *conn;
+    return 0;
+}
+EOF
+
+    if clang $cflags conftest.c $libs -o conftest >/dev/null 2>&1; then
+        rm -f conftest conftest.c
+        return 0
+    fi
+    rm -f conftest conftest.c
+    return 1
+}
+
+# Detect operating system
+OS=$(uname -s)
+echo "Detected OS: $OS"
+
+# Initialize variables
+DBUS_CFLAGS=""
+DBUS_LIBS="-ldbus-1"
+
+# Platform-specific library paths
+case "$OS" in
+    FreeBSD)
+        DBUS_LIBS="-L/usr/local/lib -ldbus-1"
+        ;;
+    *)
+        DBUS_LIBS="-ldbus-1"
+        ;;
+esac
+
+echo "Detecting DBUS paths manually..."
+
+# Common include paths to check
+INCLUDE_PATHS="/usr/include/dbus-1.0 /usr/local/include/dbus-1.0 /opt/local/include/dbus-1.0"
+ARCH_PATHS="/usr/lib/dbus-1.0/include /usr/lib/x86_64-linux-gnu/dbus-1.0/include /usr/lib/i386-linux-gnu/dbus-1.0/include /usr/lib/*-linux-gnu/dbus-1.0/include /usr/local/lib/dbus-1.0/include /opt/local/lib/dbus-1.0/include"
+
+# Find main dbus include directory
+for path in $INCLUDE_PATHS; do
+    if check_header "dbus/dbus.h" "$path"; then
+        echo "Found dbus/dbus.h in $path"
+        DBUS_CFLAGS="$DBUS_CFLAGS -I$path"
+        break
+    fi
+done
+
+for path in $ARCH_PATHS; do
+    # Handle glob patterns
+    for expanded_path in $path; do
+        if [ -d "$expanded_path" ] && check_header "dbus/dbus-arch-deps.h" "$expanded_path"; then
+            echo "Found dbus/dbus-arch-deps.h in $expanded_path"
+            DBUS_CFLAGS="$DBUS_CFLAGS -I$expanded_path"
+            break 2
+        fi
+    done
+done
+
+# Platform-specific fallbacks
+case "$OS" in
+    Linux)
+        # Additional Arch Linux specific check
+        if [ -d "/usr/lib/dbus-1.0/include" ]; then
+            DBUS_CFLAGS="$DBUS_CFLAGS -I/usr/lib/dbus-1.0/include"
+        fi
+        ;;
+    FreeBSD)
+        # FreeBSD typically uses /usr/local
+        if [ -z "$DBUS_CFLAGS" ]; then
+            DBUS_CFLAGS="-I/usr/local/include/dbus-1.0 -I/usr/local/include"
+            if [ -d "/usr/local/lib/dbus-1.0/include" ]; then
+                DBUS_CFLAGS="$DBUS_CFLAGS -I/usr/local/lib/dbus-1.0/include"
+            fi
+        fi
+        ;;
+esac
+
+# Test the final configuration
+echo "Testing DBUS configuration..."
+echo "DBUS_CFLAGS: $DBUS_CFLAGS"
+echo "DBUS_LIBS: $DBUS_LIBS"
+
+if test_compile "$DBUS_CFLAGS" "$DBUS_LIBS"; then
+    echo "DBUS configuration test passed"
+else
+    echo "Error: DBUS is required but not found or not working"
+    echo ""
+    case "$OS" in
+        Linux)
+            echo "Please install DBUS development package:"
+            echo "  Ubuntu/Debian: sudo apt-get install libdbus-1-dev"
+            echo "  Fedora/RHEL:   sudo dnf install dbus-devel"
+            echo "  Arch Linux:    sudo pacman -S dbus"
+            ;;
+        FreeBSD)
+            echo "Please install DBUS:"
+            echo "  sudo pkg install dbus"
+            ;;
+        *)
+            echo "Please install DBUS development headers and libraries"
+            ;;
+    esac
+    echo ""
+    exit 1
+fi
+
+# Generate GNUmakefile from GNUmakefile.in
+echo "Generating GNUmakefile from GNUmakefile.in..."
+
+if [ ! -f "GNUmakefile.in" ]; then
+    echo "Error: GNUmakefile.in not found"
+    exit 1
+fi
+
+# Use sed to substitute placeholders
+sed -e "s|@DBUS_CFLAGS@|$DBUS_CFLAGS|g" \
+    -e "s|@DBUS_LIBS@|$DBUS_LIBS|g" \
+    GNUmakefile.in > GNUmakefile
+
+echo "Configuration complete!"
+echo ""
+echo "DBUS_CFLAGS = $DBUS_CFLAGS"
+echo "DBUS_LIBS = $DBUS_LIBS"
+echo ""
