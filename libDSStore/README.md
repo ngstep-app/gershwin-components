@@ -122,52 +122,9 @@ NSDictionary *listViewSettings = @{
 [store setListViewSettings:listViewSettings];
 ```
 
-## Command-Line Tool Usage
+## Command-Line Tool
 
 The `dsstore` command-line tool provides easy access to .DS_Store file functionality.
-
-### Icon Positions
-
-```bash
-# Get icon position for a file
-dsstore --get-icon-pos file.txt
-
-# Set icon position for a file
-dsstore --set-icon-pos file.txt 100 200
-```
-
-### Background Pictures
-
-```bash
-# Set background picture
-dsstore --set-bg-picture /path/to/image.jpg
-
-# Clear background picture
-dsstore --clear-bg-picture
-```
-
-### Entry Manipulation
-
-```bash
-# Set a custom entry
-dsstore -s --filename file.txt --code note --type ustr --value "My custom note"
-
-# Delete an entry
-dsstore -d --filename file.txt --code note
-
-# Set boolean entry
-dsstore -s --filename . --code customFlag --type bool --value true
-
-# Set integer entry
-dsstore -s --filename file.txt --code priority --type long --value 42
-```
-
-### Creating Files
-
-```bash
-# Create new .DS_Store file
-dsstore -c /path/to/new/.DS_Store
-```
 
 ## Building
 
