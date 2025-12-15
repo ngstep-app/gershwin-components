@@ -7,15 +7,30 @@
 
 + (NSString *)getApplicationNameForWindow:(unsigned long)windowId
 {
+    // Validate window ID - 0 means no window
+    if (windowId == 0) {
+        NSLog(@"MenuUtils: Window ID is 0 (no active window), returning nil");
+        return nil;
+    }
+
     Display *display = XOpenDisplay(NULL);
     if (!display) {
         return nil;
     }
-    
+
+    // First validate that the window still exists before accessing properties
+    XWindowAttributes attrs;
+    if (XGetWindowAttributes(display, (Window)windowId, &attrs) != Success) {
+        NSLog(@"MenuUtils: Window %lu no longer exists, skipping property access", windowId);
+        XCloseDisplay(display);
+        return nil;
+    }
+
     // Try to get the application name from WM_CLASS first
     XClassHint classHint;
+    NSString *className = nil;
+
     if (XGetClassHint(display, (Window)windowId, &classHint) == Success) {
-        NSString *className = nil;
         if (classHint.res_class) {
             className = [NSString stringWithUTF8String:classHint.res_class];
             XFree(classHint.res_class);
@@ -23,22 +38,26 @@
         if (classHint.res_name) {
             XFree(classHint.res_name);
         }
-        XCloseDisplay(display);
-        if (className && [className length] > 0) {
-            // Normalize application names for better cache consistency
-            NSString *normalizedName = [className lowercaseString];
-            if ([normalizedName isEqualToString:@"gimp"] || 
-                [normalizedName hasPrefix:@"gimp-"]) {
-                return @"GIMP";
-            } else if ([normalizedName isEqualToString:@"inkscape"]) {
-                return @"Inkscape";
-            } else if ([normalizedName isEqualToString:@"libreoffice"]) {
-                return @"LibreOffice";
-            }
-            return className;
-        }
     }
-    
+
+    if (className && [className length] > 0) {
+        // Normalize application names for better cache consistency
+        NSString *normalizedName = [className lowercaseString];
+        if ([normalizedName isEqualToString:@"gimp"] ||
+            [normalizedName hasPrefix:@"gimp-"]) {
+            XCloseDisplay(display);
+            return @"GIMP";
+        } else if ([normalizedName isEqualToString:@"inkscape"]) {
+            XCloseDisplay(display);
+            return @"Inkscape";
+        } else if ([normalizedName isEqualToString:@"libreoffice"]) {
+            XCloseDisplay(display);
+            return @"LibreOffice";
+        }
+        XCloseDisplay(display);
+        return className;
+    }
+
     // Fallback to window title, try to extract application name
     XTextProperty windowName;
     if (XGetWMName(display, (Window)windowId, &windowName) == Success) {
@@ -48,14 +67,14 @@
             XFree(windowName.value);
         }
         XCloseDisplay(display);
-        
+
         // Extract application name from window title
         if (title && [title length] > 0) {
             // Special handling for GIMP windows
             if ([title containsString:@"GIMP"] || [title containsString:@"GNU Image Manipulation Program"]) {
                 return @"GIMP";
             }
-            
+
             // Look for patterns like "Document - AppName" or "Title - AppName"
             NSRange dashRange = [title rangeOfString:@" - " options:NSBackwardsSearch];
             if (dashRange.location != NSNotFound) {

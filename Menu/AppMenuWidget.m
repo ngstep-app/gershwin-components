@@ -73,8 +73,22 @@
         }
         
         // Check if this is a different application by comparing application names
-        NSString *newAppName = [MenuUtils getApplicationNameForWindow:activeWindow];
-        BOOL isDifferentApp = !self.currentApplicationName || 
+        // Use @try/@catch to prevent crashes when accessing window properties of invalid/transitioning windows
+        NSString *newAppName = nil;
+        if (activeWindow != 0) {
+            @try {
+                newAppName = [MenuUtils getApplicationNameForWindow:activeWindow];
+            }
+            @catch (NSException *exception) {
+                NSLog(@"AppMenuWidget: Exception getting app name for window %lu: %@", activeWindow, exception);
+                newAppName = nil;
+            }
+        } else {
+            NSLog(@"AppMenuWidget: Active window is 0 (no window), skipping app name lookup");
+            newAppName = nil;
+        }
+
+        BOOL isDifferentApp = !self.currentApplicationName ||
                              ![self.currentApplicationName isEqualToString:newAppName];
         
         // Notify cache manager about application switch
@@ -83,7 +97,16 @@
         }
         
         self.currentWindowId = activeWindow;
-        [self displayMenuForWindow:activeWindow isDifferentApp:isDifferentApp];
+
+        // Use @try/@catch to prevent crashes during menu setup for invalid/transitioning windows
+        @try {
+            [self displayMenuForWindow:activeWindow isDifferentApp:isDifferentApp];
+        }
+        @catch (NSException *exception) {
+            NSLog(@"AppMenuWidget: Exception displaying menu for window %lu: %@", activeWindow, exception);
+            // Clear menu on exception to prevent further issues
+            [self clearMenu];
+        }
         
         // For complex applications, try to pre-warm cache for other windows of same app
         if (newAppName && [cacheManager isComplexApplication:newAppName]) {
@@ -134,7 +157,15 @@
     }
     
     // Get application name for this window
-    NSString *appName = [MenuUtils getApplicationNameForWindow:windowId];
+    NSString *appName = nil;
+    @try {
+        appName = [MenuUtils getApplicationNameForWindow:windowId];
+    }
+    @catch (NSException *exception) {
+        NSLog(@"AppMenuWidget: Exception getting app name for window %lu in displayMenuForWindow: %@", windowId, exception);
+        appName = nil;
+    }
+
     if (appName && [appName length] > 0) {
         self.currentApplicationName = appName;
         NSLog(@"AppMenuWidget: Window %lu belongs to application: %@", windowId, appName);
@@ -143,31 +174,48 @@
     NSLog(@"AppMenuWidget: Displaying menu for window %lu", windowId);
     
     // Check if this window has a DBus menu registered
-    if (![self.protocolManager hasMenuForWindow:windowId]) {
-        NSLog(@"AppMenuWidget: No registered menu for window %lu, triggering immediate scan", windowId);
-        
-        // Trigger immediate scan for new menu services
-        [self.protocolManager scanForExistingMenuServices];
-        
-        // Check again after immediate scan
+    @try {
         if (![self.protocolManager hasMenuForWindow:windowId]) {
-            NSLog(@"AppMenuWidget: Still no registered menu for window %lu after immediate scan, providing fallback menu", windowId);
-            
-            // Create fallback File->Close menu for windows without exported menus
-            NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
-            [self loadMenu:fallbackMenu forWindow:windowId];
-            return;
+            NSLog(@"AppMenuWidget: No registered menu for window %lu, triggering immediate scan", windowId);
+
+            // Trigger immediate scan for new menu services
+            [self.protocolManager scanForExistingMenuServices];
+
+            // Check again after immediate scan
+            if (![self.protocolManager hasMenuForWindow:windowId]) {
+                NSLog(@"AppMenuWidget: Still no registered menu for window %lu after immediate scan, providing fallback menu", windowId);
+
+                // Create fallback File->Close menu for windows without exported menus
+                NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
+                [self loadMenu:fallbackMenu forWindow:windowId];
+                return;
+            }
         }
+    }
+    @catch (NSException *exception) {
+        NSLog(@"AppMenuWidget: Exception during menu protocol check for window %lu: %@", windowId, exception);
+        // Create fallback File->Close menu on exception
+        NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
+        [self loadMenu:fallbackMenu forWindow:windowId];
+        return;
     }
     
     NSLog(@"AppMenuWidget: ===== LOADING MENU FROM PROTOCOL MANAGER =====");
     NSLog(@"AppMenuWidget: This is where AboutToShow events should be triggered for submenus");
-    
+
     // Get the menu from protocol manager for registered windows
-    NSMenu *menu = [self.protocolManager getMenuForWindow:windowId];
+    NSMenu *menu = nil;
+    @try {
+        menu = [self.protocolManager getMenuForWindow:windowId];
+    }
+    @catch (NSException *exception) {
+        NSLog(@"AppMenuWidget: Exception getting menu from protocol manager for window %lu: %@", windowId, exception);
+        menu = nil;
+    }
+
     if (!menu) {
         NSLog(@"AppMenuWidget: Failed to get menu for window %lu, providing fallback menu", windowId);
-        
+
         // Create fallback File->Close menu if protocol manager fails to provide menu
         NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
         [self loadMenu:fallbackMenu forWindow:windowId];
@@ -195,16 +243,33 @@
 
 - (void)setupMenuViewWithMenu:(NSMenu *)menu
 {
+    if (!menu) {
+        NSLog(@"AppMenuWidget: Cannot setup menu view with nil menu");
+        return;
+    }
+
     NSLog(@"AppMenuWidget: Setting up menu view with menu: %@", [menu title]);
     
+    // Remove any existing menu view to prevent crashes when adding new one
+    if (self.menuView) {
+        [self.menuView removeFromSuperview];
+        self.menuView = nil;
+        NSLog(@"AppMenuWidget: Removed existing menu view before creating new one");
+    }
+
     // Create a new horizontal menu view that fits within our widget frame
     NSRect menuViewFrame = NSMakeRect(0, 0, [self bounds].size.width, [self bounds].size.height);
     self.menuView = [[NSMenuView alloc] initWithFrame:menuViewFrame];
-    
+
+    if (!self.menuView) {
+        NSLog(@"AppMenuWidget: Failed to create menu view - aborting setup");
+        return;
+    }
+
     // Configure the menu view for horizontal display (like a menu bar)
     [self.menuView setHorizontal:YES];
     [self.menuView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-    
+
     // Set the menu for the menu view
     [self.menuView setMenu:menu];
     
