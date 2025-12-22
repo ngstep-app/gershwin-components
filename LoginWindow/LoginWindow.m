@@ -2041,57 +2041,43 @@ void signalHandler(int sig) {
  
 - (void)shakeWindow
 {
-    NSRect originalFrame = [loginWindow frame];
-    
-    // Create an animation to shake the window
-    NSMutableArray *animations = [NSMutableArray array];
-    
-    // Define shake parameters
-    CGFloat shakeDistance = 10.0;
-    NSTimeInterval shakeDuration = 0.05;
-    int shakeCount = 4;
-    
-    // Create keyframe animations for the shake effect
-    for (int i = 0; i < shakeCount; i++) {
-        // Shake left
-        NSRect leftFrame = originalFrame;
-        leftFrame.origin.x -= shakeDistance;
+    NSLog(@"[DEBUG] shakeWindow called");
+    @try {
+        if (!loginWindow) {
+            NSLog(@"[WARNING] loginWindow is NULL, cannot shake");
+            return;
+        }
         
-        NSDictionary *leftAnimation = @{
-            NSViewAnimationTargetKey: loginWindow,
-            NSViewAnimationEndFrameKey: [NSValue valueWithRect:leftFrame]
-        };
-        [animations addObject:leftAnimation];
+        NSRect originalFrame = [loginWindow frame];
+        NSLog(@"[DEBUG] Original frame: x=%.1f, y=%.1f", originalFrame.origin.x, originalFrame.origin.y);
         
-        // Shake right  
-        NSRect rightFrame = originalFrame;
-        rightFrame.origin.x += shakeDistance;
+        // Simple shake without NSViewAnimation to avoid potential crashes
+        CGFloat shakeDistance = 10.0;
+        int shakeCount = 2; // Reduced shakes
         
-        NSDictionary *rightAnimation = @{
-            NSViewAnimationTargetKey: loginWindow,
-            NSViewAnimationEndFrameKey: [NSValue valueWithRect:rightFrame]
-        };
-        [animations addObject:rightAnimation];
+        for (int i = 0; i < shakeCount; i++) {
+            // Shake left
+            NSRect leftFrame = originalFrame;
+            leftFrame.origin.x -= shakeDistance;
+            [loginWindow setFrameOrigin:leftFrame.origin];
+            [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+            
+            // Shake right
+            NSRect rightFrame = originalFrame;
+            rightFrame.origin.x += shakeDistance;
+            [loginWindow setFrameOrigin:rightFrame.origin];
+            [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+            
+            // Reduce shake distance
+            shakeDistance *= 0.7;
+        }
         
-        // Reduce shake distance for dampening effect
-        shakeDistance *= 0.7;
+        // Return to original position
+        [loginWindow setFrameOrigin:originalFrame.origin];
+        NSLog(@"[DEBUG] Window shake complete");
+    } @catch (NSException *exception) {
+        NSLog(@"[ERROR] Exception in shakeWindow: %@", exception);
     }
-    
-    // Return to original position
-    NSDictionary *returnAnimation = @{
-        NSViewAnimationTargetKey: loginWindow,
-        NSViewAnimationEndFrameKey: [NSValue valueWithRect:originalFrame]
-    };
-    [animations addObject:returnAnimation];
-    
-    // Create and configure the animation
-    NSViewAnimation *shakeAnimation = [[NSViewAnimation alloc] initWithViewAnimations:animations];
-    [shakeAnimation setDuration:shakeDuration * [animations count]];
-    [shakeAnimation setAnimationCurve:NSAnimationEaseInOut];
-    
-    // Start the animation
-    [shakeAnimation startAnimation];
-    [shakeAnimation autorelease];
 }
 
 - (void)updateLoginButtonState
