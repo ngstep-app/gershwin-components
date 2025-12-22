@@ -829,9 +829,9 @@ typedef struct DBusConnection DBusConnectionStruct;
            @"</node>";
 }
 
-- (DBusConnectionStruct *)connection
+- (void *)connection
 {
-    return (DBusConnectionStruct *)_connection;
+    return _connection;
 }
 
 @end

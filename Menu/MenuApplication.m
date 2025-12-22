@@ -95,6 +95,9 @@ id menu_drawRectWithoutBottomLine(id self, SEL _cmd, NSRect dirtyRect);
     IMP originalIMP = method_getImplementation(originalMethod);
     const char *typeEncoding = method_getTypeEncoding(originalMethod);
     
+    // Store the original IMP globally for proper calling from the swizzled method
+    original_drawRect_IMP = (void (*)(id, SEL, NSRect))originalIMP;
+    
     // Add the original implementation under a new name
     class_addMethod(menuViewClass, originalSelector, originalIMP, typeEncoding);
     
@@ -104,12 +107,16 @@ id menu_drawRectWithoutBottomLine(id self, SEL _cmd, NSRect dirtyRect);
     NSLog(@"MenuApplication: Successfully swizzled NSMenuView drawRect: method");
 }
 
+// Store the original IMP globally so we can call it properly
+static void (*original_drawRect_IMP)(id, SEL, NSRect) = NULL;
+
 // Custom drawRect implementation that removes bottom line
 id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRect dirtyRect)
 {
-    // Call the original drawRect implementation
-    if ([self respondsToSelector:@selector(original_drawRect:)]) {
-        [self performSelector:@selector(original_drawRect:) withObject:[NSValue valueWithRect:dirtyRect]];
+    // Call the original drawRect implementation directly via the stored IMP
+    // (performSelector:withObject: cannot pass NSRect structs correctly)
+    if (original_drawRect_IMP != NULL) {
+        original_drawRect_IMP(self, @selector(drawRect:), dirtyRect);
     }
     /*
     // Now override any bottom line drawing by drawing over it with background color
