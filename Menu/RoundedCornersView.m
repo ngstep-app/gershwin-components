@@ -67,4 +67,10 @@
     return NO;
 }
 
+- (NSView *)hitTest:(NSPoint)aPoint
+{
+    // This view should not intercept mouse events - pass them through to underlying views
+    return nil;
+}
+
 @end
