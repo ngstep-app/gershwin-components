@@ -966,15 +966,13 @@ void signalHandler(int sig) {
 {
     NSLog(@"[DEBUG] Checking for auto-login user");
     
-    // Read the autoLoginUser from loginwindow domain (lowercase 'l')
-    NSUserDefaults *loginDefaults = [[NSUserDefaults alloc] init];
-    [loginDefaults addSuiteNamed:@"loginwindow"];
+    // Read the autoLoginUser from system-wide LoginWindow.plist like other settings
+    NSString *plistPath = [self getLoginWindowPreferencesPath];
+    NSDictionary *plistData = [NSDictionary dictionaryWithContentsOfFile:plistPath];
+    NSString *autoLoginUser = [plistData objectForKey:@"autoLoginUser"];
     
-    NSString *autoLoginUser = [loginDefaults stringForKey:@"autoLoginUser"];
-    
-    [loginDefaults release];
-    
-    NSLog(@"[DEBUG] Auto-login setting from loginwindow domain: %@", autoLoginUser ? autoLoginUser : @"(none)");
+    NSLog(@"[DEBUG] Auto-login setting from LoginWindow.plist (%@): %@",
+          plistPath, autoLoginUser ? autoLoginUser : @"(none)");
     
     if (autoLoginUser && [autoLoginUser length] > 0) {
         NSLog(@"[DEBUG] Auto-login user found: %@", autoLoginUser);

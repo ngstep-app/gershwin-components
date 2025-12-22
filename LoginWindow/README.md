@@ -15,17 +15,23 @@ A simple, minimalist login manager for GNUstep-based desktop environments.
 
 ## Enabling
 
-Create the system preferences directory if it doesn't exist
+Create the local preferences directory if it doesn't exist
 
 ```
-sudo -A mkdir -p /System/Library/Preferences
+sudo -A -E mkdir -p /Local/Library/Preferences
 ```
 
-Create or update the loginwindow.plist file with auto-login user
+Create or update `/Local/Library/Preferences/LoginWindow.plist` with the auto-login user (replace `User`)
 
 ```
-sudo -A defaults write /System/Library/Preferences/loginwindow autoLoginUser User
+{
+    autoLoginUser = User;
+    lastLoggedInUser = User;
+    lastSession = "/System/Library/Scripts/Gershwin.sh";
+}'
 ```
+
+To disable autologin, remove the key or the file.
 
 ## Logs
 
