@@ -392,14 +392,44 @@ void signalHandler(int sig) {
     // These arrays can be expanded with more commands if needed for other systems
     // or if the current commands fail. The order is important - we try the most
     // common commands first, and if they fail, we try alternatives.
+    // LoginWindow typically runs as root, so we try direct commands first, then sudo.
     NSArray *commands;
     if ([actionType isEqualToString:@"restart"]) {
         commands = [NSArray arrayWithObjects:
-            [NSArray arrayWithObjects:@"/sbin/shutdown", @"-r", @"now", nil], nil
+            // systemd-based Linux (Debian with systemd)
+            [NSArray arrayWithObjects:@"/bin/systemctl", @"reboot", nil],
+            [NSArray arrayWithObjects:@"/usr/bin/systemctl", @"reboot", nil],
+            // Traditional Unix commands (BSD and Linux)
+            [NSArray arrayWithObjects:@"/sbin/reboot", nil],
+            [NSArray arrayWithObjects:@"/usr/sbin/reboot", nil],
+            [NSArray arrayWithObjects:@"/sbin/shutdown", @"-r", @"now", nil],
+            [NSArray arrayWithObjects:@"/usr/sbin/shutdown", @"-r", @"now", nil],
+            // With sudo as fallback (if LoginWindow isn't running as root)
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/bin/systemctl", @"reboot", nil],
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/bin/systemctl", @"reboot", nil],
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/reboot", nil],
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/sbin/reboot", nil],
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-r", @"now", nil], nil
         ];
     } else if ([actionType isEqualToString:@"shutdown"]) {
         commands = [NSArray arrayWithObjects:
-            [NSArray arrayWithObjects:@"/sbin/shutdown", @"-p", @"now", nil], nil
+            // systemd-based Linux (Debian with systemd)
+            [NSArray arrayWithObjects:@"/bin/systemctl", @"poweroff", nil],
+            [NSArray arrayWithObjects:@"/usr/bin/systemctl", @"poweroff", nil],
+            // Traditional Unix commands (BSD and Linux)
+            [NSArray arrayWithObjects:@"/sbin/poweroff", nil],
+            [NSArray arrayWithObjects:@"/usr/sbin/poweroff", nil],
+            [NSArray arrayWithObjects:@"/sbin/shutdown", @"-h", @"now", nil],
+            [NSArray arrayWithObjects:@"/usr/sbin/shutdown", @"-h", @"now", nil],
+            [NSArray arrayWithObjects:@"/sbin/shutdown", @"-p", @"now", nil],  // BSD-style with poweroff
+            [NSArray arrayWithObjects:@"/sbin/halt", @"-p", nil],  // Another BSD option
+            // With sudo as fallback (if LoginWindow isn't running as root)
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/bin/systemctl", @"poweroff", nil],
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/bin/systemctl", @"poweroff", nil],
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/poweroff", nil],
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/sbin/poweroff", nil],
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-h", @"now", nil],
+            [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-p", @"now", nil], nil
         ];
     } else {
         return NO;
