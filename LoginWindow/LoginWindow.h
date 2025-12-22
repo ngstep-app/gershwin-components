@@ -70,6 +70,8 @@
 - (void)shakeWindow;
 - (void)saveLastLoggedInUser:(NSString *)username;
 - (NSString *)loadLastLoggedInUser;
+- (void)saveLastSession:(NSString *)sessionExec;
+- (NSString *)loadLastSession;
 - (void)updateLoginButtonState;
 - (void)clearFieldsAndShake;
 - (BOOL)control:(NSControl *)control textView:(NSTextView *)textView doCommandBySelector:(SEL)commandSelector;

@@ -8,6 +8,7 @@
 #import <pwd.h>
 #import <unistd.h>
 #import <sys/wait.h>
+#import <sys/stat.h>
 #if !defined(__linux__)
 #import <login_cap.h>
 #import <sys/sysctl.h>
@@ -275,6 +276,20 @@ void signalHandler(int sig) {
     if (showDropdown) {
         sessionDropdown = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(50, 110+12, 300, 24)];
         [sessionDropdown addItemsWithTitles:availableSessions];
+        
+        // Load last chosen session and select it
+        NSString *lastSession = [self loadLastSession];
+        if (lastSession) {
+            NSUInteger lastSessionIndex = [availableSessionExecs indexOfObject:lastSession];
+            if (lastSessionIndex != NSNotFound) {
+                [sessionDropdown selectItemAtIndex:lastSessionIndex];
+                selectedSessionExec = lastSession;
+                NSLog(@"[DEBUG] Pre-selected last chosen session: %@", lastSession);
+            } else {
+                NSLog(@"[DEBUG] Last chosen session not found in available sessions: %@", lastSession);
+            }
+        }
+        
         [sessionDropdown setTarget:self];
         [sessionDropdown setAction:@selector(sessionChanged:)];
         [contentView addSubview:sessionDropdown];
@@ -500,6 +515,9 @@ void signalHandler(int sig) {
     
     NSLog(@"[DEBUG] User found - UID: %d, GID: %d, Home: %s, Shell: %s", 
           pwd->pw_uid, pwd->pw_gid, pwd->pw_dir, pwd->pw_shell);
+    
+    // Save the current session choice before starting
+    [self saveLastSession:selectedSessionExec];
     
     // Open PAM session
     if (![pamAuth openSession]) {
@@ -1615,6 +1633,8 @@ void signalHandler(int sig) {
     if (idx >= 0 && idx < [availableSessionExecs count]) {
         selectedSessionExec = [availableSessionExecs objectAtIndex:idx];
         NSLog(@"[DEBUG] Selected session exec: %@", selectedSessionExec);
+        // Save the selected session
+        [self saveLastSession:selectedSessionExec];
     } else {
         NSLog(@"[DEBUG] Invalid session index: %ld (count: %lu)", (long)idx, (unsigned long)[availableSessionExecs count]);
     }
@@ -1677,6 +1697,15 @@ void signalHandler(int sig) {
     return YES;
 }
 
+- (NSString *)getLoginWindowPreferencesPath
+{
+    // Use system-wide Library/Preferences directory
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSLocalDomainMask, NO);
+    NSString *libraryPath = ([paths count] > 0) ? [paths objectAtIndex:0] : @"/Library";
+    NSString *preferencesDir = [libraryPath stringByAppendingPathComponent:@"Preferences"];
+    return [preferencesDir stringByAppendingPathComponent:@"LoginWindow.plist"];
+}
+
 - (void)saveLastLoggedInUser:(NSString *)username
 {
     if (!username || [username length] == 0) {
@@ -1686,69 +1715,100 @@ void signalHandler(int sig) {
     
     NSLog(@"[DEBUG] Saving last logged-in user: %@", username);
     
-    // Use the loginwindow domain for storing preferences (lowercase 'l')
-    NSUserDefaults *loginDefaults = [[NSUserDefaults alloc] init];
-    [loginDefaults addSuiteNamed:@"loginwindow"];
-
-    [loginDefaults setObject:username forKey:@"lastLoggedInUser"];
+    // Save to system-wide plist since LoginWindow runs as root
+    NSString *plistPath = [self getLoginWindowPreferencesPath];
+    NSString *plistDir = [plistPath stringByDeletingLastPathComponent];
     
-    // Force synchronization to ensure the setting is written immediately
-    if ([loginDefaults synchronize]) {
-        NSLog(@"[DEBUG] Successfully saved last logged-in user to loginwindow domain");
-    } else {
-        NSLog(@"[DEBUG] Failed to save last logged-in user to loginwindow domain");
+    // Ensure directory exists
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSError *error = nil;
+    if (![fm createDirectoryAtPath:plistDir withIntermediateDirectories:YES attributes:nil error:&error]) {
+        NSLog(@"[DEBUG] Failed to create directory %@: %@", plistDir, error);
+        return;
     }
     
-    [loginDefaults release];
+    NSMutableDictionary *plistData = [NSMutableDictionary dictionaryWithContentsOfFile:plistPath];
+    if (!plistData) {
+        plistData = [NSMutableDictionary dictionary];
+    }
+    
+    [plistData setObject:username forKey:@"lastLoggedInUser"];
+    
+    if ([plistData writeToFile:plistPath atomically:YES]) {
+        NSLog(@"[DEBUG] Successfully saved last logged-in user to %@", plistPath);
+    } else {
+        NSLog(@"[DEBUG] Failed to save last logged-in user to %@", plistPath);
+    }
 }
 
 - (NSString *)loadLastLoggedInUser
 {
-    NSLog(@"[DEBUG] Loading last logged-in user from loginwindow domain");
+    NSLog(@"[DEBUG] Loading last logged-in user from system-wide plist");
     
-    // First try using defaults command for more reliable reading
-    FILE *pipe = popen("/usr/bin/defaults read loginwindow lastLoggedInUser 2>/dev/null", "r");
-    if (pipe) {
-        char buffer[256];
-        NSString *result = nil;
-        if (fgets(buffer, sizeof(buffer), pipe)) {
-            // Remove newline
-            char *newline = strchr(buffer, '\n');
-            if (newline) *newline = '\0';
-            // Remove any leading/trailing whitespace
-            char *start = buffer;
-            while (*start == ' ' || *start == '\t') start++;
-            char *end = start + strlen(start) - 1;
-            while (end > start && (*end == ' ' || *end == '\t' || *end == '\r')) {
-                *end = '\0';
-                end--;
-            }
-            if (strlen(start) > 0) {
-                result = [NSString stringWithUTF8String:start];
-            }
-        }
-        pclose(pipe);
-        
-        if (result && [result length] > 0) {
-            NSLog(@"[DEBUG] Loaded last logged-in user from defaults command: %@", result);
-            return result;
-        }
-    }
+    NSString *plistPath = [self getLoginWindowPreferencesPath];
+    NSDictionary *plistData = [NSDictionary dictionaryWithContentsOfFile:plistPath];
     
-    // Fall back to NSUserDefaults method
-    NSUserDefaults *loginDefaults = [[NSUserDefaults alloc] init];
-    [loginDefaults addSuiteNamed:@"loginwindow"];
-    
-    NSString *lastUser = [loginDefaults stringForKey:@"lastLoggedInUser"];
-    
-    [loginDefaults release];
+    NSString *lastUser = [plistData objectForKey:@"lastLoggedInUser"];
     
     if (lastUser && [lastUser length] > 0) {
-        NSLog(@"[DEBUG] Loaded last logged-in user from NSUserDefaults: %@", lastUser);
+        NSLog(@"[DEBUG] Loaded last logged-in user: %@", lastUser);
         return lastUser;
     }
     
-    NSLog(@"[DEBUG] No last logged-in user found in loginwindow domain");
+    NSLog(@"[DEBUG] No last logged-in user found in system-wide plist");
+    return nil;
+}
+
+- (void)saveLastSession:(NSString *)sessionExec
+{
+    if (!sessionExec || [sessionExec length] == 0) {
+        NSLog(@"[DEBUG] No session exec provided to save");
+        return;
+    }
+    
+    NSLog(@"[DEBUG] Saving last chosen session: %@", sessionExec);
+    
+    // Save to system-wide plist since LoginWindow runs as root
+    NSString *plistPath = [self getLoginWindowPreferencesPath];
+    NSString *plistDir = [plistPath stringByDeletingLastPathComponent];
+    
+    // Ensure directory exists
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSError *error = nil;
+    if (![fm createDirectoryAtPath:plistDir withIntermediateDirectories:YES attributes:nil error:&error]) {
+        NSLog(@"[DEBUG] Failed to create directory %@: %@", plistDir, error);
+        return;
+    }
+    
+    NSMutableDictionary *plistData = [NSMutableDictionary dictionaryWithContentsOfFile:plistPath];
+    if (!plistData) {
+        plistData = [NSMutableDictionary dictionary];
+    }
+    
+    [plistData setObject:sessionExec forKey:@"lastSession"];
+    
+    if ([plistData writeToFile:plistPath atomically:YES]) {
+        NSLog(@"[DEBUG] Successfully saved last chosen session to %@", plistPath);
+    } else {
+        NSLog(@"[DEBUG] Failed to save last chosen session to %@", plistPath);
+    }
+}
+
+- (NSString *)loadLastSession
+{
+    NSLog(@"[DEBUG] Loading last chosen session from system-wide plist");
+    
+    NSString *plistPath = [self getLoginWindowPreferencesPath];
+    NSDictionary *plistData = [NSDictionary dictionaryWithContentsOfFile:plistPath];
+    
+    NSString *lastSession = [plistData objectForKey:@"lastSession"];
+    
+    if (lastSession && [lastSession length] > 0) {
+        NSLog(@"[DEBUG] Loaded last chosen session: %@", lastSession);
+        return lastSession;
+    }
+    
+    NSLog(@"[DEBUG] No last chosen session found in system-wide plist");
     return nil;
 }
 
