@@ -283,7 +283,7 @@ void signalHandler(int sig) {
             NSUInteger lastSessionIndex = [availableSessionExecs indexOfObject:lastSession];
             if (lastSessionIndex != NSNotFound) {
                 [sessionDropdown selectItemAtIndex:lastSessionIndex];
-                selectedSessionExec = lastSession;
+                selectedSessionExec = [availableSessionExecs objectAtIndex:lastSessionIndex];
                 NSLog(@"[DEBUG] Pre-selected last chosen session: %@", lastSession);
             } else {
                 NSLog(@"[DEBUG] Last chosen session not found in available sessions: %@", lastSession);
