@@ -11,6 +11,7 @@
 
 + (NSString *)getApplicationNameForWindow:(unsigned long)windowId;
 + (BOOL)isWindowValid:(unsigned long)windowId;
++ (BOOL)isDesktopWindow:(unsigned long)windowId;
 + (NSArray *)getAllWindows;
 + (unsigned long)getActiveWindow;
 + (NSString *)getWindowProperty:(unsigned long)windowId atomName:(NSString *)atomName;

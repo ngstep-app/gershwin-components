@@ -205,6 +205,11 @@
 
             // Check again after immediate scan
             if (![self.protocolManager hasMenuForWindow:windowId]) {
+                // Prevent fallback menu for desktop windows
+                if ([MenuUtils isDesktopWindow:windowId]) {
+                    NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu", windowId);
+                    return;
+                }
                 NSLog(@"AppMenuWidget: Still no registered menu for window %lu after immediate scan, providing fallback menu", windowId);
 
                 // Create fallback File->Close menu for windows without exported menus
@@ -216,6 +221,11 @@
     }
     @catch (NSException *exception) {
         NSLog(@"AppMenuWidget: Exception during menu protocol check for window %lu: %@", windowId, exception);
+        // Prevent fallback menu for desktop windows
+        if ([MenuUtils isDesktopWindow:windowId]) {
+            NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu on exception", windowId);
+            return;
+        }
         // Create fallback File->Close menu on exception
         NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
         [self loadMenu:fallbackMenu forWindow:windowId];
@@ -237,7 +247,11 @@
 
     if (!menu) {
         NSLog(@"AppMenuWidget: Failed to get menu for window %lu, providing fallback menu", windowId);
-
+        // Prevent fallback menu for desktop windows
+        if ([MenuUtils isDesktopWindow:windowId]) {
+            NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu", windowId);
+            return;
+        }
         // Create fallback File->Close menu if protocol manager fails to provide menu
         NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
         [self loadMenu:fallbackMenu forWindow:windowId];
@@ -256,6 +270,11 @@
     
     // If this is a placeholder menu, replace it with a functional File menu
     if (isPlaceholder) {
+        // Prevent fallback menu for desktop windows
+        if ([MenuUtils isDesktopWindow:windowId]) {
+            NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu (placeholder menu)", windowId);
+            return;
+        }
         NSLog(@"AppMenuWidget: Replacing placeholder menu with File menu containing Close for window %lu", windowId);
         menu = [self createFileMenuWithClose:windowId];
     }

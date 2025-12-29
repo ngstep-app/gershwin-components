@@ -113,6 +113,45 @@
     return valid;
 }
 
++ (BOOL)isDesktopWindow:(unsigned long)windowId
+{
+    if (windowId == 0) {
+        return NO;
+    }
+    
+    Display *display = XOpenDisplay(NULL);
+    if (!display) {
+        return NO;
+    }
+    
+    // Check if window has _NET_WM_WINDOW_TYPE_DESKTOP
+    Atom actualType;
+    int actualFormat;
+    unsigned long nitems, bytesAfter;
+    unsigned char *prop = NULL;
+    BOOL isDesktop = NO;
+    
+    Atom windowTypeAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
+    Atom desktopTypeAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DESKTOP", False);
+    
+    if (XGetWindowProperty(display, (Window)windowId, windowTypeAtom,
+                          0, (~0L), False, XA_ATOM,
+                          &actualType, &actualFormat, &nitems, &bytesAfter,
+                          &prop) == Success && prop) {
+        Atom *types = (Atom *)prop;
+        for (unsigned long i = 0; i < nitems; i++) {
+            if (types[i] == desktopTypeAtom) {
+                isDesktop = YES;
+                break;
+            }
+        }
+        XFree(prop);
+    }
+    
+    XCloseDisplay(display);
+    return isDesktop;
+}
+
 + (NSArray *)getAllWindows
 {
     Display *display = XOpenDisplay(NULL);
