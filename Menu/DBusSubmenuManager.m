@@ -258,11 +258,15 @@ static NSMutableSet *refreshedByAboutToShow = nil;
     NSLog(@"DBusSubmenuDelegate: DBus connection: %@", self.dbusConnection);
     
     // Call GetLayout specifically for this submenu item with optimized property filtering
-    NSArray *essentialProperties = [NSArray arrayWithObjects:@"label", @"enabled", @"visible", @"type", nil];
+    // Include shortcut-related properties so keyboard shortcuts are displayed in menus
+    NSArray *essentialProperties = [NSArray arrayWithObjects:
+                                    @"label", @"enabled", @"visible", @"type",
+                                    @"shortcut", @"accel", @"accelerator", @"key-binding",
+                                    @"children-display", nil];
     NSArray *arguments = [NSArray arrayWithObjects:
                          self.itemId,                   // parentId (this submenu's ID)
                          [NSNumber numberWithInt:2], // recursionDepth (2 levels for lazy loading)
-                         essentialProperties,       // propertyNames (filtered for performance)
+                         essentialProperties,       // propertyNames (including shortcuts for display)
                          nil];
     
     NSLog(@"DBusSubmenuDelegate: Calling GetLayout with optimized arguments: %@", arguments);
@@ -271,7 +275,7 @@ static NSMutableSet *refreshedByAboutToShow = nil;
     NSLog(@"DBusSubmenuDelegate:   service: %@", self.serviceName);
     NSLog(@"DBusSubmenuDelegate:   path: %@", self.objectPath);
     NSLog(@"DBusSubmenuDelegate:   interface: com.canonical.dbusmenu");
-    NSLog(@"DBusSubmenuDelegate:   using filtered properties for performance");
+    NSLog(@"DBusSubmenuDelegate:   using filtered properties (including shortcuts) for performance");
     
     id result = [self.dbusConnection callMethod:@"GetLayout"
                                   onService:self.serviceName

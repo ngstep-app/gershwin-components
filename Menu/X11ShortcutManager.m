@@ -145,14 +145,15 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
     NSString *originalShortcut = [self createShortcutStringFromKey:keyEquivalent modifiers:modifierMask];
     unsigned int originalX11Modifier = [self convertToX11Modifier:modifierMask];
     
-    // For <Primary> shortcuts (which now map to Control), skip the original
-    // and only register Alt+key for cross-platform menu access
-    BOOL isControlShortcut = (modifierMask & NSControlKeyMask) != 0;
+    // For <Primary> shortcuts (Control from DBus, displayed as Command in menus)
+    // Skip registering the original and only register Alt+key for cross-platform menu access
+    // Note: DBusMenuParser converts Control→Command for display, so we check for BOTH
+    BOOL isControlShortcut = (modifierMask & NSControlKeyMask) != 0 || (modifierMask & NSCommandKeyMask) != 0;
     BOOL registeredOriginal = NO;
     BOOL registeredAlt = NO;
     
     if (!isControlShortcut) {
-        // Not a Control shortcut - register normally
+        // Not a Control/Command shortcut - register normally
         registeredOriginal = [self registerSingleShortcut:keycode 
                                                   modifier:originalX11Modifier 
                                                menuItemKey:menuItemKey 
@@ -161,10 +162,10 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
         NSLog(@"X11ShortcutManager: Skipping %@ (preserving app's internal shortcut)", originalShortcut);
     }
     
-    // For Control shortcuts, register Alt+key for our menu system
+    // For Control/Command shortcuts, register Alt+key for our menu system
     if (isControlShortcut) {
-        // Replace Control with Alt
-        NSUInteger altModifierMask = (modifierMask & ~NSControlKeyMask) | NSAlternateKeyMask;
+        // Replace Control OR Command with Alt
+        NSUInteger altModifierMask = (modifierMask & ~(NSControlKeyMask | NSCommandKeyMask)) | NSAlternateKeyMask;
         NSString *altShortcut = [self createShortcutStringFromKey:keyEquivalent modifiers:altModifierMask];
         unsigned int altX11Modifier = [self convertToX11Modifier:altModifierMask];
         

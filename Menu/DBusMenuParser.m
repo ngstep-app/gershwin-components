@@ -353,6 +353,17 @@
               label ?: @"(no label)", properties);
     }
     
+    // Enhanced shortcut property logging
+    if (shortcut || accel || accelerator || keyBinding) {
+        NSLog(@"DBusMenuParser: *** SHORTCUT PROPERTIES FOUND for '%@' ***", label ?: @"(no label)");
+        if (shortcut) NSLog(@"DBusMenuParser:   shortcut=%@", shortcut);
+        if (accel) NSLog(@"DBusMenuParser:   accel=%@", accel);
+        if (accelerator) NSLog(@"DBusMenuParser:   accelerator=%@", accelerator);
+        if (keyBinding) NSLog(@"DBusMenuParser:   key-binding=%@", keyBinding);
+    } else {
+        NSLog(@"DBusMenuParser: No shortcut properties for '%@'", label ?: @"(no label)");
+    }
+    
     // Check if this is a submenu container
     BOOL hasChildren = ([children count] > 0);
     BOOL hasSubmenuDisplay = (childrenDisplay && [childrenDisplay isEqualToString:@"submenu"]);
@@ -437,12 +448,51 @@
         modifierMask = [[parsedShortcut objectForKey:@"modifiers"] unsignedIntegerValue];
     }
     
+    // Create menu item without keyEquivalent first (to avoid GNUstep auto-setting NSCommandKeyMask)
     NSMenuItem *menuItem = [[NSMenuItem alloc] initWithTitle:label
                                                       action:nil
-                                               keyEquivalent:keyEquivalent];
+                                               keyEquivalent:@""];
     
     // Store the DBus item ID in representedObject for later use in activation
     [menuItem setRepresentedObject:itemId];
+    
+    // Set enabled state BEFORE setting shortcuts
+    if (enabled) {
+        [menuItem setEnabled:[enabled boolValue]];
+        NSLog(@"DBusMenuParser: Set enabled state to: %@", [enabled boolValue] ? @"YES" : @"NO");
+    } else {
+        NSLog(@"DBusMenuParser: No enabled property, using default");
+    }
+    
+    // Now set key equivalent and modifier mask AFTER creation
+    // This ensures we control the exact values without GNUstep auto-setting anything
+    if ([keyEquivalent length] > 0) {
+        [menuItem setKeyEquivalent:keyEquivalent];
+        if (modifierMask > 0) {
+            // WORKAROUND: GNUstep doesn't display Control shortcuts properly in menus
+            // For display: Convert NSControlKeyMask to NSCommandKeyMask 
+            // For X11 registration: Keep original NSControlKeyMask (X11ShortcutManager will convert to Alt)
+            NSUInteger displayModifierMask = modifierMask;
+            BOOL hasControlKey = (modifierMask & NSControlKeyMask) != 0;
+            
+            if (hasControlKey) {
+                // Display as Command in menu
+                displayModifierMask = (modifierMask & ~NSControlKeyMask) | NSCommandKeyMask;
+                NSLog(@"DBusMenuParser: Control shortcut will display as Command but register as Alt for X11");
+                
+                // Store ORIGINAL modifier (Control) in a way X11ShortcutManager can retrieve it
+                // We'll use the menu item's tag to encode the original modifier
+                // Tag format: upper 16 bits = original modifier flags, lower 16 bits = item ID
+                NSUInteger originalModBits = (modifierMask >> 8) & 0xFFFF; // Extract relevant modifier bits
+                NSUInteger itemIdBits = [[menuItem representedObject] intValue] & 0xFFFF;
+                [menuItem setTag:(originalModBits << 16) | itemIdBits];
+            }
+            
+            [menuItem setKeyEquivalentModifierMask:displayModifierMask];
+        }
+        NSLog(@"DBusMenuParser: Set shortcut: key='%@', modifiers=%lu (display=%lu)", 
+              keyEquivalent, (unsigned long)modifierMask, (unsigned long)[menuItem keyEquivalentModifierMask]);
+    }
     
     NSLog(@"DBusMenuParser: ===== CREATED MENU ITEM =====");
     NSLog(@"DBusMenuParser: Menu item object: %@", menuItem);
@@ -451,18 +501,17 @@
     NSLog(@"DBusMenuParser: Key equivalent: '%@'", [menuItem keyEquivalent]);
     NSLog(@"DBusMenuParser: Modifier mask: %lu", (unsigned long)[menuItem keyEquivalentModifierMask]);
     
-    // Set enabled state
-    if (enabled) {
-        [menuItem setEnabled:[enabled boolValue]];
-        NSLog(@"DBusMenuParser: Set enabled state to: %@", [enabled boolValue] ? @"YES" : @"NO");
+    // Enhanced shortcut logging
+    if ([[menuItem keyEquivalent] length] > 0) {
+        NSString *shortcutDesc = [NSString stringWithFormat:@"%@%@%@%@%@",
+                                 ([menuItem keyEquivalentModifierMask] & NSControlKeyMask) ? @"Ctrl+" : @"",
+                                 ([menuItem keyEquivalentModifierMask] & NSAlternateKeyMask) ? @"Alt+" : @"",
+                                 ([menuItem keyEquivalentModifierMask] & NSShiftKeyMask) ? @"Shift+" : @"",
+                                 ([menuItem keyEquivalentModifierMask] & NSCommandKeyMask) ? @"Cmd+" : @"",
+                                 [menuItem keyEquivalent]];
+        NSLog(@"DBusMenuParser: *** SHORTCUT SET: '%@' ***", shortcutDesc);
     } else {
-        NSLog(@"DBusMenuParser: No enabled property, using default");
-    }
-    
-    // Set key equivalent modifier mask
-    if (modifierMask > 0) {
-        [menuItem setKeyEquivalentModifierMask:modifierMask];
-        NSLog(@"DBusMenuParser: Set modifier mask to: %lu", (unsigned long)modifierMask);
+        NSLog(@"DBusMenuParser: *** NO SHORTCUT (key equivalent is empty) ***");
     }
     
     // Store item ID for event handling
@@ -529,16 +578,52 @@
                           dbusConnection:dbusConnection
                                   itemId:itemId];
         
+        // Force the submenu to update its layout now that all items and shortcuts are set
+        // This is critical for GNUstep to recalculate menu item cell sizes including key equivalent widths
+        [submenu update];
+        [submenu sizeToFit];
+        NSLog(@"DBusMenuParser: Forced submenu update and sizeToFit for proper shortcut display");
+        
+        // DIAGNOSTIC: Log all submenu items and their shortcuts after submenu is fully set up
+        NSLog(@"DBusMenuParser: ===== SUBMENU '%@' FINAL STATE =====", label ?: @"(no label)");
+        NSArray *submenuItems = [submenu itemArray];
+        for (NSUInteger idx = 0; idx < [submenuItems count]; idx++) {
+            NSMenuItem *subItem = [submenuItems objectAtIndex:idx];
+            NSString *keyEq = [subItem keyEquivalent];
+            NSUInteger modMask = [subItem keyEquivalentModifierMask];
+            if ([keyEq length] > 0) {
+                NSLog(@"DBusMenuParser:   Item %lu: '%@' - shortcut: '%@' (modifiers=%lu)", 
+                      idx, [subItem title], keyEq, (unsigned long)modMask);
+            } else {
+                NSLog(@"DBusMenuParser:   Item %lu: '%@' - no shortcut", idx, [subItem title]);
+            }
+        }
+        NSLog(@"DBusMenuParser: ===== END SUBMENU FINAL STATE =====");
+        
         NSLog(@"DBusMenuParser: ===== SUBMENU CREATION COMPLETE FOR '%@' =====", label ?: @"(no label)");
     } else {
         NSLog(@"DBusMenuParser: Item '%@' is NOT a submenu (children=%lu, children-display=%@)", 
               label ?: @"(no label)", (unsigned long)[children count], childrenDisplay ?: @"(none)");
     }
     
+    // Final summary log
+    NSString *shortcutSummary = @"none";
+    if ([keyEquivalent length] > 0 && modifierMask > 0) {
+        shortcutSummary = [NSString stringWithFormat:@"%@+%@", 
+                          [DBusMenuShortcutParser modifierMaskToString:modifierMask], keyEquivalent];
+    } else if ([keyEquivalent length] > 0) {
+        shortcutSummary = keyEquivalent;
+    }
     NSLog(@"DBusMenuParser: Created menu item: '%@' (ID=%@, enabled=%@, children=%lu, shortcut=%@)",
-          label, itemId, enabled, (unsigned long)[children count], 
-          ([keyEquivalent length] > 0) ? [NSString stringWithFormat:@"%@+%@", 
-           [DBusMenuShortcutParser modifierMaskToString:modifierMask], keyEquivalent] : @"none");
+          label, itemId, enabled, (unsigned long)[children count], shortcutSummary);
+    
+    // Additional warning if shortcut was supposed to be set but isn't on the menu item
+    if ([[menuItem keyEquivalent] length] == 0 && ([keyEquivalent length] > 0 || modifierMask > 0)) {
+        NSLog(@"DBusMenuParser: *** WARNING: Shortcut was parsed but NOT set on menu item! ***");
+        NSLog(@"DBusMenuParser: ***   Parsed keyEquivalent='%@', modifierMask=%lu ***", keyEquivalent, (unsigned long)modifierMask);
+        NSLog(@"DBusMenuParser: ***   MenuItem keyEquivalent='%@', modifierMask=%lu ***", 
+              [menuItem keyEquivalent], (unsigned long)[menuItem keyEquivalentModifierMask]);
+    }
     
     return menuItem;
 }
