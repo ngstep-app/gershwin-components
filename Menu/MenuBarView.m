@@ -6,7 +6,7 @@
 {
     self = [super initWithFrame:frameRect];
     if (self) {
-        // Use the theme's menubar background color instead of hardcoded values
+         // Use the theme's menubar background color instead of hardcoded values
         self.backgroundColor = [[GSTheme theme] menuItemBackgroundColor];
     }
     return self;

@@ -33,3 +33,4 @@ old/
 out/
 *.pkg
 Menu/GNUmakefile
+screenshot*.png

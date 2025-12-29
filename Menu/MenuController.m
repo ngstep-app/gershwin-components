@@ -13,6 +13,20 @@
 #import <sys/select.h>
 #import <errno.h>
 
+@interface TimeMenuView : NSMenuView
+@end
+
+@implementation TimeMenuView
+
+- (void)drawRect:(NSRect)dirtyRect
+{
+    [[NSColor yellowColor] set];
+    NSRectFill(dirtyRect);
+    [super drawRect:dirtyRect];
+}
+
+@end
+
 @implementation MenuController
 
 // DBus file descriptor monitoring using NSFileHandle
@@ -263,8 +277,8 @@
     NSLog(@"MenuController: Created MenuBarView: %@", self.menuBarView);
     
     // Create app menu widget for displaying menus - use larger width to accommodate more menu items
-    CGFloat menuWidgetWidth = self.screenSize.width - 140; // Leave space for time menu and margins
-    self.appMenuWidget = [[AppMenuWidget alloc] initWithFrame:NSMakeRect(20, 0, menuWidgetWidth, menuBarHeight)];
+    CGFloat menuWidgetWidth = self.screenSize.width - 60; // Leave space for time menu
+    self.appMenuWidget = [[AppMenuWidget alloc] initWithFrame:NSMakeRect(0, 0, menuWidgetWidth, menuBarHeight)];
     NSLog(@"MenuController: AppMenuWidget created successfully");
     
     NSLog(@"MenuController: Setting up protocol manager connection");
@@ -610,7 +624,7 @@
     CGFloat timeMenuWidth = 60;
     CGFloat timeMenuX = self.screenSize.width - timeMenuWidth;
     const CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight];
-    self.timeMenuView = [[NSMenuView alloc] initWithFrame:NSMakeRect(timeMenuX, 0, timeMenuWidth, menuBarHeight)];
+    self.timeMenuView = [[TimeMenuView alloc] initWithFrame:NSMakeRect(timeMenuX, 0, timeMenuWidth, menuBarHeight)];
     [self.timeMenuView setMenu:self.timeMenu];
     [self.timeMenuView setHorizontal:YES];
     [self.timeMenuView setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin | NSViewMinYMargin];

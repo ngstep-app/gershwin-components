@@ -9,6 +9,20 @@
 #import <X11/Xutil.h>
 #import <X11/Xatom.h>
 
+@interface AppMenuView : NSMenuView
+@end
+
+@implementation AppMenuView
+
+- (void)drawRect:(NSRect)dirtyRect
+{
+    [[NSColor yellowColor] set];
+    NSRectFill(dirtyRect);
+    [super drawRect:dirtyRect];
+}
+
+@end
+
 @implementation AppMenuWidget
 
 - (id)initWithFrame:(NSRect)frameRect
@@ -257,9 +271,21 @@
         NSLog(@"AppMenuWidget: Removed existing menu view before creating new one");
     }
 
-    // Create a new horizontal menu view that fits within our widget frame
-    NSRect menuViewFrame = NSMakeRect(0, 0, [self bounds].size.width, [self bounds].size.height);
-    self.menuView = [[NSMenuView alloc] initWithFrame:menuViewFrame];
+    // Calculate text width for positioning
+    CGFloat textWidth = 0;
+    if (self.currentApplicationName && [self.currentApplicationName length] > 0) {
+        NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
+                                   [NSFont boldSystemFontOfSize:11.0], NSFontAttributeName,
+                                   [NSColor colorWithCalibratedWhite:0.3 alpha:1.0], NSForegroundColorAttributeName,
+                                   nil];
+        
+        NSSize textSize = [self.currentApplicationName sizeWithAttributes:attributes];
+        textWidth = textSize.width + 0; // Add minimal padding
+    }
+
+    // Create a new horizontal menu view that fits within our widget frame, starting after the text
+    NSRect menuViewFrame = NSMakeRect(textWidth, 0, [self bounds].size.width - textWidth, [self bounds].size.height);
+    self.menuView = [[AppMenuView alloc] initWithFrame:menuViewFrame];
 
     if (!self.menuView) {
         NSLog(@"AppMenuWidget: Failed to create menu view - aborting setup");
@@ -306,6 +332,11 @@
 
 - (void)drawRect:(NSRect)dirtyRect
 {
+    // Fill background with yellow color
+    NSColor *bgColor = [NSColor yellowColor];
+    [bgColor set];
+    NSRectFill([self bounds]);
+    
     // Draw application name if we have one
     if (self.currentApplicationName && [self.currentApplicationName length] > 0) {
         NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
@@ -314,7 +345,7 @@
                                    nil];
         
         NSSize textSize = [self.currentApplicationName sizeWithAttributes:attributes];
-        NSPoint textPoint = NSMakePoint(4, ([self bounds].size.height - textSize.height) / 2);
+        NSPoint textPoint = NSMakePoint(0, ([self bounds].size.height - textSize.height) / 2);
         
         [self.currentApplicationName drawAtPoint:textPoint withAttributes:attributes];
     }
