@@ -17,8 +17,34 @@
 
 // DBus file descriptor monitoring using NSFileHandle
 - (void)dbusFileDescriptorReady:(NSNotification *)notification {
-    NSLog(@"MenuController: DBus file descriptor ready for reading");
-    [[MenuProtocolManager sharedManager] processDBusMessages];
+    // Always handle DBus traffic on the main thread to avoid races with UI work
+    if (![NSThread isMainThread]) {
+        [self performSelectorOnMainThread:@selector(dbusFileDescriptorReady:)
+                                   withObject:notification
+                                waitUntilDone:NO];
+        return;
+    }
+
+    NSLog(@"MenuController: DBus file descriptor reported data available");
+    
+    @try {
+        [[MenuProtocolManager sharedManager] processDBusMessages];
+    }
+    @catch (NSException *exception) {
+        NSLog(@"MenuController: Exception processing DBus messages: %@", exception);
+    }
+
+    // Re-arm the watcher so we continue receiving notifications
+    // Only re-arm if the file handle is still valid
+    if (self.dbusFileHandle) {
+        @try {
+            [self.dbusFileHandle waitForDataInBackgroundAndNotify];
+        }
+        @catch (NSException *exception) {
+            NSLog(@"MenuController: Exception re-arming DBus file handle: %@", exception);
+            self.dbusFileHandle = nil;
+        }
+    }
 }
 
 - (id)init
@@ -315,13 +341,14 @@
             NSLog(@"MenuController: Got DBus file descriptor %d for event loop integration", self.dbusFileDescriptor);
             
             // Create NSFileHandle for DBus file descriptor monitoring
-            NSFileHandle *dbusFileHandle = [[NSFileHandle alloc] initWithFileDescriptor:self.dbusFileDescriptor];
-            if (dbusFileHandle) {
-                [[NSNotificationCenter defaultCenter] addObserver:self
-                                                         selector:@selector(dbusFileDescriptorReady:)
-                                                             name:NSFileHandleReadCompletionNotification
-                                                           object:dbusFileHandle];
-                [dbusFileHandle readInBackgroundAndNotify];
+            self.dbusFileHandle = [[NSFileHandle alloc] initWithFileDescriptor:self.dbusFileDescriptor closeOnDealloc:NO];
+            if (self.dbusFileHandle) {
+                NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+                [center addObserver:self
+                           selector:@selector(dbusFileDescriptorReady:)
+                               name:NSFileHandleDataAvailableNotification
+                             object:self.dbusFileHandle];
+                [self.dbusFileHandle waitForDataInBackgroundAndNotify];
                 NSLog(@"MenuController: DBus file descriptor integrated into notification system");
             } else {
                 NSLog(@"MenuController: Failed to create NSFileHandle for DBus file descriptor");

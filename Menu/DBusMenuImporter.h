@@ -6,6 +6,9 @@
 @class AppMenuWidget;
 
 @interface DBusMenuImporter : NSObject <MenuProtocolHandler>
+{
+    NSObject *_windowRegistryLock;  // Lock for thread-safe window registry access
+}
 
 @property (nonatomic, strong) GNUDBusConnection *dbusConnection;
 @property (nonatomic, strong) NSMutableDictionary *registeredWindows; // windowId -> service name
@@ -13,6 +16,7 @@
 @property (nonatomic, strong) NSMutableDictionary *menuCache;         // windowId -> NSMenu
 @property (nonatomic, strong) NSTimer *cleanupTimer;
 @property (nonatomic, weak) AppMenuWidget *appMenuWidget;  // Reference to AppMenuWidget for immediate menu display
+@property (atomic, assign) BOOL processingMessages;        // Guard to prevent re-entrant DBus processing
 
 - (BOOL)connectToDBus;
 - (void)showDBusErrorAndExit;

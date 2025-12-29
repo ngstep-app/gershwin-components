@@ -32,6 +32,7 @@
 @property (nonatomic, strong) NSThread *x11Thread;
 @property (nonatomic, assign) BOOL shouldStopMonitoring;
 @property (nonatomic, assign) int dbusFileDescriptor;
+@property (nonatomic, strong) NSFileHandle *dbusFileHandle;
 @property (nonatomic, assign) Display *strutDisplay;
 @property (nonatomic, assign) Window strutWindow;
 

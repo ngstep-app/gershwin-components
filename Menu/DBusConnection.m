@@ -145,6 +145,13 @@ typedef struct DBusConnection DBusConnectionStruct;
      arguments:(NSArray *)arguments
 {
     if (!self.connected || !self.connection) {
+        NSLog(@"DBusConnection: Cannot call method - not connected");
+        return nil;
+    }
+    
+    // Validate inputs
+    if (!method || !serviceName || !objectPath || !interfaceName) {
+        NSLog(@"DBusConnection: Cannot call method - invalid parameters");
         return nil;
     }
     
@@ -674,14 +681,24 @@ typedef struct DBusConnection DBusConnectionStruct;
         return;
     }
     
-    // Process pending messages with timeout
-    dbus_connection_read_write_dispatch((DBusConnectionStruct *)self.connection, 0);
-    
-    // Check for incoming messages
-    DBusMessage *message;
-    while ((message = dbus_connection_pop_message((DBusConnectionStruct *)self.connection)) != NULL) {
-        [self handleIncomingMessage:message];
-        dbus_message_unref(message);
+    @try {
+        // Process pending messages with timeout
+        dbus_connection_read_write_dispatch((DBusConnectionStruct *)self.connection, 0);
+        
+        // Check for incoming messages
+        DBusMessage *message;
+        while ((message = dbus_connection_pop_message((DBusConnectionStruct *)self.connection)) != NULL) {
+            // Recheck connection validity in case it closed during processing
+            if (!self.connected || !self.connection) {
+                dbus_message_unref(message);
+                break;
+            }
+            [self handleIncomingMessage:message];
+            dbus_message_unref(message);
+        }
+    }
+    @catch (NSException *exception) {
+        NSLog(@"DBusConnection: Exception during message processing: %@", exception);
     }
 }
 

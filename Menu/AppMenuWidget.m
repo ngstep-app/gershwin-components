@@ -359,7 +359,12 @@
     if (activeWindow == windowId) {
         NSLog(@"AppMenuWidget: Newly registered window %lu is currently active, displaying menu immediately", windowId);
         self.currentWindowId = activeWindow;
-        [self displayMenuForWindow:activeWindow isDifferentApp:YES];
+        @try {
+            [self displayMenuForWindow:activeWindow isDifferentApp:YES];
+        }
+        @catch (NSException *exception) {
+            NSLog(@"AppMenuWidget: Exception displaying menu for newly registered window %lu: %@", windowId, exception);
+        }
     } else {
         NSLog(@"AppMenuWidget: Newly registered window %lu is not currently active (active: %lu)", windowId, activeWindow);
     }
@@ -772,7 +777,14 @@
               [item hasSubmenu] ? (unsigned long)[[[item submenu] itemArray] count] : 0);
     }
     
-    [self setupMenuViewWithMenu:menu];
+    @try {
+        [self setupMenuViewWithMenu:menu];
+        NSLog(@"AppMenuWidget: setupMenuViewWithMenu completed successfully");
+    }
+    @catch (NSException *exception) {
+        NSLog(@"AppMenuWidget: EXCEPTION in setupMenuViewWithMenu: %@", exception);
+        NSLog(@"AppMenuWidget: Exception details - name: %@, reason: %@", [exception name], [exception reason]);
+    }
     
     // Re-register shortcuts for this menu since we cleared them in clearMenu
     [self reregisterShortcutsForMenu:menu];

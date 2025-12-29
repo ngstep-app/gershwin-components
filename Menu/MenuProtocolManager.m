@@ -137,34 +137,40 @@
 
 - (NSMenu *)getMenuForWindow:(unsigned long)windowId
 {
-    NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
-    NSNumber *protocolTypeNum = [self.windowToProtocolMap objectForKey:windowKey];
-    
-    if (protocolTypeNum) {
-        // We know which protocol handles this window
-        MenuProtocolType protocolType = [protocolTypeNum integerValue];
-        id<MenuProtocolHandler> handler = [self handlerForType:protocolType];
-        if (handler) {
-            return [handler getMenuForWindow:windowId];
-        }
-    }
-    
-    // Try all protocols to find one that can provide a menu
-    for (NSUInteger i = 0; i < [self.protocolHandlers count]; i++) {
-        id handler = [self.protocolHandlers objectAtIndex:i];
-        if (![handler isKindOfClass:[NSNull class]]) {
-            NSMenu *menu = [handler getMenuForWindow:windowId];
-            if (menu) {
-                // Cache which protocol handles this window
-                [self.windowToProtocolMap setObject:[NSNumber numberWithUnsignedLong:i] forKey:windowKey];
-                NSLog(@"MenuProtocolManager: Window %lu handled by protocol %lu", windowId, (unsigned long)i);
-                return menu;
+    @try {
+        NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
+        NSNumber *protocolTypeNum = [self.windowToProtocolMap objectForKey:windowKey];
+        
+        if (protocolTypeNum) {
+            // We know which protocol handles this window
+            MenuProtocolType protocolType = [protocolTypeNum integerValue];
+            id<MenuProtocolHandler> handler = [self handlerForType:protocolType];
+            if (handler) {
+                return [handler getMenuForWindow:windowId];
             }
         }
+        
+        // Try all protocols to find one that can provide a menu
+        for (NSUInteger i = 0; i < [self.protocolHandlers count]; i++) {
+            id handler = [self.protocolHandlers objectAtIndex:i];
+            if (![handler isKindOfClass:[NSNull class]]) {
+                NSMenu *menu = [handler getMenuForWindow:windowId];
+                if (menu) {
+                    // Cache which protocol handles this window
+                    [self.windowToProtocolMap setObject:[NSNumber numberWithUnsignedLong:i] forKey:windowKey];
+                    NSLog(@"MenuProtocolManager: Window %lu handled by protocol %lu", windowId, (unsigned long)i);
+                    return menu;
+                }
+            }
+        }
+        
+        NSLog(@"MenuProtocolManager: No protocol could provide menu for window %lu", windowId);
+        return nil;
     }
-    
-    NSLog(@"MenuProtocolManager: No protocol could provide menu for window %lu", windowId);
-    return nil;
+    @catch (NSException *exception) {
+        NSLog(@"MenuProtocolManager: Exception getting menu for window %lu: %@", windowId, exception);
+        return nil;
+    }
 }
 
 - (void)activateMenuItem:(NSMenuItem *)menuItem forWindow:(unsigned long)windowId
