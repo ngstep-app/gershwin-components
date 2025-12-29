@@ -3,7 +3,7 @@
 
 @implementation DisplayInfo
 
-@synthesize name, frame, resolution, isPrimary, isConnected, output;
+@synthesize name, frame, resolution, isPrimary, isConnected, output, currentResolutionString;
 
 - (id)init
 {
@@ -15,6 +15,7 @@
         isPrimary = NO;
         isConnected = NO;
         output = nil;
+        currentResolutionString = nil;
     }
     return self;
 }
@@ -23,6 +24,7 @@
 {
     [name release];
     [output release];
+    [currentResolutionString release];
     [super dealloc];
 }
 
@@ -228,6 +230,7 @@
     
     NSArray *lines = [output componentsSeparatedByString:@"\n"];
     DisplayInfo *currentDisplay = nil;
+    BOOL parsingModes = NO;
     
     NSLog(@"DisplayController: Parsing xrandr output...");
     
@@ -238,12 +241,27 @@
         if ([trimmedLine rangeOfString:@" connected"].location != NSNotFound ||
             [trimmedLine rangeOfString:@" disconnected"].location != NSNotFound) {
             
+            // Finish previous display if any
+            if (currentDisplay) {
+                if ([currentDisplay isConnected]) {
+                    [displays addObject:currentDisplay];
+                    NSLog(@"Added display %@ to list", [currentDisplay name]);
+                }
+                [currentDisplay release];
+                currentDisplay = nil;
+                parsingModes = NO;
+            }
+            
             NSArray *parts = [trimmedLine componentsSeparatedByString:@" "];
             if ([parts count] >= 2) {
                 currentDisplay = [[DisplayInfo alloc] init];
                 [currentDisplay setOutput:[parts objectAtIndex:0]];
                 [currentDisplay setName:[parts objectAtIndex:0]];
                 [currentDisplay setIsConnected:[trimmedLine rangeOfString:@" connected"].location != NSNotFound];
+                
+                if ([currentDisplay isConnected]) {
+                    parsingModes = YES;
+                }
                 
                 NSLog(@"Found display: %@ (connected: %d)", [currentDisplay name], [currentDisplay isConnected]);
                 
@@ -291,15 +309,37 @@
                     [currentDisplay setFrame:NSMakeRect(0, 0, 1920, 1080)]; // Default position
                     [currentDisplay setIsPrimary:YES]; // Make it primary if it's the only one
                 }
-                
-                if ([currentDisplay isConnected]) {
-                    [displays addObject:currentDisplay];
-                    NSLog(@"Added display %@ to list", [currentDisplay name]);
+            }
+        } else if (parsingModes && [trimmedLine rangeOfString:@"x"].location != NSNotFound) {
+            // Parse mode line for current display
+            if ([trimmedLine rangeOfString:@"*"].location != NSNotFound) {
+                // This is the current mode
+                NSArray *parts = [trimmedLine componentsSeparatedByString:@" "];
+                NSMutableArray *filteredParts = [NSMutableArray array];
+                for (NSString *part in parts) {
+                    NSString *trimmedPart = [part stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                    if ([trimmedPart length] > 0) {
+                        [filteredParts addObject:trimmedPart];
+                    }
                 }
-                [currentDisplay release];
-                currentDisplay = nil;
+                
+                if ([filteredParts count] > 0) {
+                    NSString *resPart = [filteredParts objectAtIndex:0];
+                    [currentDisplay setCurrentResolutionString:resPart];
+                    NSLog(@"Display %@ current resolution string: %@", [currentDisplay name], resPart);
+                }
             }
         }
+    }
+    
+    // Finish last display if any
+    if (currentDisplay) {
+        if ([currentDisplay isConnected]) {
+            [displays addObject:currentDisplay];
+            NSLog(@"Added display %@ to list", [currentDisplay name]);
+        }
+        [currentDisplay release];
+        currentDisplay = nil;
     }
     
     NSLog(@"DisplayController: Found %lu connected displays", (unsigned long)[displays count]);
@@ -348,15 +388,26 @@
     
     if (targetDisplay) {
         NSLog(@"DisplayController: Updating resolution popup for display: %@", [targetDisplay name]);
-        NSArray *availableResolutions = [self getAvailableResolutionsForDisplay:targetDisplay];
+        NSMutableArray *availableResolutions = [[self getAvailableResolutionsForDisplay:targetDisplay] mutableCopy];
+        
+        // Ensure current resolution is in the list
+        NSString *currentRes = [targetDisplay currentResolutionString];
+        if (!currentRes) {
+            // Fallback to formatted size
+            currentRes = [NSString stringWithFormat:@"%.0fx%.0f", 
+                         [targetDisplay resolution].width, 
+                         [targetDisplay resolution].height];
+        }
+        if (![availableResolutions containsObject:currentRes]) {
+            [availableResolutions addObject:currentRes];
+            NSLog(@"DisplayController: Added current resolution to popup: %@", currentRes);
+        }
+        
         for (NSString *res in availableResolutions) {
             [resolutionPopup addItemWithTitle:res];
         }
         
         // Select current resolution
-        NSString *currentRes = [NSString stringWithFormat:@"%.0fx%.0f", 
-                               [targetDisplay resolution].width, 
-                               [targetDisplay resolution].height];
         [resolutionPopup selectItemWithTitle:currentRes];
         NSLog(@"DisplayController: Set resolution popup to current resolution: %@", currentRes);
     }

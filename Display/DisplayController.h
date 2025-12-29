@@ -18,6 +18,7 @@
     BOOL isPrimary;
     BOOL isConnected;
     NSString *output; // xrandr output name
+    NSString *currentResolutionString; // e.g., "1920x1080" or "1920x1080i"
 }
 
 @property (retain) NSString *name;
@@ -26,6 +27,7 @@
 @property BOOL isPrimary;
 @property BOOL isConnected;
 @property (retain) NSString *output;
+@property (retain) NSString *currentResolutionString;
 
 @end
 
