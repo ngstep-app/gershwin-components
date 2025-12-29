@@ -74,6 +74,33 @@ static NSMutableSet *refreshedByAboutToShow = nil;
     NSLog(@"DBusSubmenuManager: ===== SUBMENU DELEGATE SETUP COMPLETE =====");
 }
 
++ (void)cleanupDelegatesForService:(NSString *)serviceName
+{
+    if (!serviceName) {
+        return;
+    }
+    
+    NSLog(@"DBusSubmenuManager: Cleaning up delegates for service: %@", serviceName);
+    
+    NSMutableArray *keysToRemove = [NSMutableArray array];
+    
+    for (NSString *key in [submenuDelegates allKeys]) {
+        DBusSubmenuDelegate *delegate = [submenuDelegates objectForKey:key];
+        if (delegate && [[delegate serviceName] isEqualToString:serviceName]) {
+            [keysToRemove addObject:key];
+        }
+    }
+    
+    for (NSString *key in keysToRemove) {
+        [submenuDelegates removeObjectForKey:key];
+    }
+    
+    if ([keysToRemove count] > 0) {
+        NSLog(@"DBusSubmenuManager: Removed %lu stale delegates for service: %@", 
+              (unsigned long)[keysToRemove count], serviceName);
+    }
+}
+
 + (void)cleanup
 {
     NSLog(@"DBusSubmenuManager: Performing cleanup...");

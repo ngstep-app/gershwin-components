@@ -21,6 +21,9 @@
              groupId:(NSNumber *)groupId
             menuDict:(NSMutableDictionary *)menuDict;
 
+// Cleanup delegates for a specific service (call when window unregisters)
++ (void)cleanupDelegatesForService:(NSString *)serviceName;
+
 + (void)cleanup;
 
 @end

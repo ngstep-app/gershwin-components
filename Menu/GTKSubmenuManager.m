@@ -69,6 +69,42 @@ static NSMutableSet *loadedGroups = nil;
     NSLog(@"GTKSubmenuManager: ===== GTK SUBMENU DELEGATE SETUP COMPLETE =====");
 }
 
++ (void)cleanupDelegatesForService:(NSString *)serviceName
+{
+    if (!serviceName) {
+        return;
+    }
+    
+    NSLog(@"GTKSubmenuManager: Cleaning up delegates for service: %@", serviceName);
+    
+    NSMutableArray *keysToRemove = [NSMutableArray array];
+    
+    for (NSString *key in [gtkSubmenuDelegates allKeys]) {
+        GTKSubmenuDelegate *delegate = [gtkSubmenuDelegates objectForKey:key];
+        if (delegate && [[delegate serviceName] isEqualToString:serviceName]) {
+            [keysToRemove addObject:key];
+        }
+    }
+    
+    for (NSString *key in keysToRemove) {
+        [gtkSubmenuDelegates removeObjectForKey:key];
+    }
+    
+    // Also remove loaded group markers for this service
+    NSMutableSet *groupKeysToRemove = [NSMutableSet set];
+    for (NSString *groupKey in loadedGroups) {
+        if ([groupKey hasPrefix:[NSString stringWithFormat:@"group_%@_", serviceName]]) {
+            [groupKeysToRemove addObject:groupKey];
+        }
+    }
+    [loadedGroups minusSet:groupKeysToRemove];
+    
+    if ([keysToRemove count] > 0 || [groupKeysToRemove count] > 0) {
+        NSLog(@"GTKSubmenuManager: Removed %lu stale delegates and %lu loaded group markers for service: %@", 
+              (unsigned long)[keysToRemove count], (unsigned long)[groupKeysToRemove count], serviceName);
+    }
+}
+
 + (void)cleanup
 {
     NSLog(@"GTKSubmenuManager: Performing GTK submenu cleanup...");

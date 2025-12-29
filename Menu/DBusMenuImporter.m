@@ -8,6 +8,7 @@
 #import "DBusMenuImporter.h"
 #import "DBusMenuParser.h"
 #import "DBusMenuActionHandler.h"
+#import "DBusSubmenuManager.h"
 #import "MenuUtils.h"
 #import "AppMenuWidget.h"
 #import "MenuCacheManager.h"
@@ -143,9 +144,11 @@
         legacyCachedMenu = [self.menuCache objectForKey:windowKey];
     }
     
-    // Check enhanced cache first (outside lock)
+    // Check enhanced cache with service name validation (outside lock)
+    // This prevents returning stale menus when window IDs are reused
     MenuCacheManager *cacheManager = [MenuCacheManager sharedManager];
-    NSMenu *cachedMenu = [cacheManager getCachedMenuForWindow:windowId];
+    NSMenu *cachedMenu = [cacheManager getCachedMenuForWindow:windowId
+                                        validateServiceName:serviceName];
     if (cachedMenu) {
         NSLog(@"DBusMenuImporter: Returning enhanced cached menu for window %lu - re-registering shortcuts", windowId);
         
@@ -455,15 +458,25 @@
 - (void)unregisterWindow:(unsigned long)windowId
 {
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
+    NSString *serviceName = nil;
     
     @try {
         // Protect dictionary access with lock to prevent crashes when unregistering from background threads
         @synchronized(_windowRegistryLock) {
+            // Get the service name before removing to clean up related delegates
+            serviceName = [[self.registeredWindows objectForKey:windowKey] copy];
+            
             [self.registeredWindows removeObjectForKey:windowKey];
             [self.windowMenuPaths removeObjectForKey:windowKey];
             [self.menuCache removeObjectForKey:windowKey];
         }
         [[MenuCacheManager sharedManager] invalidateCacheForWindow:windowId];
+        
+        // Clean up submenu delegates associated with this service to prevent
+        // crashes when trying to use stale DBus connections
+        if (serviceName) {
+            [DBusSubmenuManager cleanupDelegatesForService:serviceName];
+        }
         
         NSLog(@"DBusMenuImporter: Unregistered window %lu", windowId);
     }

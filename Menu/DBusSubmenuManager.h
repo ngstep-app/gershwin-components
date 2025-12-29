@@ -39,7 +39,10 @@
       dbusConnection:(GNUDBusConnection *)dbusConnection
               itemId:(NSNumber *)itemId;
 
-// Cleanup method
+// Cleanup delegates for a specific service (call when window unregisters)
++ (void)cleanupDelegatesForService:(NSString *)serviceName;
+
+// Full cleanup method
 + (void)cleanup;
 
 @end

@@ -102,6 +102,12 @@
 
 - (NSMenu *)getCachedMenuForWindow:(unsigned long)windowId
 {
+    return [self getCachedMenuForWindow:windowId validateServiceName:nil];
+}
+
+- (NSMenu *)getCachedMenuForWindow:(unsigned long)windowId 
+         validateServiceName:(NSString *)expectedServiceName
+{
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
     MenuCacheEntry *entry = [self.cache objectForKey:windowKey];
     
@@ -109,6 +115,19 @@
         self.cacheMisses++;
         NSLog(@"MenuCacheManager: Cache MISS for window %lu", windowId);
         return nil;
+    }
+    
+    // Validate service name if provided - this prevents returning stale menus
+    // when a window ID is reused by a different DBus service (e.g., after closing
+    // and reopening a file manager window)
+    if (expectedServiceName && [entry serviceName]) {
+        if (![expectedServiceName isEqualToString:[entry serviceName]]) {
+            NSLog(@"MenuCacheManager: Cache INVALID for window %lu - service name mismatch (cached: %@, expected: %@)",
+                  windowId, [entry serviceName], expectedServiceName);
+            [self invalidateCacheForWindow:windowId];
+            self.cacheMisses++;
+            return nil;
+        }
     }
     
     // Check if entry is stale

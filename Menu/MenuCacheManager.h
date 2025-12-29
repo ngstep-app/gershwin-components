@@ -45,6 +45,8 @@
 
 // Cache operations
 - (NSMenu *)getCachedMenuForWindow:(unsigned long)windowId;
+- (NSMenu *)getCachedMenuForWindow:(unsigned long)windowId 
+         validateServiceName:(NSString *)expectedServiceName;
 - (void)cacheMenu:(NSMenu *)menu 
         forWindow:(unsigned long)windowId 
       serviceName:(NSString *)serviceName 

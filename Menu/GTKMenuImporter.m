@@ -95,9 +95,17 @@
     
     NSLog(@"GTKMenuImporter: Getting GTK menu for window %lu", windowId);
     
-    // Check enhanced cache first
+    // Get the currently registered service name for this window FIRST
+    // This is critical for validating cached menus
+    NSString *serviceName = [_registeredWindows objectForKey:windowKey];
+    NSString *menuPath = [_windowMenuPaths objectForKey:windowKey];
+    NSString *actionPath = [_windowActionPaths objectForKey:windowKey];
+    
+    // Check enhanced cache with service name validation
+    // This prevents returning stale menus when window IDs are reused
     MenuCacheManager *cacheManager = [MenuCacheManager sharedManager];
-    NSMenu *cachedMenu = [cacheManager getCachedMenuForWindow:windowId];
+    NSMenu *cachedMenu = [cacheManager getCachedMenuForWindow:windowId 
+                                        validateServiceName:serviceName];
     if (cachedMenu) {
         NSLog(@"GTKMenuImporter: Returning enhanced cached GTK menu for window %lu - re-registering shortcuts", windowId);
         
@@ -118,8 +126,6 @@
         
         // Get application name for this window
         NSString *appName = [MenuUtils getApplicationNameForWindow:windowId];
-        NSString *serviceName = [_registeredWindows objectForKey:windowKey];
-        NSString *menuPath = [_windowMenuPaths objectForKey:windowKey];
         
         // Migrate to enhanced cache
         [cacheManager cacheMenu:legacyCachedMenu
@@ -136,10 +142,6 @@
         
         return legacyCachedMenu;
     }
-    
-    NSString *serviceName = [_registeredWindows objectForKey:windowKey];
-    NSString *menuPath = [_windowMenuPaths objectForKey:windowKey];
-    NSString *actionPath = [_windowActionPaths objectForKey:windowKey];
     
     if (!serviceName || !menuPath) {
         // Try immediate scan for this specific window before giving up
@@ -265,12 +267,21 @@
 {
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
     
+    // Get the service name before removing to clean up related delegates
+    NSString *serviceName = [[_registeredWindows objectForKey:windowKey] copy];
+    
     [_registeredWindows removeObjectForKey:windowKey];
     [_windowMenuPaths removeObjectForKey:windowKey];
     [_windowActionPaths removeObjectForKey:windowKey];
     [_menuCache removeObjectForKey:windowKey];
     [_actionGroupCache removeObjectForKey:windowKey];
     [[MenuCacheManager sharedManager] invalidateCacheForWindow:windowId];
+    
+    // Clean up submenu delegates associated with this service to prevent
+    // crashes when trying to use stale DBus connections
+    if (serviceName) {
+        [GTKSubmenuManager cleanupDelegatesForService:serviceName];
+    }
     
     NSLog(@"GTKMenuImporter: Unregistered GTK window %lu", windowId);
 }
