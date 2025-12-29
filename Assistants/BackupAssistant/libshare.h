@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2025 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+
 /*-
  * Copyright (c) 2007 Pawel Jakub Dawidek <pjd@FreeBSD.org>
  * All rights reserved.

@@ -1,4 +1,11 @@
 /*
+ * Copyright (c) 2025 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+
+/*
  * Test complex array and struct parsing - specifically signature 'a(ssasib)'
  * This targets the exact message type that was causing failures in the XFCE test
  */

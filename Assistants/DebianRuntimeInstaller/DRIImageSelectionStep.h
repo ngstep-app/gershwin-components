@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2025 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+
 //
 // DRIImageSelectionStep.h
 // Debian Runtime Installer - Image Selection Step

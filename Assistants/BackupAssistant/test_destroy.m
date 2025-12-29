@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2025 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+
 // Simple test program for destroyPool method
 // Build with: clang19 -framework Foundation -I/System/Library/Frameworks/GNUstep.framework/Headers test_destroy.m BAZFSUtility.m -lobjc
 

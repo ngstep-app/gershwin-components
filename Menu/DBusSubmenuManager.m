@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2025 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+
 #import "DBusSubmenuManager.h"
 #import "DBusConnection.h"
 #import "DBusMenuParser.h"

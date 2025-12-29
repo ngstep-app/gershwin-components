@@ -1,4 +1,11 @@
 /*
+ * Copyright (c) 2025 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+
+/*
  * appstub - Execute a wrapped executable from Info.plist
  * 
  * This tool reads the GSWrappedExecutable key from its Info.plist

@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2025 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+
 //
 // test_enhanced_destroy.m
 // Test program for enhanced destroyPool method with dataset unmounting

@@ -1,4 +1,11 @@
 /*
+ * Copyright (c) 2025 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+
+/*
  * appwrap - Create GNUstep application bundles from .desktop files
  * 
  * Usage: appwrap /path/to/application.desktop
