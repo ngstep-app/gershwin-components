@@ -163,7 +163,11 @@
     
     self.currentApplicationName = nil;
     
-    // Don't call setNeedsDisplay here - we want to preserve the old menu visually
+    // Trigger redraw to hide the widget when menu is empty
+    // Only do this if we're not in a half-finished state
+    if (self.window) {
+        [self setNeedsDisplay:YES];
+    }
 }
 
 - (void)displayMenuForWindow:(unsigned long)windowId
@@ -367,12 +371,41 @@
 
 - (void)drawRect:(NSRect)dirtyRect
 {
+    // Only draw if we have menu items to display
+    // Check both currentMenu and oldMenuView (during anti-flicker transitions)
+    BOOL hasMenu = (self.currentMenu && [[self.currentMenu itemArray] count] > 0);
+    BOOL hasOldMenu = (self.oldMenuView != nil);
+    
+    NSLog(@"AppMenuWidget: drawRect called - hasMenu=%@, hasOldMenu=%@, currentMenu=%@, oldMenuView=%@", 
+          hasMenu ? @"YES" : @"NO", hasOldMenu ? @"YES" : @"NO", 
+          self.currentMenu, self.oldMenuView);
+    
+    if (!hasMenu && !hasOldMenu) {
+        // No menu to display - clear the background completely
+        NSLog(@"AppMenuWidget: No menus - clearing background");
+        [[NSColor clearColor] set];
+        NSRectFill([self bounds]);
+        NSLog(@"AppMenuWidget: Background cleared");
+        return;
+    }
+    
+    // Only draw background during anti-flicker if we have a valid old menu
+    // Don't try to draw the old menu view itself - it's still a subview
+    if (!hasMenu && hasOldMenu) {
+        // Just preserve the visual - the oldMenuView subview will draw itself
+        NSLog(@"AppMenuWidget: In anti-flicker transition, letting oldMenuView draw");
+        return;
+    }
+    
+    NSLog(@"AppMenuWidget: Drawing background and content");
+    
     // Fill background with theme color
     [[[GSTheme theme] menuItemBackgroundColor] set];
     NSRectFill([self bounds]);
     
     // Draw application name if we have one
     if (self.currentApplicationName && [self.currentApplicationName length] > 0) {
+        NSLog(@"AppMenuWidget: Drawing app name: %@", self.currentApplicationName);
         NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
                                    [NSFont boldSystemFontOfSize:11.0], NSFontAttributeName,
                                    [NSColor colorWithCalibratedWhite:0.3 alpha:1.0], NSForegroundColorAttributeName,
@@ -385,10 +418,13 @@
     }
     
     // Draw drop shadow below the menu bar (GNUstep compatible)
+    NSLog(@"AppMenuWidget: Drawing shadow");
     NSRect shadowRect = NSMakeRect(0, [self bounds].size.height - 2, [self bounds].size.width, 6);
     NSColor *shadowColor = [NSColor colorWithCalibratedWhite:0.0 alpha:0.18];
     [shadowColor set];
     NSRectFillUsingOperation(shadowRect, NSCompositeSourceOver);
+    
+    NSLog(@"AppMenuWidget: drawRect completed");
 
 }
 
@@ -556,7 +592,7 @@
     NSPoint localPoint = [self convertPoint:location fromView:nil];
     NSLog(@"AppMenuWidget: Mouse down at: %@ (local: %@)", NSStringFromPoint(location), NSStringFromPoint(localPoint));
     
-    if (self.menuView) {
+    if (self.menuView && self.currentMenu) {
         NSPoint menuViewPoint = [self.menuView convertPoint:location fromView:nil];
         NSLog(@"AppMenuWidget: Menu view click point: %@", NSStringFromPoint(menuViewPoint));
         
@@ -1016,12 +1052,17 @@
     
     // Clean up any previous old menu view
     if (self.oldMenuView) {
+        NSLog(@"AppMenuWidget: Removing previous oldMenuView");
         [self.oldMenuView removeFromSuperview];
         self.oldMenuView = nil;
     }
     
     // Move current menu view to old menu view (keep it visible)
     if (self.menuView) {
+        NSLog(@"AppMenuWidget: Preserving current menuView for anti-flicker");
+        // IMPORTANT: Clear the menu reference from the old view to prevent crashes
+        // when the view tries to redraw after the menu is freed
+        [self.menuView setMenu:nil];
         self.oldMenuView = self.menuView;  // Transfer ownership
         self.menuView = nil;
         NSLog(@"AppMenuWidget: Preserved old menu view to prevent flicker");
