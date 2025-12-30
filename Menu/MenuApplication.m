@@ -258,6 +258,15 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     
     // Set up signal handlers for graceful shutdown
     NSLog(@"MenuApplication: Setting up signal handlers...");
+    
+    // CRITICAL: Ignore SIGPIPE to prevent crashes when stdout/stderr is unavailable
+    // This happens when running in background without output redirection
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        NSLog(@"MenuApplication: Warning: Failed to ignore SIGPIPE - app may crash if terminal closes");
+    } else {
+        NSLog(@"MenuApplication: SIGPIPE handler set to ignore (prevents crashes on write to closed stdout/stderr)");
+    }
+    
     if (signal(SIGTERM, signalHandler) == SIG_ERR) {
         NSLog(@"MenuApplication: Warning: Failed to set SIGTERM handler");
     } else {

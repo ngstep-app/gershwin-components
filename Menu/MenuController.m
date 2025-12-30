@@ -561,8 +561,11 @@
                     NSLog(@"MenuController: _NET_ACTIVE_WINDOW property changed - active window changed");
                     
                     // Update the app menu widget for the new active window
+                    // IMPORTANT: Perform UI updates on main thread to avoid race conditions
                     if (self.appMenuWidget) {
-                        [self.appMenuWidget updateForActiveWindow];
+                        [self.appMenuWidget performSelectorOnMainThread:@selector(updateForActiveWindow)
+                                                             withObject:nil
+                                                          waitUntilDone:NO];
                     }
                 }
                 // Check if this is a PropertyNotify event for _NET_CLIENT_LIST (new windows)
@@ -571,6 +574,11 @@
                          event.xproperty.atom == self.netClientListAtom) {
                     
                     NSLog(@"MenuController: _NET_CLIENT_LIST property changed - new window created/destroyed");
+                    
+                    // IMPORTANT: Wait a moment before scanning to let new windows fully initialize
+                    // Scanning too early can interfere with app startup and cause crashes
+                    NSLog(@"MenuController: Waiting 100ms before scanning to allow window initialization");
+                    [NSThread sleepForTimeInterval:0.1];
                     
                     // Scan for new GTK menu services when windows are created/destroyed
                     [[MenuProtocolManager sharedManager] scanForExistingMenuServices];

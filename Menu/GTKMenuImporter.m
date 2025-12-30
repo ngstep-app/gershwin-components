@@ -14,6 +14,16 @@
 #import "MenuUtils.h"
 #import "MenuCacheManager.h"
 
+// X11 error handler to prevent crashes when querying invalid/stale windows
+static int x11ErrorHandler(Display *display, XErrorEvent *error) {
+    char errorText[256];
+    XGetErrorText(display, error->error_code, errorText, sizeof(errorText));
+    NSLog(@"GTKMenuImporter: X11 Error caught (non-fatal): %s (request: %d, resource: 0x%lx)", 
+          errorText, error->request_code, error->resourceid);
+    // Return 0 to indicate error was handled and shouldn't crash
+    return 0;
+}
+
 @implementation GTKMenuImporter
 
 - (id)init
@@ -296,7 +306,19 @@
         return;
     }
     
+    // DEFENSIVE: Install X11 error handler to catch errors from invalid windows
+    XErrorHandler oldHandler = XSetErrorHandler(x11ErrorHandler);
+    XSynchronize(display, True);
+    
     Window window = (Window)windowId;
+    
+    // DEFENSIVE: Verify window is valid before querying properties
+    XWindowAttributes attrs;
+    if (XGetWindowAttributes(display, window, &attrs) == 0) {
+        NSLog(@"GTKMenuImporter: Window %lu not ready/valid in immediate scan, skipping", windowId);
+        XCloseDisplay(display);
+        return;
+    }
     
     // Create atoms for GTK menu properties
     Atom busNameAtom = XInternAtom(display, "_GTK_UNIQUE_BUS_NAME", False);
@@ -338,6 +360,10 @@
         NSLog(@"GTKMenuImporter: Window %lu has no GTK menu properties", windowId);
     }
     
+    // Restore synchronous mode and error handler
+    XSynchronize(display, False);
+    XSetErrorHandler(oldHandler);
+    
     XCloseDisplay(display);
 }
 
@@ -365,6 +391,11 @@
         return;
     }
     NSLog(@"GTKMenuImporter: X11 display opened successfully");
+    
+    // DEFENSIVE: Install X11 error handler to catch errors from invalid windows
+    XErrorHandler oldHandler = XSetErrorHandler(x11ErrorHandler);
+    // Enable synchronous mode for error handling during scanning
+    XSynchronize(display, True);
     
     NSUInteger gtkWindows = 0;
     NSUInteger newWindows = 0;
@@ -406,6 +437,17 @@
             // Debug: log the window ID we're checking (only for first few scans)
             if (gtkScans <= 2) {
                 NSLog(@"GTKMenuImporter: Checking client window %lu (0x%lx)", (unsigned long)window, (unsigned long)window);
+            }
+            
+            // DEFENSIVE: Verify window is valid before querying properties
+            // This prevents interfering with windows that are still initializing
+            XWindowAttributes attrs;
+            if (XGetWindowAttributes(display, window, &attrs) == 0) {
+                // Window is not valid/ready, skip it
+                if (gtkScans <= 2) {
+                    NSLog(@"GTKMenuImporter: Window %lu not ready/valid, skipping", (unsigned long)window);
+                }
+                continue;
             }
             
             // Check this window for GTK menu properties
@@ -511,6 +553,11 @@
     }
     
     NSLog(@"GTKMenuImporter: About to close X11 display");
+    
+    // Restore synchronous mode and error handler before closing
+    XSynchronize(display, False);
+    XSetErrorHandler(oldHandler);
+    
     XCloseDisplay(display);
     NSLog(@"GTKMenuImporter: X11 display closed");
     

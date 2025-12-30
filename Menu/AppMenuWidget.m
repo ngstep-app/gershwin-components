@@ -172,6 +172,12 @@
 
 - (void)displayMenuForWindow:(unsigned long)windowId isDifferentApp:(BOOL)isDifferentApp
 {
+    // Defensive check: ensure we're initialized
+    if (!self.protocolManager) {
+        NSLog(@"AppMenuWidget: Protocol manager not initialized, cannot display menu for window %lu", windowId);
+        return;
+    }
+    
     [self clearMenu:isDifferentApp];
     
     if (windowId == 0) {
@@ -198,12 +204,13 @@
     // Check if this window has a DBus menu registered
     @try {
         if (![self.protocolManager hasMenuForWindow:windowId]) {
-            NSLog(@"AppMenuWidget: No registered menu for window %lu, triggering immediate scan", windowId);
+            NSLog(@"AppMenuWidget: No registered menu for window %lu yet", windowId);
 
-            // Trigger immediate scan for new menu services
-            [self.protocolManager scanForExistingMenuServices];
+            // DON'T trigger immediate scan here - it can interfere with app startup
+            // The periodic scanning will pick it up safely
+            // [self.protocolManager scanForExistingMenuServices];
 
-            // Check again after immediate scan
+            // Check if we should wait a moment for menu to appear
             if (![self.protocolManager hasMenuForWindow:windowId]) {
                 // Prevent fallback menu for desktop windows
                 if ([MenuUtils isDesktopWindow:windowId]) {
