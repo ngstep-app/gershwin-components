@@ -21,6 +21,9 @@
 @property (nonatomic, strong) NSMenu *currentMenu;
 @property (nonatomic, strong) NSTimer *updateTimer;
 
+// Delayed fallback timers keyed by window id -> NSTimer
+@property (nonatomic, strong) NSMutableDictionary *fallbackTimers;
+
 // Anti-flicker support - keep old menu visible until new one is ready
 @property (nonatomic, strong) NSMenuView *oldMenuView;
 @property (nonatomic, strong) NSTimer *antiFlickerTimer;

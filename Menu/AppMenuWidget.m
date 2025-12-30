@@ -41,6 +41,7 @@
         self.currentApplicationName = nil;
         self.currentWindowId = 0;
         self.currentMenu = nil;
+        self.fallbackTimers = [NSMutableDictionary dictionary];
         
         NSLog(@"AppMenuWidget: Initialized with frame %.0f,%.0f %.0fx%.0f", 
               frameRect.origin.x, frameRect.origin.y, frameRect.size.width, frameRect.size.height);
@@ -217,13 +218,14 @@
                     NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu", windowId);
                     return;
                 }
-                NSLog(@"AppMenuWidget: Still no registered menu for window %lu after immediate scan, providing fallback menu", windowId);
 
-                // Create fallback File->Close menu for windows without exported menus
-                NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
-                [self loadMenu:fallbackMenu forWindow:windowId];
+                // Schedule a delayed fallback (200ms) to avoid showing fallback immediately
+                [self scheduleFallbackMenuForWindow:windowId delay:0.2];
                 return;
             }
+        } else {
+            // If we already have a menu, cancel any scheduled fallback
+            [self cancelScheduledFallbackForWindow:windowId];
         }
     }
     @catch (NSException *exception) {
@@ -253,15 +255,14 @@
     }
 
     if (!menu) {
-        NSLog(@"AppMenuWidget: Failed to get menu for window %lu, providing fallback menu", windowId);
+        NSLog(@"AppMenuWidget: Failed to get menu for window %lu (protocol manager), will provide fallback after short delay", windowId);
         // Prevent fallback menu for desktop windows
         if ([MenuUtils isDesktopWindow:windowId]) {
             NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu", windowId);
             return;
         }
-        // Create fallback File->Close menu if protocol manager fails to provide menu
-        NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
-        [self loadMenu:fallbackMenu forWindow:windowId];
+        // Schedule delayed fallback to allow menu to arrive (200ms)
+        [self scheduleFallbackMenuForWindow:windowId delay:0.2];
         return;
     }
     
@@ -393,6 +394,9 @@
 
 - (void)checkAndDisplayMenuForNewlyRegisteredWindow:(unsigned long)windowId
 {
+    // If we had a scheduled fallback for this window, cancel it — a real menu is now available
+    [self cancelScheduledFallbackForWindow:windowId];
+
     // Get the currently active window using X11
     Display *display = XOpenDisplay(NULL);
     if (!display) {
@@ -682,6 +686,57 @@
     return mainMenu;
 }
 
+// Schedule a delayed fallback menu to avoid showing fallback immediately when an app is starting up
+- (void)scheduleFallbackMenuForWindow:(unsigned long)windowId delay:(NSTimeInterval)delay
+{
+    NSNumber *key = [NSNumber numberWithUnsignedLong:windowId];
+    if ([self.fallbackTimers objectForKey:key]) {
+        // Already scheduled
+        return;
+    }
+
+    NSTimer *timer = [NSTimer scheduledTimerWithTimeInterval:delay target:self selector:@selector(fallbackTimerFired:) userInfo:key repeats:NO];
+    [self.fallbackTimers setObject:timer forKey:key];
+}
+
+- (void)cancelScheduledFallbackForWindow:(unsigned long)windowId
+{
+    NSNumber *key = [NSNumber numberWithUnsignedLong:windowId];
+    NSTimer *timer = [self.fallbackTimers objectForKey:key];
+    if (timer) {
+        [timer invalidate];
+        [self.fallbackTimers removeObjectForKey:key];
+    }
+}
+
+- (void)fallbackTimerFired:(NSTimer *)timer
+{
+    NSNumber *windowNum = (NSNumber *)[timer userInfo];
+    [self.fallbackTimers removeObjectForKey:windowNum];
+
+    unsigned long windowId = [windowNum unsignedLongValue];
+
+    // If the user switched away, do nothing
+    if (self.currentWindowId != windowId) {
+        return;
+    }
+
+    // If a real menu appeared in the meantime, cancel fallback
+    if ([self.protocolManager hasMenuForWindow:windowId]) {
+        return;
+    }
+
+    // Prevent fallback for desktop windows
+    if ([MenuUtils isDesktopWindow:windowId]) {
+        NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu (delayed)", windowId);
+        return;
+    }
+
+    NSLog(@"AppMenuWidget: No menu received for window %lu after delay, providing fallback menu", windowId);
+    NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
+    [self loadMenu:fallbackMenu forWindow:windowId];
+}
+
 - (void)closeWindow:(NSMenuItem *)sender
 {
     NSNumber *windowIdNumber = [sender representedObject];
@@ -825,6 +880,9 @@
         return;
     }
     
+    // Cancel any scheduled fallback for this window since we're loading a real menu
+    [self cancelScheduledFallbackForWindow:windowId];
+
     NSLog(@"AppMenuWidget: Loading menu for window %lu", windowId);
     
     self.currentMenu = menu;
