@@ -69,8 +69,13 @@ void signalHandler(int sig) {
     
     [self createLoginWindow];
     
-    // Check for auto-login user after window is created but before showing it
-    [self checkAutoLogin];
+    // Validate LoginWindow.plist security BEFORE anything accesses it
+    if (![self validateLoginWindowPreferencesFile]) {
+        NSLog(@"[WARNING] LoginWindow.plist validation failed, skipping auto-login");
+    } else {
+        // Check for auto-login user after window is created but before showing it
+        [self checkAutoLogin];
+    }
     
     [loginWindow makeKeyAndOrderFront:self];
     [NSApp activateIgnoringOtherApps:YES];
@@ -953,12 +958,63 @@ void signalHandler(int sig) {
     }
 }
 
+- (BOOL)validateLoginWindowPreferencesFile
+{
+    NSLog(@"[DEBUG] Validating LoginWindow.plist file security");
+    
+    NSString *plistPath = [self getLoginWindowPreferencesPath];
+    
+    // Security check: Verify file ownership and permissions before reading
+    struct stat fileStat;
+    if (stat([plistPath UTF8String], &fileStat) != 0) {
+        NSLog(@"[DEBUG] Warning: Could not stat LoginWindow.plist file: %s", strerror(errno));
+        NSAlert *alert = [NSAlert alertWithMessageText:@"Autologin File Error"
+                                         defaultButton:@"OK"
+                                       alternateButton:nil
+                                           otherButton:nil
+                             informativeTextWithFormat:@"The autologin configuration file is missing or inaccessible."];
+        [alert runModal];
+        return NO;
+    }
+    
+    // Check if file is owned by root (uid 0)
+    if (fileStat.st_uid != 0) {
+        NSLog(@"[DEBUG] Warning: LoginWindow.plist is not owned by root (owner uid: %d)", fileStat.st_uid);
+        NSAlert *alert = [NSAlert alertWithMessageText:@"Autologin File Permission Error"
+                                         defaultButton:@"OK"
+                                       alternateButton:nil
+                                           otherButton:nil
+                             informativeTextWithFormat:@"The autologin configuration file is not owned by root. Please check file permissions."];
+        [alert runModal];
+        return NO;
+    }
+    
+    // Check if file has permissions 644 (rw-r--r--)
+    mode_t expectedMode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH; // 0644
+    if ((fileStat.st_mode & 0777) != expectedMode) {
+        NSLog(@"[DEBUG] Warning: LoginWindow.plist has incorrect permissions (expected 0644, got 0%o)", 
+              fileStat.st_mode & 0777);
+        NSAlert *alert = [NSAlert alertWithMessageText:@"Autologin File Permission Error"
+                                         defaultButton:@"OK"
+                                       alternateButton:nil
+                                           otherButton:nil
+                             informativeTextWithFormat:@"The autologin configuration file has incorrect permissions (expected 0644). This is a security risk."];
+        [alert runModal];
+        return NO;
+    }
+    
+    NSLog(@"[DEBUG] LoginWindow.plist file security check passed (owned by root with 0644 permissions)");
+    return YES;
+}
+
 - (void)checkAutoLogin
 {
     NSLog(@"[DEBUG] Checking for auto-login user");
     
+    // File has already been validated in applicationDidFinishLaunching
     // Read the autoLoginUser from system-wide LoginWindow.plist like other settings
     NSString *plistPath = [self getLoginWindowPreferencesPath];
+    
     NSDictionary *plistData = [NSDictionary dictionaryWithContentsOfFile:plistPath];
     NSString *autoLoginUser = [plistData objectForKey:@"autoLoginUser"];
     
