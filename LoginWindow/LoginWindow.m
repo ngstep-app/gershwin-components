@@ -77,8 +77,57 @@ void signalHandler(int sig) {
         [self checkAutoLogin];
     }
     
+    // Set X11 background to mid grey BEFORE showing the window
+    [self setX11BackgroundMidGrey];
+    
     [loginWindow makeKeyAndOrderFront:self];
     [NSApp activateIgnoringOtherApps:YES];
+}
+
+- (void)setX11BackgroundMidGrey
+{
+    NSLog(@"[DEBUG] Setting X11 background to mid grey");
+    
+    Display *display = XOpenDisplay(NULL);
+    if (!display) {
+        NSLog(@"[WARNING] Could not open X display");
+        return;
+    }
+    
+    int screen_count = ScreenCount(display);
+    NSLog(@"[DEBUG] Found %d X11 screen(s)", screen_count);
+    
+    for (int i = 0; i < screen_count; i++) {
+        int screen = i;
+        Window root = RootWindow(display, screen);
+        Colormap colormap = DefaultColormap(display, screen);
+        
+        // Mid grey: RGB(128, 128, 128) = 0x808080
+        XColor color;
+        color.red = 0x8080;
+        color.green = 0x8080;
+        color.blue = 0x8080;
+        color.flags = DoRed | DoGreen | DoBlue;
+        
+        if (!XAllocColor(display, colormap, &color)) {
+            NSLog(@"[WARNING] Could not allocate mid grey color on screen %d", i);
+            continue;
+        }
+        
+        NSLog(@"[DEBUG] Allocated color pixel: 0x%lx on screen %d", color.pixel, i);
+        
+        // Set root window background to the allocated color
+        XSetWindowBackground(display, root, color.pixel);
+        XClearWindow(display, root);
+        
+        NSLog(@"[DEBUG] Screen %d root window background set", i);
+    }
+    
+    XFlush(display);
+    XSync(display, False);
+    XCloseDisplay(display);
+    
+    NSLog(@"[DEBUG] X11 background set to mid grey");
 }
 
 - (void)dealloc
