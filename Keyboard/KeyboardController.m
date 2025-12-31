@@ -32,9 +32,10 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 - (void)populateVariantsForLayout:(NSString *)layout;
 - (void)selectLayout:(NSString *)layout variant:(NSString *)variant;
 - (BOOL)applyLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options error:(NSString **)error;
-- (void)persistUserDefaultsLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options;
-- (void)writeUserAutostartWithLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options;
-- (BOOL)updateSystemKeyboardFileWithLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options error:(NSString **)error;
+- (void)persistUserDefaultsLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options keyboardType:(NSString *)keyboardType isApple:(BOOL)isApple;
+- (void)writeUserAutostartWithLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options keyboardType:(NSString *)keyboardType isApple:(BOOL)isApple;
+- (BOOL)updateSystemKeyboardFileWithLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options keyboardType:(NSString *)keyboardType isApple:(BOOL)isApple error:(NSString **)error;
+- (NSString *)modelForKeyboardType:(NSString *)keyboardType isApple:(BOOL)isApple;
 - (NSString *)shellEscapedValue:(NSString *)value;
 - (NSString *)trimmed:(NSString *)value;
 - (void)updateStatus:(NSString *)message;
@@ -62,7 +63,8 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     [variantScroll release];
     [statusLabel release];
     [tryTextField release];
-    [swapCheckbox release];
+    [isAppleKeyboardCheckbox release];
+    [keyboardTypePopup release];
     [layouts release];
     [variantsByLayout release];
     [setxkbmapPath release];
@@ -70,6 +72,7 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     [currentVariants release];
     [lastAppliedLayout release];
     [lastAppliedVariant release];
+    [lastAppliedKeyboardType release];
     [super dealloc];
 }
 
@@ -81,61 +84,64 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 
     [self ensureMetadataLoaded];
 
-    mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 560, 290)];
+    // Make the preference pane slightly shorter to remove unneeded vertical space
+    mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 560, 320)];
 
-    // Try layout text field at the top
-    NSTextField *tryLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 260, 100, 20)];
+    // Try layout text field at the bottom above the status label (moved down)
+    NSTextField *tryLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 46, 100, 20)];
     [tryLabel setBezeled:NO];
     [tryLabel setEditable:NO];
     [tryLabel setSelectable:NO];
     [tryLabel setDrawsBackground:NO];
     [tryLabel setStringValue:@"Try layout:"];
-    [tryLabel setAutoresizingMask:NSViewMinYMargin];
+    [tryLabel setAutoresizingMask:NSViewMaxYMargin];
     [mainView addSubview:tryLabel];
     [tryLabel release];
 
-    tryTextField = [[NSTextField alloc] initWithFrame:NSMakeRect(120, 255, 420, 24)];
+    tryTextField = [[NSTextField alloc] initWithFrame:NSMakeRect(120, 42, 420, 24)];
     [tryTextField setEditable:YES];
     [tryTextField setSelectable:YES];
     [tryTextField setBezeled:YES];
     [tryTextField setDrawsBackground:YES];
     [tryTextField setPlaceholderString:@"Type here to test the keyboard layout"];
-    [tryTextField setAutoresizingMask:(NSViewWidthSizable | NSViewMinYMargin)];
+    [tryTextField setAutoresizingMask:(NSViewWidthSizable | NSViewMaxYMargin)];
     [mainView addSubview:tryTextField];
 
-    // Swap checkbox
-    swapCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(20, 225, 300, 18)];
-    [swapCheckbox setButtonType:NSSwitchButton];
-    [swapCheckbox setTitle:@"Swap command key (for Apple keyboards)"];
-    [swapCheckbox setTarget:self];
-    [swapCheckbox setAction:@selector(swapCheckboxChanged:)];
-    [swapCheckbox setAutoresizingMask:NSViewMinYMargin | NSViewWidthSizable];
-    [mainView addSubview:swapCheckbox];
+    // Swap checkbox (moved down to reduce vertical spacing)
+    isAppleKeyboardCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(20, 280, 300, 18)];
+    [isAppleKeyboardCheckbox setButtonType:NSSwitchButton];
+    [isAppleKeyboardCheckbox setTitle:@"Apple keyboard"];
+    [isAppleKeyboardCheckbox setTarget:self];
+    [isAppleKeyboardCheckbox setAction:@selector(isAppleKeyboardCheckboxChanged:)];
+    [isAppleKeyboardCheckbox setAutoresizingMask:NSViewMinYMargin | NSViewWidthSizable];
+    [mainView addSubview:isAppleKeyboardCheckbox];
 
-    // Layout label
-    NSTextField *layoutLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 195, 80, 20)];
+    // Keyboard type popup (no separate label)
+    // Place the popup aligned with the checkbox on the right
+    keyboardTypePopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(320, 275, 140, 26)];
+    [keyboardTypePopup addItemWithTitle:@"ANSI"];
+    [keyboardTypePopup addItemWithTitle:@"ISO"];
+    [keyboardTypePopup addItemWithTitle:@"JIS"];
+    [keyboardTypePopup setTarget:self];
+    [keyboardTypePopup setAction:@selector(keyboardTypeChanged:)];
+    [keyboardTypePopup setAutoresizingMask:NSViewMinYMargin];
+    [mainView addSubview:keyboardTypePopup];
+
+    // Move the single 'Layout:' label in front of the dropdown to reduce visual clutter
+    NSTextField *layoutLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(260, 275, 60, 20)];
     [layoutLabel setBezeled:NO];
     [layoutLabel setEditable:NO];
     [layoutLabel setSelectable:NO];
     [layoutLabel setDrawsBackground:NO];
     [layoutLabel setStringValue:@"Layout:"];
-    [layoutLabel setAutoresizingMask:NSViewMaxXMargin | NSViewMinYMargin];
+    [layoutLabel setAutoresizingMask:NSViewMinXMargin | NSViewMinYMargin];
     [mainView addSubview:layoutLabel];
     [layoutLabel release];
 
-    // Variant label
-    NSTextField *variantLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(310, 195, 80, 20)];
-    [variantLabel setBezeled:NO];
-    [variantLabel setEditable:NO];
-    [variantLabel setSelectable:NO];
-    [variantLabel setDrawsBackground:NO];
-    [variantLabel setStringValue:@"Variant:"];
-    [variantLabel setAutoresizingMask:NSViewMinXMargin | NSViewMinYMargin];
-    [mainView addSubview:variantLabel];
-    [variantLabel release];
+    // Variant label removed to simplify UI — the variant list itself is self-explanatory
 
-    // Layout table - wider to use more space
-    layoutScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 60, 270, 130)];
+    // Layout table - slightly shorter to reduce unneeded vertical space
+    layoutScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 100, 270, 140)];
     [layoutScroll setHasVerticalScroller:YES];
     [layoutScroll setHasHorizontalScroller:NO];
     [layoutScroll setBorderType:NSBezelBorder];
@@ -157,8 +163,8 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 
     [layoutScroll setDocumentView:layoutTable];
 
-    // Variant table - wider to use more space
-    variantScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(310, 60, 230, 130)];
+    // Variant table - slightly shorter to reduce vertical space
+    variantScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(310, 100, 230, 140)];
     [variantScroll setHasVerticalScroller:YES];
     [variantScroll setHasHorizontalScroller:NO];
     [variantScroll setBorderType:NSBezelBorder];
@@ -180,8 +186,10 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 
     [variantScroll setDocumentView:variantTable];
 
-    // Status label at the bottom
-    statusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 10, 520, 40)];
+
+
+    // Status label at the bottom (height reduced for compact layout)
+    statusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 6, 520, 30)];
     [statusLabel setBezeled:NO];
     [statusLabel setEditable:NO];
     [statusLabel setSelectable:NO];
@@ -608,13 +616,13 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     return YES;
 }
 
-- (void)persistUserDefaultsLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options
+- (void)persistUserDefaultsLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options keyboardType:(NSString *)keyboardType isApple:(BOOL)isApple
 {
     if (isRefreshing) {
         NSLog(@"[Keyboard] persistUserDefaultsLayout blocked during refresh");
         return;
     }
-    NSLog(@"[Keyboard] persistUserDefaultsLayout: layout='%@' variant='%@' options='%@'", layout, variant, options);
+    NSLog(@"[Keyboard] persistUserDefaultsLayout: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
     NSMutableDictionary *domain = [NSMutableDictionary dictionary];
     if (layout) {
         [domain setObject:layout forKey:@"layout"];
@@ -625,19 +633,23 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     if (options) {
         [domain setObject:options forKey:@"options"];
     }
+    if (keyboardType) {
+        [domain setObject:keyboardType forKey:@"keyboardType"];
+    }
+    [domain setObject:[NSNumber numberWithBool:isApple] forKey:@"isApple"];
 
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     [defaults setPersistentDomain:domain forName:kKeyboardDomain];
     [defaults synchronize];
 }
 
-- (void)writeUserAutostartWithLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options
+- (void)writeUserAutostartWithLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options keyboardType:(NSString *)keyboardType isApple:(BOOL)isApple
 {
     if (isRefreshing) {
         NSLog(@"[Keyboard] writeUserAutostartWithLayout blocked during refresh");
         return;
     }
-    NSLog(@"[Keyboard] writeUserAutostartWithLayout: layout='%@' variant='%@' options='%@'", layout, variant, options);
+    NSLog(@"[Keyboard] writeUserAutostartWithLayout: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
     NSString *home = NSHomeDirectory();
     NSString *binDir = [home stringByAppendingPathComponent:@".local/bin"];
     NSString *scriptPath = [binDir stringByAppendingPathComponent:@"gershwin-apply-keyboard.sh"];
@@ -648,9 +660,13 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     NSString *escapedLayout = [self shellEscapedValue:(layout ? layout : @"")];
     NSString *escapedVariant = [self shellEscapedValue:(variant ? variant : @"")];
     NSString *escapedOptions = [self shellEscapedValue:(options ? options : @"")];
+    NSString *model = [self modelForKeyboardType:(keyboardType ? keyboardType : @"") isApple:isApple];
+    NSString *escapedModel = [self shellEscapedValue:model];
 
     NSMutableString *script = [NSMutableString string];
-    [script appendString:@"#!/bin/sh\nset -e\n\nsetxkbmap_bin=\"/usr/local/bin/setxkbmap\"\n[ -x \"$setxkbmap_bin\" ] || setxkbmap_bin=\"/usr/bin/setxkbmap\"\n[ -x \"$setxkbmap_bin\" ] || exit 0\n\n$setxkbmap_bin -option '' >/dev/null 2>&1 || true\ncmd=\"$setxkbmap_bin -layout '"];
+    [script appendString:@"#!/bin/sh\nset -e\n\nsetxkbmap_bin=\"/usr/local/bin/setxkbmap\"\n[ -x \"$setxkbmap_bin\" ] || setxkbmap_bin=\"/usr/bin/setxkbmap\"\n[ -x \"$setxkbmap_bin\" ] || exit 0\n\n$setxkbmap_bin -option '' >/dev/null 2>&1 || true\ncmd=\"$setxkbmap_bin -model '"];
+    [script appendString:escapedModel];
+    [script appendString:@"' -layout '"];
     [script appendString:escapedLayout];
     [script appendString:@"'\"\nif [ -n \""];
     [script appendString:escapedVariant];
@@ -661,13 +677,43 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     [script appendString:@"\" ]; then\n  cmd=\"$cmd -option '"];
     [script appendString:escapedOptions];
     [script appendString:@"'\"\nelse\n  cmd=\"$cmd -option ''\"\nfi\nsh -c \"$cmd\" >/dev/null 2>&1\n"];
+    
+    /*
+     * Apple ISO Keyboard TLDE/LSGT Swap Fix
+     * 
+     * Problem: Apple ISO keyboards have two keys physically swapped compared to PC ISO keyboards:
+     * 
+     * PC ISO Layout:              Apple ISO Layout:
+     *   Top-left: ^ (TLDE = 49)     Top-left: < (physically TLDE = 49)
+     *   Left of Z: < (LSGT = 94)    Left of Z: ^ (physically LSGT = 94)
+     * 
+     * The XKB applealu_iso model correctly identifies the keyboard but does NOT remap
+     * the keycodes to match the physical layout. This causes the symbols to appear wrong:
+     * - Pressing the top-left key (expecting <) produces ^
+     * - Pressing the left-of-Z key (expecting ^) produces <
+     * 
+     * Solution: After setxkbmap configures the layout, use xmodmap to swap the symbol
+     * mappings for keycodes 49 and 94, so they match what users expect based on the
+     * physical key labels and positions on Apple ISO keyboards.
+     * 
+     * For German (de) layout specifically:
+     *   - Keycode 49 should produce: < > (less/greater with bar/dagger on level 3/4)
+     *   - Keycode 94 should produce: ^ ° (circumflex/degree with notsign on level 3)
+     */
+    if (isApple && [keyboardType isEqualToString:@"ISO"]) {
+        [script appendString:@"\n# Fix Apple ISO keyboard TLDE/LSGT swap\n"];
+        [script appendString:@"if command -v xmodmap >/dev/null 2>&1; then\n"];
+        [script appendString:@"  xmodmap -e 'keycode 49 = less greater less greater bar dagger bar' >/dev/null 2>&1 || true\n"];
+        [script appendString:@"  xmodmap -e 'keycode 94 = asciicircum degree asciicircum degree notsign notsign notsign' >/dev/null 2>&1 || true\n"];
+        [script appendString:@"fi\n"];
+    }
 
     [script writeToFile:scriptPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
     NSDictionary *attrs = [NSDictionary dictionaryWithObject:[NSNumber numberWithShort:0755] forKey:NSFilePosixPermissions];
     [fm setAttributes:attrs ofItemAtPath:scriptPath error:nil];
 }
 
-- (BOOL)updateSystemKeyboardFileWithLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options error:(NSString **)error
+- (BOOL)updateSystemKeyboardFileWithLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options keyboardType:(NSString *)keyboardType isApple:(BOOL)isApple error:(NSString **)error
 {
     if (isRefreshing) {
         NSLog(@"[Keyboard] updateSystemKeyboardFileWithLayout blocked during refresh");
@@ -676,14 +722,20 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
         }
         return NO;
     }
-    NSLog(@"[Keyboard] updateSystemKeyboardFileWithLayout: layout='%@' variant='%@' options='%@'", layout, variant, options);
+    NSLog(@"[Keyboard] updateSystemKeyboardFileWithLayout: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
     NSFileManager *fm = [NSFileManager defaultManager];
     NSString *tmpPath = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSProcessInfo processInfo] globallyUniqueString]];
 
     NSDictionary *systemDefaults = [self systemKeyboardDefaults];
-    NSString *model = [systemDefaults objectForKey:@"XKBMODEL"];
-    if (![model length]) {
-        model = @"pc105";
+    NSString *model = nil;
+    if ([keyboardType length]) {
+        model = [self modelForKeyboardType:keyboardType isApple:isApple];
+    } else {
+        model = [systemDefaults objectForKey:@"XKBMODEL"];
+        if (![model length]) {
+            // Default to a reasonable PC ISO model if nothing else is known
+            model = @"pc105";
+        }
     }
 
     NSMutableString *payload = [NSMutableString string];
@@ -735,6 +787,27 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     return YES;
 }
 
+- (NSString *)modelForKeyboardType:(NSString *)keyboardType isApple:(BOOL)isApple
+{
+    if (isApple) {
+        if ([keyboardType isEqualToString:@"ISO"]) {
+            return @"applealu_iso";
+        } else if ([keyboardType isEqualToString:@"JIS"]) {
+            return @"applealu_jis";
+        } else {
+            return @"applealu_ansi";
+        }
+    } else {
+        if ([keyboardType isEqualToString:@"ISO"]) {
+            return @"pc105";
+        } else if ([keyboardType isEqualToString:@"JIS"]) {
+            return @"pc106";
+        } else {
+            return @"pc104";
+        }
+    }
+}
+
 - (NSString *)shellEscapedValue:(NSString *)value
 {
     NSString *v = (value ? value : @"");
@@ -763,7 +836,17 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     [alert runModal];
 }
 
-- (IBAction)swapCheckboxChanged:(id)sender
+- (IBAction)isAppleKeyboardCheckboxChanged:(id)sender
+{
+    (void)sender;
+    // Don't apply changes during initial refresh
+    if (isRefreshing) {
+        return;
+    }
+    [self applySelection:nil];
+}
+
+- (IBAction)keyboardTypeChanged:(id)sender
 {
     (void)sender;
     // Don't apply changes during initial refresh
@@ -795,28 +878,50 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     }
 
     NSString *options = @"";
-    if ([swapCheckbox state] == NSOnState) {
+    if ([isAppleKeyboardCheckbox state] == NSOnState) {
         options = @"altwin:swap_alt_win";
     }
 
-    NSLog(@"[Keyboard] Applying layout='%@' variant='%@' options='%@'", layout, variant, options);
+    NSString *keyboardType = [[keyboardTypePopup titleOfSelectedItem] copy];
+    BOOL isApple = ([isAppleKeyboardCheckbox state] == NSOnState);
+
+    NSLog(@"[Keyboard] Applying layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
 
     NSString *error = nil;
     if (![self applyLayout:layout variant:variant options:options error:&error]) {
         [self showAlertWithTitle:@"Could not set layout" text:error];
         [self updateStatus:[NSString stringWithFormat:@"Failed to apply layout (%@)", error ? error : @"unknown error"]];
+        [keyboardType release];
         return;
     }
 
-    [self persistUserDefaultsLayout:layout variant:variant options:options];
-    [self writeUserAutostartWithLayout:layout variant:variant options:options];
+    // Apple ISO keyboards have TLDE and LSGT physically swapped compared to PC ISO keyboards
+    // We need to swap keycodes 49 (TLDE) and 94 (LSGT) to fix this
+    if (isApple && [keyboardType isEqualToString:@"ISO"]) {
+        NSLog(@"[Keyboard] Applying TLDE/LSGT swap for Apple ISO keyboard");
+        NSTask *xmodmapTask = [[NSTask alloc] init];
+        [xmodmapTask setLaunchPath:@"/usr/bin/xmodmap"];
+        [xmodmapTask setArguments:[NSArray arrayWithObjects:
+            @"-e", @"keycode 49 = less greater less greater bar dagger bar",
+            @"-e", @"keycode 94 = asciicircum degree asciicircum degree notsign notsign notsign",
+            nil]];
+        [xmodmapTask launch];
+        [xmodmapTask waitUntilExit];
+        [xmodmapTask release];
+    }
+
+    [self persistUserDefaultsLayout:layout variant:variant options:options keyboardType:keyboardType isApple:isApple];
+    [self writeUserAutostartWithLayout:layout variant:variant options:options keyboardType:keyboardType isApple:isApple];
 
     NSString *systemError = nil;
-    BOOL systemUpdated = [self updateSystemKeyboardFileWithLayout:layout variant:variant options:options error:&systemError];
+    BOOL systemUpdated = [self updateSystemKeyboardFileWithLayout:layout variant:variant options:options keyboardType:keyboardType isApple:isApple error:&systemError];
 
     NSMutableString *status = [NSMutableString stringWithFormat:@"Active layout: %@", layout];
     if ([variant length]) {
         [status appendFormat:@" / %@", variant];
+    }
+    if ([keyboardType length]) {
+        [status appendFormat:@" (%@)", keyboardType];
     }
 
     if (systemUpdated) {
@@ -829,6 +934,7 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     }
 
     [self updateStatus:status];
+    [keyboardType release];
 }
 
 - (void)refreshFromSystem
@@ -843,6 +949,7 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     NSString *layout = [system objectForKey:@"XKBLAYOUT"];
     NSString *variant = [system objectForKey:@"XKBVARIANT"];
     NSString *options = [system objectForKey:@"XKBOPTIONS"];
+    NSString *keyboardType = nil;
     NSLog(@"[Keyboard] System config file: layout='%@' variant='%@' options='%@'", layout, variant, options);
 
     // If system config is empty, try current XKB settings
@@ -865,26 +972,74 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     }
 
     // If still empty, try saved preferences
+    NSNumber *savedIsApple = nil;
+    // If still empty, try saved preferences
     if (![layout length]) {
         NSLog(@"[Keyboard] Still empty, trying saved preferences");
         NSDictionary *saved = [self savedPreferences];
         layout = [saved objectForKey:@"layout"];
         variant = [saved objectForKey:@"variant"];
         options = [saved objectForKey:@"options"];
-        NSLog(@"[Keyboard] Saved prefs: layout='%@' variant='%@' options='%@'", layout, variant, options);
+        keyboardType = [saved objectForKey:@"keyboardType"];
+        savedIsApple = [saved objectForKey:@"isApple"];
+        if (savedIsApple) {
+            [isAppleKeyboardCheckbox setState:([savedIsApple boolValue] ? NSOnState : NSOffState)];
+        }
+        NSLog(@"[Keyboard] Saved prefs: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%@", layout, variant, options, keyboardType, savedIsApple);
     }
 
-    NSLog(@"[Keyboard] Final values to select: layout='%@' variant='%@' options='%@'", layout, variant, options);
+    // If keyboardType not found in saved prefs, try to infer from system model
+    if (!keyboardType) {
+        NSString *model = [system objectForKey:@"XKBMODEL"];
+        if ([model isEqualToString:@"pc104"] || [model isEqualToString:@"applealu_ansi"]) {
+            keyboardType = @"ANSI";
+        } else if ([model isEqualToString:@"pc105"] || [model isEqualToString:@"applealu_iso"]) {
+            keyboardType = @"ISO";
+        } else if ([model isEqualToString:@"pc106"] || [model isEqualToString:@"applealu_jis"]) {
+            keyboardType = @"JIS";
+        } else {
+            keyboardType = @"ANSI";  // Default to ANSI
+        }
+    }
+
+    NSLog(@"[Keyboard] Final values to select: layout='%@' variant='%@' options='%@' keyboardType='%@'", layout, variant, options, keyboardType);
     [self selectLayout:layout variant:variant];
-    [swapCheckbox setState:([options isEqualToString:@"altwin:swap_alt_win"] ? NSOnState : NSOffState)];
+
+    // Determine Apple state: prefer saved, otherwise infer from system model or options
+    BOOL modelIndicatesApple = NO;
+    NSString *modelVal = [system objectForKey:@"XKBMODEL"];
+    if (modelVal && [modelVal hasPrefix:@"apple"]) {
+        modelIndicatesApple = YES;
+    }
+    BOOL isApple = NO;
+    if (savedIsApple) {
+        isApple = [savedIsApple boolValue];
+    } else if (modelIndicatesApple) {
+        isApple = YES;
+    } else if ([options isEqualToString:@"altwin:swap_alt_win"]) {
+        isApple = YES;
+    }
+
+    [isAppleKeyboardCheckbox setState:(isApple ? NSOnState : NSOffState)];
+
+    // Set keyboard type popup
+    if ([keyboardType length]) {
+        [keyboardTypePopup selectItemWithTitle:keyboardType];
+    } else {
+        [keyboardTypePopup selectItemAtIndex:0];  // Default to ANSI
+    }
 
     NSMutableString *status = [NSMutableString stringWithFormat:@"Current layout: %@", layout ? layout : @"(unknown)"];
     if ([variant length]) {
         [status appendFormat:@" / %@", variant];
     }
+    if ([keyboardType length]) {
+        [status appendFormat:@" (%@)", keyboardType];
+    }
     if ([options length]) {
         [status appendFormat:@" (%@)", options];
     }
+
     [status appendString:@". Changes apply instantly."];
     [self updateStatus:status];
     

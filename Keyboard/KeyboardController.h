@@ -16,7 +16,8 @@
     NSScrollView *variantScroll;
     NSTextField *statusLabel;
     NSTextField *tryTextField;
-    NSButton *swapCheckbox;
+    NSButton *isAppleKeyboardCheckbox;
+    NSPopUpButton *keyboardTypePopup;
 
     NSDictionary *layouts;
     NSDictionary *variantsByLayout;
@@ -27,6 +28,7 @@
 
     NSString *lastAppliedLayout;
     NSString *lastAppliedVariant;
+    NSString *lastAppliedKeyboardType;
 
     BOOL metadataLoaded;
     BOOL isRefreshing;
@@ -35,6 +37,7 @@
 - (NSView *)createMainView;
 - (void)refreshFromSystem;
 - (IBAction)applySelection:(id)sender;
-- (IBAction)swapCheckboxChanged:(id)sender;
+- (IBAction)isAppleKeyboardCheckboxChanged:(id)sender;
+- (IBAction)keyboardTypeChanged:(id)sender;
 
 @end
