@@ -213,21 +213,38 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
     
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // Only use GlobalShortcuts domain
-    NSDictionary *globalShortcuts = [defaults persistentDomainForName:@"GlobalShortcuts"];
-    
-    if (!globalShortcuts || [globalShortcuts count] == 0) {
+    // Merge GlobalShortcuts from system and user domains.
+    // System-level files (if present) are read first and then user-level entries override them.
+    NSMutableDictionary *merged = [NSMutableDictionary dictionary];
+
+    NSArray *systemPaths = @[@"/System/Library/Preferences/GlobalShortcuts.plist",
+                             @"/Library/Preferences/GlobalShortcuts.plist"];
+
+    for (NSString *p in systemPaths) {
+        NSDictionary *sys = [NSDictionary dictionaryWithContentsOfFile:p];
+        if (sys && [sys count] > 0) {
+            [merged addEntriesFromDictionary:sys];
+        }
+    }
+
+    NSDictionary *userDomain = [defaults persistentDomainForName:@"GlobalShortcuts"];
+    if (userDomain && [userDomain count] > 0) {
+        // User overrides system entries
+        [merged addEntriesFromDictionary:userDomain];
+    }
+
+    if (!merged || [merged count] == 0) {
         [statusLabel setStringValue:@"No shortcuts configured. Add shortcuts to create GlobalShortcuts domain."];
         return NO;
     }
-    
-    // Convert dictionary to array of dictionaries for table view
-    NSEnumerator *keyEnum = [globalShortcuts keyEnumerator];
+
+    // Convert merged dictionary to array of dictionaries for table view
+    NSEnumerator *keyEnum = [merged keyEnumerator];
     NSString *keyCombo;
     int shortcutCount = 0;
-    
+
     while ((keyCombo = [keyEnum nextObject])) {
-        NSString *command = [globalShortcuts objectForKey:keyCombo];
+        NSString *command = [merged objectForKey:keyCombo];
         if (command && [command length] > 0) {
             NSMutableDictionary *shortcut = [NSMutableDictionary dictionaryWithObjectsAndKeys:
                 keyCombo, @"keyCombo",
@@ -250,38 +267,60 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
     NSMutableDictionary *globalShortcuts = [NSMutableDictionary dictionary];
     NSMutableArray *shortcutsArray = [NSMutableArray array];
     
-    // Convert array of dictionaries back to key-value dictionary and create shortcuts array for IPC
+    // Convert array of dictionaries (user-edited shortcuts) back to key-value dictionary
     for (NSDictionary *shortcut in shortcuts) {
         NSString *keyCombo = [shortcut objectForKey:@"keyCombo"];
         NSString *command = [shortcut objectForKey:@"command"];
         if (keyCombo && command && [keyCombo length] > 0 && [command length] > 0) {
             [globalShortcuts setObject:command forKey:keyCombo];
-            
-            // Parse keyCombo to extract modifiers and key for IPC
-            NSArray *parts = [keyCombo componentsSeparatedByString:@"+"];
+        }
+    }
+    
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    
+    // Save to primary domain (user overrides system)
+    [defaults setPersistentDomain:globalShortcuts forName:@"GlobalShortcuts"];
+    [defaults synchronize];
+    
+    // Build IPC payload from the merged view: system defaults overridden by user entries
+    NSMutableDictionary *merged = [NSMutableDictionary dictionary];
+    NSArray *systemPaths = @[@"/System/Library/Preferences/GlobalShortcuts.plist",
+                             @"/Library/Preferences/GlobalShortcuts.plist"];
+    for (NSString *p in systemPaths) {
+        NSDictionary *sys = [NSDictionary dictionaryWithContentsOfFile:p];
+        if (sys && [sys count] > 0) {
+            [merged addEntriesFromDictionary:sys];
+        }
+    }
+    
+    // Overlay with user-provided entries (saved to the domain above)
+    NSDictionary *userDomain = [defaults persistentDomainForName:@"GlobalShortcuts"];
+    if (userDomain && [userDomain count] > 0) {
+        [merged addEntriesFromDictionary:userDomain];
+    }
+    
+    // Create IPC array from merged entries
+    NSEnumerator *mergedEnum = [merged keyEnumerator];
+    NSString *mkey;
+    while ((mkey = [mergedEnum nextObject])) {
+        NSString *mcommand = [merged objectForKey:mkey];
+        if (mcommand && [mcommand length] > 0) {
+            NSArray *parts = [mkey componentsSeparatedByString:@"+"];
             NSString *keyStr = [parts lastObject];
             NSMutableArray *modifierParts = [NSMutableArray array];
             for (NSUInteger i = 0; i < [parts count] - 1; i++) {
                 [modifierParts addObject:[parts objectAtIndex:i]];
             }
             NSString *modifiersStr = [modifierParts componentsJoinedByString:@"+"];
-            
-            // Create shortcut entry for IPC (property list compatible)
-            NSDictionary *shortcutForIPC = @{
-                @"key": keyCombo,
-                @"command": command,
+            NSDictionary *entry = @{
+                @"key": mkey,
+                @"command": mcommand,
                 @"modifiers": modifiersStr ?: @"",
                 @"keyStr": keyStr ?: @""
             };
-            [shortcutsArray addObject:shortcutForIPC];
+            [shortcutsArray addObject:entry];
         }
     }
-    
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    
-    // Save to primary domain
-    [defaults setPersistentDomain:globalShortcuts forName:@"GlobalShortcuts"];
-    [defaults synchronize];
     
     // Debug: log what we're about to send
     NSLog(@"GlobalShortcuts: Shortcuts array to send: %@", shortcutsArray);
