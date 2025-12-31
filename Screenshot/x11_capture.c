@@ -12,6 +12,7 @@
 #include <time.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 #include <X11/cursorfont.h>
 
 // Global variables
@@ -288,10 +289,32 @@ int select_area_interactive(Display *display, Window root_window, CaptureRect *r
         fprintf(stderr, "Warning: Failed to grab keyboard\n");
     }
     
-    // Create GC for drawing the selection rectangle
-    GC gc = XCreateGC(display, root_window, 0, NULL);
-    if (!gc) {
-        fprintf(stderr, "Failed to create graphics context\n");
+    // Create an override-redirect window for drawing the selection rectangle
+    // This lets X11 handle the rectangle rendering properly
+    XSetWindowAttributes attrs;
+    attrs.override_redirect = True;
+    
+    // Create a semi-transparent blue color (RGB: 100, 149, 237 = cornflower blue)
+    // Allocate the color
+    XColor blue_color;
+    Colormap colormap = DefaultColormap(display, DefaultScreen(display));
+    blue_color.red = 0x6400;    // 100/255 * 65535
+    blue_color.green = 0x9500;  // 149/255 * 65535
+    blue_color.blue = 0xED00;   // 237/255 * 65535
+    blue_color.flags = DoRed | DoGreen | DoBlue;
+    XAllocColor(display, colormap, &blue_color);
+    
+    attrs.background_pixel = blue_color.pixel;
+    attrs.border_pixel = WhitePixel(display, DefaultScreen(display));
+    
+    Window selection_window = XCreateWindow(display, root_window,
+                                           0, 0, 1, 1, 2,
+                                           CopyFromParent, InputOutput, CopyFromParent,
+                                           CWOverrideRedirect | CWBackPixel | CWBorderPixel,
+                                           &attrs);
+    
+    if (!selection_window) {
+        fprintf(stderr, "Failed to create selection window\n");
         if (kbd_status == GrabSuccess) {
             XUngrabKeyboard(display, CurrentTime);
         }
@@ -299,17 +322,19 @@ int select_area_interactive(Display *display, Window root_window, CaptureRect *r
         XFreeCursor(display, cursor);
         return 0;
     }
-    XSetFunction(display, gc, GXxor);
-    XSetForeground(display, gc, WhitePixel(display, DefaultScreen(display)));
-    XSetLineAttributes(display, gc, 2, LineSolid, CapButt, JoinMiter);
-    XSetSubwindowMode(display, gc, IncludeInferiors);
+    
+    // Set window opacity to 30% using _NET_WM_WINDOW_OPACITY property
+    Atom opacity_atom = XInternAtom(display, "_NET_WM_WINDOW_OPACITY", False);
+    if (opacity_atom != None) {
+        unsigned long opacity = (unsigned long)(0.3 * 0xFFFFFFFF);  // 30% opacity
+        XChangeProperty(display, selection_window, opacity_atom, XA_CARDINAL, 32,
+                       PropModeReplace, (unsigned char *)&opacity, 1);
+    }
     
     XEvent event;
     int start_x = 0, start_y = 0, end_x = 0, end_y = 0;
-    int last_x = 0, last_y = 0;
     int pressed = 0;
     int cancelled = 0;
-    int drawn = 0;
     
     while (1) {
         if (XPending(display) == 0) {
@@ -329,14 +354,6 @@ int select_area_interactive(Display *display, Window root_window, CaptureRect *r
             // Check if ESC key was pressed
             KeySym keysym = XLookupKeysym(&event.xkey, 0);
             if (keysym == XK_Escape) {
-                // Erase the current rectangle if drawn
-                if (drawn && pressed) {
-                    int rx = (start_x < last_x) ? start_x : last_x;
-                    int ry = (start_y < last_y) ? start_y : last_y;
-                    int rw = abs(last_x - start_x);
-                    int rh = abs(last_y - start_y);
-                    XDrawRectangle(display, root_window, gc, rx, ry, rw, rh);
-                }
                 // Cancel selection
                 cancelled = 1;
                 break;
@@ -344,14 +361,6 @@ int select_area_interactive(Display *display, Window root_window, CaptureRect *r
         } else if (event.type == ButtonPress) {
             // Check if right mouse button (Button3) was pressed
             if (event.xbutton.button == Button3) {
-                // Erase the current rectangle if drawn
-                if (drawn && pressed) {
-                    int rx = (start_x < last_x) ? start_x : last_x;
-                    int ry = (start_y < last_y) ? start_y : last_y;
-                    int rw = abs(last_x - start_x);
-                    int rh = abs(last_y - start_y);
-                    XDrawRectangle(display, root_window, gc, rx, ry, rw, rh);
-                }
                 // Cancel selection
                 cancelled = 1;
                 break;
@@ -359,43 +368,26 @@ int select_area_interactive(Display *display, Window root_window, CaptureRect *r
                 // Left click - start selection
                 start_x = event.xbutton.x_root;
                 start_y = event.xbutton.y_root;
-                last_x = start_x;
-                last_y = start_y;
                 pressed = 1;
-                drawn = 0;
             }
         } else if (event.type == MotionNotify && pressed) {
-            // Erase previous rectangle (XOR makes it disappear)
-            if (drawn) {
-                int rx = (start_x < last_x) ? start_x : last_x;
-                int ry = (start_y < last_y) ? start_y : last_y;
-                int rw = abs(last_x - start_x);
-                int rh = abs(last_y - start_y);
-                XDrawRectangle(display, root_window, gc, rx, ry, rw, rh);
-            }
-            
             // Update current position
-            last_x = event.xmotion.x_root;
-            last_y = event.xmotion.y_root;
+            int current_x = event.xmotion.x_root;
+            int current_y = event.xmotion.y_root;
             
-            // Draw new rectangle
-            int rx = (start_x < last_x) ? start_x : last_x;
-            int ry = (start_y < last_y) ? start_y : last_y;
-            int rw = abs(last_x - start_x);
-            int rh = abs(last_y - start_y);
-            XDrawRectangle(display, root_window, gc, rx, ry, rw, rh);
-            drawn = 1;
-            XFlush(display);
+            // Calculate rectangle bounds
+            int rx = (start_x < current_x) ? start_x : current_x;
+            int ry = (start_y < current_y) ? start_y : current_y;
+            int rw = abs(current_x - start_x);
+            int rh = abs(current_y - start_y);
+            
+            // Resize and reposition the selection window - X11 handles all drawing
+            if (rw > 0 && rh > 0) {
+                XMoveResizeWindow(display, selection_window, rx, ry, rw, rh);
+                XMapRaised(display, selection_window);
+            }
         } else if (event.type == ButtonRelease && pressed) {
             if (event.xbutton.button == Button1) {
-                // Erase the rectangle before finishing
-                if (drawn) {
-                    int rx = (start_x < last_x) ? start_x : last_x;
-                    int ry = (start_y < last_y) ? start_y : last_y;
-                    int rw = abs(last_x - start_x);
-                    int rh = abs(last_y - start_y);
-                    XDrawRectangle(display, root_window, gc, rx, ry, rw, rh);
-                }
                 // Left button release - complete selection
                 end_x = event.xbutton.x_root;
                 end_y = event.xbutton.y_root;
@@ -404,13 +396,19 @@ int select_area_interactive(Display *display, Window root_window, CaptureRect *r
         }
     }
     
-    XFreeGC(display, gc);
+    // Hide and destroy the selection window
+    XUnmapWindow(display, selection_window);
+    XDestroyWindow(display, selection_window);
+    XSync(display, False);
+    // Brief delay to ensure window is fully destroyed before capture
+    usleep(100000); // 100ms
+    
     if (kbd_status == GrabSuccess) {
         XUngrabKeyboard(display, CurrentTime);
     }
     XUngrabPointer(display, CurrentTime);
     XFreeCursor(display, cursor);
-    XFlush(display);
+    XSync(display, False);
     
     // If cancelled, return failure
     if (cancelled) {

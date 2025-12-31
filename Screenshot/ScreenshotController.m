@@ -259,8 +259,8 @@
         BOOL windowWasVisible = (mainWindow && [mainWindow isVisible]);
         if (windowWasVisible) {
             [mainWindow orderOut:self];
-            // Give the window manager a brief moment to update
-            usleep(100000); // 100ms
+            // Give the window manager more time to unmap the window before grabbing pointer
+            usleep(250000); // 250ms - needed for X11 pointer grab to succeed
         }
 
         rect = [ScreenshotCapture selectWindow];
@@ -286,7 +286,8 @@
         BOOL windowWasVisible = (mainWindow && [mainWindow isVisible]);
         if (windowWasVisible) {
             [mainWindow orderOut:self];
-            usleep(100000); // 100ms
+            // Give the window manager more time to unmap the window before grabbing pointer
+            usleep(250000); // 250ms - needed for X11 pointer grab to succeed
         }
 
         rect = [ScreenshotCapture selectArea];
