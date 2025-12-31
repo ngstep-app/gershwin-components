@@ -1039,13 +1039,8 @@ void signalHandler(int sig) {
     // Security check: Verify file ownership and permissions before reading
     struct stat fileStat;
     if (stat([plistPath UTF8String], &fileStat) != 0) {
-        NSLog(@"[DEBUG] Warning: Could not stat LoginWindow.plist file: %s", strerror(errno));
-        NSAlert *alert = [NSAlert alertWithMessageText:@"Autologin File Error"
-                                         defaultButton:@"OK"
-                                       alternateButton:nil
-                                           otherButton:nil
-                             informativeTextWithFormat:@"The autologin configuration file is missing or inaccessible."];
-        [alert runModal];
+        NSLog(@"[DEBUG] LoginWindow.plist file does not exist: %s", strerror(errno));
+        // It's OK if the file doesn't exist - just skip auto-login
         return NO;
     }
     
