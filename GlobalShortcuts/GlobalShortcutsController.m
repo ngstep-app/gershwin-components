@@ -104,7 +104,6 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
     self = [super init];
     if (self) {
         shortcuts = [[NSMutableArray alloc] init];
-        isDaemonRunning = NO;
     }
     return self;
 }
@@ -204,7 +203,6 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
 
 - (void)refreshShortcuts:(NSTimer *)timer
 {
-    [self updateDaemonStatus];
     [self loadShortcutsFromDefaults];
     [shortcutsTable reloadData];
 }
@@ -240,9 +238,9 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
         }
     }
     
-    NSString *daemonStatus = isDaemonRunning ? @"running" : @"not running";
-    [statusLabel setStringValue:[NSString stringWithFormat:@"Loaded %d shortcuts. Daemon is %@", 
-                               shortcutCount, daemonStatus]];
+    NSString *status = [NSString stringWithFormat:@"Loaded %d shortcuts. Changes will be applied to Workspace automatically.", 
+                       shortcutCount];
+    [statusLabel setStringValue:status];
     
     return YES;
 }
@@ -250,13 +248,32 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
 - (BOOL)saveShortcutsToDefaults
 {
     NSMutableDictionary *globalShortcuts = [NSMutableDictionary dictionary];
+    NSMutableArray *shortcutsArray = [NSMutableArray array];
     
-    // Convert array of dictionaries back to key-value dictionary
+    // Convert array of dictionaries back to key-value dictionary and create shortcuts array for IPC
     for (NSDictionary *shortcut in shortcuts) {
         NSString *keyCombo = [shortcut objectForKey:@"keyCombo"];
         NSString *command = [shortcut objectForKey:@"command"];
         if (keyCombo && command && [keyCombo length] > 0 && [command length] > 0) {
             [globalShortcuts setObject:command forKey:keyCombo];
+            
+            // Parse keyCombo to extract modifiers and key for IPC
+            NSArray *parts = [keyCombo componentsSeparatedByString:@"+"];
+            NSString *keyStr = [parts lastObject];
+            NSMutableArray *modifierParts = [NSMutableArray array];
+            for (NSUInteger i = 0; i < [parts count] - 1; i++) {
+                [modifierParts addObject:[parts objectAtIndex:i]];
+            }
+            NSString *modifiersStr = [modifierParts componentsJoinedByString:@"+"];
+            
+            // Create shortcut entry for IPC (property list compatible)
+            NSDictionary *shortcutForIPC = @{
+                @"key": keyCombo,
+                @"command": command,
+                @"modifiers": modifiersStr ?: @"",
+                @"keyStr": keyStr ?: @""
+            };
+            [shortcutsArray addObject:shortcutForIPC];
         }
     }
     
@@ -266,18 +283,24 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
     [defaults setPersistentDomain:globalShortcuts forName:@"GlobalShortcuts"];
     [defaults synchronize];
     
-    // Send SIGHUP to daemon to reload configuration
-    if (isDaemonRunning) {
-        system("killall -HUP globalshortcutsd 2>/dev/null");
-    }
+    // Debug: log what we're about to send
+    NSLog(@"GlobalShortcuts: Shortcuts array to send: %@", shortcutsArray);
+    
+    NSDictionary *userInfo = @{
+        @"shortcutCount": @([globalShortcuts count]),
+        @"shortcuts": shortcutsArray
+    };
+    NSLog(@"GlobalShortcuts: UserInfo to send: %@", userInfo);
+    
+    // Post distributed notification for cross-application communication with shortcuts data
+    [[NSDistributedNotificationCenter defaultCenter] 
+        postNotificationName:@"GSGlobalShortcutsConfigurationChanged"
+                      object:@"GlobalShortcuts"
+                    userInfo:userInfo];
+    
+    NSLog(@"GlobalShortcuts: Saved %lu shortcuts to defaults and posted distributed notification", (unsigned long)[globalShortcuts count]);
     
     return YES;
-}
-
-- (BOOL)isDaemonRunningCheck
-{
-    // Check if globalshortcutsd is running using native code
-    return [self findProcessByName:@"globalshortcutsd"] > 0;
 }
 
 - (pid_t)findProcessByName:(NSString *)processName
@@ -368,7 +391,8 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
 
 - (void)updateDaemonStatus
 {
-    isDaemonRunning = [self isDaemonRunningCheck];
+    // No longer using separate daemon - Workspace handles global shortcuts directly
+    // This method is kept for compatibility but does nothing
 }
 
 - (void)addShortcut:(id)sender
@@ -625,6 +649,13 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
     [keyComboField setStringValue:@""];
     [capturedModifiers removeAllObjects];
     
+    // Temporarily disable all global shortcuts to avoid conflicts
+    NSLog(@"GlobalShortcuts: Sending temporary disable notification");
+    [[NSDistributedNotificationCenter defaultCenter] 
+        postNotificationName:@"GSGlobalShortcutsTemporaryDisable"
+                      object:@"GlobalShortcuts"
+                    userInfo:nil];
+    
     // Make the window the key window and first responder
     [editWindow makeKeyAndOrderFront:nil];
     [editWindow makeFirstResponder:editWindow];
@@ -640,6 +671,13 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
     isCapturingKeyCombo = NO;
     [setButton setTitle:@"Set"];
     [setButton setEnabled:YES];
+    
+    // Re-enable all global shortcuts
+    NSLog(@"GlobalShortcuts: Sending re-enable notification");
+    [[NSDistributedNotificationCenter defaultCenter] 
+        postNotificationName:@"GSGlobalShortcutsReEnable"
+                      object:@"GlobalShortcuts"
+                    userInfo:nil];
 }
 
 - (void)handleKeyEvent:(NSEvent *)event
@@ -832,6 +870,29 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
                              informativeTextWithFormat:@"Key combination format is invalid. Use format: modifier+modifier+key (e.g., ctrl+shift+t).\n\nSupported modifiers: ctrl, shift, alt, mod1-mod5\nSupported keys: a-z, 0-9, f1-f24, special keys, multimedia keys"];
         [alert runModal];
         return;
+    }
+    
+    // Check for collision with existing shortcuts (unless we're editing the same one)
+    if (!isEditing || ![keyCombo isEqualToString:[currentShortcut objectForKey:@"keyCombo"]]) {
+        for (NSDictionary *existingShortcut in parentController->shortcuts) {
+            if ([[existingShortcut objectForKey:@"keyCombo"] isEqualToString:keyCombo]) {
+                NSString *existingCommand = [existingShortcut objectForKey:@"command"];
+                NSAlert *alert = [NSAlert alertWithMessageText:@"Shortcut Already Exists"
+                                                 defaultButton:@"Replace"
+                                               alternateButton:@"Cancel"
+                                                   otherButton:nil
+                                     informativeTextWithFormat:@"The shortcut '%@' is already assigned to command:\n\n%@\n\nDo you want to replace it?", keyCombo, existingCommand];
+                
+                NSInteger result = [alert runModal];
+                if (result != NSAlertDefaultReturn) {
+                    return; // User cancelled
+                }
+                
+                // Remove the existing shortcut
+                [parentController->shortcuts removeObject:existingShortcut];
+                break;
+            }
+        }
     }
     
     if ([command length] == 0) {

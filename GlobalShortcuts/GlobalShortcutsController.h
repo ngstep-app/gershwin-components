@@ -18,7 +18,6 @@
     NSButton *deleteButton;
     NSButton *editButton;
     NSTextField *statusLabel;
-    BOOL isDaemonRunning;
 }
 
 - (id)init;
@@ -32,8 +31,6 @@
 - (void)tableDoubleClicked:(id)sender;
 - (BOOL)loadShortcutsFromDefaults;
 - (BOOL)saveShortcutsToDefaults;
-- (BOOL)isDaemonRunningCheck;
-- (void)updateDaemonStatus;
 - (void)showAddEditShortcutSheet:(NSMutableDictionary *)shortcut isEditing:(BOOL)editing;
 - (BOOL)isValidKeyCombo:(NSString *)keyCombo;
 
