@@ -124,6 +124,11 @@
         NSString *accel = [menuItem objectForKey:@"accel"];
         if (!accel) {
             accel = [menuItem objectForKey:@"x-canonical-accel"];
+            if (accel) {
+                NSLog(@"GTKMenuParser: Found x-canonical-accel='%@' for label='%@'", accel, label);
+            }
+        } else {
+            NSLog(@"GTKMenuParser: Found accel='%@' for label='%@'", accel, label);
         }
         
         // Handle sections - these don't create menu items but contain other items
@@ -180,7 +185,10 @@
                     [item setKeyEquivalent:keyEquivalent];
                     NSUInteger modifierMask = [self parseKeyboardModifiers:accel];
                     [item setKeyEquivalentModifierMask:modifierMask];
-                    NSLog(@"GTKMenuParser: Added shortcut '%@' to menu item '%@'", accel, displayLabel);
+                    NSLog(@"GTKMenuParser: Added shortcut '%@' to menu item '%@' (keyEq='%@', modifiers=%lu)", 
+                          accel, displayLabel, keyEquivalent, (unsigned long)modifierMask);
+                    NSLog(@"GTKMenuParser: MenuItem now has keyEquivalent='%@', modifierMask=%lu",
+                          [item keyEquivalent], (unsigned long)[item keyEquivalentModifierMask]);
                 }
             }
             
@@ -530,17 +538,25 @@
         return @"";
     }
     
-    // GTK accelerator format: <Control>o, <Primary><Shift>n, <Alt>F4, etc.
-    // Convert to NSMenuItem key equivalent (just the key part)
     NSString *key = accel;
     
-    // Remove modifier prefixes
-    key = [key stringByReplacingOccurrencesOfString:@"<Control>" withString:@""];
-    key = [key stringByReplacingOccurrencesOfString:@"<Primary>" withString:@""];
-    key = [key stringByReplacingOccurrencesOfString:@"<Shift>" withString:@""];
-    key = [key stringByReplacingOccurrencesOfString:@"<Alt>" withString:@""];
-    key = [key stringByReplacingOccurrencesOfString:@"<Meta>" withString:@""];
-    key = [key stringByReplacingOccurrencesOfString:@"<Super>" withString:@""];
+    // Handle x-canonical-accel format: "Ctrl+O", "Shift+Ctrl+V", etc.
+    if ([accel containsString:@"+"]) {
+        // Split by + and get the last component (the actual key)
+        NSArray *components = [accel componentsSeparatedByString:@"+"];
+        if ([components count] > 0) {
+            key = [components lastObject];
+        }
+    } else {
+        // Handle GTK accelerator format: <Control>o, <Primary><Shift>n, <Alt>F4, etc.
+        // Remove modifier prefixes
+        key = [key stringByReplacingOccurrencesOfString:@"<Control>" withString:@""];
+        key = [key stringByReplacingOccurrencesOfString:@"<Primary>" withString:@""];
+        key = [key stringByReplacingOccurrencesOfString:@"<Shift>" withString:@""];
+        key = [key stringByReplacingOccurrencesOfString:@"<Alt>" withString:@""];
+        key = [key stringByReplacingOccurrencesOfString:@"<Meta>" withString:@""];
+        key = [key stringByReplacingOccurrencesOfString:@"<Super>" withString:@""];
+    }
     
     // Convert special keys
     if ([key isEqualToString:@"Return"]) return @"\r";
@@ -571,17 +587,20 @@
     
     NSUInteger modifiers = 0;
     
-    if ([accel containsString:@"<Control>"] || [accel containsString:@"<Primary>"]) {
-        modifiers |= NSControlKeyMask;  // Primary/Control maps to Control for cross-platform shortcuts
+    // Handle both x-canonical-accel format ("Ctrl+O") and GTK format ("<Control>o")
+    if ([accel containsString:@"<Control>"] || [accel containsString:@"<Primary>"] || 
+        [accel containsString:@"Ctrl+"]) {
+        modifiers |= NSControlKeyMask;
     }
-    if ([accel containsString:@"<Shift>"]) {
+    if ([accel containsString:@"<Shift>"] || [accel containsString:@"Shift+"]) {
         modifiers |= NSEventModifierFlagShift;
     }
-    if ([accel containsString:@"<Alt>"]) {
+    if ([accel containsString:@"<Alt>"] || [accel containsString:@"Alt+"]) {
         modifiers |= NSEventModifierFlagOption;
     }
-    if ([accel containsString:@"<Meta>"] || [accel containsString:@"<Super>"]) {
-        modifiers |= NSEventModifierFlagCommand;  // Meta/Super maps to Cmd key
+    if ([accel containsString:@"<Meta>"] || [accel containsString:@"<Super>"] || 
+        [accel containsString:@"Meta+"] || [accel containsString:@"Super+"]) {
+        modifiers |= NSEventModifierFlagCommand;
     }
     
     return modifiers;
