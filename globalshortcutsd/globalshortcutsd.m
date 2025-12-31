@@ -862,9 +862,19 @@ static void signalHandler(int sig)
     } else if (pid > 0) {
         // Parent process - wait for child to exit
         int status;
-        if (waitpid(pid, &status, 0) < 0) {
-            [self logWithFormat:@"Warning: waitpid failed for command: %@", command];
-            return NO;
+        int ret;
+        while ((ret = waitpid(pid, &status, 0)) < 0) {
+            // EINTR: interrupted by signal, retry
+            // ECHILD: process already exited/was reaped (this is OK due to double fork)
+            if (errno == EINTR) {
+                continue;
+            } else if (errno == ECHILD) {
+                // This is expected with double fork - child already exited
+                return YES;
+            } else {
+                [self logWithFormat:@"Warning: waitpid failed for command: %@ (errno=%d, %s)", command, errno, strerror(errno)];
+                return NO;
+            }
         }
         
         if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
@@ -916,7 +926,7 @@ static void signalHandler(int sig)
     if ([command containsString:@"/"]) {
         struct stat statbuf;
         const char *cPath = [command UTF8String];
-        if (stat(cPath, &statbuf) == 0 && (statbuf.st_mode & S_IXUSR)) {
+        if (stat(cPath, &statbuf) == 0 && (statbuf.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
             return command;
         }
         return nil;
@@ -939,7 +949,7 @@ static void signalHandler(int sig)
         struct stat statbuf;
         const char *cPath = [fullPath UTF8String];
         
-        if (stat(cPath, &statbuf) == 0 && (statbuf.st_mode & S_IXUSR)) {
+        if (stat(cPath, &statbuf) == 0 && (statbuf.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
             return fullPath;
         }
     }

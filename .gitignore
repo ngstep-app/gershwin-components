@@ -34,3 +34,4 @@ out/
 *.pkg
 Menu/GNUmakefile
 screenshot*.png
+*_scrot.png
