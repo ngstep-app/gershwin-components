@@ -82,6 +82,16 @@
 - (void)cleanup;
 
 /**
+ * Temporarily suspend all global key grabs (allows other windows to receive keyboard input)
+ */
+- (void)suspendKeyGrabs;
+
+/**
+ * Resume global key grabs after suspension
+ */
+- (void)resumeKeyGrabs;
+
+/**
  * Check availability of multiple shortcuts and log which are available vs taken
  * @param shortcuts Array of shortcut strings (e.g., @[@"ctrl+t", @"alt+n"])
  */

@@ -324,7 +324,29 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
 {
     // Log events for debugging if needed
     NSEventType eventType = [event type];
-    if (eventType == NSKeyDown || eventType == NSMouseMoved) {
+    if (eventType == NSKeyDown) {
+        // Log KeyDown events and route to key window
+        NSWindow *keyWin = [self keyWindow];
+        NSLog(@"MenuApplication: KeyDown event, key window: %@, characters: %@", 
+              keyWin, [event characters]);
+        
+        // If no key window, check if action search window is visible and route to it
+        if (!keyWin) {
+            // Find the ActionSearchWindow if visible
+            for (NSWindow *window in [self windows]) {
+                if ([window isVisible] && 
+                    [[window className] isEqualToString:@"ActionSearchWindow"]) {
+                    NSLog(@"MenuApplication: Routing KeyDown to ActionSearchWindow");
+                    [window sendEvent:event];
+                    return;
+                }
+            }
+        } else if (keyWin != [event window]) {
+            NSLog(@"MenuApplication: Forwarding KeyDown to key window");
+            [keyWin sendEvent:event];
+            return;
+        }
+    } else if (eventType == NSMouseMoved) {
         // Suppress frequent event logging
     } else {
         NSLog(@"MenuApplication: Processing event type %ld", (long)eventType);

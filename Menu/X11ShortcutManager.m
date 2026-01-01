@@ -47,6 +47,7 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
     NSThread *_eventMonitorThread;
     BOOL _shouldStopEventMonitoring;
     BOOL _swapCtrlAlt;
+    BOOL _grabsSuspended;  // flag to temporarily suspend key grabs
     
     // Lock key masks
     unsigned int _numlock_mask;
@@ -311,6 +312,67 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
     } @catch (NSException *exception) {
         NSLog(@"X11ShortcutManager: Exception during cleanup: %@", exception);
     }
+}
+
+- (void)suspendKeyGrabs
+{
+    if (_grabsSuspended) {
+        NSLog(@"X11ShortcutManager: Key grabs already suspended");
+        return;
+    }
+    
+    if (!_display) {
+        NSLog(@"X11ShortcutManager: Cannot suspend key grabs - no X11 display");
+        return;
+    }
+    
+    NSLog(@"X11ShortcutManager: Suspending all key grabs to allow text input");
+    
+    // Ungrab all keys temporarily
+    XUngrabKey(_display, AnyKey, AnyModifier, DefaultRootWindow(_display));
+    XSync(_display, False);
+    
+    _grabsSuspended = YES;
+    NSLog(@"X11ShortcutManager: Key grabs suspended");
+}
+
+- (void)resumeKeyGrabs
+{
+    if (!_grabsSuspended) {
+        NSLog(@"X11ShortcutManager: Key grabs not suspended, nothing to resume");
+        return;
+    }
+    
+    if (!_display) {
+        NSLog(@"X11ShortcutManager: Cannot resume key grabs - no X11 display");
+        return;
+    }
+    
+    NSLog(@"X11ShortcutManager: Resuming key grabs");
+    
+    // Re-register all grabbed keys
+    Window root = DefaultRootWindow(_display);
+    for (NSString *key in _grabbedKeys) {
+        NSArray *parts = [key componentsSeparatedByString:@"_"];
+        if ([parts count] >= 2) {
+            KeyCode keycode = (KeyCode)[[parts objectAtIndex:0] intValue];
+            unsigned int modifier = (unsigned int)[[parts objectAtIndex:1] intValue];
+            
+            XGrabKey(_display, keycode, modifier, root, False, GrabModeAsync, GrabModeAsync);
+            
+            // Also grab with lock key variants
+            if (_numlock_mask) {
+                XGrabKey(_display, keycode, modifier | _numlock_mask, root, False, GrabModeAsync, GrabModeAsync);
+            }
+            if (_capslock_mask) {
+                XGrabKey(_display, keycode, modifier | _capslock_mask, root, False, GrabModeAsync, GrabModeAsync);
+            }
+        }
+    }
+    XSync(_display, False);
+    
+    _grabsSuspended = NO;
+    NSLog(@"X11ShortcutManager: Key grabs resumed, %lu shortcuts active", (unsigned long)[_grabbedKeys count]);
 }
 
 - (BOOL)isShortcutAlreadyTaken:(NSString *)shortcutString
@@ -658,6 +720,12 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
 {
     if (!_display) {
         return NO;
+    }
+    
+    // Don't grab keys while suspended (e.g., during text input in search popup)
+    if (_grabsSuspended) {
+        NSLog(@"X11ShortcutManager: Key grab skipped - grabs are suspended");
+        return YES;  // Return YES so registration continues, will be grabbed on resume
     }
 
     Window root = DefaultRootWindow(_display);

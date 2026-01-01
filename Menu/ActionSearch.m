@@ -7,6 +7,7 @@
 
 #import "ActionSearch.h"
 #import "AppMenuWidget.h"
+#import "X11ShortcutManager.h"
 #import <GNUstepGUI/GSTheme.h>
 #import <pthread.h>
 
@@ -51,19 +52,20 @@ static const CGFloat kWindowPadding = 8;
 
 - (id)initWithContentRect:(NSRect)contentRect
 {
-    // Use borderless window but with different approach for keyboard
+    // Use titled window to ensure proper keyboard handling
+    // We'll hide the title with minimal height later if needed
     self = [super initWithContentRect:contentRect
-                            styleMask:NSBorderlessWindowMask | NSNonactivatingPanelMask
+                            styleMask:NSTitledWindowMask
                               backing:NSBackingStoreBuffered
                                 defer:NO];
     if (self) {
-        [self setLevel:NSFloatingWindowLevel];
+        [self setLevel:NSPopUpMenuWindowLevel];
         [self setHasShadow:YES];
         [self setOpaque:YES];
         [self setBackgroundColor:[[GSTheme theme] menuBackgroundColor]];
         [self setMovableByWindowBackground:NO];
         [self setReleasedWhenClosed:NO];
-        // Key settings for keyboard input with borderless window
+        [self setTitle:@""];  // Empty title
         [self setAcceptsMouseMovedEvents:YES];
     }
     return self;
@@ -71,7 +73,7 @@ static const CGFloat kWindowPadding = 8;
 
 - (BOOL)canBecomeKeyWindow
 {
-    // Critical: borderless windows must explicitly return YES to receive keyboard events
+    // Required to receive keyboard events
     return YES;
 }
 
@@ -93,9 +95,22 @@ static const CGFloat kWindowPadding = 8;
 
 - (void)sendEvent:(NSEvent *)event
 {
-    if ([event type] == NSKeyDown) {
-        NSLog(@"ActionSearchWindow: sendEvent KeyDown: %@", [event characters]);
+    NSEventType eventType = [event type];
+    
+    // Log keyboard-related events for debugging
+    // NSKeyDown=10, NSKeyUp=11, NSFlagsChanged=12
+    // Type 22 seems to be some kind of text input event in GNUstep
+    if (eventType == 10 || eventType == 11 || eventType == 12 || eventType == 22) {
+        NSLog(@"ActionSearchWindow: sendEvent type %lu, firstResponder: %@", 
+              (unsigned long)eventType, [self firstResponder]);
     }
+    
+    // For key events (type 10 = NSKeyDown), try to route to first responder
+    if (eventType == 10) {
+        id firstResponder = [self firstResponder];
+        NSLog(@"ActionSearchWindow: KeyDown event, forwarding to %@", firstResponder);
+    }
+    
     [super sendEvent:event];
 }
 
@@ -291,7 +306,7 @@ static const CGFloat kWindowPadding = 8;
     [bgView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [contentView addSubview:bgView];
     
-    // Create search field at the top of content area
+    // Create search field at the top of content area - add to contentView so it's on top of bgView
     CGFloat fieldY = contentView.frame.size.height - kSearchFieldHeight - kWindowPadding;
     self.searchField = [[NSTextField alloc] initWithFrame:
         NSMakeRect(kWindowPadding, fieldY, kSearchWindowWidth - kWindowPadding * 2, kSearchFieldHeight)];
@@ -306,6 +321,10 @@ static const CGFloat kWindowPadding = 8;
     [self.searchField setRefusesFirstResponder:NO];
     [[self.searchField cell] setSendsActionOnEndEditing:NO];
     [[self.searchField cell] setScrollable:YES];
+    [[self.searchField cell] setWraps:NO];
+    
+    // Make the text field focusable
+    [self.searchField setNextKeyView:self.searchField];
     
     // Placeholder text
     NSAttributedString *placeholder = [[NSAttributedString alloc] 
@@ -316,6 +335,7 @@ static const CGFloat kWindowPadding = 8;
         }];
     [[self.searchField cell] setPlaceholderAttributedString:placeholder];
     
+    // Add search field directly to contentView (after bgView, so it's on top)
     [contentView addSubview:self.searchField];
     
     // Create scroll view for results (initially hidden)
@@ -344,6 +364,9 @@ static const CGFloat kWindowPadding = 8;
 
 - (void)showSearchPopupAtPoint:(NSPoint)point
 {
+    // CRITICAL: Suspend global key grabs so keyboard input reaches this window
+    [[X11ShortcutManager sharedManager] suspendKeyGrabs];
+    
     // Collect menu items first
     [self collectMenuItems];
     
@@ -385,6 +408,10 @@ static const CGFloat kWindowPadding = 8;
 - (void)hideSearchPopup
 {
     [self.searchWindow orderOut:nil];
+    
+    // Resume global key grabs now that the popup is closed
+    [[X11ShortcutManager sharedManager] resumeKeyGrabs];
+    
     NSLog(@"ActionSearchController: Hiding search popup");
 }
 
@@ -400,9 +427,13 @@ static const CGFloat kWindowPadding = 8;
     NSLog(@"ActionSearchController: searchField window: %@", [self.searchField window]);
     NSLog(@"ActionSearchController: searchWindow: %@", self.searchWindow);
     
-    // Ensure window is key
-    [self.searchWindow makeKeyWindow];
+    // Activate the application first
+    [NSApp activateIgnoringOtherApps:YES];
+    
+    // Make window key
+    [self.searchWindow makeKeyAndOrderFront:nil];
     NSLog(@"ActionSearchController: Window is key: %@", [self.searchWindow isKeyWindow] ? @"YES" : @"NO");
+    NSLog(@"ActionSearchController: Window is visible: %@", [self.searchWindow isVisible] ? @"YES" : @"NO");
     
     // Check if field is in window
     if ([self.searchField window] != self.searchWindow) {
@@ -424,10 +455,18 @@ static const CGFloat kWindowPadding = 8;
             NSLog(@"ActionSearchController: Got field editor: %@, trying to focus it", fieldEditor);
             success = [self.searchWindow makeFirstResponder:fieldEditor];
             NSLog(@"ActionSearchController: makeFirstResponder on fieldEditor result: %@", success ? @"YES" : @"NO");
+            
+            // Ensure the field editor is ready
+            [fieldEditor setSelectedRange:NSMakeRange(0, 0)];
+            NSLog(@"ActionSearchController: Field editor first responder: %@", 
+                  [[self.searchWindow firstResponder] isEqual:fieldEditor] ? @"YES" : @"NO");
         } else {
             NSLog(@"ActionSearchController: Could not get field editor");
         }
     }
+    
+    // Log the current first responder
+    NSLog(@"ActionSearchController: Current first responder: %@", [self.searchWindow firstResponder]);
 }
 
 - (void)toggleSearchPopupAtPoint:(NSPoint)point
