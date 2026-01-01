@@ -492,6 +492,7 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
     
     BOOL hasModifier = NO;
     BOOL hasKey = NO;
+    NSString *keyPart = nil;
     
     for (NSString *part in parts) {
         NSString *cleanPart = [[part stringByTrimmingCharactersInSet:
@@ -509,10 +510,21 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
             hasModifier = YES;
         } else {
             hasKey = YES;
+            keyPart = cleanPart;
         }
     }
     
-    return hasModifier && hasKey;
+    // CRITICAL: Require at least one modifier key - no bare keys allowed
+    if (!hasModifier) {
+        return NO;
+    }
+    
+    // CRITICAL: Reject Tab key to allow proper focus navigation
+    if ([keyPart isEqualToString:@"tab"]) {
+        return NO;
+    }
+    
+    return hasKey;
 }
 
 // Table view data source methods
