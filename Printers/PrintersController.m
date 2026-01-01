@@ -326,38 +326,42 @@ static void deviceCallback(const char *device_class,
         return mainView;
     }
     
-    // Add privilege warning banner if user is not in lpadmin group
+    // Add privilege warning banner at the top if user is not in lpadmin group
+    int warningHeight = 0;
     if (!userInLpadminGroup) {
-        // Create a simple separator line instead
-        NSBox *warningBox = [[NSBox alloc] initWithFrame:NSMakeRect(0, 345, 560, 1)];
+        // Create a simple separator line
+        NSBox *warningBox = [[NSBox alloc] initWithFrame:NSMakeRect(0, 360, 560, 1)];
         [warningBox setBoxType:NSBoxSeparator];
         [mainView addSubview:warningBox];
         [warningBox release];
         
-        privilegeWarningLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 350, 520, 25)];
-        [privilegeWarningLabel setStringValue:@"⚠️  You are not in the 'lpadmin' group. Printer management functions are disabled."];
+        warningHeight = 25;
+        privilegeWarningLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 362, 520, 18)];
+        [privilegeWarningLabel setStringValue:@"⚠️  Not in 'lpadmin' group - printer management disabled"];
         [privilegeWarningLabel setBezeled:NO];
         [privilegeWarningLabel setDrawsBackground:NO];
         [privilegeWarningLabel setEditable:NO];
         [privilegeWarningLabel setSelectable:NO];
-        [privilegeWarningLabel setFont:[NSFont systemFontOfSize:11]];
+        [privilegeWarningLabel setFont:[NSFont systemFontOfSize:10]];
         [privilegeWarningLabel setTextColor:[NSColor darkGrayColor]];
         [mainView addSubview:privilegeWarningLabel];
     }
     
     // Printers label
-    NSTextField *printersLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 350, 200, 20)];
+    NSTextField *printersLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 335 - warningHeight, 200, 16)];
     [printersLabel setStringValue:@"Printers"];
     [printersLabel setBezeled:NO];
     [printersLabel setDrawsBackground:NO];
     [printersLabel setEditable:NO];
     [printersLabel setSelectable:NO];
-    [printersLabel setFont:[NSFont boldSystemFontOfSize:12]];
+    [printersLabel setFont:[NSFont boldSystemFontOfSize:11]];
     [mainView addSubview:printersLabel];
     [printersLabel release];
     
-    // Printer table
-    printerScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 200, 340, 145)];
+    // Printer table - takes up more space
+    int tableY = 180;
+    int tableHeight = 155 - warningHeight;
+    printerScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, tableY, 340, tableHeight)];
     [printerScroll setHasVerticalScroller:YES];
     [printerScroll setHasHorizontalScroller:NO];
     [printerScroll setBorderType:NSBezelBorder];
@@ -400,15 +404,17 @@ static void deviceCallback(const char *device_class,
     
     [printerScroll setDocumentView:printerTable];
     
-    // Printer buttons (right side)
-    addButton = [[NSButton alloc] initWithFrame:NSMakeRect(370, 310, 80, 24)];
+    // Printer buttons - compact 2x2 grid on the right
+    int buttonStartY = 335 - warningHeight;
+    
+    addButton = [[NSButton alloc] initWithFrame:NSMakeRect(370, buttonStartY - 24, 85, 22)];
     [addButton setTitle:@"Add..."];
     [addButton setBezelStyle:NSRoundedBezelStyle];
     [addButton setTarget:self];
     [addButton setAction:@selector(addPrinter:)];
     [mainView addSubview:addButton];
     
-    removeButton = [[NSButton alloc] initWithFrame:NSMakeRect(460, 310, 80, 24)];
+    removeButton = [[NSButton alloc] initWithFrame:NSMakeRect(460, buttonStartY - 24, 80, 22)];
     [removeButton setTitle:@"Remove"];
     [removeButton setBezelStyle:NSRoundedBezelStyle];
     [removeButton setTarget:self];
@@ -416,15 +422,15 @@ static void deviceCallback(const char *device_class,
     [removeButton setEnabled:NO];
     [mainView addSubview:removeButton];
     
-    defaultButton = [[NSButton alloc] initWithFrame:NSMakeRect(370, 277, 170, 24)];
-    [defaultButton setTitle:@"Set as Default"];
+    defaultButton = [[NSButton alloc] initWithFrame:NSMakeRect(370, buttonStartY - 50, 85, 22)];
+    [defaultButton setTitle:@"Default"];
     [defaultButton setBezelStyle:NSRoundedBezelStyle];
     [defaultButton setTarget:self];
     [defaultButton setAction:@selector(setDefaultPrinter:)];
     [defaultButton setEnabled:NO];
     [mainView addSubview:defaultButton];
     
-    optionsButton = [[NSButton alloc] initWithFrame:NSMakeRect(370, 244, 170, 24)];
+    optionsButton = [[NSButton alloc] initWithFrame:NSMakeRect(460, buttonStartY - 50, 80, 22)];
     [optionsButton setTitle:@"Options..."];
     [optionsButton setBezelStyle:NSRoundedBezelStyle];
     [optionsButton setTarget:self];
@@ -433,29 +439,29 @@ static void deviceCallback(const char *device_class,
     [mainView addSubview:optionsButton];
     
     // Printer info label
-    printerInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(370, 200, 170, 35)];
+    printerInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(370, buttonStartY - 80, 170, 25)];
     [printerInfoLabel setStringValue:@""];
     [printerInfoLabel setBezeled:NO];
     [printerInfoLabel setDrawsBackground:NO];
     [printerInfoLabel setEditable:NO];
     [printerInfoLabel setSelectable:YES];
-    [printerInfoLabel setFont:[NSFont systemFontOfSize:10]];
+    [printerInfoLabel setFont:[NSFont systemFontOfSize:9]];
     [printerInfoLabel setTextColor:[NSColor darkGrayColor]];
     [mainView addSubview:printerInfoLabel];
     
     // Print queue label
-    NSTextField *queueLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 170, 200, 20)];
+    NSTextField *queueLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 160, 200, 16)];
     [queueLabel setStringValue:@"Print Queue"];
     [queueLabel setBezeled:NO];
     [queueLabel setDrawsBackground:NO];
     [queueLabel setEditable:NO];
     [queueLabel setSelectable:NO];
-    [queueLabel setFont:[NSFont boldSystemFontOfSize:12]];
+    [queueLabel setFont:[NSFont boldSystemFontOfSize:11]];
     [mainView addSubview:queueLabel];
     [queueLabel release];
     
-    // Job table
-    jobScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 45, 420, 120)];
+    // Job table - more compact
+    jobScroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 80, 420, 75)];
     [jobScroll setHasVerticalScroller:YES];
     [jobScroll setHasHorizontalScroller:NO];
     [jobScroll setBorderType:NSBezelBorder];
@@ -498,31 +504,31 @@ static void deviceCallback(const char *device_class,
     
     [jobScroll setDocumentView:jobTable];
     
-    // Job control buttons
-    cancelJobButton = [[NSButton alloc] initWithFrame:NSMakeRect(450, 130, 90, 24)];
-    [cancelJobButton setTitle:@"Cancel Job"];
+    // Job control buttons - compact
+    cancelJobButton = [[NSButton alloc] initWithFrame:NSMakeRect(450, 107, 90, 22)];
+    [cancelJobButton setTitle:@"Cancel"];
     [cancelJobButton setBezelStyle:NSRoundedBezelStyle];
     [cancelJobButton setTarget:self];
     [cancelJobButton setAction:@selector(cancelJob:)];
     [cancelJobButton setEnabled:NO];
     [mainView addSubview:cancelJobButton];
     
-    pauseJobButton = [[NSButton alloc] initWithFrame:NSMakeRect(450, 99, 90, 24)];
-    [pauseJobButton setTitle:@"Hold Job"];
+    pauseJobButton = [[NSButton alloc] initWithFrame:NSMakeRect(450, 82, 90, 22)];
+    [pauseJobButton setTitle:@"Hold"];
     [pauseJobButton setBezelStyle:NSRoundedBezelStyle];
     [pauseJobButton setTarget:self];
     [pauseJobButton setAction:@selector(pauseResumeJob:)];
     [pauseJobButton setEnabled:NO];
     [mainView addSubview:pauseJobButton];
     
-    // Status label
-    statusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 10, 520, 30)];
+    // Status label - at bottom
+    statusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 8, 520, 28)];
     [statusLabel setStringValue:@""];
     [statusLabel setBezeled:NO];
     [statusLabel setDrawsBackground:NO];
     [statusLabel setEditable:NO];
     [statusLabel setSelectable:NO];
-    [statusLabel setFont:[NSFont systemFontOfSize:10]];
+    [statusLabel setFont:[NSFont systemFontOfSize:9]];
     [statusLabel setTextColor:[NSColor darkGrayColor]];
     [mainView addSubview:statusLabel];
     
