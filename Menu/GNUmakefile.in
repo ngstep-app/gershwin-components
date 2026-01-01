@@ -31,7 +31,8 @@ Menu_OBJC_FILES = \
 	MenuUtils.m \
 	X11ShortcutManager.m \
 	RoundedCornersView.m \
-	MenuCacheManager.m
+	MenuCacheManager.m \
+	ActionSearch.m
 
 # Header files
 Menu_HEADER_FILES = \
@@ -53,7 +54,8 @@ Menu_HEADER_FILES = \
 	MenuUtils.h \
 	X11ShortcutManager.h \
 	RoundedCornersView.h \
-	MenuCacheManager.h
+	MenuCacheManager.h \
+	ActionSearch.h
 
 # Resources
 Menu_RESOURCE_FILES = \
