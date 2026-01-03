@@ -35,3 +35,4 @@ out/
 Menu/GNUmakefile
 screenshot*.png
 *_scrot.png
+*.desktop
