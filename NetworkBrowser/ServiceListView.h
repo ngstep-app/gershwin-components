@@ -20,14 +20,17 @@
   NSScrollView *scrollView;
   NSMutableArray *services;
   ServiceDetailsView *detailsView;
+  id selectionDelegate;
 }
 
 - (id)initWithFrame:(NSRect)frame;
 - (void)setDetailsView:(ServiceDetailsView *)view;
+- (void)setSelectionDelegate:(id)delegate;
 - (void)addService:(NSNetService *)service;
 - (void)removeService:(NSNetService *)service;
 - (void)clearServices;
 - (NSArray *)services;
+- (NSNetService *)selectedService;
 
 @end
 

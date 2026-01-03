@@ -7,8 +7,6 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import "NetworkBrowser.h"
-#import "ServiceListView.h"
-#import "ServiceDetailsView.h"
 
 @implementation NetworkBrowser
 
@@ -17,7 +15,9 @@
   self = [super init];
   if (self)
     {
+      types = [[NSMutableArray alloc] init];
       services = [[NSMutableArray alloc] init];
+      typeBrowser = nil;
       serviceBrowser = nil;
     }
   return self;
@@ -25,11 +25,17 @@
 
 - (void)dealloc
 {
+  if (typeBrowser)
+    {
+      [typeBrowser stop];
+      RELEASE(typeBrowser);
+    }
   if (serviceBrowser)
     {
       [serviceBrowser stop];
       RELEASE(serviceBrowser);
     }
+  RELEASE(types);
   RELEASE(services);
   RELEASE(window);
   [super dealloc];
@@ -63,55 +69,188 @@
           return;
         }
     }
-  
-  NSRect windowFrame = NSMakeRect(100, 100, 800, 600);
-  
+
   /* Create main window */
-  window = [[NSWindow alloc] 
+  NSRect windowFrame = NSMakeRect(100, 100, 1000, 600);
+  window = [[NSWindow alloc]
     initWithContentRect: windowFrame
-    styleMask: (NSTitledWindowMask | NSClosableWindowMask | 
+    styleMask: (NSTitledWindowMask | NSClosableWindowMask |
                 NSMiniaturizableWindowMask | NSResizableWindowMask)
-    backing: NSBackingStoreBuffered 
+    backing: NSBackingStoreBuffered
     defer: NO];
-  
+
   [window setTitle: @"Network Browser"];
-  [window setMinSize: NSMakeSize(600, 400)];
+  [window setMinSize: NSMakeSize(800, 400)];
   [window setDelegate: self];
-  
-  /* Create split view */
-  splitView = [[NSSplitView alloc] initWithFrame: [[window contentView] bounds]];
-  [splitView setVertical: YES];
-  [splitView setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
-  
-  /* Create list view (left pane) */
-  NSRect leftFrame = NSMakeRect(0, 0, 250, 600);
-  listView = [[ServiceListView alloc] initWithFrame: leftFrame];
-  
-  /* Create details view (right pane) */
-  NSRect rightFrame = NSMakeRect(250, 0, 550, 600);
-  detailsView = [[ServiceDetailsView alloc] initWithFrame: rightFrame];
-  
-  [listView setDetailsView: detailsView];
-  
-  /* Add subviews to split view */
-  [splitView addSubview: listView];
-  [splitView addSubview: detailsView];
-  
-  /* Set split view as content view */
-  [window setContentView: splitView];
-  
+
+  /* Create main content view */
+  NSView *contentView = [window contentView];
+  NSRect contentRect = [contentView bounds];
+
+  /* Left pane: Service Types */
+  NSRect leftRect = NSMakeRect(0, 0, 250, contentRect.size.height);
+  NSScrollView *typesScroll = [[NSScrollView alloc] initWithFrame: leftRect];
+  [typesScroll setAutoresizingMask: NSViewHeightSizable | NSViewMaxXMargin];
+  [typesScroll setHasVerticalScroller: YES];
+  [typesScroll setHasHorizontalScroller: NO];
+
+  typesTable = [[NSTableView alloc] initWithFrame: NSZeroRect];
+  [typesTable setDataSource: self];
+  [typesTable setDelegate: self];
+  [typesTable setAllowsEmptySelection: YES];
+  [typesTable setAllowsMultipleSelection: NO];
+
+  NSTableColumn *typesCol = [[NSTableColumn alloc] initWithIdentifier: @"type"];
+  [[typesCol headerCell] setStringValue: @"Service Types"];
+  [typesCol setWidth: 250 - 20];
+  [typesTable addTableColumn: typesCol];
+  RELEASE(typesCol);
+
+  [typesScroll setDocumentView: typesTable];
+  [contentView addSubview: typesScroll];
+  RELEASE(typesScroll);
+
+  /* Middle pane: Services */
+  NSRect midRect = NSMakeRect(250, 0, 300, contentRect.size.height);
+  NSScrollView *servicesScroll = [[NSScrollView alloc] initWithFrame: midRect];
+  [servicesScroll setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
+  [servicesScroll setHasVerticalScroller: YES];
+  [servicesScroll setHasHorizontalScroller: NO];
+
+  servicesTable = [[NSTableView alloc] initWithFrame: NSZeroRect];
+  [servicesTable setDataSource: self];
+  [servicesTable setDelegate: self];
+  [servicesTable setAllowsEmptySelection: YES];
+  [servicesTable setAllowsMultipleSelection: NO];
+
+  NSTableColumn *servicesCol = [[NSTableColumn alloc] initWithIdentifier: @"service"];
+  [[servicesCol headerCell] setStringValue: @"Services"];
+  [servicesCol setWidth: 300 - 20];
+  [servicesTable addTableColumn: servicesCol];
+  RELEASE(servicesCol);
+
+  [servicesScroll setDocumentView: servicesTable];
+  [contentView addSubview: servicesScroll];
+  RELEASE(servicesScroll);
+
+  /* Right pane: Details */
+  NSRect rightRect = NSMakeRect(550, 0, contentRect.size.width - 550, contentRect.size.height);
+  NSScrollView *detailsScroll = [[NSScrollView alloc] initWithFrame: rightRect];
+  [detailsScroll setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
+  [detailsScroll setHasVerticalScroller: YES];
+  [detailsScroll setHasHorizontalScroller: NO];
+
+  detailsText = [[NSTextView alloc] initWithFrame: NSZeroRect];
+  [detailsText setEditable: NO];
+  [detailsText setSelectable: YES];
+
+  [detailsScroll setDocumentView: detailsText];
+  [contentView addSubview: detailsScroll];
+  RELEASE(detailsScroll);
+
   [window makeKeyAndOrderFront: nil];
-  
-  /* Start browsing for services */
-  [self startServiceBrowsing];
+
+  /* Start browsing for service types */
+  typeBrowser = [[NSNetServiceBrowser alloc] init];
+  [typeBrowser setDelegate: self];
+  [typeBrowser searchForServicesOfType: @"_services._dns-sd._udp"
+                               inDomain: @"local"];
 }
 
-- (void)startServiceBrowsing
+/* NSTableViewDataSource methods */
+
+- (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView
 {
-  serviceBrowser = [[NSNetServiceBrowser alloc] init];
-  [serviceBrowser setDelegate: self];
-  [serviceBrowser searchForServicesOfType: @"_http._tcp" 
-                                  inDomain: @"local"];
+  if (tableView == typesTable)
+    return [types count];
+  else if (tableView == servicesTable)
+    return [services count];
+  return 0;
+}
+
+- (id)tableView:(NSTableView *)tableView
+  objectValueForTableColumn:(NSTableColumn *)tableColumn
+  row:(NSInteger)row
+{
+  if (tableView == typesTable && row >= 0 && row < (NSInteger)[types count])
+    {
+      NSNetService *type = [types objectAtIndex: row];
+      return [type name];
+    }
+  else if (tableView == servicesTable && row >= 0 && row < (NSInteger)[services count])
+    {
+      NSNetService *service = [services objectAtIndex: row];
+      return [service name];
+    }
+  return nil;
+}
+
+/* NSTableViewDelegate methods */
+
+- (void)tableViewSelectionDidChange:(NSNotification *)aNotification
+{
+  NSTableView *table = [aNotification object];
+
+  if (table == typesTable)
+    {
+      NSInteger selectedRow = [typesTable selectedRow];
+      [services removeAllObjects];
+      [servicesTable reloadData];
+      [detailsText setString: @""];
+
+      if (selectedRow >= 0 && selectedRow < (NSInteger)[types count])
+        {
+          NSNetService *typeService = [types objectAtIndex: selectedRow];
+          NSString *typeName = [typeService name];
+
+          NSLog(@"Selected type row %ld: %@", selectedRow, typeName);
+
+          if (serviceBrowser)
+            {
+              [serviceBrowser stop];
+              RELEASE(serviceBrowser);
+            }
+
+          NSString *searchType = [NSString stringWithFormat: @"%@._tcp", typeName];
+          NSLog(@"Starting search for type: %@", searchType);
+
+          serviceBrowser = [[NSNetServiceBrowser alloc] init];
+          [serviceBrowser setDelegate: self];
+          [serviceBrowser searchForServicesOfType: searchType inDomain: @"local"];
+        }
+    }
+  else if (table == servicesTable)
+    {
+      NSInteger selectedRow = [servicesTable selectedRow];
+      NSMutableString *details = [[NSMutableString alloc] init];
+
+      if (selectedRow >= 0 && selectedRow < (NSInteger)[services count])
+        {
+          NSNetService *service = [services objectAtIndex: selectedRow];
+          [details appendFormat: @"Name: %@\n", [service name]];
+          [details appendFormat: @"Type: %@\n", [service type]];
+          [details appendFormat: @"Domain: %@\n", [service domain]];
+          [details appendFormat: @"Port: %d\n", [service port]];
+          [details appendFormat: @"Host: %@\n", [service hostName] ? [service hostName] : @"(pending)"];
+
+          NSArray *addresses = [service addresses];
+          if ([addresses count] > 0)
+            {
+              [details appendString: @"Addresses:\n"];
+              for (NSData *addr in addresses)
+                {
+                  [details appendFormat: @"  %@\n", addr];
+                }
+            }
+        }
+      else
+        {
+          [details appendString: @"(No service selected)"];
+        }
+
+      [detailsText setString: details];
+      RELEASE(details);
+    }
 }
 
 /* NSNetServiceBrowserDelegate methods */
@@ -130,24 +269,65 @@
            didFindService:(NSNetService *)aNetService
                moreComing:(BOOL)moreComing
 {
-  NSLog(@"Found service: %@", [aNetService name]);
-  [aNetService setDelegate: self];
-  [aNetService resolve];
-  [services addObject: aNetService];
-  [listView addService: aNetService];
+  if (aNetServiceBrowser == typeBrowser)
+    {
+      NSLog(@"Found service type: %@", [aNetService name]);
+      for (NSNetService *existing in types)
+        {
+          if ([[existing name] isEqual: [aNetService name]])
+            return;
+        }
+      [types addObject: aNetService];
+      [typesTable reloadData];
+    }
+  else if (aNetServiceBrowser == serviceBrowser)
+    {
+      NSLog(@"Found service: %@", [aNetService name]);
+      [aNetService setDelegate: self];
+      [aNetService resolve];
+      for (NSNetService *existing in services)
+        {
+          if ([[existing name] isEqual: [aNetService name]])
+            return;
+        }
+      [services addObject: aNetService];
+      [servicesTable reloadData];
+    }
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)aNetServiceBrowser
          didRemoveService:(NSNetService *)aNetService
                moreComing:(BOOL)moreComing
 {
-  NSLog(@"Service removed: %@", [aNetService name]);
-  [services removeObject: aNetService];
-  [listView removeService: aNetService];
+  if (aNetServiceBrowser == typeBrowser)
+    {
+      NSLog(@"Service type removed: %@", [aNetService name]);
+      for (NSNetService *existing in [NSArray arrayWithArray: types])
+        {
+          if ([[existing name] isEqual: [aNetService name]])
+            {
+              [types removeObject: existing];
+            }
+        }
+      [typesTable reloadData];
+    }
+  else if (aNetServiceBrowser == serviceBrowser)
+    {
+      NSLog(@"Service removed: %@", [aNetService name]);
+      for (NSNetService *existing in [NSArray arrayWithArray: services])
+        {
+          if ([[existing name] isEqual: [aNetService name]])
+            {
+              [services removeObject: existing];
+            }
+        }
+      [servicesTable reloadData];
+      [detailsText setString: @""];
+    }
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)aNetServiceBrowser
- didNotSearch:(NSDictionary *)errorDict
+  didNotSearch:(NSDictionary *)errorDict
 {
   NSLog(@"Error searching for services: %@", errorDict);
 }

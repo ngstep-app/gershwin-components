@@ -61,6 +61,11 @@
   detailsView = view;
 }
 
+- (void)setSelectionDelegate:(id)delegate
+{
+  selectionDelegate = delegate;
+}
+
 - (void)addService:(NSNetService *)service
 {
   if (![services containsObject: service])
@@ -85,6 +90,14 @@
 - (NSArray *)services
 {
   return [NSArray arrayWithArray: services];
+}
+
+- (NSNetService *)selectedService
+{
+  NSInteger sel = [tableView selectedRow];
+  if (sel >= 0 && sel < (NSInteger)[services count])
+    return [services objectAtIndex: sel];
+  return nil;
 }
 
 /* NSTableViewDataSource methods */
@@ -126,6 +139,11 @@
         {
           [detailsView clear];
         }
+    }
+
+  if (selectionDelegate && [selectionDelegate respondsToSelector:@selector(serviceListViewSelectionDidChange:)])
+    {
+      [selectionDelegate serviceListViewSelectionDidChange: self];
     }
 }
 

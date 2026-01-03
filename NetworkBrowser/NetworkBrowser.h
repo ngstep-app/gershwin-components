@@ -4,25 +4,23 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#ifndef NETWORKBROWSER_H
-#define NETWORKBROWSER_H
-
 #import <AppKit/NSApplication.h>
 #import <AppKit/NSWindow.h>
 #import <AppKit/NSView.h>
-#import <AppKit/NSSplitView.h>
+#import <AppKit/NSTableView.h>
+#import <AppKit/NSScrollView.h>
+#import <AppKit/NSTextView.h>
 #import <Foundation/NSNetServices.h>
 
-@class ServiceListView;
-@class ServiceDetailsView;
-
-@interface NetworkBrowser : NSObject <NSNetServiceBrowserDelegate, NSNetServiceDelegate>
+@interface NetworkBrowser : NSObject <NSNetServiceBrowserDelegate, NSNetServiceDelegate, NSTableViewDataSource, NSTableViewDelegate>
 {
   NSWindow *window;
-  NSSplitView *splitView;
-  ServiceListView *listView;
-  ServiceDetailsView *detailsView;
+  NSTableView *typesTable;
+  NSTableView *servicesTable;
+  NSTextView *detailsText;
+  NSNetServiceBrowser *typeBrowser;
   NSNetServiceBrowser *serviceBrowser;
+  NSMutableArray *types;
   NSMutableArray *services;
 }
 
@@ -31,5 +29,3 @@
 - (void)windowWillClose:(NSNotification *)aNotification;
 
 @end
-
-#endif // NETWORKBROWSER_H
