@@ -550,6 +550,13 @@ static void VNCErr(const char *format, ...)
         client->format.depth = 24;
         client->format.bitsPerPixel = 32;
         client->format.trueColour = TRUE;
+        // Set proper RGB shifts for 32-bit ARGB format
+        client->format.redShift = 16;
+        client->format.greenShift = 8;
+        client->format.blueShift = 0;
+        client->format.redMax = 255;
+        client->format.greenMax = 255;
+        client->format.blueMax = 255;
         
         // Connection parameters
         client->serverHost = strdup([_hostname UTF8String]);

@@ -70,6 +70,8 @@
     [_username release];
     [_password release];
     [_currentImage release];
+    [_imageView release];
+    [_trackingArea release];
     [super dealloc];
 }
 

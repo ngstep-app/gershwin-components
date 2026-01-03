@@ -513,7 +513,7 @@
     
     if (selectedProtocol == 0) {
         // VNC
-        [self connectToVNCHost:host port:port password:password];
+        [self connectToVNCHost:host port:port username:username password:password];
     } else {
         // RDP
         [self connectToRDPHost:host port:port username:username password:password];

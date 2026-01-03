@@ -114,7 +114,7 @@ typedef struct {
 static BOOL rdp_pre_connect(freerdp *instance)
 {
     RDPCustomContext *customContext = (RDPCustomContext *)instance->context;
-    RDPClient *client = customContext->client;
+    (void)customContext; // Unused but kept for consistency
     
     NSLog(@"RDPClient: Pre-connect callback");
     
@@ -176,7 +176,7 @@ static BOOL rdp_post_connect(freerdp *instance)
 static void rdp_post_disconnect(freerdp *instance)
 {
     RDPCustomContext *customContext = (RDPCustomContext *)instance->context;
-    RDPClient *client = customContext->client;
+    (void)customContext; // Unused but kept for consistency
     
     NSLog(@"RDPClient: Post-disconnect callback");
     
