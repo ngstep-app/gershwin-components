@@ -117,6 +117,7 @@ static VNCClient *g_currentVNCClient = nil;
 @synthesize password = _password;
 @synthesize connected = _connected;
 @synthesize connecting = _connecting;
+@synthesize headlessMode = _headlessMode;
 @synthesize width = _width;
 @synthesize height = _height;
 @synthesize depth = _depth;
@@ -194,6 +195,13 @@ static char *VNCGetPassword(rfbClient *client)
         return strdup([existingPassword UTF8String]);
     }
     
+    // In headless mode, don't prompt
+    if ([vncClient headlessMode]) {
+        NSLog(@"VNCClient: ERROR - Password required but running in headless mode (CLI)");
+        NSLog(@"VNCClient: Please provide --password on the command line");
+        return NULL;
+    }
+    
     // Otherwise prompt the user on main thread
     NSLog(@"VNCClient: Server requires password, prompting user...");
     
@@ -230,8 +238,14 @@ static rfbCredential *VNCGetCredential(rfbClient *client, int credentialType)
         NSString *username = [vncClient username];
         NSString *password = [vncClient password];
         
-        // If we don't have both, prompt the user
+        // If we don't have both, prompt the user (unless in headless mode)
         if (!username || [username length] == 0 || !password || [password length] == 0) {
+            if ([vncClient headlessMode]) {
+                NSLog(@"VNCClient: ERROR - Credentials required but running in headless mode (CLI)");
+                NSLog(@"VNCClient: Please provide --user and --password on the command line");
+                return NULL;
+            }
+            
             NSLog(@"VNCClient: Prompting user for credentials...");
             
             VNCPasswordPromptHelper *helper = [[VNCPasswordPromptHelper alloc] initWithClient:vncClient];

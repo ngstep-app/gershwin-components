@@ -59,6 +59,9 @@ int main(int argc, char *argv[])
     if (hostname) {
         NSLog(@"RemoteDesktop: Command line connection requested to %@", hostname);
         
+        // Set CLI mode to skip browser window
+        [controller setCliMode:YES];
+        
         // Use NSInvocation to call method with multiple arguments after delay
         NSMethodSignature *signature = [controller methodSignatureForSelector:@selector(connectFromCommandLine:username:password:)];
         NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];

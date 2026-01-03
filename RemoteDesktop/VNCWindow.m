@@ -20,6 +20,7 @@
 @synthesize username = _username;
 @synthesize password = _password;
 @synthesize connected = _connected;
+@synthesize headlessMode = _headlessMode;
 @synthesize vncDelegate = _vncDelegate;
 
 #pragma mark - Initialization
@@ -141,7 +142,9 @@
         return YES;
     }
     
-    NSLog(@"VNCWindow: Connecting to %@:%ld (username: %@)", _hostname, (long)_port, _username ? _username : @"(none)");
+    NSLog(@"VNCWindow: Connecting to %@:%ld (username: %@)%@", _hostname, (long)_port, 
+          _username ? _username : @"(none)",
+          _headlessMode ? @" [headless mode]" : @"");
     
     // Pre-populate credentials if provided via command line
     if (_username) {
@@ -151,13 +154,22 @@
         [_vncClient setPassword:_password];
     }
     
+    // Set headless mode on the client
+    [_vncClient setHeadlessMode:_headlessMode];
+    
     BOOL result = [_vncClient connectToHost:_hostname port:_port password:_password];
     if (!result) {
-        NSAlert *alert = [[NSAlert alloc] init];
-        [alert setMessageText:@"VNC Connection Failed"];
-        [alert setInformativeText:@"Failed to connect to VNC server. Please check that the server is running and the address is correct."];
-        [alert runModal];
-        [alert release];
+        if (_headlessMode) {
+            // In headless mode, just log the error and exit
+            NSLog(@"VNCWindow: ERROR - Connection failed in headless mode");
+            [NSApp terminate:nil];
+        } else {
+            NSAlert *alert = [[NSAlert alloc] init];
+            [alert setMessageText:@"VNC Connection Failed"];
+            [alert setInformativeText:@"Failed to connect to VNC server. Please check that the server is running and the address is correct."];
+            [alert runModal];
+            [alert release];
+        }
     }
     
     return result;
@@ -546,15 +558,22 @@
     
     if (success) {
         _connected = YES;
+        // Always show the remote desktop window, even in headless mode
+        // (headless only prevents credential prompts, not the actual display)
         [self makeKeyAndOrderFront:nil];
         [self updateDisplay];
         [_vncClient requestFullFramebufferUpdate];
     } else {
-        NSAlert *alert = [[NSAlert alloc] init];
-        [alert setMessageText:@"VNC Connection Failed"];
-        [alert setInformativeText:@"Could not connect to the VNC server. Please ensure the server is running and accessible."];
-        [alert runModal];
-        [alert release];
+        if (_headlessMode) {
+            NSLog(@"VNCWindow: ERROR - Connection failed in headless mode");
+            [NSApp terminate:nil];
+        } else {
+            NSAlert *alert = [[NSAlert alloc] init];
+            [alert setMessageText:@"VNC Connection Failed"];
+            [alert setInformativeText:@"Could not connect to the VNC server. Please ensure the server is running and accessible."];
+            [alert runModal];
+            [alert release];
+        }
     }
 }
 
@@ -841,16 +860,21 @@
         NSLog(@"VNCWindow: User cancelled credential dialog");
     }
     
-    [usernameField release];
-    [passwordField release];
     NSLog(@"VNCWindow: Closing credentials panel...");
     [panel orderOut:nil];
+    
+    // Clean up text fields before releasing panel to avoid dangling references
+    [usernameField removeFromSuperview];
+    [passwordField removeFromSuperview];
+    [usernameField release];
+    [passwordField release];
+    
+    // Process any pending events to clear button state updates
+    NSDate *now = [NSDate date];
+    [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:now];
+    
     [panel release];
     NSLog(@"VNCWindow: Credentials panel released");
-    
-    // Small delay to ensure modal state is fully cleaned up
-    // This prevents issues with rapid successive modal dialogs
-    usleep(100000); // 100ms
     
     return result;
 }

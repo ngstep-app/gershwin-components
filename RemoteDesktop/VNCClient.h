@@ -46,6 +46,9 @@
     NSThread *_connectionThread;
     BOOL _shouldStop;
     
+    // CLI mode - don't prompt for credentials if not provided
+    BOOL _headlessMode;
+    
     // Delegate
     id<VNCClientDelegate> _delegate;
 }
@@ -56,6 +59,7 @@
 @property (nonatomic, retain) NSString *password;
 @property (nonatomic, assign) BOOL connected;
 @property (nonatomic, assign) BOOL connecting;
+@property (nonatomic, assign) BOOL headlessMode;
 @property (nonatomic, assign) NSInteger width;
 @property (nonatomic, assign) NSInteger height;
 @property (nonatomic, assign) NSInteger depth;

@@ -71,8 +71,14 @@
         rdpWindows = [[NSMutableArray alloc] init];
         vncBrowser = nil;
         rdpBrowser = nil;
+        _cliMode = NO;
     }
     return self;
+}
+
+- (void)setCliMode:(BOOL)cliMode
+{
+    _cliMode = cliMode;
 }
 
 - (void)dealloc
@@ -100,8 +106,14 @@
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
-    // Create menu
+    // Create menu (needed even in CLI mode)
     [self createMenu];
+    
+    // Skip creating browser window in CLI mode
+    if (_cliMode) {
+        NSLog(@"RemoteDesktop: Running in CLI mode, skipping browser window");
+        return;
+    }
     
     // Create main window
     NSRect windowFrame = NSMakeRect(100, 100, 800, 600);
@@ -545,9 +557,19 @@
 
 - (void)connectToVNCHost:(NSString *)hostname port:(NSInteger)port username:(NSString *)username password:(NSString *)password
 {
-    NSLog(@"RemoteDesktop: Opening VNC connection to %@:%ld", hostname, (long)port);
+    [self connectToVNCHost:hostname port:port username:username password:password headless:NO];
+}
+
+- (void)connectToVNCHost:(NSString *)hostname port:(NSInteger)port username:(NSString *)username password:(NSString *)password headless:(BOOL)headless
+{
+    NSLog(@"RemoteDesktop: Opening VNC connection to %@:%ld%@", hostname, (long)port, headless ? @" [headless]" : @"");
     
     if (![VNCClient isLibVNCClientAvailable]) {
+        if (headless) {
+            NSLog(@"RemoteDesktop: ERROR - libvncclient is not installed");
+            [NSApp terminate:nil];
+            return;
+        }
         NSAlert *alert = [[NSAlert alloc] init];
         [alert setMessageText:@"VNC Library Not Found"];
         [alert setInformativeText:@"libvncclient is not installed. Please install the libvncserver package."];
@@ -562,8 +584,11 @@
                                                              port:port 
                                                          username:username
                                                          password:password];
+    [vncWindow setHeadlessMode:headless];
     [vncWindow setVncDelegate:self];
-    [vncWindow center];
+    if (!headless) {
+        [vncWindow center];
+    }
     [vncWindow connectToVNC];
     
     [vncWindows addObject:vncWindow];
@@ -611,7 +636,8 @@
     // Default to VNC on port 5900
     NSInteger port = 5900;
     
-    [self connectToVNCHost:hostname port:port username:username password:password];
+    // Use headless mode for CLI connections
+    [self connectToVNCHost:hostname port:port username:username password:password headless:YES];
 }
 
 #pragma mark - NSTableViewDataSource

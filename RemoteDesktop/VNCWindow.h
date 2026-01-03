@@ -39,6 +39,9 @@
     NSTrackingArea *_trackingArea;
     BOOL _mouseInside;
     
+    // CLI mode
+    BOOL _headlessMode;
+    
     id<VNCWindowDelegate> _vncDelegate;
 }
 
@@ -48,6 +51,7 @@
 @property (nonatomic, retain) NSString *username;
 @property (nonatomic, retain) NSString *password;
 @property (nonatomic, assign) BOOL connected;
+@property (nonatomic, assign) BOOL headlessMode;
 @property (nonatomic, assign) id<VNCWindowDelegate> vncDelegate;
 
 // Initialization
