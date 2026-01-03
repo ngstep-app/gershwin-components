@@ -52,7 +52,7 @@
   NSLog(@"========================================");
   NSLog(@"");
   NSLog(@"Environment: Headless mode (no network)");
-  NSLog(@"Looking for HTTP services (_http._tcp.local)...");
+  NSLog(@"Looking for HTTP services (_services._dns-sd._udp.local)...");
   NSLog(@"");
   
   NSLog(@"Note: Real service discovery would work if:");

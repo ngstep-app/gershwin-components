@@ -87,7 +87,7 @@ openapp ./NetworkBrowser.app
 ## Implementation Details
 
 ### Service Discovery
-The application uses `NSNetServiceBrowser` to browse for services of type `_http._tcp` in the `local` domain. This discovers HTTP services including web servers, embedded devices, and other network services.
+The application uses `NSNetServiceBrowser` to browse for services of type `_services._dns-sd._udp` in the `local` domain. This discovers HTTP services including web servers, embedded devices, and other network services.
 
 ### Service Resolution
 When a service is discovered, it's automatically resolved to obtain:
