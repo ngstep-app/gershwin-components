@@ -81,6 +81,30 @@ The application consists of several components:
 
 ## Protocol Notes
 
+### Network Service Discovery
+
+The application automatically discovers remote desktop services on the local network using mDNS/DNS-SD (Bonjour/Avahi). Services are discovered by their service type:
+
+- **VNC Services**: Announced as `_rfb._tcp` (Remote Frame Buffer protocol)
+- **RDP Services**: Announced as `_rdp._tcp` (Remote Desktop Protocol)
+
+#### Duplicate Service Handling
+
+The application automatically detects and removes duplicate service entries that may occur when:
+- The same service is announced multiple times on the network
+- Multiple service names resolve to the same hostname and port
+
+Duplicate detection works by comparing the resolved hostname, port, and service type. This ensures a clean service list even when hosts are coming and going dynamically.
+
+#### Windows RDP Service Discovery
+
+By default, Windows computers **do not announce RDP services via mDNS/DNS-SD** on the network. However, the RemoteDesktop application can still discover and connect to Windows RDP services if:
+
+1. **Third-party mDNS Announcer**: A tool running on the Windows machine announces RDP as `_rdp._tcp` service (e.g., Home2, Avahi on Windows, or similar)
+2. **Manual Connection**: Enter the Windows hostname or IP address directly in the "Manual Connection" panel
+
+If you have a Windows machine with a proper mDNS/DNS-SD announcer configured, it will appear automatically in the service list.
+
 ### VNC (Virtual Network Computing)
 
 - Default port: 5900

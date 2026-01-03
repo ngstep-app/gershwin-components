@@ -343,7 +343,7 @@
     NSMenu *mainMenu = [[NSMenu alloc] init];
     
     // Application menu
-    NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
+    NSMenuItem *appMenuItem = [[NSMenuItem alloc] initWithTitle:@"RemoteDesktop" action:NULL keyEquivalent:@""];
     [mainMenu addItem:appMenuItem];
     
     NSMenu *appMenu = [[NSMenu alloc] init];
@@ -357,7 +357,7 @@
     RELEASE(appMenuItem);
     
     // File menu
-    NSMenuItem *fileMenuItem = [[NSMenuItem alloc] init];
+    NSMenuItem *fileMenuItem = [[NSMenuItem alloc] initWithTitle:@"File" action:NULL keyEquivalent:@""];
     [mainMenu addItem:fileMenuItem];
     
     NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
@@ -371,7 +371,7 @@
     RELEASE(fileMenuItem);
     
     // Edit menu
-    NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
+    NSMenuItem *editMenuItem = [[NSMenuItem alloc] initWithTitle:@"Edit" action:NULL keyEquivalent:@""];
     [mainMenu addItem:editMenuItem];
     
     NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
@@ -386,7 +386,7 @@
     RELEASE(editMenuItem);
     
     // Window menu
-    NSMenuItem *windowMenuItem = [[NSMenuItem alloc] init];
+    NSMenuItem *windowMenuItem = [[NSMenuItem alloc] initWithTitle:@"Window" action:NULL keyEquivalent:@""];
     [mainMenu addItem:windowMenuItem];
     
     NSMenu *windowMenu = [[NSMenu alloc] initWithTitle:@"Window"];
@@ -397,6 +397,18 @@
     
     RELEASE(windowMenu);
     RELEASE(windowMenuItem);
+    
+    // Help menu
+    NSMenuItem *helpMenuItem = [[NSMenuItem alloc] initWithTitle:@"Help" action:NULL keyEquivalent:@""];
+    [mainMenu addItem:helpMenuItem];
+    
+    NSMenu *helpMenu = [[NSMenu alloc] initWithTitle:@"Help"];
+    [helpMenuItem setSubmenu:helpMenu];
+    
+    [helpMenu addItemWithTitle:@"About Remote Desktop" action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
+    
+    RELEASE(helpMenu);
+    RELEASE(helpMenuItem);
     
     [NSApp setMainMenu:mainMenu];
     RELEASE(mainMenu);
@@ -490,12 +502,16 @@
 - (void)refreshButtonClicked:(id)sender
 {
     NSLog(@"RemoteDesktop: Refreshing services...");
+    NSLog(@"RemoteDesktop: Clearing %lu services and restarting discovery", (unsigned long)[discoveredServices count]);
     
     [discoveredServices removeAllObjects];
     [servicesTable reloadData];
     
     [self stopServiceDiscovery];
+    [NSThread sleepForTimeInterval:0.5]; // Brief delay to ensure browsers are properly stopped
     [self startServiceDiscovery];
+    
+    NSLog(@"RemoteDesktop: Service discovery restarted");
 }
 
 - (void)manualConnectButtonClicked:(id)sender
@@ -616,8 +632,7 @@
                                                          username:username 
                                                          password:password];
     [rdpWindow setRdpDelegate:self];
-    [rdpWindow center];
-    [rdpWindow makeKeyAndOrderFront:nil];
+    // Note: Window will be shown after successful connection via rdpClient:didConnect:
     [rdpWindow connectToRDP];
     
     [rdpWindows addObject:rdpWindow];
@@ -626,18 +641,26 @@
 
 #pragma mark - Command Line Connection
 
-- (void)connectFromCommandLine:(NSString *)hostname username:(NSString *)username password:(NSString *)password
+- (void)connectFromCommandLine:(NSString *)hostname protocol:(NSString *)protocol username:(NSString *)username password:(NSString *)password
 {
-    NSLog(@"RemoteDesktop: Command line auto-connect to %@ (username: %@, password: %@)", 
+    NSLog(@"RemoteDesktop: Command line auto-connect to %@ via %@ (username: %@, password: %@)", 
           hostname,
+          [protocol uppercaseString],
           username ? username : @"(none)",
           password ? @"<provided>" : @"(none)");
     
-    // Default to VNC on port 5900
-    NSInteger port = 5900;
+    // Determine protocol and use appropriate connection method
+    BOOL isRDP = [[protocol lowercaseString] isEqual:@"rdp"];
     
-    // Use headless mode for CLI connections
-    [self connectToVNCHost:hostname port:port username:username password:password headless:YES];
+    if (isRDP) {
+        // RDP connection on default port 3389
+        NSInteger port = 3389;
+        [self connectToRDPHost:hostname port:port username:username password:password];
+    } else {
+        // VNC connection on default port 5900 (default)
+        NSInteger port = 5900;
+        [self connectToVNCHost:hostname port:port username:username password:password headless:YES];
+    }
 }
 
 #pragma mark - NSTableViewDataSource
@@ -725,40 +748,68 @@
     NSLog(@"RemoteDesktop: Service browser stopped");
 }
 
+- (BOOL)serviceAlreadyExists:(NSNetService *)aNetService withType:(RemoteServiceType)serviceType
+{
+    // Check for existing service by NetService object first
+    for (RemoteService *existing in discoveredServices) {
+        if ([existing netService] == aNetService) {
+            return YES;
+        }
+    }
+    
+    return NO;
+}
+
 - (void)netServiceBrowser:(NSNetServiceBrowser *)aNetServiceBrowser
            didFindService:(NSNetService *)aNetService
                moreComing:(BOOL)moreComing
 {
-    NSLog(@"RemoteDesktop: Found service: %@ (%@)", [aNetService name], [aNetService type]);
+    NSString *type = [aNetService type];
+    NSLog(@"RemoteDesktop: Found service: %@ (type: %@)", [aNetService name], type);
     
-    // Check for duplicates
-    for (RemoteService *existing in discoveredServices) {
-        if ([[existing name] isEqual:[aNetService name]] && 
-            [existing netService] == aNetService) {
-            return;
-        }
+    // Determine service type
+    RemoteServiceType serviceType = RemoteServiceTypeUnknown;
+    if ([type hasPrefix:@"_rfb."]) {
+        serviceType = RemoteServiceTypeVNC;
+        NSLog(@"RemoteDesktop: Detected VNC service");
+    } else if ([type hasPrefix:@"_rdp."]) {
+        serviceType = RemoteServiceTypeRDP;
+        NSLog(@"RemoteDesktop: Detected RDP service (Windows Remote Desktop or compatible)");
+    } else {
+        NSLog(@"RemoteDesktop: Warning - Unknown service type: %@", type);
+    }
+    
+    // Check for duplicates by NetService object
+    if ([self serviceAlreadyExists:aNetService withType:serviceType]) {
+        NSLog(@"RemoteDesktop: Service already in list, skipping: %@", [aNetService name]);
+        return;
     }
     
     // Create a new RemoteService
     RemoteService *service = [[RemoteService alloc] init];
     [service setName:[aNetService name]];
     [service setNetService:aNetService];
+    [service setType:serviceType];
     
-    // Determine service type
-    NSString *type = [aNetService type];
-    if ([type hasPrefix:@"_rfb."]) {
-        [service setType:RemoteServiceTypeVNC];
-        [service setPort:5900]; // Default VNC port
-    } else if ([type hasPrefix:@"_rdp."]) {
-        [service setType:RemoteServiceTypeRDP];
-        [service setPort:3389]; // Default RDP port
+    // Set default ports based on service type
+    switch (serviceType) {
+        case RemoteServiceTypeVNC:
+            [service setPort:5900];
+            break;
+        case RemoteServiceTypeRDP:
+            [service setPort:3389];
+            break;
+        default:
+            [service setPort:0];
+            break;
     }
     
-    // Start resolving the service
+    // Start resolving the service to get hostname and actual port
     [aNetService setDelegate:self];
     [aNetService resolveWithTimeout:10.0];
     
     [discoveredServices addObject:service];
+    NSLog(@"RemoteDesktop: Added service to list (total: %lu)", (unsigned long)[discoveredServices count]);
     RELEASE(service);
     
     [servicesTable reloadData];
@@ -768,15 +819,19 @@
          didRemoveService:(NSNetService *)aNetService
                moreComing:(BOOL)moreComing
 {
-    NSLog(@"RemoteDesktop: Service removed: %@", [aNetService name]);
+    NSLog(@"RemoteDesktop: Service removed: %@ (type: %@)", [aNetService name], [aNetService type]);
     
-    for (RemoteService *service in [NSArray arrayWithArray:discoveredServices]) {
+    // Use a copy of the array to safely remove items during iteration
+    NSArray *servicesCopy = [NSArray arrayWithArray:discoveredServices];
+    for (RemoteService *service in servicesCopy) {
         if ([service netService] == aNetService) {
+            NSLog(@"RemoteDesktop: Removing %@ from service list", [service name]);
             [discoveredServices removeObject:service];
             break;
         }
     }
     
+    NSLog(@"RemoteDesktop: Services remaining: %lu", (unsigned long)[discoveredServices count]);
     [servicesTable reloadData];
 }
 
@@ -790,16 +845,48 @@
 
 - (void)netServiceDidResolveAddress:(NSNetService *)sender
 {
+    NSString *hostname = [sender hostName];
+    NSInteger port = [sender port];
     NSLog(@"RemoteDesktop: Service resolved: %@ -> %@:%ld", 
-          [sender name], [sender hostName], (long)[sender port]);
+          [sender name], hostname, (long)port);
     
     // Update the RemoteService with resolved information
+    RemoteService *resolvedService = nil;
     for (RemoteService *service in discoveredServices) {
         if ([service netService] == sender) {
-            [service setHostname:[sender hostName]];
-            [service setPort:[sender port]];
+            [service setHostname:hostname];
+            [service setPort:port];
+            resolvedService = service;
+            NSLog(@"RemoteDesktop: Updated %@ (%@) - %@:%ld", 
+                  [service name], [service typeString], hostname, (long)port);
             break;
         }
+    }
+    
+    if (resolvedService) {
+        // Check for duplicate services with same hostname, port, and type
+        NSMutableArray *toRemove = [[NSMutableArray alloc] init];
+        for (RemoteService *service in discoveredServices) {
+            // Skip the service we just resolved
+            if (service == resolvedService) continue;
+            
+            // If another service has the same hostname, port, and type, mark it for removal
+            if ([service hostname] && [resolvedService hostname] &&
+                [[service hostname] isEqual:[resolvedService hostname]] &&
+                [service port] == [resolvedService port] &&
+                [service type] == [resolvedService type]) {
+                NSLog(@"RemoteDesktop: Found duplicate service: %@ (same as %@)", 
+                      [service name], [resolvedService name]);
+                [toRemove addObject:service];
+            }
+        }
+        
+        // Remove duplicates
+        if ([toRemove count] > 0) {
+            NSLog(@"RemoteDesktop: Removing %lu duplicate services", (unsigned long)[toRemove count]);
+            [discoveredServices removeObjectsInArray:toRemove];
+        }
+        [toRemove release];
     }
     
     [servicesTable reloadData];

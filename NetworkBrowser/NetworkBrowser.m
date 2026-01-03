@@ -43,6 +43,9 @@
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
+  /* Create menus */
+  [self createMenu];
+  
   /* Check if mDNS-SD support is available */
   Class netServiceBrowserClass = NSClassFromString(@"NSNetServiceBrowser");
   if (!netServiceBrowserClass)
@@ -330,6 +333,67 @@
   didNotSearch:(NSDictionary *)errorDict
 {
   NSLog(@"Error searching for services: %@", errorDict);
+}
+
+- (void)createMenu
+{
+  NSMenu *mainMenu = [[NSMenu alloc] init];
+  
+  /* Application menu */
+  NSMenuItem *appMenuItem = [[NSMenuItem alloc] initWithTitle:@"NetworkBrowser" action:NULL keyEquivalent:@""];
+  [mainMenu addItem:appMenuItem];
+  
+  NSMenu *appMenu = [[NSMenu alloc] init];
+  [appMenuItem setSubmenu:appMenu];
+  
+  [appMenu addItemWithTitle:@"About Network Browser" action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
+  [appMenu addItem:[NSMenuItem separatorItem]];
+  [appMenu addItemWithTitle:@"Quit Network Browser" action:@selector(terminate:) keyEquivalent:@"q"];
+  
+  RELEASE(appMenu);
+  RELEASE(appMenuItem);
+  
+  /* File menu */
+  NSMenuItem *fileMenuItem = [[NSMenuItem alloc] initWithTitle:@"File" action:NULL keyEquivalent:@""];
+  [mainMenu addItem:fileMenuItem];
+  
+  NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
+  [fileMenuItem setSubmenu:fileMenu];
+  
+  [fileMenu addItemWithTitle:@"Close Window" action:@selector(performClose:) keyEquivalent:@"w"];
+  
+  RELEASE(fileMenu);
+  RELEASE(fileMenuItem);
+  
+  /* Edit menu */
+  NSMenuItem *editMenuItem = [[NSMenuItem alloc] initWithTitle:@"Edit" action:NULL keyEquivalent:@""];
+  [mainMenu addItem:editMenuItem];
+  
+  NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+  [editMenuItem setSubmenu:editMenu];
+  
+  [editMenu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
+  [editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
+  [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+  [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
+  
+  RELEASE(editMenu);
+  RELEASE(editMenuItem);
+  
+  /* Help menu */
+  NSMenuItem *helpMenuItem = [[NSMenuItem alloc] initWithTitle:@"Help" action:NULL keyEquivalent:@""];
+  [mainMenu addItem:helpMenuItem];
+  
+  NSMenu *helpMenu = [[NSMenu alloc] initWithTitle:@"Help"];
+  [helpMenuItem setSubmenu:helpMenu];
+  
+  [helpMenu addItemWithTitle:@"About Network Browser" action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
+  
+  RELEASE(helpMenu);
+  RELEASE(helpMenuItem);
+  
+  [NSApp setMainMenu:mainMenu];
+  RELEASE(mainMenu);
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApp

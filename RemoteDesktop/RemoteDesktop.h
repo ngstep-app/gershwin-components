@@ -103,7 +103,7 @@ typedef enum {
                 username:(NSString *)username password:(NSString *)password;
 
 // Command line connection
-- (void)connectFromCommandLine:(NSString *)hostname username:(NSString *)username password:(NSString *)password;
+- (void)connectFromCommandLine:(NSString *)hostname protocol:(NSString *)protocol username:(NSString *)username password:(NSString *)password;
 - (void)setCliMode:(BOOL)cliMode;
 
 @end
