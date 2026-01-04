@@ -455,12 +455,9 @@
     NSLog(@"captureImageWithMode returned: image=%@", image);
     
     // Flash the screen after capture for visual feedback
-    if (captureMode == CaptureFullScreen || captureMode == CaptureArea) {
+    if (captureMode == CaptureFullScreen || captureMode == CaptureArea || captureMode == CaptureWindow) {
         NSLog(@"Flashing fullscreen");
         [self flashScreenFullscreen];
-    } else if (captureMode == CaptureWindow) {
-        NSLog(@"Flashing window rect: x=%d, y=%d, w=%d, h=%d", rect.x, rect.y, rect.width, rect.height);
-        [self flashScreenInRect:rect];
     }
     
     [self showProgressIndicator:NO];
