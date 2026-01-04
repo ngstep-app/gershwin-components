@@ -430,70 +430,85 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
     NSLog(@"AppMenuWidget: Setting up menu view with menu: %@", [menu title]);
     
-    // Remove any existing menu view to prevent crashes when adding new one
-    if (self.menuView) {
-        [self.menuView removeFromSuperview];
-        self.menuView = nil;
-        NSLog(@"AppMenuWidget: Removed existing menu view before creating new one");
+    // Lock the window to prevent flashing during menu updates
+    NSWindow *window = [self window];
+    if (window) {
+        [window disableFlushWindow];
     }
-
-    // Calculate text width for positioning
-    CGFloat textWidth = 0;
-    if (self.currentApplicationName && [self.currentApplicationName length] > 0) {
-        NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
-                                   [NSFont boldSystemFontOfSize:11.0], NSFontAttributeName,
-                                   [NSColor colorWithCalibratedWhite:0.3 alpha:1.0], NSForegroundColorAttributeName,
-                                   nil];
-        
-        NSSize textSize = [self.currentApplicationName sizeWithAttributes:attributes];
-        textWidth = textSize.width + 0; // Add minimal padding
-    }
-
-    // Create a new horizontal menu view that fits within our widget frame, starting after the text
-    NSRect menuViewFrame = NSMakeRect(textWidth, 0, [self bounds].size.width - textWidth, [self bounds].size.height);
-    self.menuView = [[AppMenuView alloc] initWithFrame:menuViewFrame];
-
-    if (!self.menuView) {
-        NSLog(@"AppMenuWidget: Failed to create menu view - aborting setup");
-        return;
-    }
-
-    // Configure the menu view for horizontal display (like a menu bar)
-    [self.menuView setHorizontal:YES];
-    [self.menuView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-
-    // Set the menu for the menu view
-    [self.menuView setMenu:menu];
     
-    // Set ourselves as the delegate of the main menu to catch AboutToShow events
-    [menu setDelegate:self];
-    NSLog(@"AppMenuWidget: Set AppMenuWidget as delegate for main menu: %@", [menu title]);
-    
-    // Add comprehensive logging to each menu item
-    NSArray *items = [menu itemArray];
-    for (NSUInteger i = 0; i < [items count]; i++) {
-        NSMenuItem *item = [items objectAtIndex:i];
-        NSLog(@"AppMenuWidget: Setting up item %lu: '%@' (submenu: %@)", 
-              i, [item title], [item hasSubmenu] ? @"YES" : @"NO");
+    @try {
+        // Remove any existing menu view to prevent crashes when adding new one
+        if (self.menuView) {
+            [self.menuView removeFromSuperview];
+            self.menuView = nil;
+            NSLog(@"AppMenuWidget: Removed existing menu view before creating new one");
+        }
+
+        // Calculate text width for positioning
+        CGFloat textWidth = 0;
+        if (self.currentApplicationName && [self.currentApplicationName length] > 0) {
+            NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
+                                       [NSFont boldSystemFontOfSize:11.0], NSFontAttributeName,
+                                       [NSColor colorWithCalibratedWhite:0.3 alpha:1.0], NSForegroundColorAttributeName,
+                                       nil];
+            
+            NSSize textSize = [self.currentApplicationName sizeWithAttributes:attributes];
+            textWidth = textSize.width + 0; // Add minimal padding
+        }
+
+        // Create a new horizontal menu view that fits within our widget frame, starting after the text
+        NSRect menuViewFrame = NSMakeRect(textWidth, 0, [self bounds].size.width - textWidth, [self bounds].size.height);
+        self.menuView = [[AppMenuView alloc] initWithFrame:menuViewFrame];
+
+        if (!self.menuView) {
+            NSLog(@"AppMenuWidget: Failed to create menu view - aborting setup");
+            return;
+        }
+
+        // Configure the menu view for horizontal display (like a menu bar)
+        [self.menuView setHorizontal:YES];
+        [self.menuView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+
+        // Set the menu for the menu view
+        [self.menuView setMenu:menu];
         
-        // Set target and action for logging purposes
-        if (![item hasSubmenu]) {
-            [item setTarget:self];
-            [item setAction:@selector(menuItemClicked:)];
-            NSLog(@"AppMenuWidget: Set click action for non-submenu item: '%@'", [item title]);
+        // Set ourselves as the delegate of the main menu to catch AboutToShow events
+        [menu setDelegate:self];
+        NSLog(@"AppMenuWidget: Set AppMenuWidget as delegate for main menu: %@", [menu title]);
+        
+        // Add comprehensive logging to each menu item
+        NSArray *items = [menu itemArray];
+        for (NSUInteger i = 0; i < [items count]; i++) {
+            NSMenuItem *item = [items objectAtIndex:i];
+            NSLog(@"AppMenuWidget: Setting up item %lu: '%@' (submenu: %@)", 
+                  i, [item title], [item hasSubmenu] ? @"YES" : @"NO");
+            
+            // Set target and action for logging purposes
+            if (![item hasSubmenu]) {
+                [item setTarget:self];
+                [item setAction:@selector(menuItemClicked:)];
+                NSLog(@"AppMenuWidget: Set click action for non-submenu item: '%@'", [item title]);
+            }
+        }
+        
+        // Add the menu view to our widget (this makes it visible)
+        [self addSubview:self.menuView];
+        
+        // Finish the anti-flicker transition now that the new menu is ready
+        [self finishAntiFlickerTransition];
+        
+        [self setNeedsDisplay:YES];
+        
+        NSLog(@"AppMenuWidget: Menu view setup complete with %lu menu items", 
+              (unsigned long)[[menu itemArray] count]);
+    }
+    @finally {
+        // Re-enable window drawing and flush all pending updates
+        if (window) {
+            [window enableFlushWindow];
+            [window flushWindow];
         }
     }
-    
-    // Add the menu view to our widget (this makes it visible)
-    [self addSubview:self.menuView];
-    
-    // Finish the anti-flicker transition now that the new menu is ready
-    [self finishAntiFlickerTransition];
-    
-    [self setNeedsDisplay:YES];
-    
-    NSLog(@"AppMenuWidget: Menu view setup complete with %lu menu items", 
-          (unsigned long)[[menu itemArray] count]);
 }
 
 - (void)drawRect:(NSRect)dirtyRect
@@ -526,9 +541,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     
     NSLog(@"AppMenuWidget: Drawing background and content");
     
-    // Fill background with theme color
-    [[[GSTheme theme] menuItemBackgroundColor] set];
-    NSRectFill([self bounds]);
+    // Don't fill background - let the MenuBarView background show through
+    // The menu items themselves will be drawn by the menuView
     
     // Draw application name if we have one
     if (self.currentApplicationName && [self.currentApplicationName length] > 0) {

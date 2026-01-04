@@ -28,9 +28,17 @@
 
 - (void)drawRect:(NSRect)dirtyRect
 {
-    [[[GSTheme theme] menuItemBackgroundColor] set];
+    // Clear with transparent background to let the MenuBarView background show through
+    [[NSColor clearColor] set];
     NSRectFill(dirtyRect);
+    
+    // Draw menu items with transparent background
     [super drawRect:dirtyRect];
+}
+
+- (BOOL)isOpaque
+{
+    return NO;
 }
 
 @end
@@ -49,11 +57,19 @@
 
     NSLog(@"MenuController: DBus file descriptor reported data available");
     
+    // Lock the menu window from redrawing during DBus processing to prevent flashing
+    [self.menuBar disableFlushWindow];
+    
     @try {
         [[MenuProtocolManager sharedManager] processDBusMessages];
     }
     @catch (NSException *exception) {
         NSLog(@"MenuController: Exception processing DBus messages: %@", exception);
+    }
+    @finally {
+        // Re-enable window drawing and flush all pending updates at once
+        [self.menuBar enableFlushWindow];
+        [self.menuBar flushWindow];
     }
 
     // Re-arm the watcher so we continue receiving notifications
@@ -274,11 +290,9 @@
     // Create and maintain a persistent X11 window for struts
     [self createPersistentStrutWindow];
 
-    // Now map the window - position it at the very top of the screen
-    [self.menuBar setFrameTopLeftPoint:NSMakePoint(0, self.screenSize.height)];
-    [self.menuBar makeKeyAndOrderFront:self];
-    [self.menuBar orderFront:self];
-    NSLog(@"MenuController: Ordered window front at top of screen");
+    // Position the window one menu height above the screen for animation effect
+    [self.menuBar setFrameTopLeftPoint:NSMakePoint(0, self.screenSize.height + menuBarHeight)];
+    NSLog(@"MenuController: Window positioned above screen for animation slide-in");
     
     // Create the main menu bar view that draws the background
     self.menuBarView = [[MenuBarView alloc] initWithFrame:NSMakeRect(0, 0, self.screenSize.width, menuBarHeight)];
@@ -334,6 +348,14 @@
     [[self.menuBar contentView] addSubview:self.actionSearchView];
     [[self.menuBar contentView] addSubview:self.timeMenuView];
     [[self.menuBar contentView] addSubview:self.roundedCornersView];
+    
+    // Show the window and slide it in from above with animation
+    [self.menuBar makeKeyAndOrderFront:self];
+    [self.menuBar orderFront:self];
+    
+    // Wait 50ms then animate menu sliding in from above and reveal AppMenuWidget after animation
+    [self performSelector:@selector(animateMenuSlideIn) withObject:nil afterDelay:0.05];
+    NSLog(@"MenuController: Window shown, menu will slide in with animation after 50ms delay");
 }
 
 - (void)setupMenuBar
@@ -649,7 +671,7 @@
     
     // Create the menu view at the right edge
     CGFloat timeMenuWidth = 60;
-    CGFloat timeMenuX = self.screenSize.width - timeMenuWidth;
+    CGFloat timeMenuX = self.screenSize.width - timeMenuWidth - 7;  // Move clock 7px left
     const CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight];
     self.timeMenuView = [[TimeMenuView alloc] initWithFrame:NSMakeRect(timeMenuX, 0, timeMenuWidth, menuBarHeight)];
     [self.timeMenuView setMenu:self.timeMenu];
@@ -675,6 +697,56 @@
     [self.timeMenuItem setTitle:timeString];
     NSString *dateString = [self.dateFormatter stringFromDate:now];
     [self.dateMenuItem setTitle:dateString];
+}
+
+- (void)animateMenuSlideIn
+{
+    const CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight];
+    
+    // Start animation timer for smooth slide-in from above
+    self.slideInStartTime = [NSDate timeIntervalSinceReferenceDate];
+    self.slideInStartY = self.screenSize.height + menuBarHeight;
+    
+    self.slideInAnimationTimer = [NSTimer scheduledTimerWithTimeInterval:0.016  // ~60fps
+                                                                  target:self
+                                                                selector:@selector(updateSlideInAnimation)
+                                                                userInfo:nil
+                                                                 repeats:YES];
+    
+    NSLog(@"MenuController: Menu slide-in animation started");
+}
+
+- (void)updateSlideInAnimation
+{
+    const CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight];
+    NSTimeInterval elapsed = [NSDate timeIntervalSinceReferenceDate] - self.slideInStartTime;
+    NSTimeInterval duration = 0.3;
+    
+    if (elapsed >= duration) {
+        // Animation complete
+        [self.slideInAnimationTimer invalidate];
+        self.slideInAnimationTimer = nil;
+        
+        // Set final position
+        [self.menuBar setFrameTopLeftPoint:NSMakePoint(0, self.screenSize.height)];
+        [self revealAppMenuWidget];
+        NSLog(@"MenuController: Menu slide-in animation completed");
+    } else {
+        // Calculate progress (0.0 to 1.0) using ease-out cubic for smooth deceleration
+        CGFloat progress = elapsed / duration;
+        progress = 1.0 - ((1.0 - progress) * (1.0 - progress) * (1.0 - progress));  // Ease-out cubic
+        
+        // Interpolate position from above screen to final position
+        CGFloat currentY = self.slideInStartY - (progress * menuBarHeight);
+        [self.menuBar setFrameTopLeftPoint:NSMakePoint(0, currentY)];
+    }
+}
+
+- (void)revealAppMenuWidget
+{
+    [self.appMenuWidget setHidden:NO];
+    [self.appMenuWidget setNeedsDisplay:YES];
+    NSLog(@"MenuController: AppMenuWidget revealed");
 }
 
 @end

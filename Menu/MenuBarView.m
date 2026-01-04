@@ -24,7 +24,7 @@
     NSLog(@"MenuBarView: drawRect called with rect: %.0f,%.0f %.0fx%.0f", 
           dirtyRect.origin.x, dirtyRect.origin.y, dirtyRect.size.width, dirtyRect.size.height);
     
-    // Fill with theme background color (no gradient)
+    // Fill with theme background color - this provides the gradient for the entire menu bar
     if (self.backgroundColor) {
         [self.backgroundColor set];
         NSRectFill([self bounds]);

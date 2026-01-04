@@ -44,6 +44,9 @@
 @property (nonatomic, strong) NSFileHandle *dbusFileHandle;
 @property (nonatomic, assign) Display *strutDisplay;
 @property (nonatomic, assign) Window strutWindow;
+@property (nonatomic, strong) NSTimer *slideInAnimationTimer;
+@property (nonatomic, assign) NSTimeInterval slideInStartTime;
+@property (nonatomic, assign) CGFloat slideInStartY;
 
 - (id)init;
 - (NSColor *)backgroundColor;

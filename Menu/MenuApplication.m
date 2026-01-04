@@ -11,6 +11,7 @@
 #import "DBusMenuParser.h"
 #import "DBusConnection.h"
 #import "MenuCacheManager.h"
+#import "CustomMenuPanel.h"
 #import <signal.h>
 #import <unistd.h>
 #import <objc/runtime.h>
@@ -236,6 +237,11 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     if (!hasSwizzled) {
         NSLog(@"MenuApplication: Setting up method swizzling to remove menu bottom line");
         [MenuApplication swizzleMenuViewDrawing];
+        
+        // Hook NSMenu panel creation to use custom styled menus
+        NSLog(@"MenuApplication: Hooking NSMenu panel creation for custom styling");
+        HookNSMenuPanelCreation();
+        
         hasSwizzled = YES;
     }
     
