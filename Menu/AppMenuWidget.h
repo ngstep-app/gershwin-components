@@ -20,13 +20,10 @@
 @property (nonatomic, assign) unsigned long currentWindowId;
 @property (nonatomic, strong) NSMenu *currentMenu;
 @property (nonatomic, strong) NSTimer *updateTimer;
+@property (nonatomic, assign) BOOL isWaitingForMenu;
 
 // Delayed fallback timers keyed by window id -> NSTimer
 @property (nonatomic, strong) NSMutableDictionary *fallbackTimers;
-
-// Anti-flicker support - keep old menu visible until new one is ready
-@property (nonatomic, strong) NSMenuView *oldMenuView;
-@property (nonatomic, strong) NSTimer *antiFlickerTimer;
 
 - (void)updateForActiveWindow;
 - (void)clearMenu;
@@ -43,11 +40,6 @@
 // Debug methods
 - (void)debugLogCurrentMenuState;
 - (void)menuItemClicked:(NSMenuItem *)sender;
-
-// Anti-flicker support
-- (void)startAntiFlickerProtection;
-- (void)finishAntiFlickerTransition;
-- (void)antiFlickerTimeoutExpired:(NSTimer *)timer;
 
 // Window validation methods
 + (BOOL)isWindowStillValid:(Window)windowId;

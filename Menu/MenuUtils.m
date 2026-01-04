@@ -10,6 +10,23 @@
 #import <X11/Xutil.h>
 #import <X11/Xatom.h>
 
+static Display *g_display = NULL;
+static NSLock *g_displayLock = nil;
+
+static Display* getSharedDisplay(void) {
+    if (g_displayLock == nil) {
+        g_displayLock = [[NSLock alloc] init];
+    }
+    
+    [g_displayLock lock];
+    if (g_display == NULL) {
+        g_display = XOpenDisplay(NULL);
+    }
+    [g_displayLock unlock];
+    
+    return g_display;
+}
+
 @implementation MenuUtils
 
 + (NSString *)getApplicationNameForWindow:(unsigned long)windowId
@@ -20,7 +37,7 @@
         return nil;
     }
 
-    Display *display = XOpenDisplay(NULL);
+    Display *display = getSharedDisplay();
     if (!display) {
         return nil;
     }
@@ -29,21 +46,21 @@
     XWindowAttributes attrs;
     if (XGetWindowAttributes(display, (Window)windowId, &attrs) != Success) {
         NSLog(@"MenuUtils: Window %lu no longer exists, skipping property access", windowId);
-        XCloseDisplay(display);
         return nil;
     }
 
     // Try to get the application name from WM_CLASS first
-    XClassHint classHint;
+    XClassHint classHint = {NULL, NULL};
     NSString *className = nil;
 
     if (XGetClassHint(display, (Window)windowId, &classHint) == Success) {
-        if (classHint.res_class) {
+        if (classHint.res_class != NULL) {
             className = [NSString stringWithUTF8String:classHint.res_class];
-            XFree(classHint.res_class);
         }
-        if (classHint.res_name) {
-            XFree(classHint.res_name);
+        // XFreeStringList handles both res_class and res_name properly
+        if (classHint.res_class != NULL || classHint.res_name != NULL) {
+            char *strings[3] = {classHint.res_class, classHint.res_name, NULL};
+            XFreeStringList(strings);
         }
     }
 
@@ -52,16 +69,12 @@
         NSString *normalizedName = [className lowercaseString];
         if ([normalizedName isEqualToString:@"gimp"] ||
             [normalizedName hasPrefix:@"gimp-"]) {
-            XCloseDisplay(display);
             return @"GIMP";
         } else if ([normalizedName isEqualToString:@"inkscape"]) {
-            XCloseDisplay(display);
             return @"Inkscape";
         } else if ([normalizedName isEqualToString:@"libreoffice"]) {
-            XCloseDisplay(display);
             return @"LibreOffice";
         }
-        XCloseDisplay(display);
         return className;
     }
 
@@ -73,7 +86,6 @@
             title = [NSString stringWithUTF8String:(char *)windowName.value];
             XFree(windowName.value);
         }
-        XCloseDisplay(display);
 
         // Extract application name from window title
         if (title && [title length] > 0) {
@@ -95,13 +107,12 @@
         }
     }
     
-    XCloseDisplay(display);
     return nil;
 }
 
 + (BOOL)isWindowValid:(unsigned long)windowId
 {
-    Display *display = XOpenDisplay(NULL);
+    Display *display = getSharedDisplay();
     if (!display) {
         return NO;
     }
@@ -109,7 +120,6 @@
     XWindowAttributes attrs;
     BOOL valid = (XGetWindowAttributes(display, (Window)windowId, &attrs) == Success);
     
-    XCloseDisplay(display);
     return valid;
 }
 
@@ -119,7 +129,7 @@
         return NO;
     }
     
-    Display *display = XOpenDisplay(NULL);
+    Display *display = getSharedDisplay();
     if (!display) {
         return NO;
     }
@@ -148,13 +158,12 @@
         XFree(prop);
     }
     
-    XCloseDisplay(display);
     return isDesktop;
 }
 
 + (NSArray *)getAllWindows
 {
-    Display *display = XOpenDisplay(NULL);
+    Display *display = getSharedDisplay();
     if (!display) {
         return [NSArray array];
     }
@@ -177,13 +186,12 @@
         XFree(children);
     }
     
-    XCloseDisplay(display);
     return windows;
 }
 
 + (unsigned long)getActiveWindow
 {
-    Display *display = XOpenDisplay(NULL);
+    Display *display = getSharedDisplay();
     if (!display) {
         return 0;
     }
@@ -204,20 +212,18 @@
         XFree(prop);
     }
     
-    XCloseDisplay(display);
     return activeWindow;
 }
 
 + (NSString *)getWindowProperty:(unsigned long)windowId atomName:(NSString *)atomName
 {
-    Display *display = XOpenDisplay(NULL);
+    Display *display = getSharedDisplay();
     if (!display) {
         return nil;
     }
     
     Atom atom = XInternAtom(display, [atomName UTF8String], False);
     if (atom == None) {
-        XCloseDisplay(display);
         return nil;
     }
     
@@ -237,11 +243,9 @@
         }
         
         XFree(prop);
-        XCloseDisplay(display);
         return result;
     }
     
-    XCloseDisplay(display);
     return nil;
 }
 
@@ -257,7 +261,7 @@
 
 + (BOOL)setWindowMenuService:(NSString*)service path:(NSString*)path forWindow:(unsigned long)windowId
 {
-    Display *display = XOpenDisplay(NULL);
+    Display *display = getSharedDisplay();
     if (!display) {
         NSLog(@"MenuUtils: Failed to open X11 display");
         return NO;
@@ -294,13 +298,12 @@
     }
     
     XFlush(display);
-    XCloseDisplay(display);
     return success;
 }
 
 + (BOOL)advertiseGlobalMenuSupport
 {
-    Display *display = XOpenDisplay(NULL);
+    Display *display = getSharedDisplay();
     if (!display) {
         NSLog(@"MenuUtils: Failed to open X11 display for advertising global menu support");
         return NO;
@@ -367,7 +370,6 @@
     
     XFlush(display);
     XSync(display, False);
-    XCloseDisplay(display);
     
     NSLog(@"MenuUtils: Successfully advertised global menu support on root window");
     return success;
@@ -375,14 +377,14 @@
 
 + (void)removeGlobalMenuSupport
 {
-    Display *display = XOpenDisplay(NULL);
+    Display *display = getSharedDisplay();
     if (!display) {
         return;
     }
     
+    // Remove the global menu properties
     Window root = DefaultRootWindow(display);
     
-    // Remove the global menu properties
     Atom kdeMenuAtom = XInternAtom(display, "_KDE_GLOBAL_MENU_AVAILABLE", False);
     if (kdeMenuAtom != None) {
         XDeleteProperty(display, root, kdeMenuAtom);
@@ -394,7 +396,6 @@
     }
     
     XFlush(display);
-    XCloseDisplay(display);
     
     NSLog(@"MenuUtils: Removed global menu support properties from root window");
 }

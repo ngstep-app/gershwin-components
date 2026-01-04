@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+// Compile-time configuration for fallback menus
+// Set to 1 to enable fallback File->Close menus when no DBus menu is available
+// Set to 0 to disable fallback menus completely
+#define ENABLE_FALLBACK_MENUS 0
 
 #import "AppMenuWidget.h"
 #import "MenuProtocolManager.h"
@@ -143,8 +147,38 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         
         NSLog(@"AppMenuWidget: Initialized with frame %.0f,%.0f %.0fx%.0f", 
               frameRect.origin.x, frameRect.origin.y, frameRect.size.width, frameRect.size.height);
+        
+        // Mark that we're waiting for real menu content - don't set up placeholder yet
+        self.isWaitingForMenu = YES;
+        
+        // Defer placeholder menu setup until after initialization completes
+        // This ensures the view is fully ready before we try to set up and draw the menu
+        [self performSelector:@selector(setupPlaceholderMenu) withObject:nil afterDelay:0.0];
     }
     return self;
+}
+
+- (void)setupPlaceholderMenu
+{
+    // Only set up if we still don't have a menu view
+    if (self.menuView) {
+        return;
+    }
+    
+    NSLog(@"AppMenuWidget: Setting up placeholder menu with initial item (deferred)");
+    NSMenu *placeholderMenu = [[NSMenu alloc] initWithTitle:@""];
+    NSMenuItem *helloItem = [[NSMenuItem alloc] initWithTitle:@" " action:nil keyEquivalent:@""];
+    [helloItem setEnabled:NO];
+    [placeholderMenu addItem:helloItem];
+    
+    @try {
+        [self setupMenuViewWithMenu:placeholderMenu];
+        NSLog(@"AppMenuWidget: Successfully set up initial menu view with placeholder");
+    }
+    @catch (NSException *exception) {
+        NSLog(@"AppMenuWidget: Exception during placeholder menu setup: %@", exception);
+        self.menuView = nil;
+    }
 }
 
 - (void)dealloc
@@ -152,12 +186,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // Unregister from X11 error handling if we're the current widget
     if (currentWidget == self) {
         currentWidget = nil;
-    }
-    
-    // Cancel any pending timers
-    if (self.antiFlickerTimer) {
-        [self.antiFlickerTimer invalidate];
-        self.antiFlickerTimer = nil;
     }
     
     // Cancel any fallback timers
@@ -282,15 +310,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         NSLog(@"AppMenuWidget: Keeping shortcuts registered (same application)");
     }
     
-    // Start anti-flicker protection by preserving the current menu view
-    [self startAntiFlickerProtection];
-    
-    // Clear the current menu reference (but keep the view visible for now)
-    self.currentMenu = nil;
+    // Mark that we're waiting for a new menu - don't clear visuals yet
+    self.isWaitingForMenu = YES;
+    NSLog(@"AppMenuWidget: Marked as waiting for menu");
     
     self.currentApplicationName = nil;
     
-    // Trigger redraw to hide the widget when menu is empty
+    // Trigger redraw to reflect the waiting state
     // Only do this if we're not in a half-finished state
     if (self.window) {
         [self setNeedsDisplay:YES];
@@ -350,8 +376,12 @@ static int handleX11Error(Display *display, XErrorEvent *event)
                     return;
                 }
 
+#if ENABLE_FALLBACK_MENUS
                 // Schedule a delayed fallback (200ms) to avoid showing fallback immediately
                 [self scheduleFallbackMenuForWindow:windowId delay:0.2];
+#else
+                NSLog(@"AppMenuWidget: Fallback menus disabled at compile time");
+#endif
                 return;
             }
         } else {
@@ -366,9 +396,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu on exception", windowId);
             return;
         }
+#if ENABLE_FALLBACK_MENUS
         // Create fallback File->Close menu on exception
         NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
         [self loadMenu:fallbackMenu forWindow:windowId];
+#else
+        NSLog(@"AppMenuWidget: Exception occurred but fallback menus disabled at compile time");
+#endif
         return;
     }
     
@@ -392,8 +426,12 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu", windowId);
             return;
         }
+#if ENABLE_FALLBACK_MENUS
         // Schedule delayed fallback to allow menu to arrive (200ms)
         [self scheduleFallbackMenuForWindow:windowId delay:0.2];
+#else
+        NSLog(@"AppMenuWidget: Fallback menus disabled at compile time, no menu available for window %lu", windowId);
+#endif
         return;
     }
     
@@ -414,8 +452,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu (placeholder menu)", windowId);
             return;
         }
+#if ENABLE_FALLBACK_MENUS
         NSLog(@"AppMenuWidget: Replacing placeholder menu with File menu containing Close for window %lu", windowId);
         menu = [self createFileMenuWithClose:windowId];
+#else
+        NSLog(@"AppMenuWidget: Placeholder menu detected but fallback menus disabled at compile time");
+        return;
+#endif
     }
     
     [self loadMenu:menu forWindow:windowId];
@@ -429,6 +472,9 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     }
 
     NSLog(@"AppMenuWidget: Setting up menu view with menu: %@", [menu title]);
+    
+    // Set the current menu so drawRect knows we have menu content
+    self.currentMenu = menu;
     
     // Lock the window to prevent flashing during menu updates
     NSWindow *window = [self window];
@@ -494,9 +540,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // Add the menu view to our widget (this makes it visible)
         [self addSubview:self.menuView];
         
-        // Finish the anti-flicker transition now that the new menu is ready
-        [self finishAntiFlickerTransition];
-        
         [self setNeedsDisplay:YES];
         
         NSLog(@"AppMenuWidget: Menu view setup complete with %lu menu items", 
@@ -514,33 +557,45 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 - (void)drawRect:(NSRect)dirtyRect
 {
     // Only draw if we have menu items to display
-    // Check both currentMenu and oldMenuView (during anti-flicker transitions)
     BOOL hasMenu = (self.currentMenu && [[self.currentMenu itemArray] count] > 0);
-    BOOL hasOldMenu = (self.oldMenuView != nil);
+    BOOL isLoading = self.isWaitingForMenu;
     
-    NSLog(@"AppMenuWidget: drawRect called - hasMenu=%@, hasOldMenu=%@, currentMenu=%@, oldMenuView=%@", 
-          hasMenu ? @"YES" : @"NO", hasOldMenu ? @"YES" : @"NO", 
-          self.currentMenu, self.oldMenuView);
+    NSLog(@"AppMenuWidget: drawRect called - hasMenu=%@, isLoading=%@, currentMenu=%@", 
+          hasMenu ? @"YES" : @"NO", isLoading ? @"YES" : @"NO", self.currentMenu);
     
-    if (!hasMenu && !hasOldMenu) {
-        // No menu to display - clear the background completely
+    // If we're waiting for a menu but don't have one yet, keep the old menu visible
+    if (!hasMenu && !isLoading) {
+        // No menu to display and not waiting - clear the background completely
         NSLog(@"AppMenuWidget: No menus - clearing background");
         [[NSColor clearColor] set];
         NSRectFill([self bounds]);
         NSLog(@"AppMenuWidget: Background cleared");
+        
+        // Hide the menu view when there's no menu
+        if (self.menuView) {
+            [self.menuView setHidden:YES];
+        }
         return;
     }
     
-    // Only draw background during anti-flicker if we have a valid old menu
-    // Don't try to draw the old menu view itself - it's still a subview
-    if (!hasMenu && hasOldMenu) {
-        // Just preserve the visual - the oldMenuView subview will draw itself
-        NSLog(@"AppMenuWidget: In anti-flicker transition, letting oldMenuView draw");
+    // If waiting for menu, show placeholder or old menu
+    if (isLoading && !hasMenu) {
+        NSLog(@"AppMenuWidget: Waiting for real menu content, showing placeholder");
+        
+        // Show the placeholder menu if it exists
+        if (self.menuView) {
+            [self.menuView setHidden:NO];
+        }
         return;
     }
     
+    // Show new menu
     NSLog(@"AppMenuWidget: Drawing background and content");
     
+    // Show the menu view when there's a menu
+    if (self.menuView) {
+        [self.menuView setHidden:NO];
+    }
     // Don't fill background - let the MenuBarView background show through
     // The menu items themselves will be drawn by the menuView
     
@@ -855,6 +910,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (NSMenu *)createFileMenuWithClose:(unsigned long)windowId
 {
+#if ENABLE_FALLBACK_MENUS
     NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
     
     // Create Close menu item with Cmd+W
@@ -870,11 +926,16 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     [mainMenu addItem:fileMenuItem];
     
     return mainMenu;
+#else
+    (void)windowId;  // Suppress unused parameter warning
+    return nil;
+#endif
 }
 
 // Schedule a delayed fallback menu to avoid showing fallback immediately when an app is starting up
 - (void)scheduleFallbackMenuForWindow:(unsigned long)windowId delay:(NSTimeInterval)delay
 {
+#if ENABLE_FALLBACK_MENUS
     NSNumber *key = [NSNumber numberWithUnsignedLong:windowId];
     if ([self.fallbackTimers objectForKey:key]) {
         // Already scheduled
@@ -883,20 +944,29 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
     NSTimer *timer = [NSTimer scheduledTimerWithTimeInterval:delay target:self selector:@selector(fallbackTimerFired:) userInfo:key repeats:NO];
     [self.fallbackTimers setObject:timer forKey:key];
+#else
+    (void)windowId;  // Suppress unused parameter warning
+    (void)delay;     // Suppress unused parameter warning
+#endif
 }
 
 - (void)cancelScheduledFallbackForWindow:(unsigned long)windowId
 {
+#if ENABLE_FALLBACK_MENUS
     NSNumber *key = [NSNumber numberWithUnsignedLong:windowId];
     NSTimer *timer = [self.fallbackTimers objectForKey:key];
     if (timer) {
         [timer invalidate];
         [self.fallbackTimers removeObjectForKey:key];
     }
+#else
+    (void)windowId;  // Suppress unused parameter warning
+#endif
 }
 
 - (void)fallbackTimerFired:(NSTimer *)timer
 {
+#if ENABLE_FALLBACK_MENUS
     NSNumber *windowNum = (NSNumber *)[timer userInfo];
     [self.fallbackTimers removeObjectForKey:windowNum];
 
@@ -921,10 +991,14 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     NSLog(@"AppMenuWidget: No menu received for window %lu after delay, providing fallback menu", windowId);
     NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
     [self loadMenu:fallbackMenu forWindow:windowId];
+#else
+    (void)timer;  // Suppress unused parameter warning
+#endif
 }
 
 - (void)closeWindow:(NSMenuItem *)sender
 {
+#if ENABLE_FALLBACK_MENUS
     NSNumber *windowIdNumber = [sender representedObject];
     if (!windowIdNumber) {
         NSLog(@"AppMenuWidget: closeWindow called but no window ID in representedObject");
@@ -936,6 +1010,9 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     
     // Send Alt+F4 to close the window
     [self sendAltF4ToWindow:windowId];
+#else
+    (void)sender;  // Suppress unused parameter warning
+#endif
 }
 
 - (void)sendAltF4ToWindow:(unsigned long)windowId
@@ -1080,6 +1157,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
     NSLog(@"AppMenuWidget: Loading menu for window %lu", windowId);
     
+    // Clear the waiting flag - we have a new menu
+    self.isWaitingForMenu = NO;
     self.currentMenu = menu;
     
     NSLog(@"AppMenuWidget: ===== MENU LOADED, SETTING UP VIEW =====");
@@ -1206,142 +1285,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
                                                      dbusConnection:nil];
 }
 
-#pragma mark - Anti-flicker support
-
-- (void)startAntiFlickerProtection
-{
-    NSLog(@"AppMenuWidget: Starting anti-flicker protection");
-    
-    // Cancel any existing anti-flicker timer
-    if (self.antiFlickerTimer) {
-        [self.antiFlickerTimer invalidate];
-        self.antiFlickerTimer = nil;
-    }
-    
-    // Clean up any previous old menu view with exception handling and memory safety
-    if (self.oldMenuView) {
-        NSLog(@"AppMenuWidget: Removing previous oldMenuView");
-        @try {
-            // Clear the menu reference BEFORE removing to prevent access to freed memory
-            if ([self.oldMenuView respondsToSelector:@selector(setMenu:)]) {
-                [self.oldMenuView setMenu:nil];
-            }
-            [self.oldMenuView removeFromSuperview];
-        }
-        @catch (NSException *exception) {
-            NSLog(@"AppMenuWidget: Exception removing previous oldMenuView: %@", exception);
-        }
-        @finally {
-            // Always clear the reference to prevent dangling pointers
-            self.oldMenuView = nil;
-        }
-    }
-    
-    // Move current menu view to old menu view (keep it visible)
-    if (self.menuView) {
-        NSLog(@"AppMenuWidget: Preserving current menuView for anti-flicker");
-        
-        @try {
-            // IMPORTANT: Clear the menu reference from the old view to prevent crashes
-            // when the view tries to redraw after the menu is freed
-            [self.menuView setMenu:nil];
-            
-            // Transfer ownership safely without explicit retain/release
-            self.oldMenuView = self.menuView;  // Property will handle memory management
-            self.menuView = nil;
-            
-            NSLog(@"AppMenuWidget: Preserved old menu view to prevent flicker");
-        }
-        @catch (NSException *exception) {
-            NSLog(@"AppMenuWidget: Exception preserving menu view: %@", exception);
-            // Clean up on error
-            self.menuView = nil;
-            self.oldMenuView = nil;
-        }
-    }
-    
-    // Start 2-second timeout timer
-    self.antiFlickerTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
-                                                          target:self
-                                                        selector:@selector(antiFlickerTimeoutExpired:)
-                                                        userInfo:nil
-                                                         repeats:NO];
-    NSLog(@"AppMenuWidget: Started 2-second anti-flicker timeout");
-}
-
-- (void)finishAntiFlickerTransition
-{
-    NSLog(@"AppMenuWidget: Finishing anti-flicker transition");
-    
-    // Cancel the timeout timer
-    if (self.antiFlickerTimer) {
-        [self.antiFlickerTimer invalidate];
-        self.antiFlickerTimer = nil;
-    }
-    
-    // Remove the old menu view now that new one is ready with safe cleanup
-    if (self.oldMenuView) {
-        @try {
-            // Clear menu reference before removing to prevent access to freed memory
-            if ([self.oldMenuView respondsToSelector:@selector(setMenu:)]) {
-                [self.oldMenuView setMenu:nil];
-            }
-            [self.oldMenuView removeFromSuperview];
-            NSLog(@"AppMenuWidget: Removed old menu view, new menu is now visible");
-        }
-        @catch (NSException *exception) {
-            NSLog(@"AppMenuWidget: Exception during finishAntiFlickerTransition: %@", exception);
-        }
-        @finally {
-            // Always release and clear the reference
-            self.oldMenuView = nil;
-        }
-    }
-}
-
-- (void)antiFlickerTimeoutExpired:(NSTimer *)timer
-{
-    NSLog(@"AppMenuWidget: Anti-flicker timeout expired, removing old menu view");
-    
-    // Clean up the timer
-    if (self.antiFlickerTimer) {
-        self.antiFlickerTimer = nil;
-    }
-    
-    // Check if the current window is still valid before doing cleanup
-    // This prevents crashes when windows disappear during the timeout period
-    if (self.currentWindowId != 0) {
-        BOOL windowStillExists = [AppMenuWidget isWindowStillValid:self.currentWindowId];
-        if (!windowStillExists) {
-            NSLog(@"AppMenuWidget: Current window %lu no longer exists, clearing state", self.currentWindowId);
-            self.currentWindowId = 0;
-            self.currentApplicationName = nil;
-            self.currentMenu = nil;
-        }
-    }
-    
-    // Remove the old menu view even if no new menu was loaded
-    // Use @try/@catch to prevent crashes during view cleanup
-    if (self.oldMenuView) {
-        @try {
-            // Clear menu reference BEFORE removing to prevent access to freed memory
-            if ([self.oldMenuView respondsToSelector:@selector(setMenu:)]) {
-                [self.oldMenuView setMenu:nil];
-            }
-            [self.oldMenuView removeFromSuperview];
-            [self setNeedsDisplay:YES];
-            NSLog(@"AppMenuWidget: Forced removal of old menu view due to timeout");
-        }
-        @catch (NSException *exception) {
-            NSLog(@"AppMenuWidget: Exception during anti-flicker timeout cleanup: %@", exception);
-        }
-        @finally {
-            // Always clear the reference to prevent dangling pointers and double-free
-            self.oldMenuView = nil;
-        }
-    }
-}
-
 #pragma mark - Window Validity Checks
 
 + (BOOL)isWindowStillValid:(Window)windowId
@@ -1402,12 +1345,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     if (self.currentWindowId == windowId) {
         NSLog(@"AppMenuWidget: Current window disappeared, clearing all state");
         
-        // Cancel any pending timers to prevent crashes
-        if (self.antiFlickerTimer) {
-            [self.antiFlickerTimer invalidate];
-            self.antiFlickerTimer = nil;
-        }
-        
         // Clear all state immediately
         self.currentWindowId = 0;
         self.currentApplicationName = nil;
@@ -1415,14 +1352,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         
         // Force cleanup of menu views with exception handling
         @try {
-            if (self.oldMenuView) {
-                if ([self.oldMenuView respondsToSelector:@selector(setMenu:)]) {
-                    [self.oldMenuView setMenu:nil];
-                }
-                [self.oldMenuView removeFromSuperview];
-                self.oldMenuView = nil;
-            }
-            
             if (self.menuView) {
                 if ([self.menuView respondsToSelector:@selector(setMenu:)]) {
                     [self.menuView setMenu:nil];
@@ -1435,7 +1364,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         @catch (NSException *exception) {
             NSLog(@"AppMenuWidget: Exception during emergency cleanup: %@", exception);
             // Force clear all references
-            self.oldMenuView = nil;
             self.menuView = nil;
         }
     }
