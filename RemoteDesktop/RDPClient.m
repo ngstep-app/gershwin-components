@@ -504,8 +504,12 @@ cleanup:
 - (void)notifyConnectionResult:(BOOL)success error:(NSString *)error
 {
     if (_delegate) {
+        NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
+                              [NSNumber numberWithBool:success], @"success",
+                              error ? error : @"", @"error",
+                              nil];
         [self performSelectorOnMainThread:@selector(notifyConnectionOnMainThread:)
-                               withObject:@{@"success": @(success), @"error": error ? error : @""}
+                               withObject:info
                             waitUntilDone:NO];
     }
 }

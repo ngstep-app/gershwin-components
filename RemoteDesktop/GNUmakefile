@@ -12,7 +12,7 @@ PACKAGE_NAME = RemoteDesktop
 VERSION = 0.1
 
 RemoteDesktop_PRINCIPAL_CLASS = NSApplication
-RemoteDesktop_APPLICATION_ICON = RemoteDesktop.png
+RemoteDesktop_APPLICATION_ICON = RemoteDesktop.icns
 
 RemoteDesktop_HEADER_FILES = \
 	RemoteDesktop.h \
@@ -30,7 +30,8 @@ RemoteDesktop_OBJC_FILES = \
 	RDPWindow.m
 
 RemoteDesktop_RESOURCE_FILES = \
-	Info.plist
+	Info.plist \
+	RemoteDesktop.icns
 
 RemoteDesktop_LOCALIZED_RESOURCE_FILES =
 

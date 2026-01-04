@@ -58,15 +58,11 @@ typedef enum {
 {
     NSWindow *window;
     NSTableView *servicesTable;
-    NSTextView *detailsText;
     NSButton *connectButton;
-    NSButton *refreshButton;
     
     // Manual connection UI
     NSTextField *hostField;
     NSTextField *portField;
-    NSTextField *usernameField;
-    NSTextField *passwordField;
     NSPopUpButton *protocolPopup;
     
     // Network service discovery
@@ -89,7 +85,6 @@ typedef enum {
 
 // UI actions
 - (void)connectButtonClicked:(id)sender;
-- (void)refreshButtonClicked:(id)sender;
 - (void)manualConnectButtonClicked:(id)sender;
 
 // Service discovery

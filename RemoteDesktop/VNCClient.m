@@ -234,12 +234,15 @@ static rfbCredential *VNCGetCredential(rfbClient *client, int credentialType)
     if (credentialType == rfbCredentialTypeUser) {
         NSLog(@"VNCClient: Server requires username/password credentials");
         
-        // Check if we already have credentials
-        NSString *username = [vncClient username];
-        NSString *password = [vncClient password];
+        // Check if we already have credentials - retain them to ensure they stay valid
+        NSString *username = [[vncClient username] retain];
+        NSString *password = [[vncClient password] retain];
         
         // If we don't have both, prompt the user (unless in headless mode)
         if (!username || [username length] == 0 || !password || [password length] == 0) {
+            [username release];
+            [password release];
+            
             if ([vncClient headlessMode]) {
                 NSLog(@"VNCClient: ERROR - Credentials required but running in headless mode (CLI)");
                 NSLog(@"VNCClient: Please provide --user and --password on the command line");
@@ -259,9 +262,9 @@ static rfbCredential *VNCGetCredential(rfbClient *client, int credentialType)
             }
             [helper release];
             
-            // Credentials are now stored in vncClient
-            username = [vncClient username];
-            password = [vncClient password];
+            // Credentials are now stored in vncClient - retain them again
+            username = [[vncClient username] retain];
+            password = [[vncClient password] retain];
         }
         
         NSLog(@"VNCGetCredential: Retrieved from VNCClient - username: '%@' (length: %lu), password: %@ (length: %lu)",
@@ -273,22 +276,38 @@ static rfbCredential *VNCGetCredential(rfbClient *client, int credentialType)
         // Defensive check - must have both valid credentials
         if (!username || [username length] == 0) {
             NSLog(@"VNCClient: ERROR - Empty username! Apple Remote Desktop requires both username AND password.");
+            [username release];
+            [password release];
             return NULL;
         }
         if (!password || [password length] == 0) {
             NSLog(@"VNCClient: ERROR - Empty password!");
+            [username release];
+            [password release];
             return NULL;
         }
         
         NSLog(@"VNCGetCredential: Creating rfbCredential with username='%@', password=<provided>", username);
+        
+        // Get C strings from NSString - these are temporary pointers, so strdup immediately
+        const char *usernameC = [username UTF8String];
+        const char *passwordC = [password UTF8String];
+        
         rfbCredential *cred = (rfbCredential *)malloc(sizeof(rfbCredential));
         if (!cred) {
             NSLog(@"VNCClient: ERROR - Failed to allocate credential struct");
+            [username release];
+            [password release];
             return NULL;
         }
         
-        cred->userCredential.username = strdup([username UTF8String]);
-        cred->userCredential.password = strdup([password UTF8String]);
+        // strdup creates permanent copies that libvncclient can use
+        cred->userCredential.username = strdup(usernameC);
+        cred->userCredential.password = strdup(passwordC);
+        
+        // Release our retained copies - we're done with them
+        [username release];
+        [password release];
         
         if (!cred->userCredential.username || !cred->userCredential.password) {
             NSLog(@"VNCClient: ERROR - Failed to duplicate credential strings");
@@ -535,6 +554,7 @@ static void VNCErr(const char *format, ...)
     
     rfbClient *client = NULL;
     int connectResult = 0;
+    BOOL credentialsObtained = NO;  // Track if we've successfully obtained credentials
     
     for (int attempt = 0; attempt < 3; attempt++) {
         if (_shouldStop) {
@@ -592,11 +612,20 @@ static void VNCErr(const char *format, ...)
         client = NULL;
         
         NSLog(@"VNCClient: Connection attempt %d failed, waiting before retry...", attempt + 1);
+        
+        // If we have stored credentials (meaning authentication succeeded but connection failed for another reason),
+        // don't retry - the issue is likely not authentication-related
+        if (_username && _password) {
+            NSLog(@"VNCClient: Have stored credentials - authentication likely succeeded but connection failed. Not retrying.");
+            break;
+        }
+        
         if (attempt < 2) {
-            // Clear any stored credentials to force fresh prompt on retry
-            [self setUsername:nil];
-            [self setPassword:nil];
-            NSLog(@"VNCClient: Cleared stored credentials for retry");
+            // Only clear credentials if connection attempt failed AND we don't have pre-set credentials
+            // If credentials were provided (e.g., via command line), keep them for retry
+            if (!_username && !_password) {
+                NSLog(@"VNCClient: No pre-set credentials, will prompt again on retry");
+            }
             
             // Use autorelease pool around sleep to ensure modal dialog cleanup
             NSLog(@"VNCClient: Sleeping 2 seconds before retry %d...", attempt + 2);
@@ -688,8 +717,12 @@ cleanup:
 - (void)notifyConnectionResult:(BOOL)success error:(NSString *)error
 {
     if (_delegate) {
+        NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
+                              [NSNumber numberWithBool:success], @"success",
+                              error ? error : @"", @"error",
+                              nil];
         [self performSelectorOnMainThread:@selector(notifyConnectionOnMainThread:)
-                               withObject:@{@"success": @(success), @"error": error ? error : @""}
+                               withObject:info
                             waitUntilDone:NO];
     }
 }

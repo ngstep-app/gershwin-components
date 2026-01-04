@@ -105,10 +105,10 @@
     NSRectFill(NSMakeRect(0, 0, 640, 480));
     
     NSString *message = @"Connecting to RDP server...";
-    NSDictionary *attributes = @{
-        NSForegroundColorAttributeName: [NSColor whiteColor],
-        NSFontAttributeName: [NSFont systemFontOfSize:16]
-    };
+    NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
+        [NSColor whiteColor], NSForegroundColorAttributeName,
+        [NSFont systemFontOfSize:16], NSFontAttributeName,
+        nil];
     NSSize textSize = [message sizeWithAttributes:attributes];
     NSPoint textPoint = NSMakePoint((640 - textSize.width) / 2, (480 - textSize.height) / 2);
     [message drawAtPoint:textPoint withAttributes:attributes];
@@ -464,10 +464,10 @@
     NSRectFill(NSMakeRect(0, 0, 640, 480));
     
     NSString *message = @"RDP Connection Lost";
-    NSDictionary *attributes = @{
-        NSForegroundColorAttributeName: [NSColor whiteColor],
-        NSFontAttributeName: [NSFont systemFontOfSize:16]
-    };
+    NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
+        [NSColor whiteColor], NSForegroundColorAttributeName,
+        [NSFont systemFontOfSize:16], NSFontAttributeName,
+        nil];
     NSSize textSize = [message sizeWithAttributes:attributes];
     NSPoint textPoint = NSMakePoint((640 - textSize.width) / 2, (480 - textSize.height) / 2);
     [message drawAtPoint:textPoint withAttributes:attributes];

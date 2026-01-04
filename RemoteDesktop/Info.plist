@@ -7,7 +7,7 @@
     <key>CFBundleExecutable</key>
     <string>RemoteDesktop</string>
     <key>CFBundleIconFile</key>
-    <string>RemoteDesktop.png</string>
+    <string>RemoteDesktop.icns</string>
     <key>CFBundleIdentifier</key>
     <string>org.gershwin.RemoteDesktop</string>
     <key>CFBundleInfoDictionaryVersion</key>

@@ -12,6 +12,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import "RemoteDesktop.h"
+#import "AppearanceMetrics.h"
 
 #pragma mark - RemoteService Implementation
 
@@ -116,7 +117,8 @@
     }
     
     // Create main window
-    NSRect windowFrame = NSMakeRect(100, 100, 800, 600);
+    // Using METRICS_WIN_MIN_WIDTH (500px) * 1.6 for appropriate width per HIG
+    NSRect windowFrame = NSMakeRect(100, 100, METRICS_WIN_MIN_WIDTH * 1.6, 400);
     window = [[NSWindow alloc]
         initWithContentRect:windowFrame
         styleMask:(NSTitledWindowMask | NSClosableWindowMask |
@@ -125,12 +127,13 @@
         defer:NO];
     
     [window setTitle:@"Remote Desktop"];
-    [window setMinSize:NSMakeSize(600, 400)];
+    [window setMinSize:NSMakeSize(600, 300)];
     [window setDelegate:self];
     
     NSView *contentView = [window contentView];
     NSRect contentRect = [contentView bounds];
-    CGFloat padding = 10;
+    // Using METRICS_CONTENT_SIDE_MARGIN (24px) for padding per HIG
+    CGFloat padding = METRICS_CONTENT_SIDE_MARGIN;
     
     // Create split layout: left panel for services list, right panel for details/manual connect
     CGFloat leftWidth = 350;
@@ -143,7 +146,8 @@
     [servicesBox setTitle:@"Discovered Services"];
     [servicesBox setAutoresizingMask:NSViewHeightSizable | NSViewMaxXMargin];
     
-    NSRect servicesContentRect = NSMakeRect(10, 50, leftWidth - 20, leftRect.size.height - 80);
+    // Using METRICS_SPACE_16 (16px) for spacing between group box edges and enclosed controls per HIG
+    NSRect servicesContentRect = NSMakeRect(METRICS_SPACE_16, 50, leftWidth - (2 * METRICS_SPACE_16), leftRect.size.height - 80);
     NSScrollView *servicesScroll = [[NSScrollView alloc] initWithFrame:servicesContentRect];
     [servicesScroll setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [servicesScroll setHasVerticalScroller:YES];
@@ -160,39 +164,21 @@
     
     NSTableColumn *nameCol = [[NSTableColumn alloc] initWithIdentifier:@"name"];
     [[nameCol headerCell] setStringValue:@"Name"];
-    [nameCol setWidth:200];
+    [nameCol setWidth:leftWidth - 40];
     [nameCol setEditable:NO];
     [servicesTable addTableColumn:nameCol];
     RELEASE(nameCol);
-    
-    NSTableColumn *typeCol = [[NSTableColumn alloc] initWithIdentifier:@"type"];
-    [[typeCol headerCell] setStringValue:@"Type"];
-    [typeCol setWidth:50];
-    [typeCol setEditable:NO];
-    [servicesTable addTableColumn:typeCol];
-    RELEASE(typeCol);
-    
-    NSTableColumn *hostCol = [[NSTableColumn alloc] initWithIdentifier:@"host"];
-    [[hostCol headerCell] setStringValue:@"Host"];
-    [hostCol setWidth:80];
-    [hostCol setEditable:NO];
-    [servicesTable addTableColumn:hostCol];
-    RELEASE(hostCol);
     
     [servicesScroll setDocumentView:servicesTable];
     [servicesBox addSubview:servicesScroll];
     RELEASE(servicesScroll);
     
-    // Buttons below service list
-    NSRect refreshRect = NSMakeRect(10, 10, 100, 30);
-    refreshButton = [[NSButton alloc] initWithFrame:refreshRect];
-    [refreshButton setTitle:@"Refresh"];
-    [refreshButton setTarget:self];
-    [refreshButton setAction:@selector(refreshButtonClicked:)];
-    [refreshButton setBezelStyle:NSRoundedBezelStyle];
-    [servicesBox addSubview:refreshButton];
-    
-    NSRect connectRect = NSMakeRect(120, 10, 100, 30);
+    // Connect button below service list
+    // Using METRICS_BUTTON_HEIGHT (20px) for button height per HIG
+    // Using METRICS_CONTENT_BOTTOM_MARGIN (20px) from bottom edge per HIG
+    CGFloat buttonY = METRICS_CONTENT_BOTTOM_MARGIN;
+    CGFloat buttonWidth = 100;
+    NSRect connectRect = NSMakeRect(METRICS_SPACE_16, buttonY, buttonWidth, METRICS_BUTTON_HEIGHT);
     connectButton = [[NSButton alloc] initWithFrame:connectRect];
     [connectButton setTitle:@"Connect"];
     [connectButton setTarget:self];
@@ -211,123 +197,78 @@
     [manualBox setTitle:@"Manual Connection"];
     [manualBox setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     
-    CGFloat fieldHeight = 25;
+    // Using METRICS_TEXT_INPUT_FIELD_HEIGHT (22px) for text input field height per HIG
+    // Using METRICS_SPACE_16 (16px) for vertical spacing between controls per HIG
+    // Using METRICS_SPACE_8 (8px) for horizontal gap between label and control per HIG
+    CGFloat fieldHeight = METRICS_TEXT_INPUT_FIELD_HEIGHT;
     CGFloat labelWidth = 80;
-    CGFloat fieldWidth = rightWidth - labelWidth - 40;
+    CGFloat fieldWidth = rightWidth - labelWidth - (3 * METRICS_SPACE_16);
     CGFloat yPos = rightRect.size.height - 60;
     
     // Protocol selection
-    NSTextField *protocolLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, yPos, labelWidth, fieldHeight)];
+    NSTextField *protocolLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(METRICS_SPACE_16, yPos, labelWidth, fieldHeight)];
     [protocolLabel setStringValue:@"Protocol:"];
     [protocolLabel setBezeled:NO];
     [protocolLabel setDrawsBackground:NO];
     [protocolLabel setEditable:NO];
     [protocolLabel setSelectable:NO];
+    [protocolLabel setFont:METRICS_FONT_SYSTEM_REGULAR_13];
     [manualBox addSubview:protocolLabel];
     RELEASE(protocolLabel);
     
-    protocolPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(labelWidth + 20, yPos, fieldWidth, fieldHeight) pullsDown:NO];
+    protocolPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(labelWidth + METRICS_SPACE_16 + METRICS_SPACE_8, yPos - 1, fieldWidth, fieldHeight) pullsDown:NO];
     [protocolPopup addItemWithTitle:@"VNC"];
     [protocolPopup addItemWithTitle:@"RDP"];
     [manualBox addSubview:protocolPopup];
     
-    yPos -= 35;
+    yPos -= METRICS_SPACE_16 + fieldHeight;
     
     // Host field
-    NSTextField *hostLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, yPos, labelWidth, fieldHeight)];
+    NSTextField *hostLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(METRICS_SPACE_16, yPos, labelWidth, fieldHeight)];
     [hostLabel setStringValue:@"Host:"];
     [hostLabel setBezeled:NO];
     [hostLabel setDrawsBackground:NO];
     [hostLabel setEditable:NO];
     [hostLabel setSelectable:NO];
+    [hostLabel setFont:METRICS_FONT_SYSTEM_REGULAR_13];
     [manualBox addSubview:hostLabel];
     RELEASE(hostLabel);
     
-    hostField = [[NSTextField alloc] initWithFrame:NSMakeRect(labelWidth + 20, yPos, fieldWidth, fieldHeight)];
+    hostField = [[NSTextField alloc] initWithFrame:NSMakeRect(labelWidth + METRICS_SPACE_16 + METRICS_SPACE_8, yPos, fieldWidth, fieldHeight)];
     [hostField setPlaceholderString:@"hostname or IP address"];
+    [hostField setFont:METRICS_FONT_SYSTEM_REGULAR_13];
     [manualBox addSubview:hostField];
     
-    yPos -= 35;
+    yPos -= METRICS_SPACE_16 + fieldHeight;
     
     // Port field
-    NSTextField *portLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, yPos, labelWidth, fieldHeight)];
+    NSTextField *portLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(METRICS_SPACE_16, yPos, labelWidth, fieldHeight)];
     [portLabel setStringValue:@"Port:"];
     [portLabel setBezeled:NO];
     [portLabel setDrawsBackground:NO];
     [portLabel setEditable:NO];
     [portLabel setSelectable:NO];
+    [portLabel setFont:METRICS_FONT_SYSTEM_REGULAR_13];
     [manualBox addSubview:portLabel];
     RELEASE(portLabel);
     
-    portField = [[NSTextField alloc] initWithFrame:NSMakeRect(labelWidth + 20, yPos, 80, fieldHeight)];
+    portField = [[NSTextField alloc] initWithFrame:NSMakeRect(labelWidth + METRICS_SPACE_16 + METRICS_SPACE_8, yPos, 80, fieldHeight)];
     [portField setPlaceholderString:@"5900"];
+    [portField setFont:METRICS_FONT_SYSTEM_REGULAR_13];
     [manualBox addSubview:portField];
     
-    yPos -= 35;
-    
-    // Username field (for RDP)
-    NSTextField *usernameLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, yPos, labelWidth, fieldHeight)];
-    [usernameLabel setStringValue:@"Username:"];
-    [usernameLabel setBezeled:NO];
-    [usernameLabel setDrawsBackground:NO];
-    [usernameLabel setEditable:NO];
-    [usernameLabel setSelectable:NO];
-    [manualBox addSubview:usernameLabel];
-    RELEASE(usernameLabel);
-    
-    usernameField = [[NSTextField alloc] initWithFrame:NSMakeRect(labelWidth + 20, yPos, fieldWidth, fieldHeight)];
-    [usernameField setPlaceholderString:@"(optional for RDP)"];
-    [manualBox addSubview:usernameField];
-    
-    yPos -= 35;
-    
-    // Password field
-    NSTextField *passwordLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, yPos, labelWidth, fieldHeight)];
-    [passwordLabel setStringValue:@"Password:"];
-    [passwordLabel setBezeled:NO];
-    [passwordLabel setDrawsBackground:NO];
-    [passwordLabel setEditable:NO];
-    [passwordLabel setSelectable:NO];
-    [manualBox addSubview:passwordLabel];
-    RELEASE(passwordLabel);
-    
-    passwordField = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(labelWidth + 20, yPos, fieldWidth, fieldHeight)];
-    [passwordField setPlaceholderString:@"(optional)"];
-    [manualBox addSubview:passwordField];
-    
-    yPos -= 45;
+    yPos -= METRICS_SPACE_20 + METRICS_BUTTON_HEIGHT;
     
     // Manual connect button
-    NSButton *manualConnectButton = [[NSButton alloc] initWithFrame:NSMakeRect(labelWidth + 20, yPos, 120, 30)];
+    // Using METRICS_BUTTON_HEIGHT (20px) for button height per HIG
+    // Using METRICS_SPACE_20 (20px) for vertical spacing between control groups per HIG
+    NSButton *manualConnectButton = [[NSButton alloc] initWithFrame:NSMakeRect(labelWidth + METRICS_SPACE_16 + METRICS_SPACE_8, yPos, 120, METRICS_BUTTON_HEIGHT)];
     [manualConnectButton setTitle:@"Connect"];
     [manualConnectButton setTarget:self];
     [manualConnectButton setAction:@selector(manualConnectButtonClicked:)];
     [manualConnectButton setBezelStyle:NSRoundedBezelStyle];
     [manualBox addSubview:manualConnectButton];
     RELEASE(manualConnectButton);
-    
-    yPos -= 60;
-    
-    // Details text view
-    NSRect detailsRect = NSMakeRect(10, 10, rightWidth - 20, yPos - 10);
-    NSScrollView *detailsScroll = [[NSScrollView alloc] initWithFrame:detailsRect];
-    [detailsScroll setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-    [detailsScroll setHasVerticalScroller:YES];
-    [detailsScroll setHasHorizontalScroller:NO];
-    [detailsScroll setBorderType:NSBezelBorder];
-    
-    detailsText = [[NSTextView alloc] initWithFrame:NSZeroRect];
-    [detailsText setEditable:NO];
-    [detailsText setSelectable:YES];
-    [detailsText setString:@"Select a discovered service to see details, or enter connection information manually above.\n\n"
-                           @"Supported protocols:\n"
-                           @"• VNC (Virtual Network Computing) - Port 5900\n"
-                           @"• RDP (Remote Desktop Protocol) - Port 3389\n\n"
-                           @"Note: VNC requires libvncclient, RDP requires FreeRDP."];
-    
-    [detailsScroll setDocumentView:detailsText];
-    [manualBox addSubview:detailsScroll];
-    RELEASE(detailsScroll);
     
     [contentView addSubview:manualBox];
     RELEASE(manualBox);
@@ -363,8 +304,6 @@
     NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
     [fileMenuItem setSubmenu:fileMenu];
     
-    [fileMenu addItemWithTitle:@"Refresh Services" action:@selector(refreshButtonClicked:) keyEquivalent:@"r"];
-    [fileMenu addItem:[NSMenuItem separatorItem]];
     [fileMenu addItemWithTitle:@"Close Window" action:@selector(performClose:) keyEquivalent:@"w"];
     
     RELEASE(fileMenu);
@@ -451,12 +390,7 @@
     // Check if mDNS-SD support is available
     Class netServiceBrowserClass = NSClassFromString(@"NSNetServiceBrowser");
     if (!netServiceBrowserClass) {
-        [detailsText setString:@"mDNS-SD support is not available.\n\n"
-                               @"Network service discovery will not work. "
-                               @"You can still connect manually by entering the host address above.\n\n"
-                               @"To enable service discovery:\n"
-                               @"1. Install libavahi-compat-libdnssd-dev\n"
-                               @"2. Rebuild GNUstep with DNS-SD support"];
+        NSLog(@"RemoteDesktop: WARNING - mDNS-SD support is not available. Network service discovery will not work.");
         return;
     }
     
@@ -499,21 +433,6 @@
     }
 }
 
-- (void)refreshButtonClicked:(id)sender
-{
-    NSLog(@"RemoteDesktop: Refreshing services...");
-    NSLog(@"RemoteDesktop: Clearing %lu services and restarting discovery", (unsigned long)[discoveredServices count]);
-    
-    [discoveredServices removeAllObjects];
-    [servicesTable reloadData];
-    
-    [self stopServiceDiscovery];
-    [NSThread sleepForTimeInterval:0.5]; // Brief delay to ensure browsers are properly stopped
-    [self startServiceDiscovery];
-    
-    NSLog(@"RemoteDesktop: Service discovery restarted");
-}
-
 - (void)manualConnectButtonClicked:(id)sender
 {
     NSString *host = [hostField stringValue];
@@ -528,8 +447,6 @@
     
     NSString *portString = [portField stringValue];
     NSInteger selectedProtocol = [protocolPopup indexOfSelectedItem];
-    NSString *username = [usernameField stringValue];
-    NSString *password = [passwordField stringValue];
     
     NSInteger port;
     if ([portString length] > 0) {
@@ -541,10 +458,10 @@
     
     if (selectedProtocol == 0) {
         // VNC
-        [self connectToVNCHost:host port:port username:username password:password];
+        [self connectToVNCHost:host port:port username:nil password:nil];
     } else {
         // RDP
-        [self connectToRDPHost:host port:port username:username password:password];
+        [self connectToRDPHost:host port:port username:nil password:nil];
     }
 }
 
@@ -565,18 +482,28 @@
           [service name], [service hostname], (long)[service port]);
     
     if ([service type] == RemoteServiceTypeVNC) {
-        [self connectToVNCHost:[service hostname] port:[service port] username:nil password:nil];
+        [self connectToVNCHost:[service hostname] port:[service port] username:nil password:nil serviceName:[service name]];
     } else if ([service type] == RemoteServiceTypeRDP) {
-        [self connectToRDPHost:[service hostname] port:[service port] username:nil password:nil];
+        [self connectToRDPHost:[service hostname] port:[service port] username:nil password:nil serviceName:[service name]];
     }
 }
 
 - (void)connectToVNCHost:(NSString *)hostname port:(NSInteger)port username:(NSString *)username password:(NSString *)password
 {
-    [self connectToVNCHost:hostname port:port username:username password:password headless:NO];
+    [self connectToVNCHost:hostname port:port username:username password:password headless:NO serviceName:nil];
+}
+
+- (void)connectToVNCHost:(NSString *)hostname port:(NSInteger)port username:(NSString *)username password:(NSString *)password serviceName:(NSString *)serviceName
+{
+    [self connectToVNCHost:hostname port:port username:username password:password headless:NO serviceName:serviceName];
 }
 
 - (void)connectToVNCHost:(NSString *)hostname port:(NSInteger)port username:(NSString *)username password:(NSString *)password headless:(BOOL)headless
+{
+    [self connectToVNCHost:hostname port:port username:username password:password headless:headless serviceName:nil];
+}
+
+- (void)connectToVNCHost:(NSString *)hostname port:(NSInteger)port username:(NSString *)username password:(NSString *)password headless:(BOOL)headless serviceName:(NSString *)serviceName
 {
     NSLog(@"RemoteDesktop: Opening VNC connection to %@:%ld%@", hostname, (long)port, headless ? @" [headless]" : @"");
     
@@ -602,6 +529,9 @@
                                                          password:password];
     [vncWindow setHeadlessMode:headless];
     [vncWindow setVncDelegate:self];
+    if (serviceName) {
+        [vncWindow setTitle:serviceName];
+    }
     if (!headless) {
         [vncWindow center];
     }
@@ -613,6 +543,12 @@
 
 - (void)connectToRDPHost:(NSString *)hostname port:(NSInteger)port 
                 username:(NSString *)username password:(NSString *)password
+{
+    [self connectToRDPHost:hostname port:port username:username password:password serviceName:nil];
+}
+
+- (void)connectToRDPHost:(NSString *)hostname port:(NSInteger)port 
+                username:(NSString *)username password:(NSString *)password serviceName:(NSString *)serviceName
 {
     NSLog(@"RemoteDesktop: Opening RDP connection to %@:%ld", hostname, (long)port);
     
@@ -632,6 +568,9 @@
                                                          username:username 
                                                          password:password];
     [rdpWindow setRdpDelegate:self];
+    if (serviceName) {
+        [rdpWindow setTitle:serviceName];
+    }
     // Note: Window will be shown after successful connection via rdpClient:didConnect:
     [rdpWindow connectToRDP];
     
@@ -722,12 +661,10 @@
         
         [details appendString:@"\nDouble-click or press Connect to open a session."];
         
-        [detailsText setString:details];
         RELEASE(details);
         
         [connectButton setEnabled:YES];
     } else {
-        [detailsText setString:@"Select a discovered service to see details, or enter connection information manually above."];
         [connectButton setEnabled:NO];
     }
 }

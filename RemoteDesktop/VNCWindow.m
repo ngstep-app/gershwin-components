@@ -38,7 +38,7 @@
 - (id)initWithContentRect:(NSRect)contentRect hostname:(NSString *)hostname port:(NSInteger)port username:(NSString *)username password:(NSString *)password
 {
     self = [super initWithContentRect:contentRect
-                            styleMask:NSTitledWindowMask | NSClosableWindowMask | NSMiniaturizableWindowMask | NSResizableWindowMask
+                            styleMask:(NSTitledWindowMask | NSClosableWindowMask | NSMiniaturizableWindowMask | NSResizableWindowMask)
                               backing:NSBackingStoreBuffered
                                 defer:NO];
     
@@ -54,6 +54,7 @@
         
         [self setTitle:[NSString stringWithFormat:@"VNC: %@:%ld", hostname, (long)port]];
         [self setMinSize:NSMakeSize(320, 240)];
+        [self setReleasedWhenClosed:NO];
         [self setDelegate:self];
         
         [self setupVNCClient];
@@ -104,10 +105,10 @@
     NSRectFill(NSMakeRect(0, 0, 640, 480));
     
     NSString *message = @"Connecting to VNC server...";
-    NSDictionary *attributes = @{
-        NSForegroundColorAttributeName: [NSColor whiteColor],
-        NSFontAttributeName: [NSFont systemFontOfSize:16]
-    };
+    NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
+        [NSColor whiteColor], NSForegroundColorAttributeName,
+        [NSFont systemFontOfSize:16], NSFontAttributeName,
+        nil];
     NSSize textSize = [message sizeWithAttributes:attributes];
     NSPoint textPoint = NSMakePoint((640 - textSize.width) / 2, (480 - textSize.height) / 2);
     [message drawAtPoint:textPoint withAttributes:attributes];
@@ -177,18 +178,27 @@
 
 - (void)disconnectFromVNC
 {
+    // Prevent multiple calls to disconnect - if EITHER is already cleared, we're disconnecting or disconnected
+    if (!_vncClient || !_connected) {
+        NSLog(@"VNCWindow: Already disconnected or disconnecting, skipping");
+        return;
+    }
+    
     NSLog(@"VNCWindow: Disconnecting from VNC");
+    
+    // Set _connected to NO immediately to prevent re-entry
+    _connected = NO;
     
     [self orderOut:nil];
     
     if (_vncClient) {
-        [_vncClient setDelegate:nil];
-        [_vncClient disconnect];
-        [_vncClient release];
-        _vncClient = nil;
+        VNCClient *client = _vncClient;
+        _vncClient = nil;  // Clear reference immediately to prevent re-entry
+        
+        [client setDelegate:nil];
+        [client disconnect];
+        [client release];
     }
-    
-    _connected = NO;
 }
 
 #pragma mark - Display Management
@@ -527,7 +537,7 @@
 
 - (BOOL)windowShouldClose:(id)sender
 {
-    [self disconnectFromVNC];
+    NSLog(@"VNCWindow: windowShouldClose called");
     return YES;
 }
 
@@ -588,10 +598,10 @@
     NSRectFill(NSMakeRect(0, 0, 640, 480));
     
     NSString *message = @"VNC Connection Lost";
-    NSDictionary *attributes = @{
-        NSForegroundColorAttributeName: [NSColor whiteColor],
-        NSFontAttributeName: [NSFont systemFontOfSize:16]
-    };
+    NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
+        [NSColor whiteColor], NSForegroundColorAttributeName,
+        [NSFont systemFontOfSize:16], NSFontAttributeName,
+        nil];
     NSSize textSize = [message sizeWithAttributes:attributes];
     NSPoint textPoint = NSMakePoint((640 - textSize.width) / 2, (480 - textSize.height) / 2);
     [message drawAtPoint:textPoint withAttributes:attributes];
@@ -623,42 +633,19 @@
 {
     NSLog(@"VNCWindow: Prompting for password");
     
-    // Eau theme metrics
-    const CGFloat sideMargin = 24;  // METRICS_CONTENT_SIDE_MARGIN
-    const CGFloat topMargin = 15;   // METRICS_CONTENT_TOP_MARGIN
-    const CGFloat bottomMargin = 20; // METRICS_CONTENT_BOTTOM_MARGIN
-    const CGFloat buttonHeight = 20; // METRICS_BUTTON_HEIGHT
-    const CGFloat textFieldHeight = 22; // METRICS_TEXT_INPUT_FIELD_HEIGHT
-    const CGFloat buttonSpacing = 10; // METRICS_BUTTON_HORIZ_INTERSPACE
-    const CGFloat labelHeight = 17;
-    const CGFloat verticalSpacing = 8;
-    
-    const CGFloat contentWidth = 300;
-    const CGFloat buttonWidth = 80;
-    
-    // Calculate layout
-    CGFloat yPos = bottomMargin;
-    CGFloat buttonsY = yPos;
-    yPos += buttonHeight + verticalSpacing;
-    CGFloat passwordY = yPos;
-    yPos += textFieldHeight + verticalSpacing;
-    CGFloat labelY = yPos;
-    yPos += labelHeight + topMargin;
-    const CGFloat contentHeight = yPos;
-    
-    // Use a simple panel instead of NSAlert with accessory view (more compatible with GNUstep)
-    NSPanel *panel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, contentWidth, contentHeight)
-                                                styleMask:NSTitledWindowMask
+    // Match Workspace credentials dialog geometry exactly
+    // Panel: 400x200, centered
+    NSPanel *panel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 400, 200)
+                                                styleMask:(NSTitledWindowMask | NSClosableWindowMask)
                                                   backing:NSBackingStoreBuffered
-                                                    defer:YES];
+                                                    defer:NO];
     [panel setTitle:@"VNC Password Required"];
     [panel center];
     
     NSView *contentView = [panel contentView];
     
-    // Label
-    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(sideMargin, labelY, 
-                                                                        contentWidth - 2*sideMargin, labelHeight)];
+    // Main label: NSMakeRect(20, 140, 360, 40)
+    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 140, 360, 40)];
     [label setStringValue:[NSString stringWithFormat:@"Enter password for %@:", [client hostname]]];
     [label setBezeled:NO];
     [label setDrawsBackground:NO];
@@ -667,40 +654,49 @@
     [contentView addSubview:label];
     [label release];
     
-    // Password field
-    NSSecureTextField *passwordField = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(sideMargin, passwordY, 
-                                                                                            contentWidth - 2*sideMargin, textFieldHeight)];
-    [contentView addSubview:passwordField];
+    // Password label: NSMakeRect(20, 75, 100, 17)
+    NSTextField *passwordLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 75, 100, 17)];
+    [passwordLabel setStringValue:@"Password:"];
+    [passwordLabel setBezeled:NO];
+    [passwordLabel setDrawsBackground:NO];
+    [passwordLabel setEditable:NO];
+    [passwordLabel setSelectable:NO];
+    [passwordLabel setAlignment:NSRightTextAlignment];
+    [contentView addSubview:passwordLabel];
+    [passwordLabel release];
     
-    // Buttons (right-aligned, Connect to the right of Cancel)
-    CGFloat button2X = contentWidth - sideMargin - buttonWidth;
-    CGFloat button1X = button2X - buttonSpacing - buttonWidth;
+    // Password field: NSMakeRect(130, 73, 250, 24)
+    NSSecureTextField *passwordField = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(130, 73, 250, 24)];
+    [[panel contentView] addSubview:passwordField];
     
-    // Cancel button
-    NSButton *cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(button1X, buttonsY, buttonWidth, buttonHeight)];
-    [cancelButton setTitle:@"Cancel"];
-    [cancelButton setBezelStyle:NSRoundedBezelStyle];
-    [cancelButton setTarget:NSApp];
-    [cancelButton setAction:@selector(abortModal)];
-    [cancelButton setTag:NSRunAbortedResponse];
-    [contentView addSubview:cancelButton];
-    [cancelButton release];
-    
-    // Connect button
-    NSButton *connectButton = [[NSButton alloc] initWithFrame:NSMakeRect(button2X, buttonsY, buttonWidth, buttonHeight)];
+    // Connect button: NSMakeRect(290, 20, 90, 24)
+    NSButton *connectButton = [[NSButton alloc] initWithFrame:NSMakeRect(290, 20, 90, 24)];
     [connectButton setTitle:@"Connect"];
-    [connectButton setBezelStyle:NSRoundedBezelStyle];
     [connectButton setTarget:NSApp];
     [connectButton setAction:@selector(stopModal)];
-    [connectButton setTag:NSRunStoppedResponse];
     [connectButton setKeyEquivalent:@"\r"];
     [contentView addSubview:connectButton];
     [connectButton release];
     
+    // Cancel button: NSMakeRect(190, 20, 90, 24)
+    NSButton *cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(190, 20, 90, 24)];
+    [cancelButton setTitle:@"Cancel"];
+    [cancelButton setTarget:NSApp];
+    [cancelButton setAction:@selector(abortModal)];
+    [cancelButton setKeyEquivalent:@"\e"];
+    [contentView addSubview:cancelButton];
+    [cancelButton release];
+    
+    // Set up key view loop for Tab to work
+    [passwordField setNextKeyView:connectButton];
+    [connectButton setNextKeyView:cancelButton];
+    [cancelButton setNextKeyView:passwordField];
+    
+    [panel setInitialFirstResponder:passwordField];
     [panel makeFirstResponder:passwordField];
     
     NSString *result = nil;
-    NSLog(@"VNCWindow: About to show modal password dialog...");
+    NSLog(@"VNCWindow: Showing modal password dialog...");
     NSInteger response = [NSApp runModalForWindow:panel];
     NSLog(@"VNCWindow: Modal password dialog returned with response: %ld", (long)response);
     
@@ -712,6 +708,16 @@
     }
     
     [passwordField release];
+    
+    // Cancel any pending Eau theme timer callbacks on button cells before closing
+    NSArray *subviews = [[panel contentView] subviews];
+    for (NSView *view in subviews) {
+        if ([view isKindOfClass:[NSButton class]]) {
+            NSButton *button = (NSButton *)view;
+            [NSObject cancelPreviousPerformRequestsWithTarget:[button cell]];
+        }
+    }
+    
     NSLog(@"VNCWindow: Closing password panel...");
     [panel orderOut:nil];
     [panel release];
@@ -727,49 +733,19 @@
 {
     NSLog(@"VNCWindow: Prompting for credentials");
     
-    // Eau theme metrics
-    const CGFloat sideMargin = 24;  // METRICS_CONTENT_SIDE_MARGIN
-    const CGFloat topMargin = 15;   // METRICS_CONTENT_TOP_MARGIN
-    const CGFloat bottomMargin = 20; // METRICS_CONTENT_BOTTOM_MARGIN
-    const CGFloat buttonHeight = 20; // METRICS_BUTTON_HEIGHT
-    const CGFloat textFieldHeight = 22; // METRICS_TEXT_INPUT_FIELD_HEIGHT
-    const CGFloat buttonSpacing = 10; // METRICS_BUTTON_HORIZ_INTERSPACE
-    const CGFloat labelHeight = 17;
-    const CGFloat verticalSpacing = 8;
-    const CGFloat fieldLabelWidth = 80;
-    
-    const CGFloat contentWidth = 320;
-    const CGFloat buttonWidth = 80;
-    
-    // Calculate layout from bottom to top
-    CGFloat yPos = bottomMargin;
-    CGFloat buttonsY = yPos;
-    yPos += buttonHeight + verticalSpacing;
-    CGFloat passwordFieldY = yPos;
-    yPos += textFieldHeight + 4;  // Small space between field and its label
-    CGFloat passwordLabelY = yPos;
-    yPos += labelHeight + verticalSpacing;
-    CGFloat usernameFieldY = yPos;
-    yPos += textFieldHeight + 4;
-    CGFloat usernameLabelY = yPos;
-    yPos += labelHeight + verticalSpacing;
-    CGFloat topLabelY = yPos;
-    yPos += labelHeight + topMargin;
-    const CGFloat contentHeight = yPos;
-    
-    // Use a simple panel instead of NSAlert with accessory view (more compatible with GNUstep)
-    NSPanel *panel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, contentWidth, contentHeight)
-                                                styleMask:NSTitledWindowMask
+    // Match Workspace credentials dialog geometry exactly
+    // Panel: 400x200, centered
+    NSPanel *panel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 400, 200)
+                                                styleMask:(NSTitledWindowMask | NSClosableWindowMask)
                                                   backing:NSBackingStoreBuffered
-                                                    defer:YES];
+                                                    defer:NO];
     [panel setTitle:@"VNC Credentials Required"];
     [panel center];
     
     NSView *contentView = [panel contentView];
     
-    // Top label
-    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(sideMargin, topLabelY, 
-                                                                        contentWidth - 2*sideMargin, labelHeight)];
+    // Main label: NSMakeRect(20, 140, 360, 40)
+    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 140, 360, 40)];
     [label setStringValue:[NSString stringWithFormat:@"Enter credentials for %@:", [client hostname]]];
     [label setBezeled:NO];
     [label setDrawsBackground:NO];
@@ -778,67 +754,66 @@
     [contentView addSubview:label];
     [label release];
     
-    // Username label
-    NSTextField *usernameLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(sideMargin, usernameLabelY, 
-                                                                                fieldLabelWidth, labelHeight)];
+    // Username label: NSMakeRect(20, 110, 100, 17)
+    NSTextField *usernameLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 110, 100, 17)];
     [usernameLabel setStringValue:@"Username:"];
     [usernameLabel setBezeled:NO];
     [usernameLabel setDrawsBackground:NO];
     [usernameLabel setEditable:NO];
     [usernameLabel setSelectable:NO];
+    [usernameLabel setAlignment:NSRightTextAlignment];
     [contentView addSubview:usernameLabel];
     [usernameLabel release];
     
-    // Username field
-    NSTextField *usernameField = [[NSTextField alloc] initWithFrame:NSMakeRect(sideMargin + fieldLabelWidth + 8, usernameFieldY, 
-                                                                                contentWidth - 2*sideMargin - fieldLabelWidth - 8, textFieldHeight)];
-    [contentView addSubview:usernameField];
+    // Username field: NSMakeRect(130, 108, 250, 24)
+    NSTextField *usernameField = [[NSTextField alloc] initWithFrame:NSMakeRect(130, 108, 250, 24)];
+    [usernameField setStringValue:NSUserName()];
+    [[panel contentView] addSubview:usernameField];
     
-    // Password label
-    NSTextField *passwordLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(sideMargin, passwordLabelY, 
-                                                                                fieldLabelWidth, labelHeight)];
+    // Password label: NSMakeRect(20, 75, 100, 17)
+    NSTextField *passwordLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 75, 100, 17)];
     [passwordLabel setStringValue:@"Password:"];
     [passwordLabel setBezeled:NO];
     [passwordLabel setDrawsBackground:NO];
     [passwordLabel setEditable:NO];
     [passwordLabel setSelectable:NO];
-    [contentView addSubview:passwordLabel];
+    [passwordLabel setAlignment:NSRightTextAlignment];
+    [[panel contentView] addSubview:passwordLabel];
     [passwordLabel release];
     
-    // Password field
-    NSSecureTextField *passwordField = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(sideMargin + fieldLabelWidth + 8, passwordFieldY, 
-                                                                                            contentWidth - 2*sideMargin - fieldLabelWidth - 8, textFieldHeight)];
-    [contentView addSubview:passwordField];
+    // Password field: NSMakeRect(130, 73, 250, 24)
+    NSSecureTextField *passwordField = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(130, 73, 250, 24)];
+    [[panel contentView] addSubview:passwordField];
     
-    // Buttons (right-aligned, Connect to the right of Cancel)
-    CGFloat button2X = contentWidth - sideMargin - buttonWidth;
-    CGFloat button1X = button2X - buttonSpacing - buttonWidth;
-    
-    // Cancel button
-    NSButton *cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(button1X, buttonsY, buttonWidth, buttonHeight)];
-    [cancelButton setTitle:@"Cancel"];
-    [cancelButton setBezelStyle:NSRoundedBezelStyle];
-    [cancelButton setTarget:NSApp];
-    [cancelButton setAction:@selector(abortModal)];
-    [cancelButton setTag:NSRunAbortedResponse];
-    [contentView addSubview:cancelButton];
-    [cancelButton release];
-    
-    // Connect button
-    NSButton *connectButton = [[NSButton alloc] initWithFrame:NSMakeRect(button2X, buttonsY, buttonWidth, buttonHeight)];
+    // Connect button: NSMakeRect(290, 20, 90, 24)
+    NSButton *connectButton = [[NSButton alloc] initWithFrame:NSMakeRect(290, 20, 90, 24)];
     [connectButton setTitle:@"Connect"];
-    [connectButton setBezelStyle:NSRoundedBezelStyle];
     [connectButton setTarget:NSApp];
     [connectButton setAction:@selector(stopModal)];
-    [connectButton setTag:NSRunStoppedResponse];
     [connectButton setKeyEquivalent:@"\r"];
     [contentView addSubview:connectButton];
     [connectButton release];
     
+    // Cancel button: NSMakeRect(190, 20, 90, 24)
+    NSButton *cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(190, 20, 90, 24)];
+    [cancelButton setTitle:@"Cancel"];
+    [cancelButton setTarget:NSApp];
+    [cancelButton setAction:@selector(abortModal)];
+    [cancelButton setKeyEquivalent:@"\e"];
+    [contentView addSubview:cancelButton];
+    [cancelButton release];
+    
+    // Set up key view loop for Tab to work
+    [usernameField setNextKeyView:passwordField];
+    [passwordField setNextKeyView:connectButton];
+    [connectButton setNextKeyView:cancelButton];
+    [cancelButton setNextKeyView:usernameField];
+    
+    [panel setInitialFirstResponder:usernameField];
     [panel makeFirstResponder:usernameField];
     
     NSDictionary *result = nil;
-    NSLog(@"VNCWindow: About to show modal credentials dialog...");
+    NSLog(@"VNCWindow: Showing modal credentials dialog...");
     NSInteger response = [NSApp runModalForWindow:panel];
     NSLog(@"VNCWindow: Modal credentials dialog returned with response: %ld", (long)response);
     
@@ -860,21 +835,25 @@
         NSLog(@"VNCWindow: User cancelled credential dialog");
     }
     
-    NSLog(@"VNCWindow: Closing credentials panel...");
-    [panel orderOut:nil];
-    
-    // Clean up text fields before releasing panel to avoid dangling references
-    [usernameField removeFromSuperview];
-    [passwordField removeFromSuperview];
     [usernameField release];
     [passwordField release];
     
-    // Process any pending events to clear button state updates
-    NSDate *now = [NSDate date];
-    [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:now];
+    // Cancel any pending Eau theme timer callbacks on button cells before closing
+    NSArray *subviews = [[panel contentView] subviews];
+    for (NSView *view in subviews) {
+        if ([view isKindOfClass:[NSButton class]]) {
+            NSButton *button = (NSButton *)view;
+            [NSObject cancelPreviousPerformRequestsWithTarget:[button cell]];
+        }
+    }
     
+    NSLog(@"VNCWindow: Closing credentials panel...");
+    [panel orderOut:nil];
     [panel release];
     NSLog(@"VNCWindow: Credentials panel released");
+    
+    // Small delay to ensure modal state is fully cleaned up
+    usleep(100000); // 100ms
     
     return result;
 }
