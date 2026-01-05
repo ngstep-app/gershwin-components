@@ -1,1 +1,0 @@
-dsstore.o: dsstore.m
