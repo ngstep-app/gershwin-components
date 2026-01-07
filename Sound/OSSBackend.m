@@ -327,4 +327,18 @@
     // TODO: Re-enumerate devices
 }
 
+#pragma mark - Immediate Device Switching
+
+- (BOOL)forceImmediateOutputDeviceSwitch:(AudioDevice *)device
+{
+    // TODO: Implement for OSS on FreeBSD
+    return NO;
+}
+
+- (BOOL)forceImmediateInputDeviceSwitch:(AudioDevice *)device
+{
+    // TODO: Implement for OSS on FreeBSD
+    return NO;
+}
+
 @end

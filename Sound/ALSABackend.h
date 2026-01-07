@@ -68,10 +68,20 @@
 - (float)parseVolumeFromMixerOutput:(NSString *)output;
 - (BOOL)parseMuteFromMixerOutput:(NSString *)output;
 
+// Immediate amixer control switching (forces immediate ALSA device change)
+- (BOOL)switchALSAControlImmediately:(NSString *)controlName 
+                                 toValue:(NSString *)value 
+                                   onCard:(int)cardIndex;
+- (NSArray *)getAvailableALSAControls:(int)cardIndex;
+
 // Default device management
 - (void)loadDefaultDevices;
 - (BOOL)saveDefaultDevice:(AudioDevice *)device isOutput:(BOOL)isOutput;
 - (NSString *)buildAsoundrcContent;
+
+// Immediate device switching (force switch even if audio is playing)
+- (BOOL)forceImmediateOutputDeviceSwitch:(AudioDevice *)device;
+- (BOOL)forceImmediateInputDeviceSwitch:(AudioDevice *)device;
 
 // Alert sounds
 - (void)loadAlertSounds;

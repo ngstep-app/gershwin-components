@@ -499,6 +499,70 @@ static NSString *const kMicControl = @"Mic";
     return (output != nil);
 }
 
+#pragma mark - Immediate ALSA Control Switching
+
+- (BOOL)switchALSAControlImmediately:(NSString *)controlName 
+                            toValue:(NSString *)value 
+                              onCard:(int)cardIndex
+{
+    NSLog(@"ALSABackend: switchALSAControlImmediately: %@ = %@ on card %d", 
+          controlName, value, cardIndex);
+    
+    // Run amixer with explicit card specification for immediate switching
+    NSString *cardStr = [NSString stringWithFormat:@"%d", cardIndex];
+    NSArray *args = @[@"-c", cardStr, @"sset", controlName, value, @"-q"];
+    
+    NSString *output = [self runCommand:amixerPath withArguments:args];
+    
+    if (output == nil) {
+        NSLog(@"ALSABackend: switchALSAControlImmediately: FAILED - amixer returned no output");
+        return NO;
+    }
+    
+    NSLog(@"ALSABackend: switchALSAControlImmediately: SUCCESS");
+    NSLog(@"ALSABackend:   output: %@", output);
+    
+    return YES;
+}
+
+- (NSArray *)getAvailableALSAControls:(int)cardIndex
+{
+    NSLog(@"ALSABackend: getAvailableALSAControls: card %d", cardIndex);
+    
+    NSString *cardStr = [NSString stringWithFormat:@"%d", cardIndex];
+    NSString *output = [self runCommand:amixerPath 
+                          withArguments:@[@"-c", cardStr, @"scontrols"]];
+    
+    if (!output) {
+        NSLog(@"ALSABackend: getAvailableALSAControls: FAILED - no output from amixer");
+        return nil;
+    }
+    
+    NSMutableArray *controls = [NSMutableArray array];
+    
+    // Parse control names from amixer output
+    // Format: Simple mixer control 'Master',0
+    NSArray *lines = [output componentsSeparatedByString:@"\n"];
+    for (NSString *line in lines) {
+        NSRange quoteStart = [line rangeOfString:@"'"];
+        if (quoteStart.location != NSNotFound) {
+            NSRange quoteEnd = [line rangeOfString:@"'" 
+                options:0 
+                range:NSMakeRange(quoteStart.location + 1, 
+                                 [line length] - quoteStart.location - 1)];
+            if (quoteEnd.location != NSNotFound) {
+                NSString *name = [line substringWithRange:
+                    NSMakeRange(quoteStart.location + 1,
+                               quoteEnd.location - quoteStart.location - 1)];
+                [controls addObject:name];
+                NSLog(@"ALSABackend:   found control: %@", name);
+            }
+        }
+    }
+    
+    return controls;
+}
+
 - (float)parseVolumeFromMixerOutput:(NSString *)output
 {
     // Look for [XX%]
@@ -1223,6 +1287,92 @@ static NSString *const kMicControl = @"Mic";
     
     // Save to our preferences file
     return [self savePreferences];
+}
+
+#pragma mark - Immediate Device Switching
+
+- (BOOL)forceImmediateOutputDeviceSwitch:(AudioDevice *)device
+{
+    if (!device) {
+        NSLog(@"ALSABackend: forceImmediateOutputDeviceSwitch: FAILED - device is nil");
+        return NO;
+    }
+    
+    NSLog(@"ALSABackend: forceImmediateOutputDeviceSwitch: %@ (card %d, device %d)", 
+          device.name, device.cardIndex, device.deviceIndex);
+    
+    // Step 1: Unmute the destination device if possible
+    NSArray *volumeControls = @[kMasterControl, kPCMControl, kSpeakerControl, kHeadphoneControl];
+    for (NSString *controlName in volumeControls) {
+        if ([self setMixerControl:controlName 
+                            value:@"unmute" 
+                             card:device.cardIndex]) {
+            NSLog(@"ALSABackend:   unmuted %@", controlName);
+            break;
+        }
+    }
+    
+    // Step 2: Silence other output devices to force switching
+    NSLog(@"ALSABackend:   silencing other output devices...");
+    for (AudioDevice *otherDevice in cachedOutputDevices) {
+        if (otherDevice.cardIndex != device.cardIndex) {
+            NSLog(@"ALSABackend:   muting card %d", otherDevice.cardIndex);
+            [self setMixerControl:kMasterControl 
+                            value:@"mute" 
+                             card:otherDevice.cardIndex];
+            [self setMixerControl:kPCMControl 
+                            value:@"mute" 
+                             card:otherDevice.cardIndex];
+        }
+    }
+    
+    // Step 4: Update default device settings
+    [self setDefaultOutputDevice:device];
+    
+    NSLog(@"ALSABackend: forceImmediateOutputDeviceSwitch: SUCCESS");
+    return YES;
+}
+
+- (BOOL)forceImmediateInputDeviceSwitch:(AudioDevice *)device
+{
+    if (!device) {
+        NSLog(@"ALSABackend: forceImmediateInputDeviceSwitch: FAILED - device is nil");
+        return NO;
+    }
+    
+    NSLog(@"ALSABackend: forceImmediateInputDeviceSwitch: %@ (card %d, device %d)", 
+          device.name, device.cardIndex, device.deviceIndex);
+    
+    // Step 1: Enable the destination device input
+    NSArray *inputControls = @[kCaptureControl, kMicControl];
+    for (NSString *controlName in inputControls) {
+        if ([self setMixerControl:controlName 
+                            value:@"cap" 
+                             card:device.cardIndex]) {
+            NSLog(@"ALSABackend:   enabled capture on %@", controlName);
+            break;
+        }
+    }
+    
+    // Step 2: Disable input capture on other devices
+    NSLog(@"ALSABackend:   disabling capture on other input devices...");
+    for (AudioDevice *otherDevice in cachedInputDevices) {
+        if (otherDevice.cardIndex != device.cardIndex) {
+            NSLog(@"ALSABackend:   disabling capture on card %d", otherDevice.cardIndex);
+            [self setMixerControl:kCaptureControl 
+                            value:@"nocap" 
+                             card:otherDevice.cardIndex];
+            [self setMixerControl:kMicControl 
+                            value:@"nocap" 
+                             card:otherDevice.cardIndex];
+        }
+    }
+    
+    // Step 3: Update default device settings
+    [self setDefaultInputDevice:device];
+    
+    NSLog(@"ALSABackend: forceImmediateInputDeviceSwitch: SUCCESS");
+    return YES;
 }
 
 - (BOOL)savePreferences

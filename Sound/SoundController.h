@@ -100,6 +100,7 @@
     
     // State
     BOOL isUpdatingUI;
+    BOOL isInitializing;
 }
 
 // View creation

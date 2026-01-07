@@ -207,6 +207,10 @@ typedef NS_ENUM(NSInteger, AudioDeviceState) {
 - (BOOL)setDefaultOutputDevice:(AudioDevice *)device;
 - (AudioDevice *)outputDeviceWithIdentifier:(NSString *)identifier;
 
+// Immediate device switching (force switch even if audio is playing)
+- (BOOL)forceImmediateOutputDeviceSwitch:(AudioDevice *)device;
+- (BOOL)forceImmediateInputDeviceSwitch:(AudioDevice *)device;
+
 // Input device management  
 - (NSArray *)inputDevices;
 - (AudioDevice *)defaultInputDevice;
@@ -261,6 +265,12 @@ typedef NS_ENUM(NSInteger, AudioDeviceState) {
 - (void)refresh;
 
 @optional
+
+// Immediate amixer control switching (backend-specific)
+- (BOOL)switchALSAControlImmediately:(NSString *)controlName 
+                                 toValue:(NSString *)value 
+                                   onCard:(int)cardIndex;
+- (NSArray *)getAvailableALSAControls:(int)cardIndex;
 
 // Bluetooth audio (for future expansion)
 - (NSArray *)bluetoothAudioDevices;

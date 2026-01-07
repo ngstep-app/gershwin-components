@@ -37,6 +37,7 @@ static const CGFloat kTableRowHeight = 18.0;
         selectedInputDevice = nil;
         selectedAlertSound = nil;
         isUpdatingUI = NO;
+        isInitializing = YES;
         
         // Initialize backend
         ALSABackend *alsaBackend = [[ALSABackend alloc] init];
@@ -75,6 +76,9 @@ static const CGFloat kTableRowHeight = 18.0;
         [self createUnavailableView];
         return mainView;
     }
+    
+    // Mark that we're in initialization phase - don't modify audio settings
+    isInitializing = YES;
     
     mainView = [[NSView alloc] initWithFrame:
                 NSMakeRect(0, 0, kPaneWidth, kPaneHeight)];
@@ -687,6 +691,13 @@ static const CGFloat kTableRowHeight = 18.0;
     
     isUpdatingUI = NO;
     
+    // After first refresh during initialization, mark that we're done initializing
+    // Subsequent device selections will now trigger actual device switches and audio changes
+    if (isInitializing && timer == nil) {
+        isInitializing = NO;
+        NSLog(@"SoundController: refreshDevices: completed initialization phase");
+    }
+    
     NSLog(@"SoundController: refreshDevices: completed");
 }
 
@@ -708,19 +719,24 @@ static const CGFloat kTableRowHeight = 18.0;
     [outputMuteCheckbox setEnabled:hasDevices];
     [outputBalanceSlider setEnabled:hasDevices];
     
-    // Find and select the default device
-    AudioDevice *defaultDevice = [backend defaultOutputDevice];
+    // Find and select the current/active device
+    AudioDevice *currentDevice = [backend defaultOutputDevice];
     [selectedOutputDevice release];
-    selectedOutputDevice = [defaultDevice retain];
+    selectedOutputDevice = [currentDevice retain];
     
     [outputDevicesTable reloadData];
     
-    // Select the row for the default device
+    // Select the row for the current device (without triggering device switch during init)
     if (selectedOutputDevice) {
         NSUInteger index = [outputDevices indexOfObject:selectedOutputDevice];
         if (index != NSNotFound) {
+            // Set the selection programmatically without triggering tableViewSelectionDidChange:
+            // by temporarily setting a flag
+            BOOL wasUpdatingUI = isUpdatingUI;
+            isUpdatingUI = YES;
             [outputDevicesTable selectRowIndexes:[NSIndexSet indexSetWithIndex:index]
                             byExtendingSelection:NO];
+            isUpdatingUI = wasUpdatingUI;
         }
     }
     
@@ -757,17 +773,22 @@ static const CGFloat kTableRowHeight = 18.0;
     [inputVolumeSlider setEnabled:hasDevices];
     [inputMuteCheckbox setEnabled:hasDevices];
     
-    AudioDevice *defaultDevice = [backend defaultInputDevice];
+    AudioDevice *currentDevice = [backend defaultInputDevice];
     [selectedInputDevice release];
-    selectedInputDevice = [defaultDevice retain];
+    selectedInputDevice = [currentDevice retain];
     
     [inputDevicesTable reloadData];
     
     if (selectedInputDevice) {
         NSUInteger index = [inputDevices indexOfObject:selectedInputDevice];
         if (index != NSNotFound) {
+            // Set the selection programmatically without triggering tableViewSelectionDidChange:
+            // by temporarily setting a flag
+            BOOL wasUpdatingUI = isUpdatingUI;
+            isUpdatingUI = YES;
             [inputDevicesTable selectRowIndexes:[NSIndexSet indexSetWithIndex:index]
                            byExtendingSelection:NO];
+            isUpdatingUI = wasUpdatingUI;
         }
     }
 }
@@ -842,10 +863,15 @@ static const CGFloat kTableRowHeight = 18.0;
     [selectedOutputDevice release];
     selectedOutputDevice = [device retain];
     
-    BOOL success = [backend setDefaultOutputDevice:device];
-    NSLog(@"SoundController: setDefaultOutputDevice: %@", success ? @"SUCCESS" : @"FAILED");
+    // During initialization, just read current state without switching devices
+    if (!isInitializing) {
+        // Use force immediate switch to change devices even if audio is playing
+        BOOL success = [backend forceImmediateOutputDeviceSwitch:device];
+        NSLog(@"SoundController: forceImmediateOutputDeviceSwitch: %@", success ? @"SUCCESS" : @"FAILED");
+    }
+    
     [self updateOutputControls];
-    return success;
+    return YES;
 }
 
 - (BOOL)selectInputDevice:(AudioDevice *)device
@@ -859,10 +885,15 @@ static const CGFloat kTableRowHeight = 18.0;
     [selectedInputDevice release];
     selectedInputDevice = [device retain];
     
-    BOOL success = [backend setDefaultInputDevice:device];
-    NSLog(@"SoundController: setDefaultInputDevice: %@", success ? @"SUCCESS" : @"FAILED");
+    // During initialization, just read current state without switching devices
+    if (!isInitializing) {
+        // Use force immediate switch to change devices even if audio is playing
+        BOOL success = [backend forceImmediateInputDeviceSwitch:device];
+        NSLog(@"SoundController: forceImmediateInputDeviceSwitch: %@", success ? @"SUCCESS" : @"FAILED");
+    }
+    
     [self updateInputControls];
-    return success;
+    return YES;
 }
 
 #pragma mark - Input Level Monitoring
