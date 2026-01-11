@@ -60,6 +60,7 @@
 - (void)showStatus:(NSString *)message;
 - (void)sessionChanged:(id)sender;
 - (void)resetLoginWindow;
+- (void)monitorSession;
 - (BOOL)trySystemAction:(NSString *)actionType;
 - (void)killAllSessionProcesses:(uid_t)uid;
 - (BOOL)isXServerRunning;

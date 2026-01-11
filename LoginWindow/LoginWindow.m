@@ -30,6 +30,71 @@
 #import <shadow.h>
 #endif
 
+// Global flag to track X I/O errors
+static volatile BOOL xIOErrorOccurred = NO;
+
+// Signal flag for alarm timeout
+static volatile BOOL xOpenDisplayTimedOut = NO;
+
+// Alarm signal handler for XOpenDisplay timeout
+static void xOpenDisplayAlarmHandler(int sig) {
+    xOpenDisplayTimedOut = YES;
+    NSLog(@"[ERROR] XOpenDisplay timed out");
+}
+
+// X11 I/O error handler - called when X connection is lost
+static int xIOErrorHandler(Display *display) {
+    NSLog(@"[ERROR] X11 I/O error detected - X server connection lost");
+    xIOErrorOccurred = YES;
+    
+    // Exit immediately to allow systemd to restart us
+    // This prevents hanging when X server dies
+    exit(1);
+}
+
+// X11 error handler - called for non-fatal X errors
+static int xErrorHandler(Display *display, XErrorEvent *error) {
+    char error_text[256];
+    XGetErrorText(display, error->error_code, error_text, sizeof(error_text));
+    NSLog(@"[WARNING] X11 error: %s (request code: %d, minor code: %d)",
+          error_text, error->request_code, error->minor_code);
+    
+    // Return 0 to continue execution for non-fatal errors
+    return 0;
+}
+
+// Safe XOpenDisplay with timeout - prevents indefinite hanging
+static Display* safeXOpenDisplay(const char *display_name, int timeout_seconds) {
+    xOpenDisplayTimedOut = NO;
+    
+    // Set up alarm handler
+    struct sigaction sa;
+    struct sigaction old_sa;
+    sa.sa_handler = xOpenDisplayAlarmHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGALRM, &sa, &old_sa);
+    
+    // Set alarm
+    alarm(timeout_seconds);
+    
+    // Try to open display
+    Display *display = XOpenDisplay(display_name);
+    
+    // Cancel alarm
+    alarm(0);
+    
+    // Restore old handler
+    sigaction(SIGALRM, &old_sa, NULL);
+    
+    if (xOpenDisplayTimedOut) {
+        NSLog(@"[ERROR] XOpenDisplay timed out after %d seconds", timeout_seconds);
+        return NULL;
+    }
+    
+    return display;
+}
+
 // Signal handler for cleanup on termination
 void signalHandler(int sig) {
     NSLog(@"[DEBUG] Received signal %d, performing cleanup", sig);
@@ -56,6 +121,11 @@ void signalHandler(int sig) {
     didStartXServer = NO;
     xServerPid = 0;
     isTerminating = NO;
+    
+    // Install X11 error handlers FIRST to prevent hanging if X dies
+    XSetIOErrorHandler(xIOErrorHandler);
+    XSetErrorHandler(xErrorHandler);
+    NSLog(@"[DEBUG] X11 error handlers installed");
     
     // Set up signal handlers for cleanup
     signal(SIGTERM, signalHandler);
@@ -88,7 +158,7 @@ void signalHandler(int sig) {
 {
     NSLog(@"[DEBUG] Setting X11 background to mid grey with persistent pixmap and cursor");
     
-    Display *display = XOpenDisplay(NULL);
+    Display *display = safeXOpenDisplay(NULL, 5);  // 5 second timeout
     if (!display) {
         NSLog(@"[WARNING] Could not open X display");
         return;
@@ -972,57 +1042,23 @@ void signalHandler(int sig) {
         perror("execl failed");
         exit(1);
     } else if (pid > 0) {
-        // Parent process - wait for session to complete
+        // Parent process - save session info and monitor it
         NSLog(@"[DEBUG] Parent process, session PID: %d", pid);
         
-        // Store session information for cleanup
+        printf("Session started for user %s (PID: %d)\n", user_cstr, pid);
+        
+        // Store session information
         sessionPid = pid;
         sessionUid = pwd->pw_uid;
         sessionGid = pwd->pw_gid;
         
-        printf("Session started for user %s (PID: %d)\n", user_cstr, pid);
+        // Hide the login window
+        [loginWindow orderOut:nil];
         
-        // Hide the login window during session
-        [loginWindow orderOut:self];
-        NSLog(@"[DEBUG] Login window hidden, waiting for session to end");
+        NSLog(@"[DEBUG] LoginWindow hidden, monitoring session PID %d", pid);
         
-        // Wait for the session to end
-        int status;
-        pid_t wpid = -1;
-        while (wpid != pid) {
-            wpid = waitpid(pid, &status, 0);
-            if (wpid == -1) {
-                if (errno == EINTR) {
-                    continue; // Interrupted by signal, try again
-                }
-                NSLog(@"[DEBUG] waitpid error: %s", strerror(errno));
-                break;
-            }
-        }
-        
-        NSLog(@"[DEBUG] Session ended with status: %d", status);
-        if (WIFEXITED(status)) {
-            NSLog(@"[DEBUG] Session exited normally with code: %d", WEXITSTATUS(status));
-        } else if (WIFSIGNALED(status)) {
-            NSLog(@"[DEBUG] Session terminated by signal: %d", WTERMSIG(status));
-        }
-        
-        // Forcefully kill all remaining session processes
-        NSLog(@"[DEBUG] Starting forceful cleanup of session processes");
-        [self killAllSessionProcesses:sessionUid];
-        
-        // Session ended, close PAM session
-        [pamAuth closeSession];
-        NSLog(@"[DEBUG] PAM session closed");
-        
-        // Reset session tracking variables
-        sessionPid = 0;
-        sessionUid = 0;
-        sessionGid = 0;
-        
-        // Reset login window for next user
-        NSLog(@"[DEBUG] Session ended, resetting login window for next user");
-        [self resetLoginWindow];
+        // Start monitoring the session in the background
+        [self performSelector:@selector(monitorSession) withObject:nil afterDelay:1.0];
     } else {
         NSLog(@"[DEBUG] Fork failed");
         [self showStatus:@"Failed to start session"];
@@ -1506,58 +1542,92 @@ void signalHandler(int sig) {
         perror("execl failed");
         exit(1);
     } else if (pid > 0) {
-        // Parent process - wait for session to complete
+        // Parent process - save session info and monitor it
         NSLog(@"[DEBUG] Parent process for auto-login, session PID: %d", pid);
         
-        // Store session information for cleanup
+        printf("Auto-login session started for user %s (PID: %d)\n", user_cstr, pid);
+        
+        // Store session information
         sessionPid = pid;
         sessionUid = pwd->pw_uid;
         sessionGid = pwd->pw_gid;
         
-        printf("Auto-login session started for user %s (PID: %d)\n", user_cstr, pid);
+        // Hide the login window (it's already visible from startup)
+        [loginWindow orderOut:nil];
         
-        // Wait for the session to end
-        int status;
-        pid_t wpid = -1;
-        while (wpid != pid) {
-            wpid = waitpid(pid, &status, 0);
-            if (wpid == -1) {
-                if (errno == EINTR) {
-                    continue; // Interrupted by signal, try again
-                }
-                NSLog(@"[DEBUG] waitpid error for auto-login: %s", strerror(errno));
-                break;
-            }
-        }
+        NSLog(@"[DEBUG] LoginWindow hidden, monitoring auto-login session PID %d", pid);
         
-        NSLog(@"[DEBUG] Auto-login session ended with status: %d", status);
-        if (WIFEXITED(status)) {
-            NSLog(@"[DEBUG] Auto-login session exited normally with code: %d", WEXITSTATUS(status));
-        } else if (WIFSIGNALED(status)) {
-            NSLog(@"[DEBUG] Auto-login session terminated by signal: %d", WTERMSIG(status));
-        }
-        
-        // Forcefully kill all remaining session processes
-        NSLog(@"[DEBUG] Starting forceful cleanup of auto-login session processes");
-        [self killAllSessionProcesses:sessionUid];
-        
-        // Session ended, close PAM session
-        [pamAuth closeSession];
-        NSLog(@"[DEBUG] PAM session closed for auto-login");
-        
-        // Reset session tracking variables
-        sessionPid = 0;
-        sessionUid = 0;
-        sessionGid = 0;
-        
-        // Reset login window for next user
-        NSLog(@"[DEBUG] Auto-login session ended, resetting login window for next user");
-        [self resetLoginWindow];
+        // Start monitoring the session in the background
+        [self performSelector:@selector(monitorSession) withObject:nil afterDelay:1.0];
     } else {
         NSLog(@"[DEBUG] Fork failed for auto-login");
         [self showStatus:@"Failed to start auto-login session"];
         [pamAuth closeSession];
         [loginWindow makeKeyAndOrderFront:self];
+    }
+}
+
+- (void)monitorSession
+{
+    // Check if the session process is still running
+    if (sessionPid <= 0) {
+        NSLog(@"[DEBUG] No session to monitor");
+        return;
+    }
+    
+    int status;
+    pid_t result = waitpid(sessionPid, &status, WNOHANG);
+    
+    if (result == sessionPid) {
+        // Session has ended
+        NSLog(@"[DEBUG] Session PID %d has ended", sessionPid);
+        
+        if (WIFEXITED(status)) {
+            NSLog(@"[DEBUG] Session exited normally with status: %d", WEXITSTATUS(status));
+        } else if (WIFSIGNALED(status)) {
+            NSLog(@"[DEBUG] Session terminated by signal: %d", WTERMSIG(status));
+        }
+        
+        // Clean up any remaining session processes
+        NSLog(@"[DEBUG] Cleaning up remaining session processes for UID: %d", sessionUid);
+        [self killAllSessionProcesses:sessionUid];
+        
+        // Close PAM session
+        if (pamAuth) {
+            [pamAuth closeSession];
+            NSLog(@"[DEBUG] PAM session closed after session ended");
+        }
+        
+        // Reset session tracking
+        sessionPid = 0;
+        sessionUid = 0;
+        sessionGid = 0;
+        
+        // Show the login window again
+        NSLog(@"[DEBUG] Session ended, showing login window again");
+        [self resetLoginWindow];
+        [loginWindow makeKeyAndOrderFront:self];
+        [NSApp activateIgnoringOtherApps:YES];
+        
+    } else if (result == 0) {
+        // Session is still running - check again later
+        [self performSelector:@selector(monitorSession) withObject:nil afterDelay:1.0];
+    } else if (result == -1) {
+        // Error occurred
+        if (errno == ECHILD) {
+            // No child process - session already reaped
+            NSLog(@"[DEBUG] Session PID %d already reaped", sessionPid);
+            sessionPid = 0;
+            sessionUid = 0;
+            sessionGid = 0;
+            [self resetLoginWindow];
+            [loginWindow makeKeyAndOrderFront:self];
+            [NSApp activateIgnoringOtherApps:YES];
+        } else {
+            NSLog(@"[DEBUG] Error monitoring session: %s", strerror(errno));
+            // Continue monitoring
+            [self performSelector:@selector(monitorSession) withObject:nil afterDelay:1.0];
+        }
     }
 }
 
@@ -1962,8 +2032,8 @@ void signalHandler(int sig) {
     const char *display_name = ":0";
     setenv("DISPLAY", display_name, 1);
     
-    // Try to open X display directly - this is more reliable than using xset
-    Display *testDisplay = XOpenDisplay(display_name);
+    // Try to open X display directly with timeout - this is more reliable than using xset
+    Display *testDisplay = safeXOpenDisplay(display_name, 2);  // 2 second timeout
     if (testDisplay != NULL) {
         XCloseDisplay(testDisplay);
         NSLog(@"[DEBUG] X server is running on %s", display_name);

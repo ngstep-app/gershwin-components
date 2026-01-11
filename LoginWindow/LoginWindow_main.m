@@ -47,6 +47,62 @@ BOOL isXServerRunning(void);
 BOOL waitForXServer(void);
 BOOL startXServer(void);
 
+// X11 I/O error handler for main - called when X connection is lost
+static int mainXIOErrorHandler(Display *display) {
+    NSLog(@"[ERROR] X11 I/O error in main() - X server connection lost");
+    // Exit immediately to allow systemd to restart us
+    exit(1);
+}
+
+// X11 error handler for main - called for non-fatal X errors
+static int mainXErrorHandler(Display *display, XErrorEvent *error) {
+    char error_text[256];
+    XGetErrorText(display, error->error_code, error_text, sizeof(error_text));
+    NSLog(@"[WARNING] X11 error in main(): %s (request: %d, minor: %d)",
+          error_text, error->request_code, error->minor_code);
+    return 0;
+}
+
+// Signal flag for alarm timeout
+static volatile BOOL mainXOpenDisplayTimedOut = NO;
+
+// Alarm signal handler for XOpenDisplay timeout in main
+static void mainXOpenDisplayAlarmHandler(int sig) {
+    mainXOpenDisplayTimedOut = YES;
+}
+
+// Safe XOpenDisplay with timeout for main - prevents indefinite hanging
+static Display* mainSafeXOpenDisplay(const char *display_name, int timeout_seconds) {
+    mainXOpenDisplayTimedOut = NO;
+    
+    // Set up alarm handler
+    struct sigaction sa;
+    struct sigaction old_sa;
+    sa.sa_handler = mainXOpenDisplayAlarmHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGALRM, &sa, &old_sa);
+    
+    // Set alarm
+    alarm(timeout_seconds);
+    
+    // Try to open display
+    Display *display = XOpenDisplay(display_name);
+    
+    // Cancel alarm
+    alarm(0);
+    
+    // Restore old handler
+    sigaction(SIGALRM, &old_sa, NULL);
+    
+    if (mainXOpenDisplayTimedOut) {
+        NSLog(@"[ERROR] XOpenDisplay timed out after %d seconds in main", timeout_seconds);
+        return NULL;
+    }
+    
+    return display;
+}
+
 // Helper function to check if a process is running by name
 static BOOL isProcessRunningByName(const char *processName)
 {
@@ -173,8 +229,8 @@ BOOL isXServerRunning(void)
         }
     }
     
-    // Try to open X display
-    Display *testDisplay = XOpenDisplay(display_name);
+    // Try to open X display with timeout
+    Display *testDisplay = mainSafeXOpenDisplay(display_name, 2);  // 2 second timeout
     if (testDisplay != NULL) {
         XCloseDisplay(testDisplay);
         NSLog(@"[DEBUG] X server is running and accessible on %s", display_name);
@@ -193,7 +249,7 @@ BOOL waitForXServer(void)
     int maxAttempts = 120; // 120 seconds timeout like SLiM
     
     for (attempts = 0; attempts < maxAttempts; attempts++) {
-        Display *testDisplay = XOpenDisplay(":0");
+        Display *testDisplay = mainSafeXOpenDisplay(":0", 2);  // 2 second timeout per attempt
         if (testDisplay != NULL) {
             XCloseDisplay(testDisplay);
             NSLog(@"[DEBUG] X server is now accepting connections after %d attempts", attempts + 1);
@@ -419,6 +475,11 @@ void stopXorgLikeShellScript(void)
 int main(int argc, const char *argv[])
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    
+    // Install X11 error handlers FIRST before any X operations
+    XSetIOErrorHandler(mainXIOErrorHandler);
+    XSetErrorHandler(mainXErrorHandler);
+    NSLog(@"[DEBUG] X11 error handlers installed in main()");
     
     // Start Xorg at the very beginning before anything else happens
     NSLog(@"[DEBUG] Starting Xorg management");
