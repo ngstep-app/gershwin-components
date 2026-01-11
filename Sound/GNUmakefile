@@ -6,7 +6,8 @@ Sound_OBJC_FILES = \
 	SoundPane.m \
 	SoundController.m \
 	SoundModels.m \
-	ALSABackend.m
+	ALSABackend.m \
+	OSSBackend.m
 
 Sound_RESOURCE_FILES = Sound.png SoundInfo.plist
 Sound_BUNDLE_LIBS = -lPreferencePanes
