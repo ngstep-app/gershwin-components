@@ -902,6 +902,12 @@ void signalHandler(int sig) {
                 // Set proper ownership and permissions
                 chmod(xauthPath, 0600);
                 NSLog(@"[DEBUG] ~/.Xauthority created successfully at: %s", xauthPath);
+                
+                // Verify that the file was actually created
+                if (access(xauthPath, F_OK) != 0) {
+                    NSLog(@"[ERROR] ~/.Xauthority was not created at: %s", xauthPath);
+                    // Can't use NSAlert in child process, just log and continue
+                }
             } else {
                 NSLog(@"[ERROR] Failed to create ~/.Xauthority at: %s", xauthPath);
             }
@@ -1431,6 +1437,12 @@ void signalHandler(int sig) {
                 // Set proper ownership and permissions
                 chmod(xauthPath, 0600);
                 NSLog(@"[DEBUG] ~/.Xauthority created successfully for auto-login at: %s", xauthPath);
+                
+                // Verify that the file was actually created
+                if (access(xauthPath, F_OK) != 0) {
+                    NSLog(@"[ERROR] ~/.Xauthority was not created for auto-login at: %s", xauthPath);
+                    // Can't use NSAlert in child process, just log and continue
+                }
             } else {
                 NSLog(@"[ERROR] Failed to create ~/.Xauthority for auto-login at: %s", xauthPath);
             }
@@ -2286,6 +2298,19 @@ void signalHandler(int sig) {
     chmod([authFile UTF8String], 0600);
     
     NSLog(@"[DEBUG] Created X authorization file at %@ using libXau", authFile);
+    
+    // Verify that the X authorization file was actually created
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if (![fileManager fileExistsAtPath:authFile]) {
+        NSLog(@"[ERROR] X authorization file was not created at %@", authFile);
+        NSAlert *alert = [NSAlert alertWithMessageText:@"X Authorization Failed"
+                                         defaultButton:@"OK"
+                                       alternateButton:nil
+                                           otherButton:nil
+                             informativeTextWithFormat:@"The X authorization file could not be created at %@. The session may not be able to use the X server properly.", authFile];
+        [alert runModal];
+        return NO;
+    }
     
     // Rotate existing X server log file before starting new session
     NSString *xorgLogPath = @"/var/log/Xorg.0.log";
