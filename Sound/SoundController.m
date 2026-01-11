@@ -8,6 +8,7 @@
 
 #import "SoundController.h"
 #import "ALSABackend.h"
+#import "OSSBackend.h"
 
 // UI Constants
 static const CGFloat kPaneWidth = 595.0;
@@ -39,16 +40,51 @@ static const CGFloat kTableRowHeight = 18.0;
         isUpdatingUI = NO;
         isInitializing = YES;
         
-        // Initialize backend
-        ALSABackend *alsaBackend = [[ALSABackend alloc] init];
-        if ([alsaBackend isAvailable]) {
-            backend = alsaBackend;
+        // Initialize backend - try OSS first (FreeBSD), then ALSA (Linux)
+        backend = nil;
+
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+        // On FreeBSD/DragonFly, prefer OSS
+        OSSBackend *ossBackend = [[OSSBackend alloc] init];
+        if ([ossBackend isAvailable]) {
+            backend = ossBackend;
             backend.delegate = self;
-            NSLog(@"SoundController: Using ALSA backend version %@", 
+            NSLog(@"SoundController: Using OSS backend version %@",
                   [backend backendVersion]);
         } else {
-            [alsaBackend release];
-            backend = nil;
+            [ossBackend release];
+        }
+#endif
+
+        // If no backend yet, try ALSA (Linux)
+        if (backend == nil) {
+            ALSABackend *alsaBackend = [[ALSABackend alloc] init];
+            if ([alsaBackend isAvailable]) {
+                backend = alsaBackend;
+                backend.delegate = self;
+                NSLog(@"SoundController: Using ALSA backend version %@",
+                      [backend backendVersion]);
+            } else {
+                [alsaBackend release];
+            }
+        }
+
+#if !defined(__FreeBSD__) && !defined(__DragonFly__)
+        // On non-BSD systems, also try OSS as fallback (e.g., OSS4 on Linux)
+        if (backend == nil) {
+            OSSBackend *ossBackend = [[OSSBackend alloc] init];
+            if ([ossBackend isAvailable]) {
+                backend = ossBackend;
+                backend.delegate = self;
+                NSLog(@"SoundController: Using OSS backend version %@",
+                      [backend backendVersion]);
+            } else {
+                [ossBackend release];
+            }
+        }
+#endif
+
+        if (backend == nil) {
             NSLog(@"SoundController: No audio backend available");
         }
     }
