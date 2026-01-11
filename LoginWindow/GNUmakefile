@@ -12,13 +12,13 @@ LoginWindow_OBJC_FILES = \
     LoginWindowPAM.m
 
 LoginWindow_RESOURCE_FILES = \
-    Info.plist \
-    LoginWindow-pam.pam
+    Info.plist
 
 LoginWindow_PRINCIPAL_CLASS = LoginWindow
 
 # Additional libraries
-LoginWindow_LDFLAGS += -lpam -lutil -lX11
+# Ensure we search /usr/local/lib (FreeBSD ports) for libXau
+LoginWindow_LDFLAGS += -L/usr/local/lib -lpam -lutil -lX11 -lXau
 
 # Installation directories
 GNUSTEP_APPS_DIR = /System/Applications
@@ -50,16 +50,7 @@ install:: all
 			echo "/usr/local/etc/rc.d does not exist, skipping rc.d script install."; \
 		fi; \
 	fi
-	@echo "Installing PAM configuration..."
-	@if [ -n "$(DESTDIR)" ]; then \
-		echo "Installing to $(DESTDIR)/etc/pam.d/LoginWindow-pam (staged install)"; \
-		mkdir -p $(DESTDIR)/etc/pam.d; \
-		install -m 644 LoginWindow-pam.pam $(DESTDIR)/etc/pam.d/LoginWindow-pam; \
-	else \
-		echo "Installing to /etc/pam.d/LoginWindow-pam (system install)"; \
-		sudo -A mkdir -p /etc/pam.d; \
-		sudo -A install -m 644 LoginWindow-pam.pam /etc/pam.d/LoginWindow-pam; \
-	fi
+	@echo "Note: PAM configuration will be auto-generated to enable X11 authorization"
 	@echo "Installation complete."
 
 # Uninstall target
