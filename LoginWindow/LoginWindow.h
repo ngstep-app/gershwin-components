@@ -44,6 +44,7 @@
     pid_t sessionPid;
     uid_t sessionUid;
     gid_t sessionGid;
+    NSDate *sessionStartTime;
     BOOL didStartXServer;
     pid_t xServerPid;
     BOOL isTerminating;

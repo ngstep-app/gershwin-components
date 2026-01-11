@@ -1,26 +1,8 @@
-// Copyright (c) 2025, Simon Peter
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// 1. Redistributions of source code must retain the above copyright notice,
-//    this list of conditions and the following disclaimer.
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
+/*
+ * Copyright (c) 2025-26 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 
 #import "LoginWindowPAM.h"
 #include <stdlib.h>
@@ -97,6 +79,7 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
 
 @synthesize storedUsername = _storedUsername;
 @synthesize storedPassword = _storedPassword;
+@synthesize lastErrorMessage = _lastErrorMessage;
 
 - (id)init
 {
@@ -107,6 +90,7 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
         pam_conversation.appdata_ptr = (__bridge void *)self;
         _storedUsername = nil;
         _storedPassword = nil;
+        _lastErrorMessage = nil;
         authenticationInProgress = NO;
         NSLog(@"[PAM] LoginWindowPAM initialized");
     }
@@ -123,6 +107,7 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     }
     [_storedUsername release];
     [_storedPassword release];
+    [_lastErrorMessage release];
     [super dealloc];
 }
 
@@ -143,7 +128,10 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     int result = pam_start("system", [username UTF8String], &pam_conversation, &pam_handle);
     NSLog(@"[PAM] pam_start result: %d (%s)", result, pam_strerror(pam_handle, result));
     if (result != PAM_SUCCESS) {
-        NSLog(@"[PAM] pam_start failed: %s", pam_strerror(pam_handle, result));
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_start failed: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"PAM start failed: %s", error] retain];
         authenticationInProgress = NO;
         return NO;
     }
@@ -159,7 +147,10 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     result = pam_authenticate(pam_handle, 0);
     NSLog(@"[PAM] pam_authenticate result: %d (%s)", result, pam_strerror(pam_handle, result));
     if (result != PAM_SUCCESS) {
-        NSLog(@"[PAM] pam_authenticate failed: %s", pam_strerror(pam_handle, result));
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_authenticate failed: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"Authentication failed: %s", error] retain];
         pam_end(pam_handle, result);
         pam_handle = NULL;
         authenticationInProgress = NO;
@@ -170,7 +161,10 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     result = pam_acct_mgmt(pam_handle, PAM_SILENT);
     NSLog(@"[PAM] pam_acct_mgmt result: %d (%s)", result, pam_strerror(pam_handle, result));
     if (result != PAM_SUCCESS) {
-        NSLog(@"[PAM] pam_acct_mgmt failed: %s", pam_strerror(pam_handle, result));
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_acct_mgmt failed: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"Account management failed: %s", error] retain];
         pam_end(pam_handle, result);
         pam_handle = NULL;
         authenticationInProgress = NO;
@@ -195,13 +189,19 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     int result = pam_setcred(pam_handle, PAM_ESTABLISH_CRED);
     NSLog(@"[PAM] pam_setcred result: %d (%s)", result, pam_strerror(pam_handle, result));
     if (result != PAM_SUCCESS) {
-        NSLog(@"[PAM] pam_setcred failed: %s", pam_strerror(pam_handle, result));
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_setcred failed: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"Failed to establish credentials: %s", error] retain];
         return NO;
     }
     result = pam_open_session(pam_handle, 0);
     NSLog(@"[PAM] pam_open_session result: %d (%s)", result, pam_strerror(pam_handle, result));
     if (result != PAM_SUCCESS) {
-        NSLog(@"[PAM] pam_open_session failed: %s", pam_strerror(pam_handle, result));
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_open_session failed: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"Failed to open session: %s", error] retain];
         pam_setcred(pam_handle, PAM_DELETE_CRED);
         return NO;
     }
@@ -261,7 +261,10 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     int result = pam_start("system", [username UTF8String], &pam_conversation, &pam_handle);
     NSLog(@"[PAM] pam_start result for auto-login: %d (%s)", result, pam_strerror(pam_handle, result));
     if (result != PAM_SUCCESS) {
-        NSLog(@"[PAM] pam_start failed for auto-login: %s", pam_strerror(pam_handle, result));
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_start failed for auto-login: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"PAM start failed for auto-login: %s", error] retain];
         authenticationInProgress = NO;
         return NO;
     }
@@ -283,7 +286,10 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     result = pam_acct_mgmt(pam_handle, PAM_SILENT);
     NSLog(@"[PAM] pam_acct_mgmt result for auto-login: %d (%s)", result, pam_strerror(pam_handle, result));
     if (result != PAM_SUCCESS) {
-        NSLog(@"[PAM] pam_acct_mgmt failed for auto-login: %s", pam_strerror(pam_handle, result));
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_acct_mgmt failed for auto-login: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"Account management failed for auto-login: %s", error] retain];
         pam_end(pam_handle, result);
         pam_handle = NULL;
         authenticationInProgress = NO;
@@ -294,7 +300,10 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     result = pam_setcred(pam_handle, PAM_ESTABLISH_CRED);
     NSLog(@"[PAM] pam_setcred result for auto-login: %d (%s)", result, pam_strerror(pam_handle, result));
     if (result != PAM_SUCCESS) {
-        NSLog(@"[PAM] pam_setcred failed for auto-login: %s", pam_strerror(pam_handle, result));
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_setcred failed for auto-login: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"Failed to establish credentials for auto-login: %s", error] retain];
         pam_end(pam_handle, result);
         pam_handle = NULL;
         authenticationInProgress = NO;
@@ -304,7 +313,10 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     result = pam_open_session(pam_handle, 0);
     NSLog(@"[PAM] pam_open_session result for auto-login: %d (%s)", result, pam_strerror(pam_handle, result));
     if (result != PAM_SUCCESS) {
-        NSLog(@"[PAM] pam_open_session failed for auto-login: %s", pam_strerror(pam_handle, result));
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_open_session failed for auto-login: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"Failed to open session for auto-login: %s", error] retain];
         pam_setcred(pam_handle, PAM_DELETE_CRED);
         pam_end(pam_handle, result);
         pam_handle = NULL;
@@ -315,6 +327,14 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     authenticationInProgress = NO;
     NSLog(@"[PAM] Auto-login session opened successfully for user: %@", username);
     return YES;
+}
+
+- (NSString *)getLastError
+{
+    if (_lastErrorMessage) {
+        return [[_lastErrorMessage copy] autorelease];
+    }
+    return @"Unknown PAM error";
 }
 
 @end

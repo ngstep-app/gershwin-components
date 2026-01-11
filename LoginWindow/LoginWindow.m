@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Simon Peter
+ * Copyright (c) 2025-26 Simon Peter
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -118,6 +118,7 @@ void signalHandler(int sig) {
     sessionPid = 0;
     sessionUid = 0;
     sessionGid = 0;
+    sessionStartTime = nil;
     didStartXServer = NO;
     xServerPid = 0;
     isTerminating = NO;
@@ -690,6 +691,13 @@ void signalHandler(int sig) {
     // Open PAM session
     if (![pamAuth openSession]) {
         NSLog(@"[DEBUG] Failed to open PAM session");
+        NSString *errorMsg = [pamAuth getLastError];
+        NSAlert *alert = [NSAlert alertWithMessageText:@"PAM Session Error"
+                                         defaultButton:@"OK"
+                                       alternateButton:nil
+                                           otherButton:nil
+                             informativeTextWithFormat:@"%@", errorMsg];
+        [alert runModal];
         [self showStatus:@"Failed to open PAM session"];
         return;
     }
@@ -708,6 +716,14 @@ void signalHandler(int sig) {
     // Change to user's home directory
     if (chdir(pwd->pw_dir) != 0) {
         NSLog(@"[DEBUG] Cannot change to home directory: %s", pwd->pw_dir);
+        NSString *errorMsg = [NSString stringWithFormat:@"Cannot change to home directory: %s\n\nError: %s", 
+                             pwd->pw_dir, strerror(errno)];
+        NSAlert *alert = [NSAlert alertWithMessageText:@"Home Directory Error"
+                                         defaultButton:@"OK"
+                                       alternateButton:nil
+                                           otherButton:nil
+                             informativeTextWithFormat:@"%@", errorMsg];
+        [alert runModal];
         [self showStatus:@"Cannot change to home directory"];
         [pamAuth closeSession];
         return;
@@ -1051,6 +1067,7 @@ void signalHandler(int sig) {
         sessionPid = pid;
         sessionUid = pwd->pw_uid;
         sessionGid = pwd->pw_gid;
+        sessionStartTime = [[NSDate date] retain];
         
         // Hide the login window
         [loginWindow orderOut:nil];
@@ -1061,6 +1078,14 @@ void signalHandler(int sig) {
         [self performSelector:@selector(monitorSession) withObject:nil afterDelay:1.0];
     } else {
         NSLog(@"[DEBUG] Fork failed");
+        NSString *errorMsg = [NSString stringWithFormat:@"Failed to fork process for session\n\nError: %s", 
+                             strerror(errno)];
+        NSAlert *alert = [NSAlert alertWithMessageText:@"Session Start Error"
+                                         defaultButton:@"OK"
+                                       alternateButton:nil
+                                           otherButton:nil
+                             informativeTextWithFormat:@"%@", errorMsg];
+        [alert runModal];
         [self showStatus:@"Failed to start session"];
         [pamAuth closeSession];
     }
@@ -1171,6 +1196,13 @@ void signalHandler(int sig) {
     // We'll use a simplified PAM session opening
     if (![pamAuth openSessionForUser:username]) {
         NSLog(@"[DEBUG] Failed to open PAM session for auto-login user");
+        NSString *errorMsg = [pamAuth getLastError];
+        NSAlert *alert = [NSAlert alertWithMessageText:@"Auto-Login PAM Error"
+                                         defaultButton:@"OK"
+                                       alternateButton:nil
+                                           otherButton:nil
+                             informativeTextWithFormat:@"%@", errorMsg];
+        [alert runModal];
         // Fall back to showing login window
         [self showStatus:@"Failed to open session for auto-login"];
         [loginWindow makeKeyAndOrderFront:self];
@@ -1191,6 +1223,14 @@ void signalHandler(int sig) {
     // Change to user's home directory
     if (chdir(pwd->pw_dir) != 0) {
         NSLog(@"[DEBUG] Cannot change to home directory: %s", pwd->pw_dir);
+        NSString *errorMsg = [NSString stringWithFormat:@"Cannot change to home directory: %s\n\nError: %s", 
+                             pwd->pw_dir, strerror(errno)];
+        NSAlert *alert = [NSAlert alertWithMessageText:@"Auto-Login Home Directory Error"
+                                         defaultButton:@"OK"
+                                       alternateButton:nil
+                                           otherButton:nil
+                             informativeTextWithFormat:@"%@", errorMsg];
+        [alert runModal];
         [self showStatus:@"Cannot change to home directory"];
         [pamAuth closeSession];
         [loginWindow makeKeyAndOrderFront:self];
@@ -1551,6 +1591,7 @@ void signalHandler(int sig) {
         sessionPid = pid;
         sessionUid = pwd->pw_uid;
         sessionGid = pwd->pw_gid;
+        sessionStartTime = [[NSDate date] retain];
         
         // Hide the login window (it's already visible from startup)
         [loginWindow orderOut:nil];
@@ -1582,10 +1623,42 @@ void signalHandler(int sig) {
         // Session has ended
         NSLog(@"[DEBUG] Session PID %d has ended", sessionPid);
         
+        // Check if session ended very quickly (within 5 seconds), indicating a startup error
+        NSTimeInterval sessionDuration = -[sessionStartTime timeIntervalSinceNow];
+        BOOL earlyFailure = (sessionDuration < 5.0);
+        
+        int exitCode = 0;
+        NSString *exitReason = nil;
+        
         if (WIFEXITED(status)) {
-            NSLog(@"[DEBUG] Session exited normally with status: %d", WEXITSTATUS(status));
+            exitCode = WEXITSTATUS(status);
+            NSLog(@"[DEBUG] Session exited normally with status: %d", exitCode);
+            if (exitCode != 0) {
+                exitReason = [NSString stringWithFormat:@"Session exited with error code: %d", exitCode];
+            }
         } else if (WIFSIGNALED(status)) {
-            NSLog(@"[DEBUG] Session terminated by signal: %d", WTERMSIG(status));
+            int signal = WTERMSIG(status);
+            NSLog(@"[DEBUG] Session terminated by signal: %d", signal);
+            exitReason = [NSString stringWithFormat:@"Session terminated by signal: %d (%s)", signal, strsignal(signal)];
+        }
+        
+        // Show alert if session failed early
+        if (earlyFailure && (exitCode != 0 || exitReason)) {
+            NSString *errorMsg;
+            if (exitReason) {
+                errorMsg = [NSString stringWithFormat:@"The session failed to start properly.\n\n%@\n\nSession duration: %.1f seconds\n\nPlease check the system logs for more details.", 
+                           exitReason, sessionDuration];
+            } else {
+                errorMsg = [NSString stringWithFormat:@"The session failed to start properly.\n\nSession duration: %.1f seconds\n\nPlease check the system logs for more details.", 
+                           sessionDuration];
+            }
+            
+            NSAlert *alert = [NSAlert alertWithMessageText:@"Session Startup Error"
+                                             defaultButton:@"OK"
+                                           alternateButton:nil
+                                               otherButton:nil
+                                 informativeTextWithFormat:@"%@", errorMsg];
+            [alert runModal];
         }
         
         // Clean up any remaining session processes
@@ -1602,6 +1675,8 @@ void signalHandler(int sig) {
         sessionPid = 0;
         sessionUid = 0;
         sessionGid = 0;
+        [sessionStartTime release];
+        sessionStartTime = nil;
         
         // Show the login window again
         NSLog(@"[DEBUG] Session ended, showing login window again");
@@ -1620,6 +1695,8 @@ void signalHandler(int sig) {
             sessionPid = 0;
             sessionUid = 0;
             sessionGid = 0;
+            [sessionStartTime release];
+            sessionStartTime = nil;
             [self resetLoginWindow];
             [loginWindow makeKeyAndOrderFront:self];
             [NSApp activateIgnoringOtherApps:YES];
