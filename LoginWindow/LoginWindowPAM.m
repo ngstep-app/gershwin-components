@@ -9,6 +9,11 @@
 #include <string.h>
 #include <unistd.h>
 
+// Define PAM_XDISPLAY if not provided by system PAM headers (e.g., on FreeBSD)
+#ifndef PAM_XDISPLAY
+#define PAM_XDISPLAY 14
+#endif
+
 // C function for PAM conversation callback
 int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
                         struct pam_response **resp, void *appdata_ptr)
