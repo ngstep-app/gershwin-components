@@ -12,6 +12,7 @@
 
 @interface LoginWindowPAM : NSObject
 {
+    @public
     pam_handle_t *pam_handle;
     struct pam_conv pam_conversation;
     NSString *_storedUsername;
@@ -28,6 +29,7 @@
 - (BOOL)authenticateUser:(NSString *)username password:(NSString *)password;
 - (BOOL)openSessionForUser:(NSString *)username;
 - (BOOL)openSession;
+- (BOOL)openSessionAsUser;
 - (void)closeSession;
 - (char **)getEnvironmentList;
 - (NSString *)getLastError;

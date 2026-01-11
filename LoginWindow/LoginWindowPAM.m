@@ -320,7 +320,7 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
 
 - (BOOL)openSession
 {
-    NSLog(@"[PAM] openSession called");
+    NSLog(@"[PAM] openSession called (as root - DEPRECATED, should use openSessionAsUser after setuid)");
     if (!pam_handle) {
         NSLog(@"[PAM] openSession failed: pam_handle is NULL");
         return NO;
@@ -345,6 +345,42 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
         return NO;
     }
     NSLog(@"[PAM] Session opened successfully");
+    return YES;
+}
+
+- (BOOL)openSessionAsUser
+{
+    NSLog(@"[PAM] openSessionAsUser called (after setuid - creates Xauthority)");
+    if (!pam_handle) {
+        NSLog(@"[PAM] openSessionAsUser failed: pam_handle is NULL");
+        return NO;
+    }
+    
+    uid_t uid = getuid();
+    NSLog(@"[PAM] Current uid: %d", uid);
+    
+    int result = pam_setcred(pam_handle, PAM_ESTABLISH_CRED);
+    NSLog(@"[PAM] pam_setcred (ESTABLISH) result: %d (%s)", result, pam_strerror(pam_handle, result));
+    if (result != PAM_SUCCESS) {
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_setcred (ESTABLISH) failed: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"Failed to establish credentials: %s", error] retain];
+        return NO;
+    }
+    
+    result = pam_open_session(pam_handle, 0);
+    NSLog(@"[PAM] pam_open_session result: %d (%s)", result, pam_strerror(pam_handle, result));
+    if (result != PAM_SUCCESS) {
+        const char *error = pam_strerror(pam_handle, result);
+        NSLog(@"[PAM] pam_open_session failed: %s", error);
+        [_lastErrorMessage release];
+        _lastErrorMessage = [[NSString stringWithFormat:@"Failed to open session: %s", error] retain];
+        pam_setcred(pam_handle, PAM_DELETE_CRED);
+        return NO;
+    }
+    
+    NSLog(@"[PAM] Session opened successfully as user %d", uid);
     return YES;
 }
 

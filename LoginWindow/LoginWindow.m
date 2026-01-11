@@ -701,21 +701,8 @@ void signalHandler(int sig) {
     // Save the current session choice before starting
     [self saveLastSession:selectedSessionExec];
     
-    // Open PAM session
-    if (![pamAuth openSession]) {
-        NSLog(@"[DEBUG] Failed to open PAM session");
-        NSString *errorMsg = [pamAuth getLastError];
-        NSAlert *alert = [NSAlert alertWithMessageText:@"PAM Session Error"
-                                         defaultButton:@"OK"
-                                       alternateButton:nil
-                                           otherButton:nil
-                             informativeTextWithFormat:@"%@", errorMsg];
-        [alert runModal];
-        [self showStatus:@"Failed to open PAM session"];
-        return;
-    }
-    
-    NSLog(@"[DEBUG] PAM session opened successfully");
+    // Note: PAM session will be opened AFTER fork and setuid, not here
+    // This is crucial so that pam_xauth can write to the user's home directory
     
     // Get PAM environment
     char **pam_envlist = [pamAuth getEnvironmentList];
@@ -822,6 +809,29 @@ void signalHandler(int sig) {
         NSLog(@"[DEBUG] Manual user setup completed successfully");
         
         NSLog(@"[DEBUG] User context setup complete");
+        
+        // NOW open PAM session as the user (creates Xauthority)
+        NSLog(@"[DEBUG] Opening PAM session as user %d", pwd->pw_uid);
+        LoginWindowPAM *userPamAuth = [[LoginWindowPAM alloc] init];
+        userPamAuth->pam_handle = pamAuth->pam_handle;  // Use existing handle from root
+        if (![userPamAuth openSessionAsUser]) {
+            NSString *errorMsg = [userPamAuth getLastError];
+            NSLog(@"[ERROR] Failed to open PAM session as user: %@", errorMsg);
+            // Don't exit - PAM session failure shouldn't block session start
+            // but the user won't get Xauthority
+        } else {
+            NSLog(@"[DEBUG] PAM session opened successfully as user");
+        }
+        [userPamAuth release];
+        
+        // Verify that ~/.Xauthority was created by pam_xauth
+        NSString *xauthorityPath = [NSString stringWithFormat:@"%s/.Xauthority", pwd->pw_dir];
+        BOOL xauthorityExists = [[NSFileManager defaultManager] fileExistsAtPath:xauthorityPath];
+        if (xauthorityExists) {
+            NSLog(@"[DEBUG] ~/.Xauthority created successfully at: %@", xauthorityPath);
+        } else {
+            NSLog(@"[WARNING] ~/.Xauthority was NOT created by PAM session");
+        }
         
         // Clear signal handlers and reset signal mask
         signal(SIGTERM, SIG_DFL);
