@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 
 // Define PAM_XDISPLAY if not provided by system PAM headers (e.g., on FreeBSD)
 #ifndef PAM_XDISPLAY
@@ -129,14 +130,30 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     _storedUsername = [username copy];
     _storedPassword = [password copy];
     NSLog(@"[PAM] Credentials stored: username=%@ password=%@", _storedUsername, _storedPassword ? @"(hidden)" : @"(nil)");
+    
+    // Check if PAM configuration file exists
+    NSLog(@"[PAM] Checking for PAM configuration file at /etc/pam.d/LoginWindow-pam");
+    if (access("/etc/pam.d/LoginWindow-pam", R_OK) != 0) {
+        NSLog(@"[PAM] ERROR: /etc/pam.d/LoginWindow-pam is not readable or does not exist (errno=%d: %s)", errno, strerror(errno));
+    } else {
+        NSLog(@"[PAM] PAM configuration file exists and is readable");
+    }
+    
     // "LoginWindow-pam" is the service name used for PAM authentication, there is a file in /etc/pam.d/ that defines the service
+    NSLog(@"[PAM] Calling pam_start with service='LoginWindow-pam', user='%s'", [username UTF8String]);
     int result = pam_start("LoginWindow-pam", [username UTF8String], &pam_conversation, &pam_handle);
-    NSLog(@"[PAM] pam_start result: %d (%s)", result, pam_strerror(pam_handle, result));
+    NSLog(@"[PAM] pam_start returned: %d", result);
+    if (pam_handle != NULL) {
+        NSLog(@"[PAM] pam_start error message: %s", pam_strerror(pam_handle, result));
+    } else {
+        NSLog(@"[PAM] pam_start failed and pam_handle is NULL");
+    }
     if (result != PAM_SUCCESS) {
-        const char *error = pam_strerror(pam_handle, result);
-        NSLog(@"[PAM] pam_start failed: %s", error);
+        const char *error = pam_handle ? pam_strerror(pam_handle, result) : "unknown error";
+        NSLog(@"[PAM] pam_start FAILED with code %d: %s (errno=%d: %s)", result, error, errno, strerror(errno));
+        NSLog(@"[PAM] Common causes: 1) /etc/pam.d/LoginWindow-pam missing, 2) PAM modules not found, 3) permission denied");
         [_lastErrorMessage release];
-        _lastErrorMessage = [[NSString stringWithFormat:@"PAM start failed: %s", error] retain];
+        _lastErrorMessage = [[NSString stringWithFormat:@"PAM initialization failed: %s\nCheck /etc/pam.d/LoginWindow-pam exists and PAM modules are installed.", error] retain];
         authenticationInProgress = NO;
         return NO;
     }
@@ -272,14 +289,29 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     
     NSLog(@"[PAM] Starting PAM session for auto-login user: %@", username);
     
+    // Check if PAM configuration file exists
+    NSLog(@"[PAM] Checking for PAM configuration file at /etc/pam.d/LoginWindow-pam");
+    if (access("/etc/pam.d/LoginWindow-pam", R_OK) != 0) {
+        NSLog(@"[PAM] ERROR: /etc/pam.d/LoginWindow-pam is not readable or does not exist (errno=%d: %s)", errno, strerror(errno));
+    } else {
+        NSLog(@"[PAM] PAM configuration file exists and is readable");
+    }
+    
     // "LoginWindow-pam" is the service name used for PAM authentication
+    NSLog(@"[PAM] Calling pam_start with service='LoginWindow-pam', user='%s'", [username UTF8String]);
     int result = pam_start("LoginWindow-pam", [username UTF8String], &pam_conversation, &pam_handle);
-    NSLog(@"[PAM] pam_start result for auto-login: %d (%s)", result, pam_strerror(pam_handle, result));
+    NSLog(@"[PAM] pam_start returned: %d", result);
+    if (pam_handle != NULL) {
+        NSLog(@"[PAM] pam_start error message: %s", pam_strerror(pam_handle, result));
+    } else {
+        NSLog(@"[PAM] pam_start failed and pam_handle is NULL");
+    }
     if (result != PAM_SUCCESS) {
-        const char *error = pam_strerror(pam_handle, result);
-        NSLog(@"[PAM] pam_start failed for auto-login: %s", error);
+        const char *error = pam_handle ? pam_strerror(pam_handle, result) : "unknown error";
+        NSLog(@"[PAM] pam_start FAILED for auto-login with code %d: %s (errno=%d: %s)", result, error, errno, strerror(errno));
+        NSLog(@"[PAM] Common causes: 1) /etc/pam.d/LoginWindow-pam missing, 2) PAM modules not found, 3) permission denied");
         [_lastErrorMessage release];
-        _lastErrorMessage = [[NSString stringWithFormat:@"PAM start failed for auto-login: %s", error] retain];
+        _lastErrorMessage = [[NSString stringWithFormat:@"PAM initialization failed for auto-login: %s\nCheck /etc/pam.d/LoginWindow-pam exists and PAM modules are installed.", error] retain];
         authenticationInProgress = NO;
         return NO;
     }

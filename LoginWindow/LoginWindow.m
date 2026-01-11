@@ -520,6 +520,19 @@ void signalHandler(int sig) {
     } else {
         NSLog(@"[DEBUG] authenticateUser:password: returned NO");
         [self showStatus:@"Authentication failed"];
+        
+        // Show detailed error message if available
+        NSString *errorMsg = [pamAuth lastErrorMessage];
+        if (errorMsg && [errorMsg length] > 0) {
+            NSLog(@"[ERROR] Showing PAM error to user: %@", errorMsg);
+            NSAlert *alert = [NSAlert alertWithMessageText:@"Authentication Error"
+                                             defaultButton:@"OK"
+                                           alternateButton:nil
+                                               otherButton:nil
+                                 informativeTextWithFormat:@"%@", errorMsg];
+            [alert runModal];
+        }
+        
         [self shakeWindow];
         [passwordField setStringValue:@""];
         [loginWindow makeFirstResponder:passwordField];
