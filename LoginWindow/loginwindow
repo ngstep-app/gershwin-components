@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # PROVIDE: loginwindow
-# REQUIRE: LOGIN cleanvar moused syscons dbus
+# REQUIRE: LOGIN cleanvar moused
 # KEYWORD: shutdown
 #
 # Add the following lines to /etc/rc.conf to enable the LoginWindow:
