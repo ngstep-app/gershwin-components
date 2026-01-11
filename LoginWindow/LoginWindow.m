@@ -21,6 +21,7 @@
 #import <signal.h>
 #import <fcntl.h>
 #import <X11/Xlib.h>
+#import <X11/Xauth.h>
 #if defined(__linux__)
 #import <dirent.h>
 #import <ctype.h>
@@ -62,6 +63,86 @@ static int xErrorHandler(Display *display, XErrorEvent *error) {
     // Return 0 to continue execution for non-fatal errors
     return 0;
 }
+
+// Generate 16 random bytes for MIT-MAGIC-COOKIE-1
+static void generate_xauth_cookie(unsigned char cookie[16]) {
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd >= 0) {
+        ssize_t n = read(fd, cookie, 16);
+        close(fd);
+        if (n == 16) {
+            return;
+        }
+    }
+    // Fallback to arc4random if /dev/urandom fails
+    for (int i = 0; i < 16; i++) {
+        cookie[i] = (unsigned char)arc4random_uniform(256);
+    }
+}
+
+// Write X authorization entry using libXau
+static int write_xauth_entry(
+    const char *authfile,
+    const char *display,   // e.g., ":0" or "0"
+    const unsigned char cookie[16]
+) {
+    Xauth xa;
+    
+    // FamilyLocal means the cookie is valid for the local machine
+    xa.family = FamilyLocal;
+    
+    // For local auth, we need to specify the hostname
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) != 0) {
+        hostname[0] = '\0';
+    }
+    xa.address_length = strlen(hostname);
+    xa.address = hostname;
+    
+    // Display number - strip leading colon if present
+    const char *dispnum = display;
+    if (dispnum[0] == ':') {
+        dispnum++;
+    }
+    // Also strip the screen number if present (e.g., "0.0" -> "0")
+    char dispnum_copy[32];
+    strncpy(dispnum_copy, dispnum, sizeof(dispnum_copy) - 1);
+    dispnum_copy[sizeof(dispnum_copy) - 1] = '\0';
+    char *dot = strchr(dispnum_copy, '.');
+    if (dot) {
+        *dot = '\0';
+    }
+    xa.number_length = strlen(dispnum_copy);
+    xa.number = dispnum_copy;
+    
+    xa.name = "MIT-MAGIC-COOKIE-1";
+    xa.name_length = strlen(xa.name);
+    
+    xa.data = (char *)cookie;
+    xa.data_length = 16;
+    
+    // Open the file for appending (creates if doesn't exist)
+    FILE *fp = fopen(authfile, "ab");
+    if (!fp) {
+        NSLog(@"[XAUTH] Failed to open %s for writing: %s", authfile, strerror(errno));
+        return -1;
+    }
+    
+    int ret = XauWriteAuth(fp, &xa);
+    fclose(fp);
+    
+    if (ret == 0) {
+        NSLog(@"[XAUTH] Failed to write Xauth entry to %s", authfile);
+        return -1;
+    }
+    
+    NSLog(@"[XAUTH] Successfully wrote MIT-MAGIC-COOKIE-1 to %s for display %s", authfile, display);
+    return 0;
+}
+
+// Global storage for the current X server cookie (shared between X server and user sessions)
+static unsigned char g_xserver_cookie[16];
+static BOOL g_xserver_cookie_valid = NO;
 
 // Safe XOpenDisplay with timeout - prevents indefinite hanging
 static Display* safeXOpenDisplay(const char *display_name, int timeout_seconds) {
@@ -701,9 +782,6 @@ void signalHandler(int sig) {
     // Save the current session choice before starting
     [self saveLastSession:selectedSessionExec];
     
-    // Note: PAM session will be opened AFTER fork and setuid, not here
-    // This is crucial so that pam_xauth can write to the user's home directory
-    
     // Get PAM environment
     char **pam_envlist = [pamAuth getEnvironmentList];
     NSLog(@"[DEBUG] PAM environment list obtained: %p", pam_envlist);
@@ -810,27 +888,25 @@ void signalHandler(int sig) {
         
         NSLog(@"[DEBUG] User context setup complete");
         
-        // NOW open PAM session as the user (creates Xauthority)
-        NSLog(@"[DEBUG] Opening PAM session as user %d", pwd->pw_uid);
-        LoginWindowPAM *userPamAuth = [[LoginWindowPAM alloc] init];
-        userPamAuth->pam_handle = pamAuth->pam_handle;  // Use existing handle from root
-        if (![userPamAuth openSessionAsUser]) {
-            NSString *errorMsg = [userPamAuth getLastError];
-            NSLog(@"[ERROR] Failed to open PAM session as user: %@", errorMsg);
-            // Don't exit - PAM session failure shouldn't block session start
-            // but the user won't get Xauthority
-        } else {
-            NSLog(@"[DEBUG] PAM session opened successfully as user");
-        }
-        [userPamAuth release];
+        // Create user's ~/.Xauthority using libXau (no PAM xauth needed)
+        // This uses the same cookie that was used for the X server
+        NSLog(@"[DEBUG] Creating user Xauthority file using libXau");
+        char xauthPath[PATH_MAX];
+        snprintf(xauthPath, sizeof(xauthPath), "%s/.Xauthority", pwd->pw_dir);
         
-        // Verify that ~/.Xauthority was created by pam_xauth
-        NSString *xauthorityPath = [NSString stringWithFormat:@"%s/.Xauthority", pwd->pw_dir];
-        BOOL xauthorityExists = [[NSFileManager defaultManager] fileExistsAtPath:xauthorityPath];
-        if (xauthorityExists) {
-            NSLog(@"[DEBUG] ~/.Xauthority created successfully at: %@", xauthorityPath);
+        // Remove any existing auth file to start fresh
+        unlink(xauthPath);
+        
+        if (g_xserver_cookie_valid) {
+            if (write_xauth_entry(xauthPath, ":0", g_xserver_cookie) == 0) {
+                // Set proper ownership and permissions
+                chmod(xauthPath, 0600);
+                NSLog(@"[DEBUG] ~/.Xauthority created successfully at: %s", xauthPath);
+            } else {
+                NSLog(@"[ERROR] Failed to create ~/.Xauthority at: %s", xauthPath);
+            }
         } else {
-            NSLog(@"[WARNING] ~/.Xauthority was NOT created by PAM session");
+            NSLog(@"[WARNING] No X server cookie available - ~/.Xauthority not created");
         }
         
         // Clear signal handlers and reset signal mask
@@ -1340,6 +1416,27 @@ void signalHandler(int sig) {
         NSLog(@"[DEBUG] Manual auto-login user setup completed successfully");
         
         NSLog(@"[DEBUG] Auto-login user context setup complete");
+        
+        // Create user's ~/.Xauthority using libXau (no PAM xauth needed)
+        // This uses the same cookie that was used for the X server
+        NSLog(@"[DEBUG] Creating user Xauthority file for auto-login using libXau");
+        char xauthPath[PATH_MAX];
+        snprintf(xauthPath, sizeof(xauthPath), "%s/.Xauthority", pwd->pw_dir);
+        
+        // Remove any existing auth file to start fresh
+        unlink(xauthPath);
+        
+        if (g_xserver_cookie_valid) {
+            if (write_xauth_entry(xauthPath, ":0", g_xserver_cookie) == 0) {
+                // Set proper ownership and permissions
+                chmod(xauthPath, 0600);
+                NSLog(@"[DEBUG] ~/.Xauthority created successfully for auto-login at: %s", xauthPath);
+            } else {
+                NSLog(@"[ERROR] Failed to create ~/.Xauthority for auto-login at: %s", xauthPath);
+            }
+        } else {
+            NSLog(@"[WARNING] No X server cookie available for auto-login - ~/.Xauthority not created");
+        }
         
         // Clear signal handlers and reset signal mask
         signal(SIGTERM, SIG_DFL);
@@ -2169,16 +2266,26 @@ void signalHandler(int sig) {
     
     NSLog(@"[DEBUG] Found X server at: %@", xserverPath);
     
-    // Create X authority file
+    // Create X authority file using libXau (no external xauth command needed)
     NSString *authFile = @"/var/run/loginwindow.auth";
-    // Generate a random 32-character hex cookie using arc4random
-    NSMutableString *mcookie = [NSMutableString stringWithCapacity:32];
-    for (int i = 0; i < 32; i++) {
-        [mcookie appendFormat:@"%x", arc4random_uniform(16)];
+    
+    // Remove any existing auth file to start fresh
+    unlink([authFile UTF8String]);
+    
+    // Generate a secure 16-byte MIT-MAGIC-COOKIE-1
+    generate_xauth_cookie(g_xserver_cookie);
+    g_xserver_cookie_valid = YES;
+    
+    // Write the cookie to the X server's auth file
+    if (write_xauth_entry([authFile UTF8String], ":0", g_xserver_cookie) != 0) {
+        NSLog(@"[ERROR] Failed to create X authorization file");
+        return NO;
     }
-    // Create xauth command to add cookie
-    NSString *xauthCmd = [NSString stringWithFormat:@"/usr/local/bin/xauth -f %@ add :0 . %@", authFile, mcookie];
-    system([xauthCmd UTF8String]);
+    
+    // Set proper permissions on auth file
+    chmod([authFile UTF8String], 0600);
+    
+    NSLog(@"[DEBUG] Created X authorization file at %@ using libXau", authFile);
     
     // Rotate existing X server log file before starting new session
     NSString *xorgLogPath = @"/var/log/Xorg.0.log";

@@ -26,8 +26,10 @@
 #import <AppKit/AppKit.h>
 #import "LoginWindow.h"
 #include <X11/Xlib.h>
+#include <X11/Xauth.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -46,6 +48,77 @@
 BOOL isXServerRunning(void);
 BOOL waitForXServer(void);
 BOOL startXServer(void);
+
+// Generate 16 random bytes for MIT-MAGIC-COOKIE-1
+static void main_generate_xauth_cookie(unsigned char cookie[16]) {
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd >= 0) {
+        ssize_t n = read(fd, cookie, 16);
+        close(fd);
+        if (n == 16) {
+            return;
+        }
+    }
+    // Fallback to arc4random if /dev/urandom fails
+    for (int i = 0; i < 16; i++) {
+        cookie[i] = (unsigned char)arc4random_uniform(256);
+    }
+}
+
+// Write X authorization entry using libXau
+static int main_write_xauth_entry(
+    const char *authfile,
+    const char *display,
+    const unsigned char cookie[16]
+) {
+    Xauth xa;
+    
+    xa.family = FamilyLocal;
+    
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) != 0) {
+        hostname[0] = '\0';
+    }
+    xa.address_length = strlen(hostname);
+    xa.address = hostname;
+    
+    const char *dispnum = display;
+    if (dispnum[0] == ':') {
+        dispnum++;
+    }
+    char dispnum_copy[32];
+    strncpy(dispnum_copy, dispnum, sizeof(dispnum_copy) - 1);
+    dispnum_copy[sizeof(dispnum_copy) - 1] = '\0';
+    char *dot = strchr(dispnum_copy, '.');
+    if (dot) {
+        *dot = '\0';
+    }
+    xa.number_length = strlen(dispnum_copy);
+    xa.number = dispnum_copy;
+    
+    xa.name = "MIT-MAGIC-COOKIE-1";
+    xa.name_length = strlen(xa.name);
+    
+    xa.data = (char *)cookie;
+    xa.data_length = 16;
+    
+    FILE *fp = fopen(authfile, "ab");
+    if (!fp) {
+        NSLog(@"[MAIN XAUTH] Failed to open %s for writing: %s", authfile, strerror(errno));
+        return -1;
+    }
+    
+    int ret = XauWriteAuth(fp, &xa);
+    fclose(fp);
+    
+    if (ret == 0) {
+        NSLog(@"[MAIN XAUTH] Failed to write Xauth entry to %s", authfile);
+        return -1;
+    }
+    
+    NSLog(@"[MAIN XAUTH] Successfully wrote MIT-MAGIC-COOKIE-1 to %s for display %s", authfile, display);
+    return 0;
+}
 
 // X11 I/O error handler for main - called when X connection is lost
 static int mainXIOErrorHandler(Display *display) {
@@ -289,16 +362,26 @@ BOOL startXServer(void)
     
     NSLog(@"[DEBUG] Found X server at: %@", xserverPath);
     
-    // Create X authority file
+    // Create X authority file using libXau (no external xauth command needed)
     NSString *authFile = @"/var/run/loginwindow.auth";
-    // Generate a random 32-character hex cookie using arc4random
-    NSMutableString *mcookie = [NSMutableString stringWithCapacity:32];
-    for (int i = 0; i < 32; i++) {
-        [mcookie appendFormat:@"%x", arc4random_uniform(16)];
+    
+    // Remove any existing auth file to start fresh
+    unlink([authFile UTF8String]);
+    
+    // Generate a secure 16-byte MIT-MAGIC-COOKIE-1
+    unsigned char cookie[16];
+    main_generate_xauth_cookie(cookie);
+    
+    // Write the cookie to the X server's auth file
+    if (main_write_xauth_entry([authFile UTF8String], ":0", cookie) != 0) {
+        NSLog(@"[ERROR] Failed to create X authorization file");
+        return NO;
     }
-    // Create xauth command to add cookie
-    NSString *xauthCmd = [NSString stringWithFormat:@"/usr/local/bin/xauth -f %@ add :0 . %@", authFile, mcookie];
-    system([xauthCmd UTF8String]);
+    
+    // Set proper permissions on auth file
+    chmod([authFile UTF8String], 0600);
+    
+    NSLog(@"[DEBUG] Created X authorization file at %@ using libXau", authFile);
     
     // Start X server on display :0
     pid_t xserver_pid = fork();

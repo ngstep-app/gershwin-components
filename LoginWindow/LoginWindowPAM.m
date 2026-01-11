@@ -12,11 +12,6 @@
 #include <errno.h>
 #include <sys/stat.h>
 
-// Define PAM_XDISPLAY if not provided by system PAM headers (e.g., on FreeBSD)
-#ifndef PAM_XDISPLAY
-#define PAM_XDISPLAY 14
-#endif
-
 // C function for PAM conversation callback
 int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
                         struct pam_response **resp, void *appdata_ptr)
@@ -102,13 +97,13 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
         authenticationInProgress = NO;
         NSLog(@"[PAM] LoginWindowPAM initialized");
         
-        // Ensure PAM configuration exists with xauth support
-        [self ensurePAMConfigurationWithXAuth];
+        // Ensure PAM configuration exists (X11 authorization is now handled by libXau)
+        [self ensurePAMConfiguration];
     }
     return self;
 }
 
-- (void)ensurePAMConfigurationWithXAuth
+- (void)ensurePAMConfiguration
 {
     const char *pam_config_path = "/etc/pam.d/LoginWindow-pam";
     
@@ -120,7 +115,7 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
         return;
     }
     
-    NSLog(@"[PAM] Creating %s for X11 authorization support...", pam_config_path);
+    NSLog(@"[PAM] Creating %s...", pam_config_path);
     
     FILE *config = fopen(pam_config_path, "w");
     if (!config) {
@@ -129,9 +124,11 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
         return;
     }
     
-    // Create config that includes login and adds xauth support
+    // Create config that includes login service
+    // Note: X11 authorization is handled directly via libXau, not PAM
     fprintf(config, "# PAM configuration for Gershwin LoginWindow\n");
-    fprintf(config, "# Includes the system login configuration and adds X11 authorization support\n");
+    fprintf(config, "# Includes the system login configuration\n");
+    fprintf(config, "# X11 authorization is handled via libXau, not pam_xauth\n");
     fprintf(config, "#\n\n");
     
     fprintf(config, "# Authentication - use login service\n");
@@ -140,16 +137,8 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     fprintf(config, "# Account management - use login service\n");
     fprintf(config, "account\t\tinclude\t\tlogin\n\n");
     
-    fprintf(config, "# Session management - use login service and add xauth for X11\n");
+    fprintf(config, "# Session management - use login service\n");
     fprintf(config, "session\t\tinclude\t\tlogin\n");
-    
-    // Check if pam_xauth.so exists and add it
-    if (access("/usr/lib/pam_xauth.so", F_OK) == 0) {
-        fprintf(config, "session\t\toptional\tpam_xauth.so\n");
-        NSLog(@"[PAM] Added pam_xauth.so for X11 authorization with MIT-MAGIC-COOKIE");
-    } else {
-        NSLog(@"[PAM] WARNING: pam_xauth.so not found at /usr/lib/pam_xauth.so");
-    }
     
     fprintf(config, "\n# Password management - use login service\n");
     fprintf(config, "password\tinclude\t\tlogin\n");
@@ -267,15 +256,6 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     result = pam_set_item(pam_handle, PAM_TTY, ttyname(STDIN_FILENO));
     NSLog(@"[PAM] pam_set_item PAM_TTY result: %d (%s)", result, pam_strerror(pam_handle, result));
     
-    // Set DISPLAY for X11 authorization (required for pam_xauth to work)
-    const char *display = getenv("DISPLAY");
-    if (display) {
-        result = pam_set_item(pam_handle, PAM_XDISPLAY, display);
-        NSLog(@"[PAM] pam_set_item PAM_XDISPLAY result: %d (%s), DISPLAY=%s", result, pam_strerror(pam_handle, result), display);
-    } else {
-        NSLog(@"[PAM] Warning: DISPLAY environment variable not set");
-    }
-    
     char hostname[256];
     if (gethostname(hostname, sizeof(hostname)) == 0) {
         pam_set_item(pam_handle, PAM_RHOST, hostname);
@@ -350,7 +330,7 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
 
 - (BOOL)openSessionAsUser
 {
-    NSLog(@"[PAM] openSessionAsUser called (after setuid - creates Xauthority)");
+    NSLog(@"[PAM] openSessionAsUser called (after setuid)");
     if (!pam_handle) {
         NSLog(@"[PAM] openSessionAsUser failed: pam_handle is NULL");
         return NO;
@@ -461,15 +441,6 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     
     result = pam_set_item(pam_handle, PAM_TTY, ttyname(STDIN_FILENO));
     NSLog(@"[PAM] pam_set_item PAM_TTY result for auto-login: %d (%s)", result, pam_strerror(pam_handle, result));
-    
-    // Set DISPLAY for X11 authorization (required for pam_xauth to work)
-    const char *display = getenv("DISPLAY");
-    if (display) {
-        result = pam_set_item(pam_handle, PAM_XDISPLAY, display);
-        NSLog(@"[PAM] pam_set_item PAM_XDISPLAY result for auto-login: %d (%s), DISPLAY=%s", result, pam_strerror(pam_handle, result), display);
-    } else {
-        NSLog(@"[PAM] Warning: DISPLAY environment variable not set for auto-login");
-    }
     
     char hostname[256];
     if (gethostname(hostname, sizeof(hostname)) == 0) {
