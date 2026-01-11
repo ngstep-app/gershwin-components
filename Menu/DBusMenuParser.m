@@ -33,59 +33,59 @@
                          objectPath:(NSString *)objectPath 
                      dbusConnection:(GNUDBusConnection *)dbusConnection
 {
-    NSLog(@"DBusMenuParser: ===== PARSING MENU STRUCTURE (with actions) =====");
-    NSLog(@"DBusMenuParser: Parsing menu structure from service: %@", serviceName);
-    NSLog(@"DBusMenuParser: Object path: %@", objectPath);
-    NSLog(@"DBusMenuParser: DBus connection: %@", dbusConnection);
-    NSLog(@"DBusMenuParser: Menu result type: %@", [result class]);
-    NSLog(@"DBusMenuParser: Menu result object: %@", result);
-    NSLog(@"DBusMenuParser: Menu result description: %@", [result description]);
+    NSDebugLog(@"DBusMenuParser: ===== PARSING MENU STRUCTURE (with actions) =====");
+    NSDebugLog(@"DBusMenuParser: Parsing menu structure from service: %@", serviceName);
+    NSDebugLog(@"DBusMenuParser: Object path: %@", objectPath);
+    NSDebugLog(@"DBusMenuParser: DBus connection: %@", dbusConnection);
+    NSDebugLog(@"DBusMenuParser: Menu result type: %@", [result class]);
+    NSDebugLog(@"DBusMenuParser: Menu result object: %@", result);
+    NSDebugLog(@"DBusMenuParser: Menu result description: %@", [result description]);
     
     // Unregister any existing global shortcuts before parsing new menu
     [[X11ShortcutManager sharedManager] unregisterAllShortcuts];
     
     // Check if result is a number (error case)
     if ([result isKindOfClass:[NSNumber class]]) {
-        NSLog(@"DBusMenuParser: ERROR: Received NSNumber instead of array structure!");
-        NSLog(@"DBusMenuParser: This suggests the DBus method call failed or returned an error code");
-        NSLog(@"DBusMenuParser: Number value: %@", result);
+        NSDebugLog(@"DBusMenuParser: ERROR: Received NSNumber instead of array structure!");
+        NSDebugLog(@"DBusMenuParser: This suggests the DBus method call failed or returned an error code");
+        NSDebugLog(@"DBusMenuParser: Number value: %@", result);
         return nil;
     }
     
     if (![result isKindOfClass:[NSArray class]]) {
-        NSLog(@"DBusMenuParser: ERROR: Expected array result, got %@", [result class]);
-        NSLog(@"DBusMenuParser: Raw object details:");
-        NSLog(@"DBusMenuParser:   - Class: %@", [result class]);
-        NSLog(@"DBusMenuParser:   - Superclass: %@", [[result class] superclass]);
-        NSLog(@"DBusMenuParser:   - Description: %@", [result description]);
+        NSDebugLog(@"DBusMenuParser: ERROR: Expected array result, got %@", [result class]);
+        NSDebugLog(@"DBusMenuParser: Raw object details:");
+        NSDebugLog(@"DBusMenuParser:   - Class: %@", [result class]);
+        NSDebugLog(@"DBusMenuParser:   - Superclass: %@", [[result class] superclass]);
+        NSDebugLog(@"DBusMenuParser:   - Description: %@", [result description]);
         if ([result respondsToSelector:@selector(stringValue)]) {
-            NSLog(@"DBusMenuParser:   - String value: %@", [result stringValue]);
+            NSDebugLog(@"DBusMenuParser:   - String value: %@", [result stringValue]);
         }
         return nil;
     }
     
     NSArray *resultArray = (NSArray *)result;
-    NSLog(@"DBusMenuParser: Result array has %lu elements", (unsigned long)[resultArray count]);
+    NSDebugLog(@"DBusMenuParser: Result array has %lu elements", (unsigned long)[resultArray count]);
     
     if ([resultArray count] < 2) {
-        NSLog(@"DBusMenuParser: ERROR: GetLayout result should have at least 2 elements (revision + layout)");
-        NSLog(@"DBusMenuParser: Actual count: %lu", (unsigned long)[resultArray count]);
+        NSDebugLog(@"DBusMenuParser: ERROR: GetLayout result should have at least 2 elements (revision + layout)");
+        NSDebugLog(@"DBusMenuParser: Actual count: %lu", (unsigned long)[resultArray count]);
         for (NSUInteger i = 0; i < [resultArray count]; i++) {
             id item = [resultArray objectAtIndex:i];
-            NSLog(@"DBusMenuParser: Element[%lu]: %@ (%@)", i, item, [item class]);
+            NSDebugLog(@"DBusMenuParser: Element[%lu]: %@ (%@)", i, item, [item class]);
         }
         return nil;
     }
     
     // First element is revision number (uint32)
     NSNumber *revision = [resultArray objectAtIndex:0];
-    NSLog(@"DBusMenuParser: Menu revision: %@ (class: %@)", revision, [revision class]);
+    NSDebugLog(@"DBusMenuParser: Menu revision: %@ (class: %@)", revision, [revision class]);
     
     // Second element is the layout item structure: (ia{sv}av)
     id layoutItem = [resultArray objectAtIndex:1];
-    NSLog(@"DBusMenuParser: Layout item type: %@", [layoutItem class]);
-    NSLog(@"DBusMenuParser: Layout item content: %@", layoutItem);
-    NSLog(@"DBusMenuParser: Layout item description: %@", [layoutItem description]);
+    NSDebugLog(@"DBusMenuParser: Layout item type: %@", [layoutItem class]);
+    NSDebugLog(@"DBusMenuParser: Layout item content: %@", layoutItem);
+    NSDebugLog(@"DBusMenuParser: Layout item description: %@", [layoutItem description]);
     
     NSMenu *menu = [self parseLayoutItem:layoutItem 
                                   isRoot:YES 
@@ -93,21 +93,21 @@
                               objectPath:objectPath 
                           dbusConnection:dbusConnection];
     if (menu) {
-        NSLog(@"DBusMenuParser: ===== MENU PARSING SUCCESS =====");
-        NSLog(@"DBusMenuParser: Successfully parsed menu with %lu items", 
+        NSDebugLog(@"DBusMenuParser: ===== MENU PARSING SUCCESS =====");
+        NSDebugLog(@"DBusMenuParser: Successfully parsed menu with %lu items", 
               (unsigned long)[[menu itemArray] count]);
         
         // Log each menu item
         NSArray *items = [menu itemArray];
         for (NSUInteger i = 0; i < [items count]; i++) {
             NSMenuItem *item = [items objectAtIndex:i];
-            NSLog(@"DBusMenuParser: Menu[%lu]: '%@' (enabled: %@, hasSubmenu: %@)", 
+            NSDebugLog(@"DBusMenuParser: Menu[%lu]: '%@' (enabled: %@, hasSubmenu: %@)", 
                   i, [item title], [item isEnabled] ? @"YES" : @"NO", 
                   [item hasSubmenu] ? @"YES" : @"NO");
         }
     } else {
-        NSLog(@"DBusMenuParser: ===== MENU PARSING FAILED =====");
-        NSLog(@"DBusMenuParser: Failed to parse layout item");
+        NSDebugLog(@"DBusMenuParser: ===== MENU PARSING FAILED =====");
+        NSDebugLog(@"DBusMenuParser: Failed to parse layout item");
     }
     
     return menu;
@@ -115,24 +115,24 @@
 
 + (NSMenu *)parseLayoutItem:(id)layoutItem isRoot:(BOOL)isRoot
 {
-    NSLog(@"DBusMenuParser: ===== PARSING LAYOUT ITEM (isRoot=%@) =====", isRoot ? @"YES" : @"NO");
-    NSLog(@"DBusMenuParser: Layout item class: %@", [layoutItem class]);
-    NSLog(@"DBusMenuParser: Layout item object: %@", layoutItem);
+    NSDebugLog(@"DBusMenuParser: ===== PARSING LAYOUT ITEM (isRoot=%@) =====", isRoot ? @"YES" : @"NO");
+    NSDebugLog(@"DBusMenuParser: Layout item class: %@", [layoutItem class]);
+    NSDebugLog(@"DBusMenuParser: Layout item object: %@", layoutItem);
     
     if (![layoutItem isKindOfClass:[NSArray class]]) {
-        NSLog(@"DBusMenuParser: ERROR: Layout item should be an array, got %@", [layoutItem class]);
+        NSDebugLog(@"DBusMenuParser: ERROR: Layout item should be an array, got %@", [layoutItem class]);
         return nil;
     }
     
     NSArray *itemArray = (NSArray *)layoutItem;
-    NSLog(@"DBusMenuParser: Layout item array has %lu elements", (unsigned long)[itemArray count]);
+    NSDebugLog(@"DBusMenuParser: Layout item array has %lu elements", (unsigned long)[itemArray count]);
     
     if ([itemArray count] < 3) {
-        NSLog(@"DBusMenuParser: ERROR: Layout item should have at least 3 elements (id, properties, children)");
-        NSLog(@"DBusMenuParser: Actual count: %lu", (unsigned long)[itemArray count]);
+        NSDebugLog(@"DBusMenuParser: ERROR: Layout item should have at least 3 elements (id, properties, children)");
+        NSDebugLog(@"DBusMenuParser: Actual count: %lu", (unsigned long)[itemArray count]);
         for (NSUInteger i = 0; i < [itemArray count]; i++) {
             id element = [itemArray objectAtIndex:i];
-            NSLog(@"DBusMenuParser: Element[%lu]: %@ (%@)", i, element, [element class]);
+            NSDebugLog(@"DBusMenuParser: Element[%lu]: %@ (%@)", i, element, [element class]);
         }
         return nil;
     }
@@ -142,9 +142,9 @@
     id propertiesObj = [itemArray objectAtIndex:1];
     id childrenObj = [itemArray objectAtIndex:2];
     
-    NSLog(@"DBusMenuParser: Item ID: %@ (class: %@)", itemId, [itemId class]);
-    NSLog(@"DBusMenuParser: Properties object: %@ (class: %@)", propertiesObj, [propertiesObj class]);
-    NSLog(@"DBusMenuParser: Children object: %@ (class: %@)", childrenObj, [childrenObj class]);
+    NSDebugLog(@"DBusMenuParser: Item ID: %@ (class: %@)", itemId, [itemId class]);
+    NSDebugLog(@"DBusMenuParser: Properties object: %@ (class: %@)", propertiesObj, [propertiesObj class]);
+    NSDebugLog(@"DBusMenuParser: Children object: %@ (class: %@)", childrenObj, [childrenObj class]);
     
     // Convert properties to dictionary
     NSDictionary *properties = [self convertPropertiesToDictionary:propertiesObj];
@@ -154,17 +154,17 @@
     if ([childrenObj isKindOfClass:[NSArray class]]) {
         children = (NSArray *)childrenObj;
     } else {
-        NSLog(@"DBusMenuParser: WARNING: Children is not an array, creating empty one");
+        NSDebugLog(@"DBusMenuParser: WARNING: Children is not an array, creating empty one");
         children = [NSArray array];
     }
     
-    NSLog(@"DBusMenuParser: Properties dict has %lu entries:", (unsigned long)[properties count]);
+    NSDebugLog(@"DBusMenuParser: Properties dict has %lu entries:", (unsigned long)[properties count]);
     for (NSString *key in [properties allKeys]) {
         id value = [properties objectForKey:key];
-        NSLog(@"DBusMenuParser:   %@ = %@ (%@)", key, value, [value class]);
+        NSDebugLog(@"DBusMenuParser:   %@ = %@ (%@)", key, value, [value class]);
     }
     
-    NSLog(@"DBusMenuParser: Children array has %lu elements", (unsigned long)[children count]);
+    NSDebugLog(@"DBusMenuParser: Children array has %lu elements", (unsigned long)[children count]);
     
     // For root item, create the main menu
     NSMenu *menu = nil;
@@ -173,28 +173,28 @@
         if (!menuTitle || [menuTitle length] == 0) {
             menuTitle = @"App Menu";
         }
-        NSLog(@"DBusMenuParser: Creating root menu with title: '%@'", menuTitle);
+        NSDebugLog(@"DBusMenuParser: Creating root menu with title: '%@'", menuTitle);
         menu = [[NSMenu alloc] initWithTitle:menuTitle];
         
         // Process children of root item
-        NSLog(@"DBusMenuParser: Processing %lu children of root item", (unsigned long)[children count]);
+        NSDebugLog(@"DBusMenuParser: Processing %lu children of root item", (unsigned long)[children count]);
         for (NSUInteger i = 0; i < [children count]; i++) {
             id childItem = [children objectAtIndex:i];
-            NSLog(@"DBusMenuParser: Processing child %lu: %@ (%@)", i, childItem, [childItem class]);
+            NSDebugLog(@"DBusMenuParser: Processing child %lu: %@ (%@)", i, childItem, [childItem class]);
             
             NSMenuItem *menuItem = [self createMenuItemFromLayoutItem:childItem];
             if (menuItem) {
                 [menu addItem:menuItem];
-                NSLog(@"DBusMenuParser: Added menu item: '%@'", [menuItem title]);
+                NSDebugLog(@"DBusMenuParser: Added menu item: '%@'", [menuItem title]);
             } else {
-                NSLog(@"DBusMenuParser: Failed to create menu item from child %lu", i);
+                NSDebugLog(@"DBusMenuParser: Failed to create menu item from child %lu", i);
             }
         }
         
-        NSLog(@"DBusMenuParser: Root menu created with %lu items", (unsigned long)[[menu itemArray] count]);
+        NSDebugLog(@"DBusMenuParser: Root menu created with %lu items", (unsigned long)[[menu itemArray] count]);
     } else {
         // This shouldn't happen for root parsing, but handle it
-        NSLog(@"DBusMenuParser: ERROR: parseLayoutItem called with isRoot=NO");
+        NSDebugLog(@"DBusMenuParser: ERROR: parseLayoutItem called with isRoot=NO");
         return nil;
     }
     
@@ -207,24 +207,24 @@
                  objectPath:(NSString *)objectPath 
              dbusConnection:(GNUDBusConnection *)dbusConnection
 {
-    NSLog(@"DBusMenuParser: ===== PARSING LAYOUT ITEM (isRoot=%@) =====", isRoot ? @"YES" : @"NO");
-    NSLog(@"DBusMenuParser: Layout item class: %@", [layoutItem class]);
-    NSLog(@"DBusMenuParser: Layout item object: %@", layoutItem);
+    NSDebugLog(@"DBusMenuParser: ===== PARSING LAYOUT ITEM (isRoot=%@) =====", isRoot ? @"YES" : @"NO");
+    NSDebugLog(@"DBusMenuParser: Layout item class: %@", [layoutItem class]);
+    NSDebugLog(@"DBusMenuParser: Layout item object: %@", layoutItem);
     
     if (![layoutItem isKindOfClass:[NSArray class]]) {
-        NSLog(@"DBusMenuParser: ERROR: Layout item should be an array, got %@", [layoutItem class]);
+        NSDebugLog(@"DBusMenuParser: ERROR: Layout item should be an array, got %@", [layoutItem class]);
         return nil;
     }
     
     NSArray *itemArray = (NSArray *)layoutItem;
-    NSLog(@"DBusMenuParser: Layout item array has %lu elements", (unsigned long)[itemArray count]);
+    NSDebugLog(@"DBusMenuParser: Layout item array has %lu elements", (unsigned long)[itemArray count]);
     
     if ([itemArray count] < 3) {
-        NSLog(@"DBusMenuParser: ERROR: Layout item should have at least 3 elements (id, properties, children)");
-        NSLog(@"DBusMenuParser: Actual count: %lu", (unsigned long)[itemArray count]);
+        NSDebugLog(@"DBusMenuParser: ERROR: Layout item should have at least 3 elements (id, properties, children)");
+        NSDebugLog(@"DBusMenuParser: Actual count: %lu", (unsigned long)[itemArray count]);
         for (NSUInteger i = 0; i < [itemArray count]; i++) {
             id element = [itemArray objectAtIndex:i];
-            NSLog(@"DBusMenuParser: Element[%lu]: %@ (%@)", i, element, [element class]);
+            NSDebugLog(@"DBusMenuParser: Element[%lu]: %@ (%@)", i, element, [element class]);
         }
         return nil;
     }
@@ -234,9 +234,9 @@
     id propertiesObj = [itemArray objectAtIndex:1];
     id childrenObj = [itemArray objectAtIndex:2];
     
-    NSLog(@"DBusMenuParser: Item ID: %@ (class: %@)", itemId, [itemId class]);
-    NSLog(@"DBusMenuParser: Properties object: %@ (class: %@)", propertiesObj, [propertiesObj class]);
-    NSLog(@"DBusMenuParser: Children object: %@ (class: %@)", childrenObj, [childrenObj class]);
+    NSDebugLog(@"DBusMenuParser: Item ID: %@ (class: %@)", itemId, [itemId class]);
+    NSDebugLog(@"DBusMenuParser: Properties object: %@ (class: %@)", propertiesObj, [propertiesObj class]);
+    NSDebugLog(@"DBusMenuParser: Children object: %@ (class: %@)", childrenObj, [childrenObj class]);
     
     // Convert properties to dictionary
     NSDictionary *properties = [self convertPropertiesToDictionary:propertiesObj];
@@ -246,17 +246,17 @@
     if ([childrenObj isKindOfClass:[NSArray class]]) {
         children = (NSArray *)childrenObj;
     } else {
-        NSLog(@"DBusMenuParser: WARNING: Children is not an array, creating empty one");
+        NSDebugLog(@"DBusMenuParser: WARNING: Children is not an array, creating empty one");
         children = [NSArray array];
     }
     
-    NSLog(@"DBusMenuParser: Properties dict has %lu entries:", (unsigned long)[properties count]);
+    NSDebugLog(@"DBusMenuParser: Properties dict has %lu entries:", (unsigned long)[properties count]);
     for (NSString *key in [properties allKeys]) {
         id value = [properties objectForKey:key];
-        NSLog(@"DBusMenuParser:   %@ = %@ (%@)", key, value, [value class]);
+        NSDebugLog(@"DBusMenuParser:   %@ = %@ (%@)", key, value, [value class]);
     }
     
-    NSLog(@"DBusMenuParser: Children array has %lu elements", (unsigned long)[children count]);
+    NSDebugLog(@"DBusMenuParser: Children array has %lu elements", (unsigned long)[children count]);
     
     // For root item, create the main menu
     NSMenu *menu = nil;
@@ -265,14 +265,14 @@
         if (!menuTitle || [menuTitle length] == 0) {
             menuTitle = @"App Menu";
         }
-        NSLog(@"DBusMenuParser: Creating root menu with title: '%@'", menuTitle);
+        NSDebugLog(@"DBusMenuParser: Creating root menu with title: '%@'", menuTitle);
         menu = [[NSMenu alloc] initWithTitle:menuTitle];
         
         // Process children of root item
-        NSLog(@"DBusMenuParser: Processing %lu children of root item", (unsigned long)[children count]);
+        NSDebugLog(@"DBusMenuParser: Processing %lu children of root item", (unsigned long)[children count]);
         for (NSUInteger i = 0; i < [children count]; i++) {
             id childItem = [children objectAtIndex:i];
-            NSLog(@"DBusMenuParser: Processing child %lu: %@ (%@)", i, childItem, [childItem class]);
+            NSDebugLog(@"DBusMenuParser: Processing child %lu: %@ (%@)", i, childItem, [childItem class]);
             
             NSMenuItem *menuItem = [self createMenuItemFromLayoutItem:childItem 
                                                           serviceName:serviceName 
@@ -280,16 +280,16 @@
                                                        dbusConnection:dbusConnection];
             if (menuItem) {
                 [menu addItem:menuItem];
-                NSLog(@"DBusMenuParser: Added menu item: '%@'", [menuItem title]);
+                NSDebugLog(@"DBusMenuParser: Added menu item: '%@'", [menuItem title]);
             } else {
-                NSLog(@"DBusMenuParser: Failed to create menu item from child %lu", i);
+                NSDebugLog(@"DBusMenuParser: Failed to create menu item from child %lu", i);
             }
         }
         
-        NSLog(@"DBusMenuParser: Root menu created with %lu items", (unsigned long)[[menu itemArray] count]);
+        NSDebugLog(@"DBusMenuParser: Root menu created with %lu items", (unsigned long)[[menu itemArray] count]);
     } else {
         // This shouldn't happen for root parsing, but handle it
-        NSLog(@"DBusMenuParser: ERROR: parseLayoutItem called with isRoot=NO");
+        NSDebugLog(@"DBusMenuParser: ERROR: parseLayoutItem called with isRoot=NO");
         return nil;
     }
     
@@ -308,13 +308,13 @@
                               dbusConnection:(GNUDBusConnection *)dbusConnection
 {
     if (![layoutItem isKindOfClass:[NSArray class]]) {
-        NSLog(@"DBusMenuParser: Layout item should be an array");
+        NSDebugLog(@"DBusMenuParser: Layout item should be an array");
         return nil;
     }
     
     NSArray *itemArray = (NSArray *)layoutItem;
     if ([itemArray count] < 3) {
-        NSLog(@"DBusMenuParser: Layout item should have at least 3 elements");
+        NSDebugLog(@"DBusMenuParser: Layout item should have at least 3 elements");
         return nil;
     }
     
@@ -330,7 +330,7 @@
     if ([childrenObj isKindOfClass:[NSArray class]]) {
         children = (NSArray *)childrenObj;
     } else {
-        NSLog(@"DBusMenuParser: WARNING: Children is not an array in createMenuItemFromLayoutItem, creating empty one");
+        NSDebugLog(@"DBusMenuParser: WARNING: Children is not an array in createMenuItemFromLayoutItem, creating empty one");
         children = [NSArray array];
     }
     
@@ -349,19 +349,19 @@
     
     // Log all properties to understand what's available
     if ([properties count] > 0) {
-        NSLog(@"DBusMenuParser: All properties for '%@': %@", 
+        NSDebugLog(@"DBusMenuParser: All properties for '%@': %@", 
               label ?: @"(no label)", properties);
     }
     
     // Enhanced shortcut property logging
     if (shortcut || accel || accelerator || keyBinding) {
-        NSLog(@"DBusMenuParser: *** SHORTCUT PROPERTIES FOUND for '%@' ***", label ?: @"(no label)");
-        if (shortcut) NSLog(@"DBusMenuParser:   shortcut=%@", shortcut);
-        if (accel) NSLog(@"DBusMenuParser:   accel=%@", accel);
-        if (accelerator) NSLog(@"DBusMenuParser:   accelerator=%@", accelerator);
-        if (keyBinding) NSLog(@"DBusMenuParser:   key-binding=%@", keyBinding);
+        NSDebugLog(@"DBusMenuParser: *** SHORTCUT PROPERTIES FOUND for '%@' ***", label ?: @"(no label)");
+        if (shortcut) NSDebugLog(@"DBusMenuParser:   shortcut=%@", shortcut);
+        if (accel) NSDebugLog(@"DBusMenuParser:   accel=%@", accel);
+        if (accelerator) NSDebugLog(@"DBusMenuParser:   accelerator=%@", accelerator);
+        if (keyBinding) NSDebugLog(@"DBusMenuParser:   key-binding=%@", keyBinding);
     } else {
-        NSLog(@"DBusMenuParser: No shortcut properties for '%@'", label ?: @"(no label)");
+        NSDebugLog(@"DBusMenuParser: No shortcut properties for '%@'", label ?: @"(no label)");
     }
     
     // Check if this is a submenu container
@@ -369,27 +369,27 @@
     BOOL hasSubmenuDisplay = (childrenDisplay && [childrenDisplay isEqualToString:@"submenu"]);
     BOOL isSubmenu = hasChildren || hasSubmenuDisplay;
     
-    NSLog(@"DBusMenuParser: ===== SUBMENU DETECTION FOR '%@' =====", label ?: @"(no label)");
-    NSLog(@"DBusMenuParser: Item ID: %@", itemId);
-    NSLog(@"DBusMenuParser: Children count: %lu", (unsigned long)[children count]);
-    NSLog(@"DBusMenuParser: Children-display property: '%@'", childrenDisplay ?: @"(none)");
-    NSLog(@"DBusMenuParser: Has children: %@", hasChildren ? @"YES" : @"NO");
-    NSLog(@"DBusMenuParser: Has submenu display: %@", hasSubmenuDisplay ? @"YES" : @"NO");
-    NSLog(@"DBusMenuParser: Final isSubmenu decision: %@", isSubmenu ? @"YES" : @"NO");
+    NSDebugLog(@"DBusMenuParser: ===== SUBMENU DETECTION FOR '%@' =====", label ?: @"(no label)");
+    NSDebugLog(@"DBusMenuParser: Item ID: %@", itemId);
+    NSDebugLog(@"DBusMenuParser: Children count: %lu", (unsigned long)[children count]);
+    NSDebugLog(@"DBusMenuParser: Children-display property: '%@'", childrenDisplay ?: @"(none)");
+    NSDebugLog(@"DBusMenuParser: Has children: %@", hasChildren ? @"YES" : @"NO");
+    NSDebugLog(@"DBusMenuParser: Has submenu display: %@", hasSubmenuDisplay ? @"YES" : @"NO");
+    NSDebugLog(@"DBusMenuParser: Final isSubmenu decision: %@", isSubmenu ? @"YES" : @"NO");
     
     if (hasChildren) {
-        NSLog(@"DBusMenuParser: Children details:");
+        NSDebugLog(@"DBusMenuParser: Children details:");
         for (NSUInteger i = 0; i < [children count]; i++) {
             id child = [children objectAtIndex:i];
-            NSLog(@"DBusMenuParser:   Child[%lu]: %@ (%@)", i, child, [child class]);
+            NSDebugLog(@"DBusMenuParser:   Child[%lu]: %@ (%@)", i, child, [child class]);
         }
     }
     
     if (isSubmenu) {
-        NSLog(@"DBusMenuParser: Item '%@' is a submenu (children=%lu, children-display=%@)", 
+        NSDebugLog(@"DBusMenuParser: Item '%@' is a submenu (children=%lu, children-display=%@)", 
               label ?: @"(no label)", (unsigned long)[children count], childrenDisplay ?: @"(none)");
     } else {
-        NSLog(@"DBusMenuParser: Item '%@' is NOT a submenu", label ?: @"(no label)");
+        NSDebugLog(@"DBusMenuParser: Item '%@' is NOT a submenu", label ?: @"(no label)");
     }
     
     // Skip invisible items
@@ -410,7 +410,7 @@
         if ([label containsString:@"_"]) {
             NSString *originalLabel = label;
             label = [label stringByReplacingOccurrencesOfString:@"_" withString:@""];
-            NSLog(@"DBusMenuParser: Transformed label '%@' -> '%@' (removed mnemonics)", originalLabel, label);
+            NSDebugLog(@"DBusMenuParser: Transformed label '%@' -> '%@' (removed mnemonics)", originalLabel, label);
         }
     }
     
@@ -420,29 +420,29 @@
     
     if (shortcut && [shortcut isKindOfClass:[NSArray class]] && [shortcut count] > 0) {
         // DBus shortcut format is typically an array of keysyms and modifiers
-        NSLog(@"DBusMenuParser: Found shortcut array for '%@': %@", label, shortcut);
+        NSDebugLog(@"DBusMenuParser: Found shortcut array for '%@': %@", label, shortcut);
         NSString *keyCombo = [DBusMenuShortcutParser parseShortcutArray:shortcut];
         if (keyCombo) {
-            NSLog(@"DBusMenuParser: Parsed shortcut array to: %@", keyCombo);
+            NSDebugLog(@"DBusMenuParser: Parsed shortcut array to: %@", keyCombo);
             NSDictionary *parsedShortcut = [DBusMenuShortcutParser parseKeyCombo:keyCombo];
             keyEquivalent = [parsedShortcut objectForKey:@"key"] ?: @"";
             modifierMask = [[parsedShortcut objectForKey:@"modifiers"] unsignedIntegerValue];
         }
     } else if (accel && [accel isKindOfClass:[NSString class]] && [accel length] > 0) {
         // Alternative accelerator format (string-based)
-        NSLog(@"DBusMenuParser: Found accel string for '%@': %@", label, accel);
+        NSDebugLog(@"DBusMenuParser: Found accel string for '%@': %@", label, accel);
         NSDictionary *parsedShortcut = [DBusMenuShortcutParser parseKeyCombo:accel];
         keyEquivalent = [parsedShortcut objectForKey:@"key"] ?: @"";
         modifierMask = [[parsedShortcut objectForKey:@"modifiers"] unsignedIntegerValue];
     } else if (accelerator && [accelerator isKindOfClass:[NSString class]] && [accelerator length] > 0) {
         // Another accelerator format
-        NSLog(@"DBusMenuParser: Found accelerator string for '%@': %@", label, accelerator);
+        NSDebugLog(@"DBusMenuParser: Found accelerator string for '%@': %@", label, accelerator);
         NSDictionary *parsedShortcut = [DBusMenuShortcutParser parseKeyCombo:accelerator];
         keyEquivalent = [parsedShortcut objectForKey:@"key"] ?: @"";
         modifierMask = [[parsedShortcut objectForKey:@"modifiers"] unsignedIntegerValue];
     } else if (keyBinding && [keyBinding isKindOfClass:[NSString class]] && [keyBinding length] > 0) {
         // Key binding format
-        NSLog(@"DBusMenuParser: Found key-binding string for '%@': %@", label, keyBinding);
+        NSDebugLog(@"DBusMenuParser: Found key-binding string for '%@': %@", label, keyBinding);
         NSDictionary *parsedShortcut = [DBusMenuShortcutParser parseKeyCombo:keyBinding];
         keyEquivalent = [parsedShortcut objectForKey:@"key"] ?: @"";
         modifierMask = [[parsedShortcut objectForKey:@"modifiers"] unsignedIntegerValue];
@@ -459,9 +459,9 @@
     // Set enabled state BEFORE setting shortcuts
     if (enabled) {
         [menuItem setEnabled:[enabled boolValue]];
-        NSLog(@"DBusMenuParser: Set enabled state to: %@", [enabled boolValue] ? @"YES" : @"NO");
+        NSDebugLog(@"DBusMenuParser: Set enabled state to: %@", [enabled boolValue] ? @"YES" : @"NO");
     } else {
-        NSLog(@"DBusMenuParser: No enabled property, using default");
+        NSDebugLog(@"DBusMenuParser: No enabled property, using default");
     }
     
     // Now set key equivalent and modifier mask AFTER creation
@@ -478,7 +478,7 @@
             if (hasControlKey) {
                 // Display as Command in menu
                 displayModifierMask = (modifierMask & ~NSControlKeyMask) | NSCommandKeyMask;
-                NSLog(@"DBusMenuParser: Control shortcut will display as Command but register as Alt for X11");
+                NSDebugLog(@"DBusMenuParser: Control shortcut will display as Command but register as Alt for X11");
                 
                 // Store ORIGINAL modifier (Control) in a way X11ShortcutManager can retrieve it
                 // We'll use the menu item's tag to encode the original modifier
@@ -490,16 +490,16 @@
             
             [menuItem setKeyEquivalentModifierMask:displayModifierMask];
         }
-        NSLog(@"DBusMenuParser: Set shortcut: key='%@', modifiers=%lu (display=%lu)", 
+        NSDebugLog(@"DBusMenuParser: Set shortcut: key='%@', modifiers=%lu (display=%lu)", 
               keyEquivalent, (unsigned long)modifierMask, (unsigned long)[menuItem keyEquivalentModifierMask]);
     }
     
-    NSLog(@"DBusMenuParser: ===== CREATED MENU ITEM =====");
-    NSLog(@"DBusMenuParser: Menu item object: %@", menuItem);
-    NSLog(@"DBusMenuParser: Title: '%@'", [menuItem title]);
-    NSLog(@"DBusMenuParser: DBus item ID: %@", itemId);
-    NSLog(@"DBusMenuParser: Key equivalent: '%@'", [menuItem keyEquivalent]);
-    NSLog(@"DBusMenuParser: Modifier mask: %lu", (unsigned long)[menuItem keyEquivalentModifierMask]);
+    NSDebugLog(@"DBusMenuParser: ===== CREATED MENU ITEM =====");
+    NSDebugLog(@"DBusMenuParser: Menu item object: %@", menuItem);
+    NSDebugLog(@"DBusMenuParser: Title: '%@'", [menuItem title]);
+    NSDebugLog(@"DBusMenuParser: DBus item ID: %@", itemId);
+    NSDebugLog(@"DBusMenuParser: Key equivalent: '%@'", [menuItem keyEquivalent]);
+    NSDebugLog(@"DBusMenuParser: Modifier mask: %lu", (unsigned long)[menuItem keyEquivalentModifierMask]);
     
     // Enhanced shortcut logging
     if ([[menuItem keyEquivalent] length] > 0) {
@@ -509,14 +509,14 @@
                                  ([menuItem keyEquivalentModifierMask] & NSShiftKeyMask) ? @"Shift+" : @"",
                                  ([menuItem keyEquivalentModifierMask] & NSCommandKeyMask) ? @"Cmd+" : @"",
                                  [menuItem keyEquivalent]];
-        NSLog(@"DBusMenuParser: *** SHORTCUT SET: '%@' ***", shortcutDesc);
+        NSDebugLog(@"DBusMenuParser: *** SHORTCUT SET: '%@' ***", shortcutDesc);
     } else {
-        NSLog(@"DBusMenuParser: *** NO SHORTCUT (key equivalent is empty) ***");
+        NSDebugLog(@"DBusMenuParser: *** NO SHORTCUT (key equivalent is empty) ***");
     }
     
     // Store item ID for event handling
     [menuItem setTag:[itemId intValue]];
-    NSLog(@"DBusMenuParser: Set tag (item ID) to: %ld", (long)[itemId intValue]);
+    NSDebugLog(@"DBusMenuParser: Set tag (item ID) to: %ld", (long)[itemId intValue]);
     
     // Set up action for menu items if we have DBus connection info and this isn't a submenu
     if (serviceName && objectPath && dbusConnection && !isSubmenu) {
@@ -525,31 +525,31 @@
                                            objectPath:objectPath
                                        dbusConnection:dbusConnection];
         
-        NSLog(@"DBusMenuParser: Set up action for menu item '%@' (ID=%@, service=%@, path=%@)", 
+        NSDebugLog(@"DBusMenuParser: Set up action for menu item '%@' (ID=%@, service=%@, path=%@)", 
               label, itemId, serviceName, objectPath);
     } else if (isSubmenu) {
-        NSLog(@"DBusMenuParser: Skipping action setup for submenu '%@'", label);
+        NSDebugLog(@"DBusMenuParser: Skipping action setup for submenu '%@'", label);
     }
     
     // Process children (submenu)
     if (isSubmenu) {
-        NSLog(@"DBusMenuParser: ===== CREATING SUBMENU FOR '%@' =====", label ?: @"(no label)");
-        NSLog(@"DBusMenuParser: Submenu detected - children count: %lu", (unsigned long)[children count]);
-        NSLog(@"DBusMenuParser: Submenu detected - children-display: %@", childrenDisplay ?: @"(none)");
-        NSLog(@"DBusMenuParser: Submenu detected - item ID: %@", itemId);
-        NSLog(@"DBusMenuParser: Submenu detected - service: %@", serviceName ?: @"(none)");
-        NSLog(@"DBusMenuParser: Submenu detected - object path: %@", objectPath ?: @"(none)");
-        NSLog(@"DBusMenuParser: Submenu detected - dbus connection: %@", dbusConnection ? @"available" : @"none");
+        NSDebugLog(@"DBusMenuParser: ===== CREATING SUBMENU FOR '%@' =====", label ?: @"(no label)");
+        NSDebugLog(@"DBusMenuParser: Submenu detected - children count: %lu", (unsigned long)[children count]);
+        NSDebugLog(@"DBusMenuParser: Submenu detected - children-display: %@", childrenDisplay ?: @"(none)");
+        NSDebugLog(@"DBusMenuParser: Submenu detected - item ID: %@", itemId);
+        NSDebugLog(@"DBusMenuParser: Submenu detected - service: %@", serviceName ?: @"(none)");
+        NSDebugLog(@"DBusMenuParser: Submenu detected - object path: %@", objectPath ?: @"(none)");
+        NSDebugLog(@"DBusMenuParser: Submenu detected - dbus connection: %@", dbusConnection ? @"available" : @"none");
         
         NSMenu *submenu = [[NSMenu alloc] initWithTitle:label ? label : @""];
-        NSLog(@"DBusMenuParser: Created NSMenu object for submenu: %@", submenu);
+        NSDebugLog(@"DBusMenuParser: Created NSMenu object for submenu: %@", submenu);
         
         // Create submenu items - but mark that we may need to refresh them via AboutToShow
-        NSLog(@"DBusMenuParser: Adding %lu initial child items to submenu...", (unsigned long)[children count]);
+        NSDebugLog(@"DBusMenuParser: Adding %lu initial child items to submenu...", (unsigned long)[children count]);
         NSUInteger addedItems = 0;
         for (NSUInteger childIndex = 0; childIndex < [children count]; childIndex++) {
             id childItem = [children objectAtIndex:childIndex];
-            NSLog(@"DBusMenuParser: Processing child item %lu: %@ (%@)", 
+            NSDebugLog(@"DBusMenuParser: Processing child item %lu: %@ (%@)", 
                   childIndex, childItem, [childItem class]);
             
             NSMenuItem *childMenuItem = [self createMenuItemFromLayoutItem:childItem 
@@ -559,15 +559,15 @@
             if (childMenuItem) {
                 [submenu addItem:childMenuItem];
                 addedItems++;
-                NSLog(@"DBusMenuParser: Added child menu item '%@' to submenu '%@' (total now: %lu)", 
+                NSDebugLog(@"DBusMenuParser: Added child menu item '%@' to submenu '%@' (total now: %lu)", 
                       [childMenuItem title], label, addedItems);
             } else {
-                NSLog(@"DBusMenuParser: ERROR: Failed to create child menu item %lu for submenu '%@'", 
+                NSDebugLog(@"DBusMenuParser: ERROR: Failed to create child menu item %lu for submenu '%@'", 
                       childIndex, label);
             }
         }
         
-        NSLog(@"DBusMenuParser: Finished adding items to submenu - %lu added out of %lu attempted", 
+        NSDebugLog(@"DBusMenuParser: Finished adding items to submenu - %lu added out of %lu attempted", 
               addedItems, (unsigned long)[children count]);
         
         // Set up submenu with delegate and attach it to the menu item
@@ -582,27 +582,27 @@
         // This is critical for GNUstep to recalculate menu item cell sizes including key equivalent widths
         [submenu update];
         [submenu sizeToFit];
-        NSLog(@"DBusMenuParser: Forced submenu update and sizeToFit for proper shortcut display");
+        NSDebugLog(@"DBusMenuParser: Forced submenu update and sizeToFit for proper shortcut display");
         
         // DIAGNOSTIC: Log all submenu items and their shortcuts after submenu is fully set up
-        NSLog(@"DBusMenuParser: ===== SUBMENU '%@' FINAL STATE =====", label ?: @"(no label)");
+        NSDebugLog(@"DBusMenuParser: ===== SUBMENU '%@' FINAL STATE =====", label ?: @"(no label)");
         NSArray *submenuItems = [submenu itemArray];
         for (NSUInteger idx = 0; idx < [submenuItems count]; idx++) {
             NSMenuItem *subItem = [submenuItems objectAtIndex:idx];
             NSString *keyEq = [subItem keyEquivalent];
             NSUInteger modMask = [subItem keyEquivalentModifierMask];
             if ([keyEq length] > 0) {
-                NSLog(@"DBusMenuParser:   Item %lu: '%@' - shortcut: '%@' (modifiers=%lu)", 
+                NSDebugLog(@"DBusMenuParser:   Item %lu: '%@' - shortcut: '%@' (modifiers=%lu)", 
                       idx, [subItem title], keyEq, (unsigned long)modMask);
             } else {
-                NSLog(@"DBusMenuParser:   Item %lu: '%@' - no shortcut", idx, [subItem title]);
+                NSDebugLog(@"DBusMenuParser:   Item %lu: '%@' - no shortcut", idx, [subItem title]);
             }
         }
-        NSLog(@"DBusMenuParser: ===== END SUBMENU FINAL STATE =====");
+        NSDebugLog(@"DBusMenuParser: ===== END SUBMENU FINAL STATE =====");
         
-        NSLog(@"DBusMenuParser: ===== SUBMENU CREATION COMPLETE FOR '%@' =====", label ?: @"(no label)");
+        NSDebugLog(@"DBusMenuParser: ===== SUBMENU CREATION COMPLETE FOR '%@' =====", label ?: @"(no label)");
     } else {
-        NSLog(@"DBusMenuParser: Item '%@' is NOT a submenu (children=%lu, children-display=%@)", 
+        NSDebugLog(@"DBusMenuParser: Item '%@' is NOT a submenu (children=%lu, children-display=%@)", 
               label ?: @"(no label)", (unsigned long)[children count], childrenDisplay ?: @"(none)");
     }
     
@@ -614,14 +614,14 @@
     } else if ([keyEquivalent length] > 0) {
         shortcutSummary = keyEquivalent;
     }
-    NSLog(@"DBusMenuParser: Created menu item: '%@' (ID=%@, enabled=%@, children=%lu, shortcut=%@)",
+    NSDebugLog(@"DBusMenuParser: Created menu item: '%@' (ID=%@, enabled=%@, children=%lu, shortcut=%@)",
           label, itemId, enabled, (unsigned long)[children count], shortcutSummary);
     
     // Additional warning if shortcut was supposed to be set but isn't on the menu item
     if ([[menuItem keyEquivalent] length] == 0 && ([keyEquivalent length] > 0 || modifierMask > 0)) {
-        NSLog(@"DBusMenuParser: *** WARNING: Shortcut was parsed but NOT set on menu item! ***");
-        NSLog(@"DBusMenuParser: ***   Parsed keyEquivalent='%@', modifierMask=%lu ***", keyEquivalent, (unsigned long)modifierMask);
-        NSLog(@"DBusMenuParser: ***   MenuItem keyEquivalent='%@', modifierMask=%lu ***", 
+        NSDebugLog(@"DBusMenuParser: *** WARNING: Shortcut was parsed but NOT set on menu item! ***");
+        NSDebugLog(@"DBusMenuParser: ***   Parsed keyEquivalent='%@', modifierMask=%lu ***", keyEquivalent, (unsigned long)modifierMask);
+        NSDebugLog(@"DBusMenuParser: ***   MenuItem keyEquivalent='%@', modifierMask=%lu ***", 
               [menuItem keyEquivalent], (unsigned long)[menuItem keyEquivalentModifierMask]);
     }
     
@@ -630,11 +630,11 @@
 
 + (NSDictionary *)convertPropertiesToDictionary:(id)propertiesObj
 {
-    NSLog(@"DBusMenuParser: Converting properties object: %@ (class: %@)", propertiesObj, [propertiesObj class]);
+    NSDebugLog(@"DBusMenuParser: Converting properties object: %@ (class: %@)", propertiesObj, [propertiesObj class]);
     
     // If it's already a dictionary, return it
     if ([propertiesObj isKindOfClass:[NSDictionary class]]) {
-        NSLog(@"DBusMenuParser: Properties is already a dictionary");
+        NSDebugLog(@"DBusMenuParser: Properties is already a dictionary");
         return (NSDictionary *)propertiesObj;
     }
     
@@ -643,48 +643,48 @@
         NSArray *propsArray = (NSArray *)propertiesObj;
         NSMutableDictionary *mergedDict = [NSMutableDictionary dictionary];
         
-        NSLog(@"DBusMenuParser: Properties is an array with %lu elements, merging...", (unsigned long)[propsArray count]);
+        NSDebugLog(@"DBusMenuParser: Properties is an array with %lu elements, merging...", (unsigned long)[propsArray count]);
         
         for (NSUInteger i = 0; i < [propsArray count]; i++) {
             id element = [propsArray objectAtIndex:i];
-            NSLog(@"DBusMenuParser: Processing properties element[%lu]: %@ (%@)", i, element, [element class]);
+            NSDebugLog(@"DBusMenuParser: Processing properties element[%lu]: %@ (%@)", i, element, [element class]);
             
             if ([element isKindOfClass:[NSDictionary class]]) {
                 NSDictionary *elementDict = (NSDictionary *)element;
-                NSLog(@"DBusMenuParser: Element is dictionary with %lu keys", (unsigned long)[elementDict count]);
+                NSDebugLog(@"DBusMenuParser: Element is dictionary with %lu keys", (unsigned long)[elementDict count]);
                 
                 // Merge this dictionary into our result
                 for (NSString *key in [elementDict allKeys]) {
                     id value = [elementDict objectForKey:key];
                     [mergedDict setObject:value forKey:key];
-                    NSLog(@"DBusMenuParser: Added property: %@ = %@", key, value);
+                    NSDebugLog(@"DBusMenuParser: Added property: %@ = %@", key, value);
                 }
             } else {
-                NSLog(@"DBusMenuParser: WARNING: Properties array element is not a dictionary: %@ (%@)", 
+                NSDebugLog(@"DBusMenuParser: WARNING: Properties array element is not a dictionary: %@ (%@)", 
                       element, [element class]);
             }
         }
         
-        NSLog(@"DBusMenuParser: Merged properties dictionary has %lu entries", (unsigned long)[mergedDict count]);
+        NSDebugLog(@"DBusMenuParser: Merged properties dictionary has %lu entries", (unsigned long)[mergedDict count]);
         return mergedDict;
     }
     
-    NSLog(@"DBusMenuParser: WARNING: Properties is neither dictionary nor array, creating empty one");
-    NSLog(@"DBusMenuParser: Properties object class: %@", [propertiesObj class]);
-    NSLog(@"DBusMenuParser: Properties object: %@", propertiesObj);
+    NSDebugLog(@"DBusMenuParser: WARNING: Properties is neither dictionary nor array, creating empty one");
+    NSDebugLog(@"DBusMenuParser: Properties object class: %@", [propertiesObj class]);
+    NSDebugLog(@"DBusMenuParser: Properties object: %@", propertiesObj);
     return [NSDictionary dictionary];
 }
 
 + (void)cleanup
 {
-    NSLog(@"DBusMenuParser: Performing cleanup...");
+    NSDebugLog(@"DBusMenuParser: Performing cleanup...");
     
     @try {
         [DBusMenuActionHandler cleanup];
         [DBusSubmenuManager cleanup];
-        NSLog(@"DBusMenuParser: Cleanup completed successfully");
+        NSDebugLog(@"DBusMenuParser: Cleanup completed successfully");
     } @catch (NSException *exception) {
-        NSLog(@"DBusMenuParser: Exception during cleanup: %@", exception);
+        NSDebugLog(@"DBusMenuParser: Exception during cleanup: %@", exception);
     }
 }
 
