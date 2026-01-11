@@ -5,6 +5,7 @@
  */
 
 #import "LoginWindowPAM.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -131,12 +132,62 @@ int loginwindow_pam_conv(int num_msg, const struct pam_message **msg,
     _storedPassword = [password copy];
     NSLog(@"[PAM] Credentials stored: username=%@ password=%@", _storedUsername, _storedPassword ? @"(hidden)" : @"(nil)");
     
-    // Check if PAM configuration file exists
+    // Check if PAM configuration file exists and log its contents
     NSLog(@"[PAM] Checking for PAM configuration file at /etc/pam.d/LoginWindow-pam");
     if (access("/etc/pam.d/LoginWindow-pam", R_OK) != 0) {
         NSLog(@"[PAM] ERROR: /etc/pam.d/LoginWindow-pam is not readable or does not exist (errno=%d: %s)", errno, strerror(errno));
     } else {
         NSLog(@"[PAM] PAM configuration file exists and is readable");
+        // Read and log the PAM configuration file contents
+        FILE *pam_config = fopen("/etc/pam.d/LoginWindow-pam", "r");
+        if (pam_config) {
+            NSLog(@"[PAM] Contents of /etc/pam.d/LoginWindow-pam:");
+            char line[256];
+            int line_num = 1;
+            while (fgets(line, sizeof(line), pam_config)) {
+                // Remove newline
+                line[strcspn(line, "\n")] = 0;
+                NSLog(@"[PAM]   Line %d: %s", line_num++, line);
+            }
+            fclose(pam_config);
+        }
+    }
+    
+    // Check common PAM module locations on FreeBSD
+    const char *pam_module_paths[] = {
+        "/usr/lib/pam_unix.so",
+        "/usr/local/lib/pam_unix.so",
+        "/lib/security/pam_unix.so",
+        "/usr/lib/security/pam_unix.so",
+        NULL
+    };
+    NSLog(@"[PAM] Checking for pam_unix.so module:");
+    for (int i = 0; pam_module_paths[i] != NULL; i++) {
+        if (access(pam_module_paths[i], R_OK) == 0) {
+            NSLog(@"[PAM]   FOUND: %s", pam_module_paths[i]);
+        } else {
+            NSLog(@"[PAM]   NOT FOUND: %s (errno=%d: %s)", pam_module_paths[i], errno, strerror(errno));
+        }
+    }
+    
+    // Check for standard PAM service file to see format
+    NSLog(@"[PAM] Checking system PAM service file for comparison:");
+    if (access("/etc/pam.d/system", R_OK) == 0) {
+        NSLog(@"[PAM] /etc/pam.d/system exists");
+        FILE *sys_config = fopen("/etc/pam.d/system", "r");
+        if (sys_config) {
+            NSLog(@"[PAM] First few lines of /etc/pam.d/system:");
+            char line[256];
+            int count = 0;
+            while (fgets(line, sizeof(line), sys_config) && count < 5) {
+                line[strcspn(line, "\n")] = 0;
+                if (line[0] && line[0] != '#') {
+                    NSLog(@"[PAM]   %s", line);
+                    count++;
+                }
+            }
+            fclose(sys_config);
+        }
     }
     
     // "LoginWindow-pam" is the service name used for PAM authentication, there is a file in /etc/pam.d/ that defines the service
