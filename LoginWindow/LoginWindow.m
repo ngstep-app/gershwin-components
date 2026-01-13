@@ -84,6 +84,56 @@ static void generate_xauth_cookie(unsigned char cookie[16]) {
 static unsigned char g_xserver_cookie[16];
 static BOOL g_xserver_cookie_valid = NO;
 
+// Check if /tmp is a mountpoint - used to wait for filesystems on BSD systems
+static BOOL isTmpMountpoint(void) {
+    struct stat tmpStat, parentStat;
+    
+    // Get stat info for /tmp
+    if (stat("/tmp", &tmpStat) != 0) {
+        return NO;  // /tmp doesn't exist
+    }
+    
+    // Get stat info for parent directory (/)
+    if (stat("/", &parentStat) != 0) {
+        return NO;  // / doesn't exist (impossible but check anyway)
+    }
+    
+    // If /tmp and / have different device IDs, /tmp is on a different filesystem (mountpoint)
+    return (tmpStat.st_dev != parentStat.st_dev);
+}
+
+// Wait for /tmp to be a mountpoint with progress indicator
+// Timeout is in seconds, checks every 0.1 seconds with dot progress
+static void waitForTmpMountpoint(int timeoutSeconds) {
+    int maxChecks = timeoutSeconds * 10;  // 10 checks per second (0.1 second interval)
+    int checksPerDot = 5;                  // Print a dot every 0.5 seconds
+    int dotCount = 0;
+    
+    for (int i = 0; i < maxChecks; i++) {
+        if (isTmpMountpoint()) {
+            NSLog(@"[INFO] /tmp is now a mountpoint (ready after %.1f seconds)", (float)i / 10.0);
+            return;
+        }
+        
+        // Print progress indicator
+        if (i > 0 && (i % checksPerDot) == 0) {
+            fprintf(stderr, ".");
+            fflush(stderr);
+            dotCount++;
+        }
+        
+        // Sleep for 0.1 seconds
+        usleep(100000);  // 100,000 microseconds = 0.1 seconds
+    }
+    
+    // Timeout reached
+    if (dotCount > 0) {
+        fprintf(stderr, "\n");
+        fflush(stderr);
+    }
+    NSLog(@"[WARNING] Timeout waiting for /tmp mountpoint (waited %d seconds)", timeoutSeconds);
+}
+
 // Safe XOpenDisplay with timeout - prevents indefinite hanging
 static Display* safeXOpenDisplay(const char *display_name, int timeout_seconds) {
     xOpenDisplayTimedOut = NO;
@@ -2248,6 +2298,11 @@ void signalHandler(int sig) {
 - (BOOL)startXServer
 {
     NSLog(@"[DEBUG] Starting X server");
+    
+    // Wait for /tmp to be a mountpoint (up to 20 seconds)
+    // This is important on BSD systems where filesystems may still be mounting
+    NSLog(@"[DEBUG] Checking if /tmp is mounted...");
+    waitForTmpMountpoint(20);
     
     // Clean up any existing X server processes first
     [self cleanupExistingXServer];
