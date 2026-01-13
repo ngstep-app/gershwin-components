@@ -2299,12 +2299,17 @@ void signalHandler(int sig) {
 {
     NSLog(@"[DEBUG] Starting X server");
     
-    // Wait for /tmp to be a mountpoint (up to 20 seconds)
-    // This is important on BSD systems where filesystems may still be mounting
-    NSLog(@"[DEBUG] Checking if /tmp is mounted...");
-    waitForTmpMountpoint(20);
-    // Sleep for 0.2 seconds longer
-    usleep(200000);  // 200,000 microseconds = 0.2 seconds
+    // Only wait for /tmp if X is not already running
+    if (![self isXServerRunning]) {
+        // Wait for /tmp to be a mountpoint (up to 20 seconds)
+        // This is important on BSD systems where filesystems may still be mounting
+        NSLog(@"[DEBUG] X not running yet, checking if /tmp is mounted...");
+        waitForTmpMountpoint(20);
+        // Sleep for 0.5 seconds longer
+        usleep(500000);  // 500,000 microseconds = 0.5 seconds
+    } else {
+        NSLog(@"[DEBUG] X server already running, skipping /tmp check");
+    }
     
     // Clean up any existing X server processes first
     [self cleanupExistingXServer];
