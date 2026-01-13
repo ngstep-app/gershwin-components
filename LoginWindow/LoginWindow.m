@@ -20,6 +20,8 @@
 #import <errno.h>
 #import <signal.h>
 #import <fcntl.h>
+#import <limits.h>
+#import <stdlib.h>
 #import <X11/Xlib.h>
 #import <X11/Xauth.h>
 #if defined(__linux__)
@@ -84,54 +86,64 @@ static void generate_xauth_cookie(unsigned char cookie[16]) {
 static unsigned char g_xserver_cookie[16];
 static BOOL g_xserver_cookie_valid = NO;
 
-// Check if /tmp is a mountpoint - used to wait for filesystems on BSD systems
-static BOOL isTmpMountpoint(void) {
-    struct stat tmpStat, parentStat;
-    
-    // Get stat info for /tmp
-    if (stat("/tmp", &tmpStat) != 0) {
-        return NO;  // /tmp doesn't exist
+// Check if /tmp is writable by actually creating, writing to, and removing a temporary file
+static BOOL isTmpWritable(void) {
+    const char *dir = "/tmp";
+    char tmpPath[PATH_MAX];
+
+    // Create a unique temporary file template
+    int len = snprintf(tmpPath, sizeof(tmpPath), "%s/loginwindow.XXXXXX", dir);
+    if (len <= 0 || len >= (int)sizeof(tmpPath)) {
+        return NO;
     }
-    
-    // Get stat info for parent directory (/)
-    if (stat("/", &parentStat) != 0) {
-        return NO;  // / doesn't exist (impossible but check anyway)
+
+    int fd = mkstemp(tmpPath);
+    if (fd < 0) {
+        // Could not create file - not writable or security restrictions
+        return NO;
     }
-    
-    // If /tmp and / have different device IDs, /tmp is on a different filesystem (mountpoint)
-    return (tmpStat.st_dev != parentStat.st_dev);
+
+    // Try writing a single byte and syncing to ensure real write worked
+    ssize_t nw = write(fd, "x", 1);
+    fsync(fd);
+    close(fd);
+
+    // Remove the temporary file
+    unlink(tmpPath);
+
+    return (nw == 1);
 }
 
-// Wait for /tmp to be a mountpoint with progress indicator
+// Wait for /tmp to be writable with progress indicator
 // Timeout is in seconds, checks every 0.1 seconds with dot progress
-static void waitForTmpMountpoint(int timeoutSeconds) {
+static void waitForTmpWritable(int timeoutSeconds) {
     int maxChecks = timeoutSeconds * 10;  // 10 checks per second (0.1 second interval)
     int checksPerDot = 5;                  // Print a dot every 0.5 seconds
     int dotCount = 0;
-    
+
     for (int i = 0; i < maxChecks; i++) {
-        if (isTmpMountpoint()) {
-            NSLog(@"[INFO] /tmp is now a mountpoint (ready after %.1f seconds)", (float)i / 10.0);
+        if (isTmpWritable()) {
+            NSLog(@"[INFO] /tmp is now writable (ready after %.1f seconds)", (float)i / 10.0);
             return;
         }
-        
+
         // Print progress indicator
         if (i > 0 && (i % checksPerDot) == 0) {
             fprintf(stderr, ".");
             fflush(stderr);
             dotCount++;
         }
-        
+
         // Sleep for 0.1 seconds
         usleep(100000);  // 100,000 microseconds = 0.1 seconds
     }
-    
+
     // Timeout reached
     if (dotCount > 0) {
         fprintf(stderr, "\n");
         fflush(stderr);
     }
-    NSLog(@"[WARNING] Timeout waiting for /tmp mountpoint (waited %d seconds)", timeoutSeconds);
+    NSLog(@"[WARNING] Timeout waiting for /tmp to be writable (waited %d seconds)", timeoutSeconds);
 }
 
 // Safe XOpenDisplay with timeout - prevents indefinite hanging
@@ -2301,12 +2313,10 @@ void signalHandler(int sig) {
     
     // Only wait for /tmp if X is not already running
     if (![self isXServerRunning]) {
-        // Wait for /tmp to be a mountpoint (up to 20 seconds)
+        // Wait for /tmp to be writable (up to 20 seconds)
         // This is important on BSD systems where filesystems may still be mounting
-        NSLog(@"[DEBUG] X not running yet, checking if /tmp is mounted...");
-        waitForTmpMountpoint(20);
-        // Sleep for 0.5 seconds longer
-        usleep(500000);  // 500,000 microseconds = 0.5 seconds
+        NSLog(@"[DEBUG] X not running yet, checking if /tmp is writable...");
+        waitForTmpWritable(20);
     } else {
         NSLog(@"[DEBUG] X server already running, skipping /tmp check");
     }

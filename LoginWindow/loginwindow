@@ -2,7 +2,7 @@
 
 # Run before everything else; loginwindow waits until /tmp is mounted and then starts X server and shows the login screen
 # PROVIDE: loginwindow
-# REQUIRE:
+# REQUIRE: tmp var_run
 # BEFORE:
 # KEYWORD: shutdown
 #
