@@ -1,0 +1,15 @@
+{
+    CFBundleDevelopmentRegion = "English";
+    CFBundleExecutable = "Sharing";
+    CFBundleIdentifier = "org.gershwin.preference.sharing";
+    CFBundleInfoDictionaryVersion = "6.0";
+    CFBundleName = "Sharing";
+    CFBundlePackageType = "BNDL";
+    CFBundleShortVersionString = "1.0";
+    CFBundleSignature = "????";
+    CFBundleVersion = "1.0";
+    NSPrefPaneIconFile = "Sharing.png";
+    NSPrefPaneIconLabel = "Sharing";
+    NSPrincipalClass = "SharingPane";
+    NSPrefPaneCategory = "Network";
+}
