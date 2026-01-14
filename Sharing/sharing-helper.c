@@ -8,7 +8,7 @@
  * This is a standalone C program that performs operations requiring root privileges.
  * It can be called via sudo/doas or installed as setuid root.
  * 
- * Supported platforms: Linux (systemd), FreeBSD, OpenBSD, NetBSD
+ * Supported platforms: Linux (systemd and other init systems such as in Devuan, Artix), FreeBSD, OpenBSD, NetBSD
  */
 
 #include <stdio.h>
@@ -488,6 +488,382 @@ static void cmd_vnc_stop(void)
     exit(0);
 }
 
+/* SFTP status - SFTP uses SSH daemon, but we check config for SFTP subsystem */
+static void cmd_sftp_status(void)
+{
+    /* SFTP is typically enabled if SSH is running and SFTP subsystem is configured */
+    /* Check if SSH is running first */
+#ifdef PLATFORM_LINUX
+    if (!check_service_running("sshd.service") && 
+        !check_service_running("ssh.service") &&
+        !check_service_running("sshd") && 
+        !check_service_running("ssh")) {
+        printf("stopped\n");
+        exit(0);
+    }
+#else
+    if (!check_service_running("sshd")) {
+        printf("stopped\n");
+        exit(0);
+    }
+#endif
+    
+    /* Check if SFTP subsystem is configured in sshd_config */
+    int found = 0;
+    const char *sshd_config_paths[] = {
+        "/etc/ssh/sshd_config",
+        "/usr/local/etc/ssh/sshd_config",
+        NULL
+    };
+    
+    for (int i = 0; sshd_config_paths[i] != NULL; i++) {
+        FILE *f = fopen(sshd_config_paths[i], "r");
+        if (f) {
+            char line[512];
+            while (fgets(line, sizeof(line), f)) {
+                /* Skip comments and whitespace */
+                char *p = line;
+                while (*p == ' ' || *p == '\t') p++;
+                if (*p == '#' || *p == '\n') continue;
+                
+                /* Check for Subsystem sftp */
+                if (strncmp(p, "Subsystem", 9) == 0) {
+                    p += 9;
+                    while (*p == ' ' || *p == '\t') p++;
+                    if (strncmp(p, "sftp", 4) == 0) {
+                        found = 1;
+                        break;
+                    }
+                }
+            }
+            fclose(f);
+            if (found) break;
+        }
+    }
+    
+    if (found) {
+        printf("running\n");
+    } else {
+        printf("stopped\n");
+    }
+    exit(0);
+}
+
+/* Start SFTP - Ensures SSH is running and SFTP subsystem is enabled */
+static void cmd_sftp_start(void)
+{
+    syslog(LOG_INFO, "sharing-helper: Starting SFTP service");
+    
+    /* First ensure SSH is running */
+    cmd_ssh_start(); /* This will exit, so we won't reach here */
+}
+
+/* Stop SFTP - We don't actually stop SSH, just note that SFTP won't be available */
+static void cmd_sftp_stop(void)
+{
+    syslog(LOG_INFO, "sharing-helper: SFTP service stop requested (SSH remains running)");
+    /* SFTP uses SSH daemon - we don't stop SSH when SFTP is disabled */
+    /* The service is controlled at the SSH level */
+    exit(0);
+}
+
+/* AFP status */
+static void cmd_afp_status(void)
+{
+#ifdef PLATFORM_LINUX
+    /* Check for Netatalk AFP daemon */
+    if (check_service_running("netatalk.service") ||
+        check_service_running("netatalk") ||
+        (system("pgrep -x afpd >/dev/null 2>&1") == 0)) {
+        printf("running\n");
+    } else {
+        printf("stopped\n");
+    }
+#else
+    /* BSD systems */
+    if (check_service_running("netatalk") ||
+        (system("pgrep -x afpd >/dev/null 2>&1") == 0)) {
+        printf("running\n");
+    } else {
+        printf("stopped\n");
+    }
+#endif
+    exit(0);
+}
+
+/* Start AFP */
+static void cmd_afp_start(void)
+{
+    syslog(LOG_INFO, "sharing-helper: Starting AFP service");
+    
+    /* Check if Netatalk is installed */
+    if (system("which afpd >/dev/null 2>&1") != 0) {
+        fprintf(stderr, "AFP server (Netatalk) is not installed\n");
+        syslog(LOG_ERR, "sharing-helper: AFP server (Netatalk) not found");
+        exit(1);
+    }
+    
+#ifdef PLATFORM_LINUX
+    /* Try systemctl first (systemd) */
+    if (system("which systemctl >/dev/null 2>&1") == 0) {
+        if (system("systemctl start netatalk.service >/dev/null 2>&1") == 0) {
+            system("systemctl enable netatalk.service >/dev/null 2>&1");
+            goto afp_started;
+        }
+    }
+    
+    /* Try service command (sysvinit/OpenRC/upstart) */
+    if (system("service netatalk start >/dev/null 2>&1") == 0) {
+        goto afp_started;
+    }
+    
+    /* Try init script directly */
+    if (system("test -x /etc/init.d/netatalk && /etc/init.d/netatalk start >/dev/null 2>&1") == 0) {
+        goto afp_started;
+    }
+    
+    /* Try starting afpd directly */
+    if (system("afpd -F /etc/netatalk/afp.conf >/dev/null 2>&1 &") == 0) {
+        goto afp_started;
+    }
+    
+    fprintf(stderr, "Failed to start AFP server\n");
+    syslog(LOG_ERR, "sharing-helper: Failed to start AFP server");
+    exit(1);
+    
+#elif defined(PLATFORM_FREEBSD) || defined(PLATFORM_NETBSD)
+    system("sysrc netatalk_enable=YES");
+    if (system("service netatalk start") == 0) {
+        goto afp_started;
+    }
+    
+    fprintf(stderr, "Failed to start AFP server\n");
+    syslog(LOG_ERR, "sharing-helper: Failed to start AFP server");
+    exit(1);
+    
+#elif defined(PLATFORM_OPENBSD)
+    system("rcctl enable netatalk");
+    if (system("rcctl start netatalk") == 0) {
+        goto afp_started;
+    }
+    
+    fprintf(stderr, "Failed to start AFP server\n");
+    syslog(LOG_ERR, "sharing-helper: Failed to start AFP server");
+    exit(1);
+#endif
+
+afp_started:
+    syslog(LOG_INFO, "sharing-helper: AFP service started");
+    exit(0);
+}
+
+/* Stop AFP */
+static void cmd_afp_stop(void)
+{
+    syslog(LOG_INFO, "sharing-helper: Stopping AFP service");
+    
+#ifdef PLATFORM_LINUX
+    /* Try systemctl first (systemd) */
+    if (system("which systemctl >/dev/null 2>&1") == 0) {
+        system("systemctl stop netatalk.service >/dev/null 2>&1");
+    }
+    
+    /* Try service command */
+    system("service netatalk stop >/dev/null 2>&1");
+    
+    /* Try init script */
+    system("test -x /etc/init.d/netatalk && /etc/init.d/netatalk stop >/dev/null 2>&1");
+    
+    /* Kill any remaining afpd processes */
+    system("pkill -x afpd >/dev/null 2>&1");
+    system("pkill -x cnid_metad >/dev/null 2>&1");
+    
+#elif defined(PLATFORM_FREEBSD) || defined(PLATFORM_NETBSD)
+    system("service netatalk stop");
+    system("pkill -x afpd >/dev/null 2>&1");
+    system("pkill -x cnid_metad >/dev/null 2>&1");
+    
+#elif defined(PLATFORM_OPENBSD)
+    system("rcctl stop netatalk");
+    system("pkill -x afpd >/dev/null 2>&1");
+    system("pkill -x cnid_metad >/dev/null 2>&1");
+#endif
+    
+    syslog(LOG_INFO, "sharing-helper: AFP service stopped");
+    exit(0);
+}
+
+/* Samba status */
+static void cmd_smb_status(void)
+{
+#ifdef PLATFORM_LINUX
+    /* Check for various Samba service names */
+    if (check_service_running("smbd.service") ||
+        check_service_running("smb.service") ||
+        check_service_running("samba.service") ||
+        check_service_running("smbd") ||
+        check_service_running("smb") ||
+        (system("pgrep -x smbd >/dev/null 2>&1") == 0)) {
+        printf("running\n");
+    } else {
+        printf("stopped\n");
+    }
+#else
+    /* BSD systems */
+    if (check_service_running("samba_server") ||
+        check_service_running("smbd") ||
+        (system("pgrep -x smbd >/dev/null 2>&1") == 0)) {
+        printf("running\n");
+    } else {
+        printf("stopped\n");
+    }
+#endif
+    exit(0);
+}
+
+/* Start Samba */
+static void cmd_smb_start(void)
+{
+    syslog(LOG_INFO, "sharing-helper: Starting Samba service");
+    
+    /* Check if Samba is installed */
+    if (system("which smbd >/dev/null 2>&1") != 0) {
+        fprintf(stderr, "Samba server is not installed\n");
+        syslog(LOG_ERR, "sharing-helper: Samba server not found");
+        exit(1);
+    }
+    
+#ifdef PLATFORM_LINUX
+    /* Try systemctl first (systemd) */
+    if (system("which systemctl >/dev/null 2>&1") == 0) {
+        /* Try common service names */
+        if (system("systemctl start smbd.service nmbd.service >/dev/null 2>&1") == 0) {
+            system("systemctl enable smbd.service nmbd.service >/dev/null 2>&1");
+            goto smb_started;
+        }
+        if (system("systemctl start smb.service nmb.service >/dev/null 2>&1") == 0) {
+            system("systemctl enable smb.service nmb.service >/dev/null 2>&1");
+            goto smb_started;
+        }
+        if (system("systemctl start samba.service >/dev/null 2>&1") == 0) {
+            system("systemctl enable samba.service >/dev/null 2>&1");
+            goto smb_started;
+        }
+    }
+    
+    /* Try service command (sysvinit/OpenRC/upstart) */
+    if (system("service smbd start >/dev/null 2>&1 && service nmbd start >/dev/null 2>&1") == 0) {
+        goto smb_started;
+    }
+    if (system("service smb start >/dev/null 2>&1") == 0) {
+        goto smb_started;
+    }
+    if (system("service samba start >/dev/null 2>&1") == 0) {
+        goto smb_started;
+    }
+    
+    /* Try init scripts directly */
+    if (system("test -x /etc/init.d/smbd && /etc/init.d/smbd start >/dev/null 2>&1") == 0) {
+        system("test -x /etc/init.d/nmbd && /etc/init.d/nmbd start >/dev/null 2>&1");
+        goto smb_started;
+    }
+    if (system("test -x /etc/init.d/samba && /etc/init.d/samba start >/dev/null 2>&1") == 0) {
+        goto smb_started;
+    }
+    
+    fprintf(stderr, "Failed to start Samba server\n");
+    syslog(LOG_ERR, "sharing-helper: Failed to start Samba server");
+    exit(1);
+    
+#elif defined(PLATFORM_FREEBSD)
+    system("sysrc samba_server_enable=YES");
+    if (system("service samba_server start") == 0) {
+        goto smb_started;
+    }
+    
+    fprintf(stderr, "Failed to start Samba server\n");
+    syslog(LOG_ERR, "sharing-helper: Failed to start Samba server");
+    exit(1);
+    
+#elif defined(PLATFORM_NETBSD)
+    /* NetBSD uses separate smbd/nmbd services */
+    system("echo smbd=YES >> /etc/rc.conf");
+    system("echo nmbd=YES >> /etc/rc.conf");
+    if (system("service smbd start && service nmbd start") == 0) {
+        goto smb_started;
+    }
+    
+    fprintf(stderr, "Failed to start Samba server\n");
+    syslog(LOG_ERR, "sharing-helper: Failed to start Samba server");
+    exit(1);
+    
+#elif defined(PLATFORM_OPENBSD)
+    system("rcctl enable smbd");
+    system("rcctl enable nmbd");
+    if (system("rcctl start smbd && rcctl start nmbd") == 0) {
+        goto smb_started;
+    }
+    
+    fprintf(stderr, "Failed to start Samba server\n");
+    syslog(LOG_ERR, "sharing-helper: Failed to start Samba server");
+    exit(1);
+#endif
+
+smb_started:
+    syslog(LOG_INFO, "sharing-helper: Samba service started");
+    exit(0);
+}
+
+/* Stop Samba */
+static void cmd_smb_stop(void)
+{
+    syslog(LOG_INFO, "sharing-helper: Stopping Samba service");
+    
+#ifdef PLATFORM_LINUX
+    /* Try systemctl first (systemd) */
+    if (system("which systemctl >/dev/null 2>&1") == 0) {
+        system("systemctl stop smbd.service nmbd.service >/dev/null 2>&1");
+        system("systemctl stop smb.service nmb.service >/dev/null 2>&1");
+        system("systemctl stop samba.service >/dev/null 2>&1");
+    }
+    
+    /* Try service command */
+    system("service smbd stop >/dev/null 2>&1");
+    system("service nmbd stop >/dev/null 2>&1");
+    system("service smb stop >/dev/null 2>&1");
+    system("service samba stop >/dev/null 2>&1");
+    
+    /* Try init scripts */
+    system("test -x /etc/init.d/smbd && /etc/init.d/smbd stop >/dev/null 2>&1");
+    system("test -x /etc/init.d/nmbd && /etc/init.d/nmbd stop >/dev/null 2>&1");
+    system("test -x /etc/init.d/samba && /etc/init.d/samba stop >/dev/null 2>&1");
+    
+    /* Kill any remaining processes */
+    system("pkill -x smbd >/dev/null 2>&1");
+    system("pkill -x nmbd >/dev/null 2>&1");
+    
+#elif defined(PLATFORM_FREEBSD)
+    system("service samba_server stop");
+    system("pkill -x smbd >/dev/null 2>&1");
+    system("pkill -x nmbd >/dev/null 2>&1");
+    
+#elif defined(PLATFORM_NETBSD)
+    system("service smbd stop");
+    system("service nmbd stop");
+    system("pkill -x smbd >/dev/null 2>&1");
+    system("pkill -x nmbd >/dev/null 2>&1");
+    
+#elif defined(PLATFORM_OPENBSD)
+    system("rcctl stop smbd");
+    system("rcctl stop nmbd");
+    system("pkill -x smbd >/dev/null 2>&1");
+    system("pkill -x nmbd >/dev/null 2>&1");
+#endif
+    
+    syslog(LOG_INFO, "sharing-helper: Samba service stopped");
+    exit(0);
+}
+
 /* Usage */
 static void usage(const char *progname)
 {
@@ -498,6 +874,15 @@ static void usage(const char *progname)
     fprintf(stderr, "  ssh-status            Check SSH daemon status\n");
     fprintf(stderr, "  ssh-start             Start SSH daemon\n");
     fprintf(stderr, "  ssh-stop              Stop SSH daemon\n");
+    fprintf(stderr, "  sftp-status           Check SFTP status\n");
+    fprintf(stderr, "  sftp-start            Start SFTP (enables SSH)\n");
+    fprintf(stderr, "  sftp-stop             Stop SFTP announcement\n");
+    fprintf(stderr, "  afp-status            Check AFP server status\n");
+    fprintf(stderr, "  afp-start             Start AFP server (Netatalk)\n");
+    fprintf(stderr, "  afp-stop              Stop AFP server\n");
+    fprintf(stderr, "  smb-status            Check Samba server status\n");
+    fprintf(stderr, "  smb-start             Start Samba server\n");
+    fprintf(stderr, "  smb-stop              Stop Samba server\n");
     fprintf(stderr, "  vnc-status            Check VNC server status\n");
     fprintf(stderr, "  vnc-start             Start VNC server\n");
     fprintf(stderr, "  vnc-stop              Stop VNC server\n");
@@ -519,6 +904,12 @@ int main(int argc, char *argv[])
         cmd_get_hostname();
     } else if (strcmp(cmd, "ssh-status") == 0) {
         cmd_ssh_status();
+    } else if (strcmp(cmd, "sftp-status") == 0) {
+        cmd_sftp_status();
+    } else if (strcmp(cmd, "afp-status") == 0) {
+        cmd_afp_status();
+    } else if (strcmp(cmd, "smb-status") == 0) {
+        cmd_smb_status();
     } else if (strcmp(cmd, "vnc-status") == 0) {
         cmd_vnc_status();
     }
@@ -541,6 +932,18 @@ int main(int argc, char *argv[])
         cmd_ssh_start();
     } else if (strcmp(cmd, "ssh-stop") == 0) {
         cmd_ssh_stop();
+    } else if (strcmp(cmd, "sftp-start") == 0) {
+        cmd_sftp_start();
+    } else if (strcmp(cmd, "sftp-stop") == 0) {
+        cmd_sftp_stop();
+    } else if (strcmp(cmd, "afp-start") == 0) {
+        cmd_afp_start();
+    } else if (strcmp(cmd, "afp-stop") == 0) {
+        cmd_afp_stop();
+    } else if (strcmp(cmd, "smb-start") == 0) {
+        cmd_smb_start();
+    } else if (strcmp(cmd, "smb-stop") == 0) {
+        cmd_smb_stop();
     } else if (strcmp(cmd, "vnc-start") == 0) {
         cmd_vnc_start();
     } else if (strcmp(cmd, "vnc-stop") == 0) {

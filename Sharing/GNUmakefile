@@ -4,7 +4,8 @@ BUNDLE_NAME = Sharing
 
 Sharing_OBJC_FILES = \
 	SharingPane.m \
-	SharingController.m
+	SharingController.m \
+	GSServiceDiscoveryManager.m
 
 Sharing_RESOURCE_FILES = Sharing.png SharingInfo.plist
 Sharing_BUNDLE_LIBS = -lPreferencePanes
@@ -47,6 +48,16 @@ custom-install: $(BUNDLE_NAME)$(BUNDLE_EXTENSION) $(HELPER_BIN)
 		mkdir -p $(DESTDIR)$(HELPER_INSTALL_DIR); \
 		cp $(HELPER_BIN) $(DESTDIR)$(HELPER_INSTALL_DIR)/sharing-helper; \
 		chmod 755 $(DESTDIR)$(HELPER_INSTALL_DIR)/sharing-helper; \
+		echo "Installing mDNS restoration script"; \
+		cp gershwin-sharing-mdns.sh $(DESTDIR)$(HELPER_INSTALL_DIR)/; \
+		chmod 755 $(DESTDIR)$(HELPER_INSTALL_DIR)/gershwin-sharing-mdns.sh; \
+		echo "Installing systemd service (if systemd is present)"; \
+		if [ -d "$(DESTDIR)/etc/systemd/system" ]; then \
+			mkdir -p $(DESTDIR)/etc/systemd/system; \
+			cp gershwin-sharing-mdns.service $(DESTDIR)/etc/systemd/system/; \
+		fi; \
+		echo "Creating state directory"; \
+		mkdir -p $(DESTDIR)/var/lib/gershwin; \
 	else \
 		echo "Installing $(BUNDLE_NAME) to $(PREF_INSTALL_DIR)"; \
 		mkdir -p $(PREF_INSTALL_DIR); \
@@ -55,6 +66,21 @@ custom-install: $(BUNDLE_NAME)$(BUNDLE_EXTENSION) $(HELPER_BIN)
 		mkdir -p $(HELPER_INSTALL_DIR); \
 		cp $(HELPER_BIN) $(HELPER_INSTALL_DIR)/sharing-helper; \
 		chmod 755 $(HELPER_INSTALL_DIR)/sharing-helper; \
+		echo "Installing mDNS restoration script"; \
+		cp gershwin-sharing-mdns.sh $(HELPER_INSTALL_DIR)/; \
+		chmod 755 $(HELPER_INSTALL_DIR)/gershwin-sharing-mdns.sh; \
+		echo "Installing systemd service (if systemd is present)"; \
+		if [ -d "/etc/systemd/system" ]; then \
+			cp gershwin-sharing-mdns.service /etc/systemd/system/; \
+			systemctl daemon-reload 2>/dev/null || true; \
+			systemctl enable gershwin-sharing-mdns.service 2>/dev/null || true; \
+			echo "Systemd service installed and enabled"; \
+		else \
+			echo "Systemd not found, service will not auto-start on boot"; \
+		fi; \
+		echo "Creating state directory"; \
+		mkdir -p /var/lib/gershwin; \
+		chmod 755 /var/lib/gershwin; \
 	fi
 
 custom-uninstall:
@@ -63,11 +89,22 @@ custom-uninstall:
 		rm -rf $(DESTDIR)$(PREF_INSTALL_DIR)/$(BUNDLE_NAME)$(BUNDLE_EXTENSION); \
 		echo "Removing sharing-helper from $(DESTDIR)$(HELPER_INSTALL_DIR)"; \
 		rm -f $(DESTDIR)$(HELPER_INSTALL_DIR)/sharing-helper; \
+		rm -f $(DESTDIR)$(HELPER_INSTALL_DIR)/gershwin-sharing-mdns.sh; \
+		if [ -f "$(DESTDIR)/etc/systemd/system/gershwin-sharing-mdns.service" ]; then \
+			rm -f $(DESTDIR)/etc/systemd/system/gershwin-sharing-mdns.service; \
+		fi; \
 	else \
 		echo "Removing $(BUNDLE_NAME) from $(PREF_INSTALL_DIR)"; \
 		rm -rf $(PREF_INSTALL_DIR)/$(BUNDLE_NAME)$(BUNDLE_EXTENSION); \
 		echo "Removing sharing-helper from $(HELPER_INSTALL_DIR)"; \
 		rm -f $(HELPER_INSTALL_DIR)/sharing-helper; \
+		rm -f $(HELPER_INSTALL_DIR)/gershwin-sharing-mdns.sh; \
+		if [ -f "/etc/systemd/system/gershwin-sharing-mdns.service" ]; then \
+			systemctl stop gershwin-sharing-mdns.service 2>/dev/null || true; \
+			systemctl disable gershwin-sharing-mdns.service 2>/dev/null || true; \
+			rm -f /etc/systemd/system/gershwin-sharing-mdns.service; \
+			systemctl daemon-reload 2>/dev/null || true; \
+		fi; \
 	fi
 
 uninstall:: custom-uninstall

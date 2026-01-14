@@ -13,10 +13,13 @@
 
 - (id)initWithBundle:(NSBundle *)bundle
 {
+    NSLog(@"SharingPane: initWithBundle starting");
     self = [super initWithBundle:bundle];
     if (self) {
+        NSLog(@"SharingPane: super init successful");
         controller = nil;  // Create lazily when needed
         refreshTimer = nil;
+        NSLog(@"SharingPane: initWithBundle complete");
     }
     return self;
 }
@@ -51,12 +54,17 @@
 
 - (NSView *)loadMainView
 {
+    NSLog(@"SharingPane: loadMainView called");
     if (_mainView == nil) {
         // Create controller lazily when view is first needed
         if (controller == nil) {
+            NSLog(@"SharingPane: Creating SharingController");
             controller = [[SharingController alloc] init];
+            NSLog(@"SharingPane: SharingController created");
         }
+        NSLog(@"SharingPane: Creating main view");
         _mainView = [[controller createMainView] retain];
+        NSLog(@"SharingPane: Main view created");
     }
     return _mainView;
 }

@@ -1,0 +1,15 @@
+[Unit]
+Description=Gershwin mDNS Service Announcement Restoration
+Documentation=man:avahi-daemon(8)
+After=network-online.target avahi-daemon.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/System/Library/Tools/gershwin-sharing-mdns.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

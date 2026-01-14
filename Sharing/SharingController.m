@@ -7,9 +7,26 @@
  */
 
 #import "SharingController.h"
+#import "GSServiceDiscoveryManager.h"
 #import <sys/utsname.h>
 #import <arpa/inet.h>
 #import <ifaddrs.h>
+
+// AppearanceMetrics design philosophy - do NOT hardcode layout values
+// All spacing shall be multiples of 4px (4, 8, 12, 16, 20, 24)
+static const float METRICS_CONTENT_SIDE_MARGIN = 24.0;
+static const float METRICS_CONTENT_TOP_MARGIN = 15.0;
+static const float METRICS_CONTENT_BOTTOM_MARGIN = 20.0;
+static const float METRICS_TEXT_INPUT_FIELD_HEIGHT = 22.0;
+static const float METRICS_BUTTON_HEIGHT = 20.0;
+static const float METRICS_BUTTON_MIN_WIDTH = 69.0;
+static const float METRICS_RADIO_BUTTON_SIZE = 18.0;
+static const float METRICS_RADIO_BUTTON_LINE_SPACING = 20.0;
+static const float METRICS_SPACE_8 = 8.0;  // Between control and its label
+static const float METRICS_SPACE_12 = 12.0;  // Between buttons
+static const float METRICS_SPACE_16 = 16.0;  // Between controls in a group
+static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox baseline-to-baseline
+
 
 @implementation SharingController
 
@@ -17,17 +34,53 @@
 {
     self = [super init];
     if (self) {
+        NSLog(@"SharingController: init starting");
+        
         sshEnabled = NO;
         vncEnabled = NO;
+        sftpEnabled = NO;
+        afpEnabled = NO;
+        smbEnabled = NO;
         currentHostname = nil;
         
         // Find helper path
         NSString *systemLibrary = @"/System/Library";
         helperPath = [[systemLibrary stringByAppendingPathComponent:@"Tools/sharing-helper"] retain];
         
-        NSLog(@"SharingController: Initialized with helper path: %@", helperPath);
+        NSLog(@"SharingController: Helper path set to: %@", helperPath);
+        
+        // Check if helper exists
+        NSFileManager *fm = [NSFileManager defaultManager];
+        if (![fm fileExistsAtPath:helperPath]) {
+            NSLog(@"SharingController: WARNING - Helper not found at %@", helperPath);
+        }
+        
+        // Don't initialize serviceDiscoveryManager here - do it lazily when needed
+        serviceDiscoveryManager = nil;
+        
+        NSLog(@"SharingController: init complete (lightweight init, manager will be created on demand)");
     }
     return self;
+}
+
+- (GSServiceDiscoveryManager *)ensureServiceDiscoveryManager
+{
+    if (serviceDiscoveryManager == nil) {
+        NSLog(@"SharingController: Creating GSServiceDiscoveryManager on demand");
+        @try {
+            serviceDiscoveryManager = [[GSServiceDiscoveryManager sharedManager] retain];
+            NSLog(@"SharingController: Successfully initialized GSServiceDiscoveryManager");
+            if (serviceDiscoveryManager) {
+                NSLog(@"SharingController: mDNS backend: %@, available: %@", 
+                      [serviceDiscoveryManager backendName],
+                      [serviceDiscoveryManager isAvailable] ? @"YES" : @"NO");
+            }
+        } @catch (NSException *exception) {
+            NSLog(@"SharingController: EXCEPTION initializing GSServiceDiscoveryManager: %@", exception);
+            serviceDiscoveryManager = nil;
+        }
+    }
+    return serviceDiscoveryManager;
 }
 
 - (void)dealloc
@@ -37,12 +90,23 @@
     [hostnameStatusLabel release];
     [sshCheckbox release];
     [vncCheckbox release];
+    [sftpCheckbox release];
+    [afpCheckbox release];
+    [smbCheckbox release];
     [sshStatusLabel release];
     [vncStatusLabel release];
+    [sftpStatusLabel release];
+    [afpStatusLabel release];
+    [smbStatusLabel release];
     [sshInfoLabel release];
     [vncInfoLabel release];
+    [sftpInfoLabel release];
+    [afpInfoLabel release];
+    [smbInfoLabel release];
+    [mdnsStatusLabel release];
     [currentHostname release];
     [helperPath release];
+    [serviceDiscoveryManager release];
     [super dealloc];
 }
 
@@ -54,6 +118,11 @@
     
     if (![fm fileExistsAtPath:helperPath]) {
         NSLog(@"SharingController: Helper not found at %@", helperPath);
+        return nil;
+    }
+    
+    if (![fm isExecutableFileAtPath:helperPath]) {
+        NSLog(@"SharingController: Helper at %@ is not executable", helperPath);
         return nil;
     }
     
@@ -70,6 +139,7 @@
     NSFileHandle *errorFile = [errorPipe fileHandleForReading];
     
     @try {
+        NSLog(@"SharingController: Launching helper with command: %@", command);
         [task launch];
         [task waitUntilExit];
         
@@ -175,6 +245,36 @@
     return NO;
 }
 
+- (BOOL)getSFTPStatus
+{
+    NSString *output = [self runHelper:@"sftp-status"];
+    if (output) {
+        NSString *trimmed = [output stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        return [trimmed isEqualToString:@"running"];
+    }
+    return NO;
+}
+
+- (BOOL)getAFPStatus
+{
+    NSString *output = [self runHelper:@"afp-status"];
+    if (output) {
+        NSString *trimmed = [output stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        return [trimmed isEqualToString:@"running"];
+    }
+    return NO;
+}
+
+- (BOOL)getSMBStatus
+{
+    NSString *output = [self runHelper:@"smb-status"];
+    if (output) {
+        NSString *trimmed = [output stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        return [trimmed isEqualToString:@"running"];
+    }
+    return NO;
+}
+
 - (NSString *)getLocalIPAddress
 {
     NSMutableString *addresses = [NSMutableString string];
@@ -245,16 +345,21 @@
     BOOL success = [self runHelperWithSudo:command];
     
     if (success) {
-        [hostnameStatusLabel setStringValue:@"Hostname updated successfully"];
-        [hostnameStatusLabel setTextColor:[NSColor colorWithCalibratedRed:0.0 green:0.6 blue:0.0 alpha:1.0]];
         ASSIGN(currentHostname, newHostname);
+        
+        // Update mDNS service name
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable]) {
+            [mgr setComputerName:newHostname];
+            NSLog(@"SharingController: Updated mDNS computer name to %@", newHostname);
+        }
+        
         NSLog(@"SharingController: Hostname changed to %@", newHostname);
         
-        // Clear status after 3 seconds
-        [self performSelector:@selector(clearHostnameStatus) withObject:nil afterDelay:3.0];
     } else {
-        [hostnameStatusLabel setStringValue:@"Failed to update hostname"];
-        [hostnameStatusLabel setTextColor:[NSColor redColor]];
+        NSRunAlertPanel(@"Hostname Error", 
+                       @"Failed to change hostname. Check system logs for details.", 
+                       @"OK", nil, nil);
     }
 }
 
@@ -274,6 +379,29 @@
     
     if (success) {
         sshEnabled = shouldEnable;
+        
+        // Announce or unannounce via mDNS
+        if (shouldEnable) {
+            GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+            if (mgr && [mgr isAvailable]) {
+                // Announce SSH service
+                BOOL announced = [mgr announceService:GSServiceTypeSSH 
+                                                                     port:22 
+                                                                txtRecord:nil];
+                if (announced) {
+                    NSLog(@"SharingController: SSH service announced via mDNS");
+                } else {
+                    NSLog(@"SharingController: Failed to announce SSH service via mDNS");
+                }
+            }
+        } else {
+            GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+            if (mgr && [mgr isAvailable]) {
+                [mgr unannounceService:GSServiceTypeSSH];
+                NSLog(@"SharingController: SSH service unannounced from mDNS");
+            }
+        }
+        
         [self refreshStatus:nil];
         NSLog(@"SharingController: SSH %@", shouldEnable ? @"started" : @"stopped");
     } else {
@@ -296,6 +424,29 @@
     
     if (success) {
         vncEnabled = shouldEnable;
+        
+        // Announce or unannounce via mDNS
+        if (shouldEnable) {
+            GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+            if (mgr && [mgr isAvailable]) {
+                // Announce VNC service (RFB)
+                BOOL announced = [mgr announceService:GSServiceTypeVNC 
+                                                                     port:5900 
+                                                                txtRecord:nil];
+                if (announced) {
+                    NSLog(@"SharingController: VNC service announced via mDNS");
+                } else {
+                    NSLog(@"SharingController: Failed to announce VNC service via mDNS");
+                }
+            }
+        } else {
+            GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+            if (mgr && [mgr isAvailable]) {
+                [mgr unannounceService:GSServiceTypeVNC];
+                NSLog(@"SharingController: VNC service unannounced from mDNS");
+            }
+        }
+        
         [self refreshStatus:nil];
         NSLog(@"SharingController: VNC %@", shouldEnable ? @"started" : @"stopped");
     } else {
@@ -307,9 +458,174 @@
     }
 }
 
+- (void)toggleSFTP:(id)sender
+{
+    BOOL shouldEnable = [sftpCheckbox state] == NSOnState;
+    NSString *command = shouldEnable ? @"sftp-start" : @"sftp-stop";
+    
+    NSLog(@"SharingController: %@ SFTP", shouldEnable ? @"Starting" : @"Stopping");
+    
+    BOOL success = [self runHelperWithSudo:command];
+    
+    if (success) {
+        sftpEnabled = shouldEnable;
+        
+        // Announce or unannounce via mDNS
+        if (shouldEnable) {
+            GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+            if (mgr && [mgr isAvailable]) {
+                // Announce SFTP service
+                BOOL announced = [mgr announceService:GSServiceTypeSFTP 
+                                                                     port:22 
+                                                                txtRecord:nil];
+                if (announced) {
+                    NSLog(@"SharingController: SFTP service announced via mDNS");
+                } else {
+                    NSLog(@"SharingController: Failed to announce SFTP service via mDNS");
+                    NSRunAlertPanel(@"SFTP Warning", 
+                                   @"SFTP service started but could not be announced on the network.", 
+                                   @"OK", nil, nil);
+                }
+            }
+        } else {
+            GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+            if (mgr && [mgr isAvailable]) {
+                [mgr unannounceService:GSServiceTypeSFTP];
+                NSLog(@"SharingController: SFTP service unannounced from mDNS");
+            }
+        }
+        
+        [self refreshStatus:nil];
+        NSLog(@"SharingController: SFTP %@", shouldEnable ? @"started" : @"stopped");
+    } else {
+        // Revert checkbox state
+        [sftpCheckbox setState:sftpEnabled ? NSOnState : NSOffState];
+        NSRunAlertPanel(@"SFTP Error", 
+                       @"Failed to modify SFTP service.\n\n"
+                       @"SFTP requires SSH to be installed and properly configured. "
+                       @"Please ensure OpenSSH server is installed and the SFTP subsystem is enabled in sshd_config.", 
+                       @"OK", nil, nil);
+    }
+}
+
+- (void)toggleAFP:(id)sender
+{
+    BOOL shouldEnable = [afpCheckbox state] == NSOnState;
+    NSString *command = shouldEnable ? @"afp-start" : @"afp-stop";
+    
+    NSLog(@"SharingController: %@ AFP", shouldEnable ? @"Starting" : @"Stopping");
+    
+    BOOL success = [self runHelperWithSudo:command];
+    
+    if (success) {
+        afpEnabled = shouldEnable;
+        
+        // Announce or unannounce via mDNS
+        if (shouldEnable) {
+            GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+            if (mgr && [mgr isAvailable]) {
+                // Announce AFP service
+                BOOL announced = [mgr announceService:GSServiceTypeAFP 
+                                                                     port:548 
+                                                                txtRecord:nil];
+                if (announced) {
+                    NSLog(@"SharingController: AFP service announced via mDNS");
+                } else {
+                    NSLog(@"SharingController: Failed to announce AFP service via mDNS");
+                    NSRunAlertPanel(@"AFP Warning", 
+                                   @"AFP service started but could not be announced on the network.", 
+                                   @"OK", nil, nil);
+                }
+            }
+        } else {
+            GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+            if (mgr && [mgr isAvailable]) {
+                [mgr unannounceService:GSServiceTypeAFP];
+                NSLog(@"SharingController: AFP service unannounced from mDNS");
+            }
+        }
+        
+        [self refreshStatus:nil];
+        NSLog(@"SharingController: AFP %@", shouldEnable ? @"started" : @"stopped");
+    } else {
+        // Revert checkbox state
+        [afpCheckbox setState:afpEnabled ? NSOnState : NSOffState];
+        NSRunAlertPanel(@"AFP Error", 
+                       @"Failed to modify AFP service.\n\n"
+                       @"AFP (Apple Filing Protocol) requires Netatalk to be installed. "
+                       @"Please install Netatalk using your system's package manager:\n"
+                       @"• Debian/Ubuntu: sudo apt-get install netatalk\n"
+                       @"• Fedora/RHEL: sudo dnf install netatalk\n"
+                       @"• FreeBSD: sudo pkg install netatalk3\n"
+                       @"• Arch: sudo pacman -S netatalk", 
+                       @"OK", nil, nil);
+    }
+}
+
+- (void)toggleSMB:(id)sender
+{
+    BOOL shouldEnable = [smbCheckbox state] == NSOnState;
+    NSString *command = shouldEnable ? @"smb-start" : @"smb-stop";
+    
+    NSLog(@"SharingController: %@ SMB", shouldEnable ? @"Starting" : @"Stopping");
+    
+    BOOL success = [self runHelperWithSudo:command];
+    
+    if (success) {
+        smbEnabled = shouldEnable;
+        
+        // Announce or unannounce via mDNS
+        if (shouldEnable) {
+            GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+            if (mgr && [mgr isAvailable]) {
+                // Announce SMB service
+                BOOL announced = [mgr announceService:GSServiceTypeSMB 
+                                                                     port:445 
+                                                                txtRecord:nil];
+                if (announced) {
+                    NSLog(@"SharingController: SMB service announced via mDNS");
+                } else {
+                    NSLog(@"SharingController: Failed to announce SMB service via mDNS");
+                    NSRunAlertPanel(@"SMB Warning", 
+                                   @"SMB service started but could not be announced on the network.", 
+                                   @"OK", nil, nil);
+                }
+            }
+        } else {
+            GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+            if (mgr && [mgr isAvailable]) {
+                [mgr unannounceService:GSServiceTypeSMB];
+                NSLog(@"SharingController: SMB service unannounced from mDNS");
+            }
+        }
+        
+        [self refreshStatus:nil];
+        NSLog(@"SharingController: SMB %@", shouldEnable ? @"started" : @"stopped");
+    } else {
+        // Revert checkbox state
+        [smbCheckbox setState:smbEnabled ? NSOnState : NSOffState];
+        NSRunAlertPanel(@"Samba Error", 
+                       @"Failed to modify Samba service.\n\n"
+                       @"Samba (Windows file sharing) requires the Samba server to be installed. "
+                       @"Please install Samba using your system's package manager:\n"
+                       @"• Debian/Ubuntu: sudo apt-get install samba\n"
+                       @"• Fedora/RHEL: sudo dnf install samba\n"
+                       @"• FreeBSD: sudo pkg install samba413\n"
+                       @"• Arch: sudo pacman -S samba\n\n"
+                       @"You may also need to configure Samba in /etc/samba/smb.conf", 
+                       @"OK", nil, nil);
+    }
+}
+
 - (void)refreshStatus:(id)sender
 {
     NSLog(@"SharingController: Refreshing service status");
+    
+    // Safety check: ensure UI elements exist before trying to update them
+    if (!hostnameField || !sshCheckbox) {
+        NSLog(@"SharingController: UI not yet initialized, skipping refresh");
+        return;
+    }
     
     // Update hostname
     NSString *hostname = [self getHostname];
@@ -328,10 +644,26 @@
         NSString *info = [NSString stringWithFormat:@"To connect: ssh user@%@", ipAddress];
         [sshInfoLabel setStringValue:info];
         [sshInfoLabel setHidden:NO];
+        
+        // Ensure mDNS announcement is active
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable] && 
+            ![mgr isServiceAnnounced:GSServiceTypeSSH]) {
+            [mgr announceService:GSServiceTypeSSH port:22 txtRecord:nil];
+            NSLog(@"SharingController: Re-announced SSH service via mDNS");
+        }
     } else {
         [sshStatusLabel setStringValue:@"Off"];
         [sshStatusLabel setTextColor:[NSColor grayColor]];
         [sshInfoLabel setHidden:YES];
+        
+        // Ensure mDNS announcement is stopped
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable] && 
+            [mgr isServiceAnnounced:GSServiceTypeSSH]) {
+            [mgr unannounceService:GSServiceTypeSSH];
+            NSLog(@"SharingController: Unannounced SSH service from mDNS");
+        }
     }
     
     // Update VNC status
@@ -346,10 +678,128 @@
         NSString *info = [NSString stringWithFormat:@"To connect: %@ (port 5900)", ipAddress];
         [vncInfoLabel setStringValue:info];
         [vncInfoLabel setHidden:NO];
+        
+        // Ensure mDNS announcement is active
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable] && 
+            ![mgr isServiceAnnounced:GSServiceTypeVNC]) {
+            [mgr announceService:GSServiceTypeVNC port:5900 txtRecord:nil];
+            NSLog(@"SharingController: Re-announced VNC service via mDNS");
+        }
     } else {
         [vncStatusLabel setStringValue:@"Off"];
         [vncStatusLabel setTextColor:[NSColor grayColor]];
         [vncInfoLabel setHidden:YES];
+        
+        // Ensure mDNS announcement is stopped
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable] && 
+            [mgr isServiceAnnounced:GSServiceTypeVNC]) {
+            [mgr unannounceService:GSServiceTypeVNC];
+            NSLog(@"SharingController: Unannounced VNC service from mDNS");
+        }
+    }
+    
+    // Update SFTP status
+    sftpEnabled = [self getSFTPStatus];
+    [sftpCheckbox setState:sftpEnabled ? NSOnState : NSOffState];
+    
+    if (sftpEnabled) {
+        [sftpStatusLabel setStringValue:@"On"];
+        [sftpStatusLabel setTextColor:[NSColor colorWithCalibratedRed:0.0 green:0.6 blue:0.0 alpha:1.0]];
+        
+        NSString *ipAddress = [self getLocalIPAddress];
+        NSString *info = [NSString stringWithFormat:@"SFTP via SSH: sftp user@%@", ipAddress];
+        [sftpInfoLabel setStringValue:info];
+        [sftpInfoLabel setHidden:NO];
+        
+        // Ensure mDNS announcement is active
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable] && 
+            ![mgr isServiceAnnounced:GSServiceTypeSFTP]) {
+            [mgr announceService:GSServiceTypeSFTP port:22 txtRecord:nil];
+            NSLog(@"SharingController: Re-announced SFTP service via mDNS");
+        }
+    } else {
+        [sftpStatusLabel setStringValue:@"Off"];
+        [sftpStatusLabel setTextColor:[NSColor grayColor]];
+        [sftpInfoLabel setHidden:YES];
+        
+        // Ensure mDNS announcement is stopped
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable] && 
+            [mgr isServiceAnnounced:GSServiceTypeSFTP]) {
+            [mgr unannounceService:GSServiceTypeSFTP];
+            NSLog(@"SharingController: Unannounced SFTP service from mDNS");
+        }
+    }
+    
+    // Update AFP status
+    afpEnabled = [self getAFPStatus];
+    [afpCheckbox setState:afpEnabled ? NSOnState : NSOffState];
+    
+    if (afpEnabled) {
+        [afpStatusLabel setStringValue:@"On"];
+        [afpStatusLabel setTextColor:[NSColor colorWithCalibratedRed:0.0 green:0.6 blue:0.0 alpha:1.0]];
+        
+        NSString *ipAddress = [self getLocalIPAddress];
+        NSString *info = [NSString stringWithFormat:@"AFP available at: afp://%@ (port 548)", ipAddress];
+        [afpInfoLabel setStringValue:info];
+        [afpInfoLabel setHidden:NO];
+        
+        // Ensure mDNS announcement is active
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable] && 
+            ![mgr isServiceAnnounced:GSServiceTypeAFP]) {
+            [mgr announceService:GSServiceTypeAFP port:548 txtRecord:nil];
+            NSLog(@"SharingController: Re-announced AFP service via mDNS");
+        }
+    } else {
+        [afpStatusLabel setStringValue:@"Off"];
+        [afpStatusLabel setTextColor:[NSColor grayColor]];
+        [afpInfoLabel setHidden:YES];
+        
+        // Ensure mDNS announcement is stopped
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable] && 
+            [mgr isServiceAnnounced:GSServiceTypeAFP]) {
+            [mgr unannounceService:GSServiceTypeAFP];
+            NSLog(@"SharingController: Unannounced AFP service from mDNS");
+        }
+    }
+    
+    // Update SMB status
+    smbEnabled = [self getSMBStatus];
+    [smbCheckbox setState:smbEnabled ? NSOnState : NSOffState];
+    
+    if (smbEnabled) {
+        [smbStatusLabel setStringValue:@"On"];
+        [smbStatusLabel setTextColor:[NSColor colorWithCalibratedRed:0.0 green:0.6 blue:0.0 alpha:1.0]];
+        
+        NSString *ipAddress = [self getLocalIPAddress];
+        NSString *info = [NSString stringWithFormat:@"SMB available at: smb://%@", ipAddress];
+        [smbInfoLabel setStringValue:info];
+        [smbInfoLabel setHidden:NO];
+        
+        // Ensure mDNS announcement is active
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable] && 
+            ![mgr isServiceAnnounced:GSServiceTypeSMB]) {
+            [mgr announceService:GSServiceTypeSMB port:445 txtRecord:nil];
+            NSLog(@"SharingController: Re-announced SMB service via mDNS");
+        }
+    } else {
+        [smbStatusLabel setStringValue:@"Off"];
+        [smbStatusLabel setTextColor:[NSColor grayColor]];
+        [smbInfoLabel setHidden:YES];
+        
+        // Ensure mDNS announcement is stopped
+        GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+        if (mgr && [mgr isAvailable] && 
+            [mgr isServiceAnnounced:GSServiceTypeSMB]) {
+            [mgr unannounceService:GSServiceTypeSMB];
+            NSLog(@"SharingController: Unannounced SMB service from mDNS");
+        }
     }
 }
 
@@ -357,116 +807,241 @@
 
 - (NSView *)createMainView
 {
-    NSView *mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 595, 400)];
+    // Following AppearanceMetrics design philosophy:
+    // - All spacing must be multiples of 4px (4, 8, 12, 16, 20, 24)
+    // - Use spacing to group controls rather than group boxes
+    // - Checkboxes spaced 20px baseline-to-baseline
+    // - 24px margins from window edges
+    // - 8px between control and its label
+    // - 20px between control groups
+    
+    NSView *mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 595, 550)];
     [mainView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     
-    CGFloat yPos = 360;
-    CGFloat leftMargin = 20;
-    CGFloat rightMargin = 20;
-    CGFloat width = 595 - leftMargin - rightMargin;
+    CGFloat yPos = 550 - METRICS_CONTENT_TOP_MARGIN;  // Start from top with proper margin
+    CGFloat leftMargin = METRICS_CONTENT_SIDE_MARGIN;  // 24px from window edge
+    CGFloat width = 595 - (METRICS_CONTENT_SIDE_MARGIN * 2);  // 24px margins on both sides
     
     // Computer Name Section
-    NSBox *hostnameBox = [[NSBox alloc] initWithFrame:NSMakeRect(leftMargin, yPos - 80, width, 80)];
-    [hostnameBox setTitle:@"Computer Name"];
-    [hostnameBox setTitlePosition:NSAtTop];
+    // Use emphasized bold font for section grouping (per metrics)
+    NSTextField *computerNameTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin, yPos, width, 17)];
+    [computerNameTitle setStringValue:@"Computer Name"];
+    [computerNameTitle setBezeled:NO];
+    [computerNameTitle setDrawsBackground:NO];
+    [computerNameTitle setEditable:NO];
+    [computerNameTitle setSelectable:NO];
+    [computerNameTitle setFont:[NSFont boldSystemFontOfSize:13]];  // METRICS_FONT_SYSTEM_BOLD_13
+    [mainView addSubview:computerNameTitle];
+    [computerNameTitle release];
     
-    NSView *hostnameContentView = [hostnameBox contentView];
-    CGFloat boxWidth = [hostnameContentView bounds].size.width;
+    yPos -= METRICS_SPACE_16;  // 16px between title and first control
     
-    NSTextField *hostnameLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, 40, 100, 20)];
+    // Hostname label and field
+    NSTextField *hostnameLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin, yPos - METRICS_TEXT_INPUT_FIELD_HEIGHT, 60, 17)];
     [hostnameLabel setStringValue:@"Name:"];
     [hostnameLabel setBezeled:NO];
     [hostnameLabel setDrawsBackground:NO];
     [hostnameLabel setEditable:NO];
     [hostnameLabel setSelectable:NO];
-    [hostnameContentView addSubview:hostnameLabel];
+    [hostnameLabel setFont:[NSFont systemFontOfSize:13]];  // METRICS_FONT_SYSTEM_REGULAR_13
+    [mainView addSubview:hostnameLabel];
     [hostnameLabel release];
     
-    hostnameField = [[NSTextField alloc] initWithFrame:NSMakeRect(120, 40, boxWidth - 240, 22)];
-    [hostnameField setStringValue:@""];
-    [hostnameContentView addSubview:hostnameField];
+    CGFloat fieldLeft = leftMargin + 60 + METRICS_SPACE_8;  // Label + 8px gap
+    CGFloat buttonWidth = MAX(METRICS_BUTTON_MIN_WIDTH, 75.0);  // Ensure minimum width
+    CGFloat fieldWidth = width - 60 - METRICS_SPACE_8 - buttonWidth - METRICS_SPACE_12;  // Space for button + 12px gap
     
-    applyHostnameButton = [[NSButton alloc] initWithFrame:NSMakeRect(boxWidth - 110, 38, 100, 24)];
+    hostnameField = [[NSTextField alloc] initWithFrame:NSMakeRect(fieldLeft, yPos - METRICS_TEXT_INPUT_FIELD_HEIGHT, fieldWidth, METRICS_TEXT_INPUT_FIELD_HEIGHT)];
+    [hostnameField setStringValue:@""];
+    [hostnameField setFont:[NSFont systemFontOfSize:13]];  // METRICS_FONT_SYSTEM_REGULAR_13
+    [mainView addSubview:hostnameField];
+    
+    applyHostnameButton = [[NSButton alloc] initWithFrame:NSMakeRect(fieldLeft + fieldWidth + METRICS_SPACE_12, yPos - METRICS_BUTTON_HEIGHT - 1, buttonWidth, METRICS_BUTTON_HEIGHT)];
     [applyHostnameButton setTitle:@"Apply"];
     [applyHostnameButton setTarget:self];
     [applyHostnameButton setAction:@selector(applyHostname:)];
     [applyHostnameButton setBezelStyle:NSRoundedBezelStyle];
-    [hostnameContentView addSubview:applyHostnameButton];
+    [applyHostnameButton setFont:[NSFont systemFontOfSize:13]];  // METRICS_FONT_SYSTEM_REGULAR_13
+    [mainView addSubview:applyHostnameButton];
     
-    hostnameStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(120, 10, boxWidth - 240, 20)];
+    yPos -= METRICS_TEXT_INPUT_FIELD_HEIGHT + METRICS_SPACE_8;  // Move below field + 8px gap
+    
+    hostnameStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(fieldLeft, yPos, fieldWidth, 17)];
     [hostnameStatusLabel setStringValue:@""];
     [hostnameStatusLabel setBezeled:NO];
     [hostnameStatusLabel setDrawsBackground:NO];
     [hostnameStatusLabel setEditable:NO];
     [hostnameStatusLabel setSelectable:NO];
-    [hostnameStatusLabel setFont:[NSFont systemFontOfSize:11]];
-    [hostnameContentView addSubview:hostnameStatusLabel];
+    [hostnameStatusLabel setFont:[NSFont systemFontOfSize:11]];  // METRICS_FONT_SYSTEM_REGULAR_11
+    [mainView addSubview:hostnameStatusLabel];
     
-    [mainView addSubview:hostnameBox];
-    [hostnameBox release];
+    yPos -= 17 + METRICS_SPACE_20;  // 20px gap between control groups
     
-    yPos -= 100;
+    // Services Section - using spacing-based grouping, no box
+    NSTextField *servicesTitle = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin, yPos, width, 17)];
+    [servicesTitle setStringValue:@"Services"];
+    [servicesTitle setBezeled:NO];
+    [servicesTitle setDrawsBackground:NO];
+    [servicesTitle setEditable:NO];
+    [servicesTitle setSelectable:NO];
+    [servicesTitle setFont:[NSFont boldSystemFontOfSize:13]];  // METRICS_FONT_SYSTEM_BOLD_13
+    [mainView addSubview:servicesTitle];
+    [servicesTitle release];
     
-    // Services Section
-    NSBox *servicesBox = [[NSBox alloc] initWithFrame:NSMakeRect(leftMargin, yPos - 200, width, 200)];
-    [servicesBox setTitle:@"Services"];
-    [servicesBox setTitlePosition:NSAtTop];
+    yPos -= METRICS_SPACE_16;  // 16px between title and first control
     
-    NSView *servicesContentView = [servicesBox contentView];
-    CGFloat servicesBoxWidth = [servicesContentView bounds].size.width;
-    
-    CGFloat serviceYPos = 150;
+    // Each service row allocates space for checkbox + optional info label (16px total vertical for both)
+    // Checkboxes are spaced 36px apart (18px checkbox + 8px to info + 10px to next checkbox)
+    CGFloat serviceRowHeight = METRICS_RADIO_BUTTON_SIZE + METRICS_SPACE_8 + 17 + METRICS_SPACE_8;  // 51px per row
     
     // SSH Service
-    sshCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(10, serviceYPos, 200, 20)];
+    sshCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(leftMargin, yPos - METRICS_RADIO_BUTTON_SIZE, 200, METRICS_RADIO_BUTTON_SIZE)];
     [sshCheckbox setTitle:@"Remote Login (SSH)"];
     [sshCheckbox setButtonType:NSSwitchButton];
     [sshCheckbox setTarget:self];
     [sshCheckbox setAction:@selector(toggleSSH:)];
-    [servicesContentView addSubview:sshCheckbox];
+    [sshCheckbox setFont:[NSFont systemFontOfSize:13]];  // METRICS_FONT_SYSTEM_REGULAR_13
+    [mainView addSubview:sshCheckbox];
     
-    sshStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(220, serviceYPos, 60, 20)];
+    sshStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + 200 + METRICS_SPACE_8, yPos - 17, 60, 17)];
     [sshStatusLabel setStringValue:@"Off"];
     [sshStatusLabel setBezeled:NO];
     [sshStatusLabel setDrawsBackground:NO];
     [sshStatusLabel setEditable:NO];
     [sshStatusLabel setSelectable:NO];
-    [sshStatusLabel setFont:[NSFont boldSystemFontOfSize:12]];
+    [sshStatusLabel setFont:[NSFont boldSystemFontOfSize:13]];  // METRICS_FONT_SYSTEM_BOLD_13
     [sshStatusLabel setTextColor:[NSColor grayColor]];
-    [servicesContentView addSubview:sshStatusLabel];
+    [mainView addSubview:sshStatusLabel];
     
-    sshInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(30, serviceYPos - 25, servicesBoxWidth - 40, 20)];
+    sshInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - METRICS_SPACE_8 - 17, width - METRICS_SPACE_16, 17)];
     [sshInfoLabel setStringValue:@""];
     [sshInfoLabel setBezeled:NO];
     [sshInfoLabel setDrawsBackground:NO];
     [sshInfoLabel setEditable:NO];
     [sshInfoLabel setSelectable:YES];
-    [sshInfoLabel setFont:[NSFont systemFontOfSize:11]];
+    [sshInfoLabel setFont:[NSFont systemFontOfSize:11]];  // METRICS_FONT_SYSTEM_REGULAR_11 for info text
     [sshInfoLabel setTextColor:[NSColor darkGrayColor]];
     [sshInfoLabel setHidden:YES];
-    [servicesContentView addSubview:sshInfoLabel];
+    [mainView addSubview:sshInfoLabel];
     
-    serviceYPos -= 70;
+    yPos -= serviceRowHeight;  // Move to next service row
+    
+    // SFTP Service
+    sftpCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(leftMargin, yPos - METRICS_RADIO_BUTTON_SIZE, 200, METRICS_RADIO_BUTTON_SIZE)];
+    [sftpCheckbox setTitle:@"File Transfer (SFTP)"];
+    [sftpCheckbox setButtonType:NSSwitchButton];
+    [sftpCheckbox setTarget:self];
+    [sftpCheckbox setAction:@selector(toggleSFTP:)];
+    [sftpCheckbox setFont:[NSFont systemFontOfSize:13]];
+    [mainView addSubview:sftpCheckbox];
+    
+    sftpStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + 200 + METRICS_SPACE_8, yPos - 17, 60, 17)];
+    [sftpStatusLabel setStringValue:@"Off"];
+    [sftpStatusLabel setBezeled:NO];
+    [sftpStatusLabel setDrawsBackground:NO];
+    [sftpStatusLabel setEditable:NO];
+    [sftpStatusLabel setSelectable:NO];
+    [sftpStatusLabel setFont:[NSFont boldSystemFontOfSize:13]];
+    [sftpStatusLabel setTextColor:[NSColor grayColor]];
+    [mainView addSubview:sftpStatusLabel];
+    
+    sftpInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - METRICS_SPACE_8 - 17, width - METRICS_SPACE_16, 17)];
+    [sftpInfoLabel setStringValue:@""];
+    [sftpInfoLabel setBezeled:NO];
+    [sftpInfoLabel setDrawsBackground:NO];
+    [sftpInfoLabel setEditable:NO];
+    [sftpInfoLabel setSelectable:YES];
+    [sftpInfoLabel setFont:[NSFont systemFontOfSize:11]];
+    [sftpInfoLabel setTextColor:[NSColor darkGrayColor]];
+    [sftpInfoLabel setHidden:YES];
+    [mainView addSubview:sftpInfoLabel];
+    
+    yPos -= serviceRowHeight;  // Move to next service row
+    
+    // AFP Service
+    afpCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(leftMargin, yPos - METRICS_RADIO_BUTTON_SIZE, 230, METRICS_RADIO_BUTTON_SIZE)];
+    [afpCheckbox setTitle:@"Apple File Sharing (AFP)"];
+    [afpCheckbox setButtonType:NSSwitchButton];
+    [afpCheckbox setTarget:self];
+    [afpCheckbox setAction:@selector(toggleAFP:)];
+    [afpCheckbox setFont:[NSFont systemFontOfSize:13]];
+    [mainView addSubview:afpCheckbox];
+    
+    afpStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + 230 + METRICS_SPACE_8, yPos - 17, 60, 17)];
+    [afpStatusLabel setStringValue:@"Off"];
+    [afpStatusLabel setBezeled:NO];
+    [afpStatusLabel setDrawsBackground:NO];
+    [afpStatusLabel setEditable:NO];
+    [afpStatusLabel setSelectable:NO];
+    [afpStatusLabel setFont:[NSFont boldSystemFontOfSize:13]];
+    [afpStatusLabel setTextColor:[NSColor grayColor]];
+    [mainView addSubview:afpStatusLabel];
+    
+    afpInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - METRICS_SPACE_8 - 17, width - METRICS_SPACE_16, 17)];
+    [afpInfoLabel setStringValue:@""];
+    [afpInfoLabel setBezeled:NO];
+    [afpInfoLabel setDrawsBackground:NO];
+    [afpInfoLabel setEditable:NO];
+    [afpInfoLabel setSelectable:YES];
+    [afpInfoLabel setFont:[NSFont systemFontOfSize:11]];
+    [afpInfoLabel setTextColor:[NSColor darkGrayColor]];
+    [afpInfoLabel setHidden:YES];
+    [mainView addSubview:afpInfoLabel];
+    
+    yPos -= serviceRowHeight;  // Move to next service row
+    
+    // SMB/Samba Service
+    smbCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(leftMargin, yPos - METRICS_RADIO_BUTTON_SIZE, 250, METRICS_RADIO_BUTTON_SIZE)];
+    [smbCheckbox setTitle:@"Windows File Sharing (SMB)"];
+    [smbCheckbox setButtonType:NSSwitchButton];
+    [smbCheckbox setTarget:self];
+    [smbCheckbox setAction:@selector(toggleSMB:)];
+    [smbCheckbox setFont:[NSFont systemFontOfSize:13]];
+    [mainView addSubview:smbCheckbox];
+    
+    smbStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + 250 + METRICS_SPACE_8, yPos - 17, 60, 17)];
+    [smbStatusLabel setStringValue:@"Off"];
+    [smbStatusLabel setBezeled:NO];
+    [smbStatusLabel setDrawsBackground:NO];
+    [smbStatusLabel setEditable:NO];
+    [smbStatusLabel setSelectable:NO];
+    [smbStatusLabel setFont:[NSFont boldSystemFontOfSize:13]];
+    [smbStatusLabel setTextColor:[NSColor grayColor]];
+    [mainView addSubview:smbStatusLabel];
+    
+    smbInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - METRICS_SPACE_8 - 17, width - METRICS_SPACE_16, 17)];
+    [smbInfoLabel setStringValue:@""];
+    [smbInfoLabel setBezeled:NO];
+    [smbInfoLabel setDrawsBackground:NO];
+    [smbInfoLabel setEditable:NO];
+    [smbInfoLabel setSelectable:YES];
+    [smbInfoLabel setFont:[NSFont systemFontOfSize:11]];
+    [smbInfoLabel setTextColor:[NSColor darkGrayColor]];
+    [smbInfoLabel setHidden:YES];
+    [mainView addSubview:smbInfoLabel];
+    
+    yPos -= serviceRowHeight;  // Move to next service row
     
     // VNC Service
-    vncCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(10, serviceYPos, 200, 20)];
+    vncCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(leftMargin, yPos - METRICS_RADIO_BUTTON_SIZE, 200, METRICS_RADIO_BUTTON_SIZE)];
     [vncCheckbox setTitle:@"Screen Sharing (VNC)"];
     [vncCheckbox setButtonType:NSSwitchButton];
     [vncCheckbox setTarget:self];
     [vncCheckbox setAction:@selector(toggleVNC:)];
-    [servicesContentView addSubview:vncCheckbox];
+    [vncCheckbox setFont:[NSFont systemFontOfSize:13]];
+    [mainView addSubview:vncCheckbox];
     
-    vncStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(220, serviceYPos, 60, 20)];
+    vncStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + 200 + METRICS_SPACE_8, yPos - 17, 60, 17)];
     [vncStatusLabel setStringValue:@"Off"];
     [vncStatusLabel setBezeled:NO];
     [vncStatusLabel setDrawsBackground:NO];
     [vncStatusLabel setEditable:NO];
     [vncStatusLabel setSelectable:NO];
-    [vncStatusLabel setFont:[NSFont boldSystemFontOfSize:12]];
+    [vncStatusLabel setFont:[NSFont boldSystemFontOfSize:13]];
     [vncStatusLabel setTextColor:[NSColor grayColor]];
-    [servicesContentView addSubview:vncStatusLabel];
+    [mainView addSubview:vncStatusLabel];
     
-    vncInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(30, serviceYPos - 25, servicesBoxWidth - 40, 20)];
+    vncInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - METRICS_SPACE_8 - 17, width - METRICS_SPACE_16, 17)];
     [vncInfoLabel setStringValue:@""];
     [vncInfoLabel setBezeled:NO];
     [vncInfoLabel setDrawsBackground:NO];
@@ -475,10 +1050,28 @@
     [vncInfoLabel setFont:[NSFont systemFontOfSize:11]];
     [vncInfoLabel setTextColor:[NSColor darkGrayColor]];
     [vncInfoLabel setHidden:YES];
-    [servicesContentView addSubview:vncInfoLabel];
+    [mainView addSubview:vncInfoLabel];
     
-    [mainView addSubview:servicesBox];
-    [servicesBox release];
+    yPos -= 17 + METRICS_SPACE_20;  // 20px gap between control groups
+    
+    // mDNS Status Section
+    mdnsStatusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin, METRICS_CONTENT_BOTTOM_MARGIN, width, 40)];
+    [mdnsStatusLabel setBezeled:NO];
+    [mdnsStatusLabel setDrawsBackground:NO];
+    [mdnsStatusLabel setEditable:NO];
+    [mdnsStatusLabel setSelectable:NO];
+    [mdnsStatusLabel setFont:[NSFont systemFontOfSize:11]];  // METRICS_FONT_SYSTEM_REGULAR_11
+    [mdnsStatusLabel setTextColor:[NSColor darkGrayColor]];
+    
+    GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
+    if (mgr && [mgr isAvailable]) {
+        NSString *statusText = [NSString stringWithFormat:@"Service Discovery: Available (%@)\nEnabled services will be announced on the local network.",
+                               [mgr backendName]];
+        [mdnsStatusLabel setStringValue:statusText];
+    } else {
+        [mdnsStatusLabel setStringValue:@"Service Discovery: Not available\nInstall avahi-daemon or mDNSResponder for automatic network service announcement."];
+    }
+    [mainView addSubview:mdnsStatusLabel];
     
     // Don't call refreshStatus here - it will be called in mainViewDidLoad
     // when the pane is actually displayed
