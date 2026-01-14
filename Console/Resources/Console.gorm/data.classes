@@ -1,0 +1,37 @@
+{
+    "## Comment" = "Do NOT CHANGE this file, Gorm maintains it";
+    FirstResponder = {
+	Actions = (
+	    "clearLogs:",
+	    "copyLogEntry:",
+	    "newQuery:",
+	    "saveLogToFile:",
+	    "search:",
+	    "toggleLogList:"
+	);
+	Super = NSObject;
+    };
+    NSApp = {
+	Delegate = ConsoleController;
+    };
+    ConsoleController = {
+	Actions = (
+	    "clearLogs:",
+	    "copyLogEntry:",
+	    "newQuery:",
+	    "saveLogToFile:",
+	    "search:",
+	    "toggleLogList:"
+	);
+	Outlets = (
+	    detailTextView,
+	    logListView,
+	    logTableView,
+	    mainWindow,
+	    progressIndicator,
+	    searchField,
+	    splitView
+	);
+	Super = NSObject;
+    };
+}

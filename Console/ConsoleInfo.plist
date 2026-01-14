@@ -1,0 +1,24 @@
+{
+    ApplicationDescription = "System log viewer";
+    ApplicationIcon = "Console.icns";
+    ApplicationName = Console;
+    ApplicationRelease = "1.0";
+    Authors = (
+        "Simon Peter"
+    );
+    Copyright = "Copyright (C) 2026";
+    FullVersionID = "1.0";
+    NSExecutable = Console;
+    NSIcon = "Console.icns";
+    NSMainNibFile = "Console.gorm";
+    NSPrincipalClass = NSApplication;
+    NSRole = Application;
+    NSTypes = (
+        {
+            NSHumanReadableName = "Log File";
+            NSName = "log";
+            NSRole = Viewer;
+            NSUnixExtensions = ( log, txt );
+        }
+    );
+}
