@@ -24,6 +24,9 @@
 #import <stdlib.h>
 #import <X11/Xlib.h>
 #import <X11/Xauth.h>
+#import <X11/cursorfont.h>
+#import <X11/Xatom.h>
+#import <GNUstepGUI/GSDisplayServer.h>
 #if defined(__linux__)
 #import <dirent.h>
 #import <ctype.h>
@@ -236,6 +239,31 @@ void signalHandler(int sig) {
     
     [loginWindow makeKeyAndOrderFront:self];
     [NSApp activateIgnoringOtherApps:YES];
+
+    // Explicitly set _NET_ACTIVE_WINDOW to our login window for X11 focus
+    Display *display = safeXOpenDisplay(NULL, 5);
+    if (display) {
+        Window root = DefaultRootWindow(display);
+        Atom netActiveWindow = XInternAtom(display, "_NET_ACTIVE_WINDOW", False);
+        
+        // Use GNUstep's way to get the X11 window ID
+        GSDisplayServer *srv = GSServerForWindow(loginWindow);
+        if (srv) {
+            Window xid = (Window)(uintptr_t)[srv windowDevice:[loginWindow windowNumber]];
+            if (xid) {
+                XChangeProperty(display, root, netActiveWindow, XA_WINDOW, 32,
+                               PropModeReplace, (unsigned char*)&xid, 1);
+                
+                // Also set input focus directly as there is no window manager
+                XSetInputFocus(display, xid, RevertToParent, CurrentTime);
+                
+                NSLog(@"[DEBUG] Set _NET_ACTIVE_WINDOW and input focus to login window 0x%lx", xid);
+            }
+        }
+        
+        XFlush(display);
+        XCloseDisplay(display);
+    }
 }
 
 - (void)setX11BackgroundMidGrey
@@ -298,6 +326,16 @@ void signalHandler(int sig) {
         XFreePixmap(display, pixmap);
         
         NSLog(@"[DEBUG] Screen %d root window background set with persistent pixmap", i);
+
+        // Set the standard arrow cursor (XC_left_ptr) on the root window
+        Cursor cursor = XCreateFontCursor(display, XC_left_ptr);
+        if (cursor) {
+            XDefineCursor(display, root, cursor);
+            XFreeCursor(display, cursor);
+            NSLog(@"[DEBUG] Standard arrow cursor set on screen %d root window", i);
+        } else {
+            NSLog(@"[WARNING] Could not create standard arrow cursor on screen %d", i);
+        }
     }
     
     XFlush(display);
