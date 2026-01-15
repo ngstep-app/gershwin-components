@@ -143,9 +143,8 @@
 @end
 
 // Store original method implementations before swizzling
-static void (*original_NSMenuView_drawRect)(id, SEL, NSRect) = NULL;
-static BOOL (*original_NSMenuView_isOpaque)(id, SEL) = NULL;
-static NSWindow * (*original_NSMenuView_window)(id, SEL) = NULL;
+static IMP original_NSMenuView_drawRectIMP = NULL;
+static IMP original_NSMenuView_windowIMP = NULL;
 
 @implementation NSMenuView (CustomMenuPanelHooks)
 
@@ -156,8 +155,11 @@ static NSWindow * (*original_NSMenuView_window)(id, SEL) = NULL;
     NSRectFill(dirtyRect);
     
     // Call original implementation directly
-    if (original_NSMenuView_drawRect) {
-        original_NSMenuView_drawRect(self, @selector(drawRect:), dirtyRect);
+    if (original_NSMenuView_drawRectIMP) {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wcast-function-type-mismatch"
+        ((void (*)(id, SEL, NSRect))original_NSMenuView_drawRectIMP)(self, @selector(drawRect:), dirtyRect);
+        #pragma clang diagnostic pop
     }
 }
 
@@ -170,8 +172,11 @@ static NSWindow * (*original_NSMenuView_window)(id, SEL) = NULL;
 {
     // Get the actual window using the original implementation
     NSWindow *window = NULL;
-    if (original_NSMenuView_window) {
-        window = original_NSMenuView_window(self, @selector(window));
+    if (original_NSMenuView_windowIMP) {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wcast-function-type-mismatch"
+        window = ((NSWindow * (*)(id, SEL))original_NSMenuView_windowIMP)(self, @selector(window));
+        #pragma clang diagnostic pop
     }
     
     if (window && ![window isKindOfClass:[CustomMenuPanel class]]) {
@@ -246,7 +251,7 @@ void HookNSMenuPanelCreation(void)
         
         if (originalDrawMethod && newDrawMethod) {
             // Save the original implementation
-            original_NSMenuView_drawRect = (void (*)(id, SEL, NSRect))method_getImplementation(originalDrawMethod);
+            original_NSMenuView_drawRectIMP = method_getImplementation(originalDrawMethod);
             method_exchangeImplementations(originalDrawMethod, newDrawMethod);
             NSLog(@"CustomMenuPanel: Swizzled NSMenuView.drawRect for transparent background");
         }
@@ -266,7 +271,7 @@ void HookNSMenuPanelCreation(void)
         
         if (originalWindowMethod && newWindowMethod) {
             // Save the original implementation
-            original_NSMenuView_window = (NSWindow * (*)(id, SEL))method_getImplementation(originalWindowMethod);
+            original_NSMenuView_windowIMP = method_getImplementation(originalWindowMethod);
             method_exchangeImplementations(originalWindowMethod, newWindowMethod);
             NSLog(@"CustomMenuPanel: Swizzled NSMenuView.window for gradient styling");
         }

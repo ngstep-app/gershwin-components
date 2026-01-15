@@ -16,10 +16,27 @@
 #import "GTKActionHandler.h"
 #import "DBusMenuActionHandler.h"
 #import "MenuCacheManager.h"
+#import "ActionSearch.h"
 #import <X11/Xlib.h>
 #import <X11/Xutil.h>
 #import <X11/Xatom.h>
 #import <GNUstepGUI/GSTheme.h>
+
+// Use libdispatch if available for background launching; otherwise fall back to performSelectorInBackground
+#if defined(__has_include)
+# if __has_include(<dispatch/dispatch.h>)
+#  import <dispatch/dispatch.h>
+#  define AMW_HAS_DISPATCH 1
+# else
+#  define AMW_HAS_DISPATCH 0
+# endif
+#else
+# include <dispatch/dispatch.h>
+# define AMW_HAS_DISPATCH 1
+#endif
+
+// Minimum interval (seconds) between consecutive system menu population runs to avoid thrashing
+#define SYSTEM_MENU_UPDATE_MIN_INTERVAL 0.15
 
 // Global X11 error handling for BadWindow and other errors
 static BOOL x11_error_occurred = NO;
@@ -106,6 +123,18 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 @end
 
 @implementation AppMenuWidget
+
+// Called when the system submenu begins tracking (is about to be shown)
+- (void)systemMenuDidBeginTracking:(NSNotification *)note
+{
+    // Populate the menu now
+    NSMenu *menu = (NSMenu *)[note object];
+    if (menu != self.systemMenu) return;
+
+    NSLog(@"AppMenuWidget: systemMenuDidBeginTracking - populating apps");
+    // Reuse our menuNeedsUpdate implementation for population
+    [self menuNeedsUpdate:self.systemMenu];
+}
 
 + (void)setCurrentWidget:(AppMenuWidget *)widget
 {
@@ -304,8 +333,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 {
     // Only unregister shortcuts when switching to a different application
     if (shouldUnregisterShortcuts) {
-        NSLog(@"AppMenuWidget: Unregistering all shortcuts for application change");
-        [[X11ShortcutManager sharedManager] unregisterAllShortcuts];
+        NSLog(@"AppMenuWidget: Unregistering only non-direct (DBus) shortcuts for application change");
+        [[X11ShortcutManager sharedManager] unregisterNonDirectShortcuts];
     } else {
         NSLog(@"AppMenuWidget: Keeping shortcuts registered (same application)");
     }
@@ -315,6 +344,12 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     NSLog(@"AppMenuWidget: Marked as waiting for menu");
     
     self.currentApplicationName = nil;
+    // Remove observer and clear any cached reference to the system submenu when clearing the menu
+    if (self.systemMenu) {
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+        [nc removeObserver:self name:NSMenuDidBeginTrackingNotification object:self.systemMenu];
+        self.systemMenu = nil;
+    }
     
     // Trigger redraw to reflect the waiting state
     // Only do this if we're not in a half-finished state
@@ -493,14 +528,72 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // Calculate text width for positioning
         CGFloat textWidth = 0;
         if (self.currentApplicationName && [self.currentApplicationName length] > 0) {
-            NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
-                                       [NSFont boldSystemFontOfSize:11.0], NSFontAttributeName,
-                                       [NSColor colorWithCalibratedWhite:0.3 alpha:1.0], NSForegroundColorAttributeName,
-                                       nil];
-            
-            NSSize textSize = [self.currentApplicationName sizeWithAttributes:attributes];
-            textWidth = textSize.width + 0; // Add minimal padding
+            // We no longer draw the text, so textWidth is 0
+            textWidth = 0;
         }
+
+        // Ensure we don't duplicate the "Command" system menu item
+        NSMutableIndexSet *commandItemIndexes = [NSMutableIndexSet indexSet];
+        NSArray *menuItems = [menu itemArray];
+        for (NSUInteger i = 0; i < [menuItems count]; i++) {
+            NSMenuItem *existingItem = [menuItems objectAtIndex:i];
+            if ([[existingItem title] isEqualToString:@"⌘"]) {
+                [commandItemIndexes addIndex:i];
+            }
+        }
+        if ([commandItemIndexes count] > 0) {
+            [commandItemIndexes enumerateIndexesWithOptions:NSEnumerationReverse
+                                                  usingBlock:^(NSUInteger idx, BOOL *stop) {
+                (void)stop;
+                [menu removeItemAtIndex:idx];
+            }];
+            NSLog(@"AppMenuWidget: Removed %lu duplicate Command menu item(s)", (unsigned long)[commandItemIndexes count]);
+        }
+
+        // Add the "Command" system menu item at the beginning
+        NSMenuItem *systemItem = [[NSMenuItem alloc] initWithTitle:@"⌘" action:nil keyEquivalent:@""];
+        NSMenu *systemMenu = [[NSMenu alloc] initWithTitle:@"System"];
+        
+        // Add "Search..." item to the system menu
+        NSMenuItem *searchItem = [[NSMenuItem alloc] initWithTitle:@"Search..." 
+                                                            action:@selector(toggleSearch:) 
+                                                     keyEquivalent:@" "]; // Space
+        [searchItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+        [searchItem setTarget:[ActionSearchController sharedController]];
+        // Ensure ActionSearchController knows about our AppMenuWidget so it can collect items
+        [[ActionSearchController sharedController] setAppMenuWidget:self];
+        
+        [systemMenu addItem:searchItem];
+        [systemMenu addItem:[NSMenuItem separatorItem]];
+
+        // Add a System Preferences entry and a separator after it
+        NSMenuItem *prefsItem = [[NSMenuItem alloc] initWithTitle:@"System Preferences" action:@selector(openSystemPreferences:) keyEquivalent:@""];
+        [prefsItem setTarget:self];
+        [systemMenu addItem:prefsItem];
+        [systemMenu addItem:[NSMenuItem separatorItem]];
+
+        // Keep a reference to this system submenu so we can populate it dynamically
+        self.systemMenu = systemMenu;
+        [systemMenu setDelegate:self];
+        // Listen for tracking begin so we can populate items reliably on open
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+        [nc addObserver:self selector:@selector(systemMenuDidBeginTracking:) name:NSMenuDidBeginTrackingNotification object:systemMenu];
+
+        // Populate once now so items show up immediately; we'll also repopulate when opened/tracked
+        [self menuNeedsUpdate:systemMenu];
+        // Log what we added for debugging
+        NSArray *sysItems = [self.systemMenu itemArray];
+        NSMutableArray *titles = [NSMutableArray array];
+        for (NSMenuItem *mi in sysItems) {
+            [titles addObject:[mi title]];
+        }
+        NSLog(@"AppMenuWidget: System submenu initially has %lu items: %@", (unsigned long)[sysItems count], titles);
+
+        
+        [systemItem setSubmenu:systemMenu];
+        
+        // Insert at the beginning of the menu
+        [menu insertItem:systemItem atIndex:0];
 
         // Create a new horizontal menu view that fits within our widget frame, starting after the text
         NSRect menuViewFrame = NSMakeRect(textWidth, 0, [self bounds].size.width - textWidth, [self bounds].size.height);
@@ -600,18 +693,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // The menu items themselves will be drawn by the menuView
     
     // Draw application name if we have one
-    if (self.currentApplicationName && [self.currentApplicationName length] > 0) {
-        NSLog(@"AppMenuWidget: Drawing app name: %@", self.currentApplicationName);
-        NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:
-                                   [NSFont boldSystemFontOfSize:11.0], NSFontAttributeName,
-                                   [NSColor colorWithCalibratedWhite:0.3 alpha:1.0], NSForegroundColorAttributeName,
-                                   nil];
-        
-        NSSize textSize = [self.currentApplicationName sizeWithAttributes:attributes];
-        NSPoint textPoint = NSMakePoint(0, ([self bounds].size.height - textSize.height) / 2);
-        
-        [self.currentApplicationName drawAtPoint:textPoint withAttributes:attributes];
-    }
+        // We no longer draw the application name text here
+        // It has been replaced by the "Command" menu item
     
     // Draw drop shadow below the menu bar (GNUstep compatible)
     NSLog(@"AppMenuWidget: Drawing shadow");
@@ -685,6 +768,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (void)menuWillOpen:(NSMenu *)menu
 {
+    // Keep legacy logging for the main menu
     NSLog(@"AppMenuWidget: ===== MAIN MENU WILL OPEN =====");
     NSLog(@"AppMenuWidget: menuWillOpen called for main menu: '%@'", [menu title] ?: @"(no title)");
     NSLog(@"AppMenuWidget: Main menu object: %@", menu);
@@ -699,6 +783,114 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         NSLog(@"AppMenuWidget: Submenu view frame: %@, screen origin: %@", NSStringFromRect(menuViewFrame), NSStringFromPoint(menuViewOriginScreen));
     }
     NSLog(@"AppMenuWidget: ===== MAIN MENU WILL OPEN COMPLETE =====");
+}
+
+// menuNeedsUpdate is called to allow menus to be repopulated before they open
+- (void)menuNeedsUpdate:(NSMenu *)menu
+{
+    if (menu != self.systemMenu) {
+        return;
+    }
+
+    // Prevent re-entrancy / repeated updates that can cause rapid loops
+    if (self.isUpdatingSystemMenu) {
+        // Already updating — silently skip to avoid log spam and re-entrancy
+        return;
+    }
+
+    // Throttle frequent updates to avoid CPU / log thrashing
+    NSTimeInterval now = [[NSDate date] timeIntervalSinceReferenceDate];
+    if (now - self.lastSystemMenuUpdateTime < SYSTEM_MENU_UPDATE_MIN_INTERVAL) {
+        // Too frequent - skip this update
+        return;
+    }
+    // Record this attempt's timestamp
+    self.lastSystemMenuUpdateTime = now;
+
+    self.isUpdatingSystemMenu = YES;
+    NSLog(@"AppMenuWidget: System submenu needs update - populating System Applications list");
+
+    @try {
+
+
+    NSArray *items = [menu itemArray];
+    NSInteger prefsIndex = NSNotFound;
+    for (NSUInteger i = 0; i < [items count]; i++) {
+        NSMenuItem *it = [items objectAtIndex:i];
+        if ([[it title] isEqualToString:@"System Preferences"]) {
+            prefsIndex = (NSInteger)i;
+            break;
+        }
+    }
+
+    NSInteger startIndex = (prefsIndex != NSNotFound) ? (prefsIndex + 2) : 3; // where app list should begin
+
+    // Remove any old application entries that were previously added directly after the prefs separator
+    while ([menu numberOfItems] > startIndex) {
+        [menu removeItemAtIndex:startIndex];
+    }
+
+    // Directories to search for .app bundles (make robust to both plural/singular and common locations)
+    NSArray *dirs = @[[NSHomeDirectory() stringByAppendingPathComponent:@"Applications"], @"/Applications", @"/System/Applications", @"/System/Application", @"/Local/Applications", @"/Local/Application"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSMutableArray *appPaths = [NSMutableArray array];
+
+    for (NSString *dir in dirs) {
+        BOOL isDir = NO;
+        if ([fm fileExistsAtPath:dir isDirectory:&isDir] && isDir) {
+            NSArray *contents = [fm contentsOfDirectoryAtPath:dir error:nil];
+            for (NSString *entry in contents) {
+                if ([[entry pathExtension] isEqualToString:@"app"]) {
+                    NSString *fullPath = [dir stringByAppendingPathComponent:entry];
+                    [appPaths addObject:fullPath];
+                }
+            }
+        }
+    }
+
+    NSLog(@"AppMenuWidget: Found %lu application bundles to list", (unsigned long)[appPaths count]);
+
+    // Sort by display name
+    NSArray *sortedApps = [appPaths sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        NSString *na = [[[a lastPathComponent] stringByDeletingPathExtension] lowercaseString];
+        NSString *nb = [[[b lastPathComponent] stringByDeletingPathExtension] lowercaseString];
+        return [na compare:nb];
+    }];
+
+    // Find or create an "Applications" submenu item at startIndex
+    NSMenuItem *appsItem = nil;
+    if ([menu numberOfItems] > startIndex && [[menu itemAtIndex:startIndex] isKindOfClass:[NSMenuItem class]] && [[[menu itemAtIndex:startIndex] title] isEqualToString:@"Applications"]) {
+        appsItem = [menu itemAtIndex:startIndex];
+    } else {
+        // Insert an Applications submenu at this position
+        NSMenu *appsSubmenu = [[NSMenu alloc] initWithTitle:@"Applications"];
+        appsItem = [[NSMenuItem alloc] initWithTitle:@"Applications" action:nil keyEquivalent:@""];
+        [appsItem setSubmenu:appsSubmenu];
+        [menu insertItem:appsItem atIndex:startIndex];
+    }
+
+    NSMenu *appsSubmenu = [appsItem submenu];
+    // Clear old submenu contents
+    [appsSubmenu removeAllItems];
+
+    for (NSString *appPath in sortedApps) {
+        NSString *title = [[appPath lastPathComponent] stringByDeletingPathExtension];
+        NSMenuItem *appItem = [[NSMenuItem alloc] initWithTitle:title action:@selector(openApplicationBundle:) keyEquivalent:@""];
+        [appItem setTarget:self];
+        [appItem setRepresentedObject:appPath];
+        [appsSubmenu addItem:appItem];
+    }
+
+    if ([sortedApps count] == 0) {
+        NSMenuItem *noneItem = [[NSMenuItem alloc] initWithTitle:@"No applications found" action:nil keyEquivalent:@""];
+        [noneItem setEnabled:NO];
+        [appsSubmenu addItem:noneItem];
+    }
+    }
+    @finally {
+        // Always clear the updating flag so further updates can occur later
+        self.isUpdatingSystemMenu = NO;
+    }
 }
 
 - (void)menuDidClose:(NSMenu *)menu
@@ -733,6 +925,11 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 {
     NSLog(@"AppMenuWidget: Main menu update item at index %ld: '%@' (shouldCancel: %@)", 
           (long)index, [item title], shouldCancel ? @"YES" : @"NO");
+
+    // Don't re-trigger menu population from inside updateItem — this causes tight loops.
+    // The menu system will call menuNeedsUpdate: at appropriate times; we also protect with
+    // `isUpdatingSystemMenu` inside menuNeedsUpdate to avoid re-entrancy.
+
     return YES; // Allow the update
 }
 
@@ -1200,10 +1397,184 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // Don't set representedObject - we'll determine the active window dynamically
     
     // Register this shortcut with the X11ShortcutManager
-    [[X11ShortcutManager sharedManager] registerDirectShortcutForMenuItem:altWMenuItem
-                                                                    target:self
-                                                                    action:@selector(closeActiveWindow:)];
+    BOOL ok = [[X11ShortcutManager sharedManager] registerDirectShortcutForMenuItem:altWMenuItem
+                                                                              target:self
+                                                                              action:@selector(closeActiveWindow:)];
+    if (!ok) {
+        NSLog(@"AppMenuWidget: Failed to register Alt+W fallback shortcut for window %lu", windowId);
+    } else {
+        NSLog(@"AppMenuWidget: Registered Alt+W fallback shortcut for window %lu", windowId);
+    }
     
+}
+
+// Background-run helpers: use libdispatch when available, otherwise fall back to performSelectorInBackground
+- (void)appMenuBackgroundRunner:(id)blockObj
+{
+    void (^block)(void) = blockObj;
+    @autoreleasepool {
+        if (block) block();
+    }
+}
+
+- (void)runBlockInBackground:(void (^)(void))block
+{
+#if AMW_HAS_DISPATCH
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), block);
+#else
+    if (block) {
+        [self performSelectorInBackground:@selector(appMenuBackgroundRunner:) withObject:[block copy]];
+    }
+#endif
+} 
+
+- (void)openSystemPreferences:(NSMenuItem *)sender
+{
+    (void)sender;
+
+    // Close the menu immediately to keep the UI responsive
+    NSMenu *parentMenu = [sender menu];
+    if (parentMenu && [parentMenu respondsToSelector:@selector(cancelTracking)]) {
+        [parentMenu performSelector:@selector(cancelTracking)];
+    }
+
+    // Perform the heavy path scanning and launch attempts on a background queue
+    [self runBlockInBackground:^{
+        // Try a few ways to launch System Preferences. Some installs use 'System Preferences' while
+        // others may have 'SystemPreferences' or a different bundle name. Try matching the bundle name
+        // and finally fall back to opening the bundle path.
+
+        NSArray *candidatePaths = @[@"/System/Applications/System Preferences.app",
+                                    @"/System/Applications/SystemPreferences.app",
+                                    @"/Applications/System Preferences.app",
+                                    @"/Applications/SystemPreferences.app",
+                                    [NSHomeDirectory() stringByAppendingPathComponent:@"Applications/System Preferences.app"],
+                                    [NSHomeDirectory() stringByAppendingPathComponent:@"Applications/SystemPreferences.app"],
+                                    @"/Local/Applications/System Preferences.app",
+                                    @"/Local/Applications/SystemPreferences.app"];
+
+        // First try launching by common application names
+        NSArray *commonNames = @[@"System Preferences", @"SystemPreferences", @"System-Preferences"];
+        for (NSString *name in commonNames) {
+            if ([[NSWorkspace sharedWorkspace] launchApplication:name]) {
+                NSLog(@"AppMenuWidget: Launched System Preferences by name: %@", name);
+                return;
+            }
+        }
+
+        NSFileManager *fm = [NSFileManager defaultManager];
+
+        // Try exact candidate paths first and log checks
+        for (NSString *p in candidatePaths) {
+            BOOL exists = [fm fileExistsAtPath:p];
+            NSLog(@"AppMenuWidget: Checking candidate path for prefs: %@ (exists=%@)", p, exists ? @"YES" : @"NO");
+            if (exists) {
+                NSURL *url = [NSURL fileURLWithPath:p];
+                NSString *bundleName = [[p lastPathComponent] stringByDeletingPathExtension];
+                if (bundleName && [bundleName length] > 0) {
+                    if ([[NSWorkspace sharedWorkspace] launchApplication:bundleName]) {
+                        NSLog(@"AppMenuWidget: Launched System Preferences using bundle name: %@", bundleName);
+                        return;
+                    }
+                    NSLog(@"AppMenuWidget: launchApplication: failed for %@", bundleName);
+                }
+
+                BOOL ok = [[NSWorkspace sharedWorkspace] openURL:url];
+                if (ok) {
+                    NSLog(@"AppMenuWidget: Opened System Preferences bundle at %@", p);
+                } else {
+                    NSLog(@"AppMenuWidget: Failed to open System Preferences at %@", p);
+                }
+                return;
+            }
+        }
+
+        // Fallback: scan /System/Applications and /Applications for likely candidates (case-insensitive matching)
+        NSArray *scanDirs = @[@"/System/Applications", @"/Applications", [NSHomeDirectory() stringByAppendingPathComponent:@"Applications"]];
+        for (NSString *dir in scanDirs) {
+            BOOL isDir = NO;
+            if ([fm fileExistsAtPath:dir isDirectory:&isDir] && isDir) {
+                NSArray *contents = [fm contentsOfDirectoryAtPath:dir error:nil];
+                for (NSString *entry in contents) {
+                    if ([[entry pathExtension] isEqualToString:@"app"]) {
+                        NSString *name = [[entry stringByDeletingPathExtension] lowercaseString];
+                        if ([name containsString:@"system"] && ([name containsString:@"pref"] || [name containsString:@"setting"])) {
+                            NSString *fullPath = [dir stringByAppendingPathComponent:entry];
+                            NSLog(@"AppMenuWidget: Found probable System Preferences at %@", fullPath);
+                            NSURL *url = [NSURL fileURLWithPath:fullPath];
+                            NSString *bundleName = [entry stringByDeletingPathExtension];
+                            if ([[NSWorkspace sharedWorkspace] launchApplication:bundleName]) {
+                                NSLog(@"AppMenuWidget: Launched System Preferences via bundle name: %@", bundleName);
+                                return;
+                            }
+                            if ([[NSWorkspace sharedWorkspace] openURL:url]) {
+                                NSLog(@"AppMenuWidget: Opened System Preferences bundle at %@", fullPath);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        NSLog(@"AppMenuWidget: Could not find System Preferences to launch");
+    }];
+}
+
+- (void)openApplicationBundle:(NSMenuItem *)sender
+{
+    NSString *path = [sender representedObject];
+    if (!path) return;
+
+    // Close the menu immediately to keep the UI responsive (works on GNUstep and Cocoa variants)
+    NSMenu *parentMenu = [sender menu];
+    if (parentMenu && [parentMenu respondsToSelector:@selector(cancelTracking)]) {
+        [parentMenu performSelector:@selector(cancelTracking)];
+    }
+
+    // Launch asynchronously so the UI thread doesn't block
+    [self runBlockInBackground:^{
+        NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+
+        // Try launching by bundle name first (e.g., 'Visual Studio Code')
+        NSString *bundleName = [[path lastPathComponent] stringByDeletingPathExtension];
+        if (bundleName && [bundleName length] > 0) {
+            if ([ws launchApplication:bundleName]) {
+                NSLog(@"AppMenuWidget: Launched application by name: %@", bundleName);
+                return;
+            }
+            NSLog(@"AppMenuWidget: launchApplication: failed for %@", bundleName);
+        }
+
+        // Try reading Info.plist to find a bundle identifier or executable
+        NSString *infoPath = [path stringByAppendingPathComponent:@"Contents/Info.plist"];
+        NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:infoPath];
+        if (info) {
+            NSString *bundleID = info[@"CFBundleIdentifier"];
+            if (bundleID && [bundleID length] > 0) {
+                if ([ws launchApplication:bundleID]) {
+                    NSLog(@"AppMenuWidget: Launched application using bundle identifier: %@", bundleID);
+                    return;
+                }
+                NSLog(@"AppMenuWidget: launchApplication: failed for bundle identifier %@", bundleID);
+            }
+        }
+
+        // Fallback: open the bundle URL (best-effort)
+        NSURL *url = [NSURL fileURLWithPath:path];
+        if ([ws openURL:url]) {
+            NSLog(@"AppMenuWidget: Opened application bundle at %@", path);
+            return;
+        }
+
+        // Final fallback: try openFile which some environments handle specially
+        if ([ws openFile:path]) {
+            NSLog(@"AppMenuWidget: Opened application bundle via openFile: %@", path);
+            return;
+        }
+
+        NSLog(@"AppMenuWidget: Failed to launch application at %@", path);
+    }];
 }
 
 - (void)closeActiveWindow:(NSMenuItem *)sender
@@ -1349,6 +1720,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         self.currentWindowId = 0;
         self.currentApplicationName = nil;
         self.currentMenu = nil;
+        
+        // Remove system menu observer if present
+        if (self.systemMenu) {
+            NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+            [nc removeObserver:self name:NSMenuDidBeginTrackingNotification object:self.systemMenu];
+            self.systemMenu = nil;
+        }
         
         // Force cleanup of menu views with exception handling
         @try {

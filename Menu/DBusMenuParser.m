@@ -41,8 +41,8 @@
     NSDebugLog(@"DBusMenuParser: Menu result object: %@", result);
     NSDebugLog(@"DBusMenuParser: Menu result description: %@", [result description]);
     
-    // Unregister any existing global shortcuts before parsing new menu
-    [[X11ShortcutManager sharedManager] unregisterAllShortcuts];
+    // Unregister any existing DBus-registered/global shortcuts (preserve direct app shortcuts)
+    [[X11ShortcutManager sharedManager] unregisterNonDirectShortcuts];
     
     // Check if result is a number (error case)
     if ([result isKindOfClass:[NSNumber class]]) {

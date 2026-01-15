@@ -248,13 +248,13 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
 
 - (void)unregisterAllShortcuts
 {
-    if ([_registeredShortcuts count] == 0) {
+    if ([_registeredShortcuts count] == 0 && [_grabbedKeys count] == 0) {
         return;
     }
-    
-    NSLog(@"X11ShortcutManager: Unregistering %lu X11 hotkeys", 
+
+    NSLog(@"X11ShortcutManager: Unregistering %lu X11 hotkeys (all)", 
           (unsigned long)[_registeredShortcuts count]);
-    
+
     // Stop event monitoring
     if (_eventMonitorThread && !_shouldStopEventMonitoring) {
         _shouldStopEventMonitoring = YES;
@@ -264,13 +264,13 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
         }
         _eventMonitorThread = nil;
     }
-    
+
     // Unregister all X11 hotkeys
     if (_display) {
         XUngrabKey(_display, AnyKey, AnyModifier, DefaultRootWindow(_display));
         XSync(_display, False);
     }
-    
+
     [_registeredShortcuts removeAllObjects];
     [_shortcutToMenuItemMap removeAllObjects];
     [_grabbedKeys removeAllObjects];
@@ -279,6 +279,113 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
     [_menuItemToObjectPathMap removeAllObjects];
     [_menuItemToConnectionMap removeAllObjects];
     [_menuItemToActionNameMap removeAllObjects];
+}
+
+- (void)unregisterNonDirectShortcuts
+{
+    if ([_grabbedKeys count] == 0) {
+        return;
+    }
+
+    NSLog(@"X11ShortcutManager: Unregistering non-direct (DBus) shortcuts, preserving direct shortcuts");
+
+    if (!_display) {
+        // If no display, just remove entries from memory
+        NSMutableArray *toRemove = [NSMutableArray array];
+        for (NSString *key in _grabbedKeys) {
+            NSString *menuItemKey = [_grabbedKeys objectForKey:key];
+            if (![menuItemKey hasPrefix:@"direct_"]) {
+                [toRemove addObject:key];
+            }
+        }
+        for (NSString *k in toRemove) {
+            [_grabbedKeys removeObjectForKey:k];
+        }
+        return;
+    }
+
+    Window root = DefaultRootWindow(_display);
+    NSMutableArray *removedRegistered = [NSMutableArray array];
+    NSMutableArray *keysToRemove = [NSMutableArray array];
+
+    for (NSString *key in [_grabbedKeys allKeys]) {
+        NSString *menuItemKey = [_grabbedKeys objectForKey:key];
+        if ([menuItemKey hasPrefix:@"direct_"]) {
+            // keep direct shortcuts
+            continue;
+        }
+
+        // key is of format "<keycode>_<modifier>"
+        NSArray *parts = [key componentsSeparatedByString:@"_"];
+        if ([parts count] >= 2) {
+            KeyCode keycode = (KeyCode)[[parts objectAtIndex:0] intValue];
+            unsigned int modifier = (unsigned int)[[parts objectAtIndex:1] intValue];
+
+            // Ungrab all variants we may have grabbed
+            XUngrabKey(_display, keycode, modifier, root);
+            if (_numlock_mask) XUngrabKey(_display, keycode, modifier | _numlock_mask, root);
+            if (_capslock_mask) XUngrabKey(_display, keycode, modifier | _capslock_mask, root);
+            if (_scrolllock_mask) XUngrabKey(_display, keycode, modifier | _scrolllock_mask, root);
+            if (_numlock_mask && _capslock_mask) XUngrabKey(_display, keycode, modifier | _numlock_mask | _capslock_mask, root);
+            if (_numlock_mask && _scrolllock_mask) XUngrabKey(_display, keycode, modifier | _numlock_mask | _scrolllock_mask, root);
+            if (_capslock_mask && _scrolllock_mask) XUngrabKey(_display, keycode, modifier | _capslock_mask | _scrolllock_mask, root);
+            if (_numlock_mask && _capslock_mask && _scrolllock_mask) XUngrabKey(_display, keycode, modifier | _numlock_mask | _capslock_mask | _scrolllock_mask, root);
+
+            [keysToRemove addObject:key];
+
+            // Also remove string representations from registered shortcuts array (best-effort match)
+            NSString *possibleShortcut = nil;
+            for (NSString *s in _registeredShortcuts) {
+                if ([s containsString:@" "] || [s containsString:@"+"]) {
+                    // simple heuristic; keep track
+                    [removedRegistered addObject:s];
+                }
+            }
+        }
+    }
+
+    XSync(_display, False);
+
+    // Remove entries from internal maps
+    for (NSString *k in keysToRemove) {
+        NSString *mikey = [_grabbedKeys objectForKey:k];
+        // Remove any matching entries in shortcutToMenuItemMap
+        NSMutableArray *toRemoveKeys = [NSMutableArray array];
+        for (NSString *sk in [_shortcutToMenuItemMap allKeys]) {
+            NSString *val = [_shortcutToMenuItemMap objectForKey:sk];
+            if ([val isEqualToString:mikey]) {
+                [toRemoveKeys addObject:sk];
+            }
+        }
+        for (NSString *rk in toRemoveKeys) {
+            [_shortcutToMenuItemMap removeObjectForKey:rk];
+        }
+
+        [_grabbedKeys removeObjectForKey:k];
+        // remove mapping from other maps
+        // Find and remove matching entries in _menuItemKeyToTag and service/object maps
+        [_menuItemKeyToTag removeObjectForKey:mikey];
+        [_menuItemToServiceMap removeObjectForKey:mikey];
+        [_menuItemToObjectPathMap removeObjectForKey:mikey];
+        [_menuItemToConnectionMap removeObjectForKey:mikey];
+        [_menuItemToActionNameMap removeObjectForKey:mikey];
+    }
+
+    // Remove registered shortcuts strings if we found any that corresponded (best effort)
+    for (NSString *r in removedRegistered) {
+        [_registeredShortcuts removeObject:r];
+    }
+
+    // If we have no grabbed keys left, stop event monitoring thread gracefully
+    if ([_grabbedKeys count] == 0 && _eventMonitorThread) {
+        _shouldStopEventMonitoring = YES;
+        while (_eventMonitorThread && ![_eventMonitorThread isFinished]) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        }
+        _eventMonitorThread = nil;
+    }
+
+    NSLog(@"X11ShortcutManager: After unregisterNonDirectShortcuts - _grabbedKeys count: %lu", (unsigned long)[_grabbedKeys count]);
 }
 
 - (BOOL)shouldSwapCtrlAlt
@@ -668,6 +775,11 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
         return NoSymbol;
     }
     
+    // Accept literal space character as 'space'
+    if ([keyStr isEqualToString:@" "]) {
+        return XK_space;
+    }
+
     const char *cStr = [keyStr UTF8String];
     
     // Handle special keys based on globalshortcutsd implementation
@@ -1130,23 +1242,23 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
           _numlock_mask, _capslock_mask, _scrolllock_mask);
 }
 
-- (void)registerDirectShortcutForMenuItem:(NSMenuItem *)menuItem
+- (BOOL)registerDirectShortcutForMenuItem:(NSMenuItem *)menuItem
                                    target:(id)target
                                    action:(SEL)action
 {
     if (!_display) {
         NSLog(@"X11ShortcutManager: Cannot register direct shortcut - no X11 display");
-        return;
+        return NO;
     }
-    
+
     NSString *keyEquivalent = [menuItem keyEquivalent];
     NSUInteger modifierMask = [menuItem keyEquivalentModifierMask];
-    
+
     if ([keyEquivalent length] == 0 || modifierMask == 0) {
         NSLog(@"X11ShortcutManager: Cannot register direct shortcut - no key equivalent or modifier");
-        return;
+        return NO;
     }
-    
+
     // Create a stable key for direct shortcuts using window ID, title, and key
     NSNumber *windowId = [menuItem representedObject];
     NSString *windowIdString = windowId ? [windowId stringValue] : @"0";
@@ -1154,46 +1266,69 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
                             windowIdString,
                             [menuItem title] ?: @"untitled",
                             [menuItem keyEquivalent] ?: @"none"];
-    
+
     [_menuItemToServiceMap setObject:windowIdString forKey:menuItemKey]; // Store window ID
     [_menuItemToObjectPathMap setObject:NSStringFromSelector(action) forKey:menuItemKey]; // Store action selector
     [_menuItemToConnectionMap setObject:target forKey:menuItemKey]; // Store target
-    
+
     // Convert key to X11 KeySym and KeyCode
     KeySym keysym = [self parseKeyString:keyEquivalent];
     if (keysym == NoSymbol) {
         NSLog(@"X11ShortcutManager: Failed to convert key '%@' to X11 KeySym", keyEquivalent);
-        return;
+        return NO;
     }
-    
+
     KeyCode keycode = XKeysymToKeycode(_display, keysym);
     if (keycode == 0) {
         NSLog(@"X11ShortcutManager: Failed to convert KeySym to KeyCode for '%@'", keyEquivalent);
-        return;
+        return NO;
     }
-    
+
     unsigned int x11_modifier = [self convertToX11Modifier:modifierMask];
-    
+
     NSLog(@"X11ShortcutManager: Registering direct shortcut %@ with modifier 0x%x (keycode %d) for window %@",
           keyEquivalent, x11_modifier, keycode, windowIdString);
-    
-    // Register the shortcut with X11 using the same method as existing shortcuts
-    if (![self grabX11Key:keycode modifier:x11_modifier]) {
-        NSLog(@"X11ShortcutManager: Failed to grab X11 key for direct shortcut %@", keyEquivalent);
-        return;
+
+    BOOL anyRegistered = NO;
+
+    // Try primary modifier first
+    if ([self grabX11Key:keycode modifier:x11_modifier]) {
+        // Store the mapping for later lookup using the same format as existing shortcuts
+        NSString *keycodeModifierKey = [NSString stringWithFormat:@"%d_%u", keycode, x11_modifier];
+        [_shortcutToMenuItemMap setObject:menuItemKey forKey:keycodeModifierKey];
+        [_grabbedKeys setObject:menuItemKey forKey:keycodeModifierKey];
+        NSLog(@"X11ShortcutManager: Successfully registered direct shortcut for %@ (modifier 0x%x)", keyEquivalent, x11_modifier);
+        anyRegistered = YES;
+    } else {
+        NSLog(@"X11ShortcutManager: Failed to grab X11 key for direct shortcut %@ with modifier 0x%x", keyEquivalent, x11_modifier);
     }
-    
-    // Store the mapping for later lookup using the same format as existing shortcuts
-    NSString *keycodeModifierKey = [NSString stringWithFormat:@"%d_%u", keycode, x11_modifier];
-    [_shortcutToMenuItemMap setObject:menuItemKey forKey:keycodeModifierKey];
-    [_grabbedKeys setObject:menuItemKey forKey:keycodeModifierKey];
-    
-    NSLog(@"X11ShortcutManager: Successfully registered direct shortcut for %@", keyEquivalent);
-    
+
+    // If the requested modifier was Command (Super), also attempt an Alt fallback (many environments use Alt for menus)
+    if ((modifierMask & NSCommandKeyMask)) {
+        NSUInteger altModifierMask = (modifierMask & ~NSCommandKeyMask) | NSAlternateKeyMask;
+        unsigned int altX11Modifier = [self convertToX11Modifier:altModifierMask];
+
+        NSLog(@"X11ShortcutManager: Attempting Alt fallback for direct shortcut %@ with modifier 0x%x", keyEquivalent, altX11Modifier);
+        if ([self grabX11Key:keycode modifier:altX11Modifier]) {
+            NSString *altKeycodeModifierKey = [NSString stringWithFormat:@"%d_%u", keycode, altX11Modifier];
+            [_shortcutToMenuItemMap setObject:menuItemKey forKey:altKeycodeModifierKey];
+            [_grabbedKeys setObject:menuItemKey forKey:altKeycodeModifierKey];
+            NSLog(@"X11ShortcutManager: Successfully registered direct shortcut for %@ (Alt fallback, modifier 0x%x)", keyEquivalent, altX11Modifier);
+            anyRegistered = YES;
+        } else {
+            NSLog(@"X11ShortcutManager: Alt fallback failed to grab X11 key for direct shortcut %@", keyEquivalent);
+        }
+    }
+
+    if (!anyRegistered) {
+        // Nothing worked - return failure
+        return NO;
+    }
+
     // Debug: Check the state after registration
     NSLog(@"X11ShortcutManager: After registration - _grabbedKeys count: %lu, _eventMonitorThread: %@", 
           (unsigned long)[_grabbedKeys count], _eventMonitorThread ? @"EXISTS" : @"nil");
-    
+
     // Start X11 event monitoring if this is the first shortcut
     if ([_grabbedKeys count] > 0 && !_eventMonitorThread) {
         NSLog(@"X11ShortcutManager: Starting event monitoring for direct shortcuts - have %lu grabbed keys", 
@@ -1203,6 +1338,9 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
         NSLog(@"X11ShortcutManager: Not starting event monitoring - count: %lu, thread: %@", 
               (unsigned long)[_grabbedKeys count], _eventMonitorThread ? @"EXISTS" : @"nil");
     }
+
+    // Success - we registered at least one shortcut
+    return YES;
 }
 
 @end

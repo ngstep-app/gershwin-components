@@ -32,7 +32,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     static NSTimeInterval lastLogTime = 0;
     NSTimeInterval currentTime = [[NSDate date] timeIntervalSince1970];
     if (currentTime - lastLogTime > 1.0) {  // Only log once per second
-        NSLog(@"GTKMenuImporter: X11 Error caught (non-fatal): %s (request: %d, resource: 0x%lx)", 
+        NSDebugLog(@"GTKMenuImporter: X11 Error caught (non-fatal): %s (request: %d, resource: 0x%lx)", 
               errorText, error->request_code, error->resourceid);
         lastLogTime = currentTime;
     }
@@ -57,7 +57,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
         // Don't set up the cleanup timer during init - do it later when the run loop is ready
         self.cleanupTimer = nil;
         
-        NSLog(@"GTKMenuImporter: Initialized GTK menu protocol handler");
+        NSDebugLog(@"GTKMenuImporter: Initialized GTK menu protocol handler");
     }
     return self;
 }
@@ -66,31 +66,31 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
 
 - (BOOL)connectToDBus
 {
-    NSLog(@"GTKMenuImporter: Attempting to connect to DBus session bus...");
+    NSDebugLog(@"GTKMenuImporter: Attempting to connect to DBus session bus...");
     
     self.dbusConnection = [GNUDBusConnection sessionBus];
     
     if (![self.dbusConnection isConnected]) {
-        NSLog(@"GTKMenuImporter: Failed to get DBus connection");
+        NSDebugLog(@"GTKMenuImporter: Failed to get DBus connection");
         return NO;
     }
     
-    NSLog(@"GTKMenuImporter: Successfully connected to DBus session bus");
+    NSDebugLog(@"GTKMenuImporter: Successfully connected to DBus session bus");
     
     // Now that we're connected and the run loop is running, set up the cleanup timer
     if (!self.cleanupTimer) {
-        NSLog(@"GTKMenuImporter: Setting up cleanup timer...");
+        NSDebugLog(@"GTKMenuImporter: Setting up cleanup timer...");
         self.cleanupTimer = [NSTimer scheduledTimerWithTimeInterval:30.0
                                                         target:self
                                                       selector:@selector(cleanupStaleEntries:)
                                                       userInfo:nil
                                                        repeats:YES];
-        NSLog(@"GTKMenuImporter: Cleanup timer scheduled");
+        NSDebugLog(@"GTKMenuImporter: Cleanup timer scheduled");
     }
     
-    NSLog(@"GTKMenuImporter: About to call scanForExistingMenuServices");
+    NSDebugLog(@"GTKMenuImporter: About to call scanForExistingMenuServices");
     [self scanForExistingMenuServices];
-    NSLog(@"GTKMenuImporter: Finished calling scanForExistingMenuServices");
+    NSDebugLog(@"GTKMenuImporter: Finished calling scanForExistingMenuServices");
     
     // Note: GTK applications don't require us to register as a specific service
     // They expose their menus directly via org.gtk.Menus and org.gtk.Actions
@@ -120,7 +120,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
 {
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
     
-    NSLog(@"GTKMenuImporter: Getting GTK menu for window %lu", windowId);
+    NSDebugLog(@"GTKMenuImporter: Getting GTK menu for window %lu", windowId);
     
     // Get the currently registered service name for this window FIRST
     // This is critical for validating cached menus
@@ -134,7 +134,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     NSMenu *cachedMenu = [cacheManager getCachedMenuForWindow:windowId 
                                         validateServiceName:serviceName];
     if (cachedMenu) {
-        NSLog(@"GTKMenuImporter: Returning enhanced cached GTK menu for window %lu - re-registering shortcuts", windowId);
+        NSDebugLog(@"GTKMenuImporter: Returning enhanced cached GTK menu for window %lu - re-registering shortcuts", windowId);
         
         // Re-register shortcuts for cached menu since they may have been unregistered
         // when the window lost focus
@@ -149,7 +149,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     // Fall back to legacy cache check for backward compatibility
     NSMenu *legacyCachedMenu = [_menuCache objectForKey:windowKey];
     if (legacyCachedMenu) {
-        NSLog(@"GTKMenuImporter: Found menu in legacy cache, migrating to enhanced cache");
+        NSDebugLog(@"GTKMenuImporter: Found menu in legacy cache, migrating to enhanced cache");
         
         // Get application name for this window
         NSString *appName = [MenuUtils getApplicationNameForWindow:windowId];
@@ -172,7 +172,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     
     if (!serviceName || !menuPath) {
         // Try immediate scan for this specific window before giving up
-        NSLog(@"GTKMenuImporter: No service/menu path found for window %lu, trying immediate scan", windowId);
+        NSDebugLog(@"GTKMenuImporter: No service/menu path found for window %lu, trying immediate scan", windowId);
         [self scanSpecificWindow:windowId];
         
         // Check again after immediate scan
@@ -181,12 +181,12 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
         actionPath = [_windowActionPaths objectForKey:windowKey];
         
         if (!serviceName || !menuPath) {
-            NSLog(@"GTKMenuImporter: Still no service/menu path found for window %lu after immediate scan", windowId);
+            NSDebugLog(@"GTKMenuImporter: Still no service/menu path found for window %lu after immediate scan", windowId);
             return nil;
         }
     }
     
-    NSLog(@"GTKMenuImporter: Loading GTK menu for window %lu from %@%@ (actions: %@)", 
+    NSDebugLog(@"GTKMenuImporter: Loading GTK menu for window %lu from %@%@ (actions: %@)", 
           windowId, serviceName, menuPath, actionPath ?: @"none");
     
     // Load the menu using GTK protocol
@@ -202,10 +202,10 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                      objectPath:menuPath
                 applicationName:appName];
         
-        NSLog(@"GTKMenuImporter: Successfully loaded and cached GTK menu with %lu items", 
+        NSDebugLog(@"GTKMenuImporter: Successfully loaded and cached GTK menu with %lu items", 
               (unsigned long)[[menu itemArray] count]);
     } else {
-        NSLog(@"GTKMenuImporter: Failed to load GTK menu for window %lu", windowId);
+        NSDebugLog(@"GTKMenuImporter: Failed to load GTK menu for window %lu", windowId);
     }
     
     return menu;
@@ -213,14 +213,14 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
 
 - (void)activateMenuItem:(NSMenuItem *)menuItem forWindow:(unsigned long)windowId
 {
-    NSLog(@"GTKMenuImporter: Activating GTK menu item '%@' for window %lu", [menuItem title], windowId);
+    NSDebugLog(@"GTKMenuImporter: Activating GTK menu item '%@' for window %lu", [menuItem title], windowId);
     
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
     NSString *serviceName = [_registeredWindows objectForKey:windowKey];
     NSString *actionPath = [_windowActionPaths objectForKey:windowKey];
     
     if (!serviceName || !actionPath) {
-        NSLog(@"GTKMenuImporter: No service/action path found for window %lu", windowId);
+        NSDebugLog(@"GTKMenuImporter: No service/action path found for window %lu", windowId);
         return;
     }
     
@@ -235,11 +235,11 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     }
     
     if (!actionName) {
-        NSLog(@"GTKMenuImporter: No action name found for menu item '%@'", [menuItem title]);
+        NSDebugLog(@"GTKMenuImporter: No action name found for menu item '%@'", [menuItem title]);
         return;
     }
     
-    NSLog(@"GTKMenuImporter: Activating GTK action '%@' via %@%@", actionName, serviceName, actionPath);
+    NSDebugLog(@"GTKMenuImporter: Activating GTK action '%@' via %@%@", actionName, serviceName, actionPath);
     
     // Call Activate method on org.gtk.Actions interface
     // Signature: Activate(s action_name, av parameter, a{sv} platform_data)
@@ -256,9 +256,9 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                                   arguments:arguments];
     
     if (result) {
-        NSLog(@"GTKMenuImporter: GTK action activation succeeded, result: %@", result);
+        NSDebugLog(@"GTKMenuImporter: GTK action activation succeeded, result: %@", result);
     } else {
-        NSLog(@"GTKMenuImporter: GTK action activation failed");
+        NSDebugLog(@"GTKMenuImporter: GTK action activation failed");
     }
 }
 
@@ -286,7 +286,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     [_actionGroupCache removeObjectForKey:windowKey];
     [[MenuCacheManager sharedManager] invalidateCacheForWindow:windowId];
     
-    NSLog(@"GTKMenuImporter: Registered GTK window %lu with service=%@ menuPath=%@ actionPath=%@", 
+    NSDebugLog(@"GTKMenuImporter: Registered GTK window %lu with service=%@ menuPath=%@ actionPath=%@", 
           windowId, serviceName, objectPath, actionPath);
 }
 
@@ -310,16 +310,16 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
         [GTKSubmenuManager cleanupDelegatesForService:serviceName];
     }
     
-    NSLog(@"GTKMenuImporter: Unregistered GTK window %lu", windowId);
+    NSDebugLog(@"GTKMenuImporter: Unregistered GTK window %lu", windowId);
 }
 
 - (void)scanSpecificWindow:(unsigned long)windowId
 {
-    NSLog(@"GTKMenuImporter: Performing immediate scan for window %lu", windowId);
+    NSDebugLog(@"GTKMenuImporter: Performing immediate scan for window %lu", windowId);
     
     Display *display = XOpenDisplay(NULL);
     if (!display) {
-        NSLog(@"GTKMenuImporter: Cannot open X11 display for immediate window scan");
+        NSDebugLog(@"GTKMenuImporter: Cannot open X11 display for immediate window scan");
         return;
     }
     
@@ -333,7 +333,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     x11_error_occurred = NO;  // Reset error state before checking
     XWindowAttributes attrs;
     if (XGetWindowAttributes(display, window, &attrs) == 0 || x11_error_occurred) {
-        NSLog(@"GTKMenuImporter: Window %lu not ready/valid%s in immediate scan, skipping", 
+        NSDebugLog(@"GTKMenuImporter: Window %lu not ready/valid%s in immediate scan, skipping", 
               windowId, x11_error_occurred ? " (X11 error)" : "");
         XSynchronize(display, False);
         XSetErrorHandler(oldHandler);
@@ -362,7 +362,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     if (busResult == Success && busNameProp != NULL) {
         busNameSuccess = YES;
         
-        NSLog(@"GTKMenuImporter: Window %lu has _GTK_UNIQUE_BUS_NAME: %s", windowId, busNameProp);
+        NSDebugLog(@"GTKMenuImporter: Window %lu has _GTK_UNIQUE_BUS_NAME: %s", windowId, busNameProp);
         
         // Get object path property
         // DEFENSIVE: Reset property pointer before X11 call
@@ -372,20 +372,20 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
         if (pathResult == Success && objectPathProp != NULL) {
             objectPathSuccess = YES;
             
-            NSLog(@"GTKMenuImporter: Window %lu has _GTK_MENUBAR_OBJECT_PATH: %s", windowId, objectPathProp);
+            NSDebugLog(@"GTKMenuImporter: Window %lu has _GTK_MENUBAR_OBJECT_PATH: %s", windowId, objectPathProp);
             
             NSString *busName = [NSString stringWithUTF8String:(char *)busNameProp];
             NSString *objectPath = [NSString stringWithUTF8String:(char *)objectPathProp];
             
-            NSLog(@"GTKMenuImporter: Immediate scan found GTK window %lu with bus=%@ path=%@", windowId, busName, objectPath);
+            NSDebugLog(@"GTKMenuImporter: Immediate scan found GTK window %lu with bus=%@ path=%@", windowId, busName, objectPath);
             
             // Register this window immediately
             [self registerWindow:windowId serviceName:busName objectPath:objectPath];
         } else {
-            NSLog(@"GTKMenuImporter: Window %lu has bus name but no object path", windowId);
+            NSDebugLog(@"GTKMenuImporter: Window %lu has bus name but no object path", windowId);
         }
     } else {
-        NSLog(@"GTKMenuImporter: Window %lu has no GTK menu properties", windowId);
+        NSDebugLog(@"GTKMenuImporter: Window %lu has no GTK menu properties", windowId);
     }
     
     // DEFENSIVE: Only free if the properties were successfully retrieved
@@ -408,28 +408,28 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
 
 - (void)scanForExistingMenuServices
 {
-    NSLog(@"GTKMenuImporter: scanForExistingMenuServices STARTED");
+    NSDebugLog(@"GTKMenuImporter: scanForExistingMenuServices STARTED");
     
     static int gtkScans = 0;
     gtkScans++;
     
     // Only log occasionally to avoid spam
     if (gtkScans % 20 == 1 || gtkScans <= 2) {
-        NSLog(@"GTKMenuImporter: Scanning for existing GTK menu services... (scan #%d)", gtkScans);
+        NSDebugLog(@"GTKMenuImporter: Scanning for existing GTK menu services... (scan #%d)", gtkScans);
     }
     
     // GTK applications set X11 properties when they export menus
     // Use a more comprehensive scanning approach
-    NSLog(@"GTKMenuImporter: About to open X11 display");
+    NSDebugLog(@"GTKMenuImporter: About to open X11 display");
     Display *display = XOpenDisplay(NULL);
     if (!display) {
         if (gtkScans <= 2) {
-            NSLog(@"GTKMenuImporter: Cannot open X11 display for scanning");
+            NSDebugLog(@"GTKMenuImporter: Cannot open X11 display for scanning");
         }
-        NSLog(@"GTKMenuImporter: scanForExistingMenuServices FAILED (no display)");
+        NSDebugLog(@"GTKMenuImporter: scanForExistingMenuServices FAILED (no display)");
         return;
     }
-    NSLog(@"GTKMenuImporter: X11 display opened successfully");
+    NSDebugLog(@"GTKMenuImporter: X11 display opened successfully");
     
     // DEFENSIVE: Install X11 error handler to catch errors from invalid windows
     XErrorHandler oldHandler = XSetErrorHandler(x11ErrorHandler);
@@ -440,16 +440,16 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     NSUInteger newWindows = 0;
     
     // Create atoms once for efficiency
-    NSLog(@"GTKMenuImporter: Creating X11 atoms");
+    NSDebugLog(@"GTKMenuImporter: Creating X11 atoms");
     Atom busNameAtom = XInternAtom(display, "_GTK_UNIQUE_BUS_NAME", False);
     Atom objectPathAtom = XInternAtom(display, "_GTK_MENUBAR_OBJECT_PATH", False);
-    NSLog(@"GTKMenuImporter: X11 atoms created");
+    NSDebugLog(@"GTKMenuImporter: X11 atoms created");
     
     // Get all windows on the display using _NET_CLIENT_LIST
-    NSLog(@"GTKMenuImporter: Getting root window");
+    NSDebugLog(@"GTKMenuImporter: Getting root window");
     Window root = DefaultRootWindow(display);
     Atom clientListAtom = XInternAtom(display, "_NET_CLIENT_LIST", False);
-    NSLog(@"GTKMenuImporter: About to query window property");
+    NSDebugLog(@"GTKMenuImporter: About to query window property");
     
     Atom actualType;
     int actualFormat;
@@ -460,22 +460,22 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                           &actualType, &actualFormat, &numClientWindows, &bytesAfter,
                           (unsigned char**)&clientWindows) == Success && clientWindows) {
         
-        NSLog(@"GTKMenuImporter: Successfully got client window list");
+        NSDebugLog(@"GTKMenuImporter: Successfully got client window list");
         if (gtkScans <= 2) {
-            NSLog(@"GTKMenuImporter: Found %lu client windows to scan", numClientWindows);
+            NSDebugLog(@"GTKMenuImporter: Found %lu client windows to scan", numClientWindows);
         }
         
-        NSLog(@"GTKMenuImporter: About to iterate through %lu client windows", numClientWindows);
+        NSDebugLog(@"GTKMenuImporter: About to iterate through %lu client windows", numClientWindows);
         for (unsigned long i = 0; i < numClientWindows; i++) {
             if (i % 100 == 0 && i > 0) {
-                NSLog(@"GTKMenuImporter: Processed %lu of %lu windows", i, numClientWindows);
+                NSDebugLog(@"GTKMenuImporter: Processed %lu of %lu windows", i, numClientWindows);
             }
             
             Window window = clientWindows[i];
             
             // Debug: log the window ID we're checking (only for first few scans)
             if (gtkScans <= 2) {
-                NSLog(@"GTKMenuImporter: Checking client window %lu (0x%lx)", (unsigned long)window, (unsigned long)window);
+                NSDebugLog(@"GTKMenuImporter: Checking client window %lu (0x%lx)", (unsigned long)window, (unsigned long)window);
             }
             
             // DEFENSIVE: Verify window is valid before querying properties
@@ -485,7 +485,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
             if (XGetWindowAttributes(display, window, &attrs) == 0 || x11_error_occurred) {
                 // Window is not valid/ready or caused an X11 error, skip it
                 if (gtkScans <= 2) {
-                    NSLog(@"GTKMenuImporter: Window %lu not ready/valid%s, skipping", 
+                    NSDebugLog(@"GTKMenuImporter: Window %lu not ready/valid%s, skipping", 
                           (unsigned long)window, x11_error_occurred ? " (X11 error)" : "");
                 }
                 x11_error_occurred = NO;  // Reset for next window
@@ -506,30 +506,30 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
             // DEFENSIVE: Reset property pointer before X11 call
             busNameProp = NULL;
             x11_error_occurred = NO;  // Reset error state before call
-            NSLog(@"GTKMenuImporter: DEFENSIVE: property pointer initialized to NULL for busName scan");
+            NSDebugLog(@"GTKMenuImporter: DEFENSIVE: property pointer initialized to NULL for busName scan");
             int busResult = XGetWindowProperty(display, window, busNameAtom, 0, 1024, False, AnyPropertyType,
                                   &propType, &propFormat, &propItems, &propBytesAfter, &busNameProp);
             if (busResult == Success && busNameProp != NULL && !x11_error_occurred) {
                 busNameSuccess = YES;
-                NSLog(@"GTKMenuImporter: DEFENSIVE: success flag set for busName property retrieval");
+                NSDebugLog(@"GTKMenuImporter: DEFENSIVE: success flag set for busName property retrieval");
                 
                 if (gtkScans <= 2) {
-                    NSLog(@"GTKMenuImporter: Window %lu has _GTK_UNIQUE_BUS_NAME: %s", (unsigned long)window, busNameProp);
+                    NSDebugLog(@"GTKMenuImporter: Window %lu has _GTK_UNIQUE_BUS_NAME: %s", (unsigned long)window, busNameProp);
                 }
                 
                 // Get object path property
                 // DEFENSIVE: Reset property pointer before X11 call
                 objectPathProp = NULL;
                 x11_error_occurred = NO;  // Reset error state before call
-                NSLog(@"GTKMenuImporter: DEFENSIVE: property pointer initialized to NULL for objectPath scan");
+                NSDebugLog(@"GTKMenuImporter: DEFENSIVE: property pointer initialized to NULL for objectPath scan");
                 int pathResult = XGetWindowProperty(display, window, objectPathAtom, 0, 1024, False, AnyPropertyType,
                                       &propType, &propFormat, &propItems, &propBytesAfter, &objectPathProp);
                 if (pathResult == Success && objectPathProp != NULL && !x11_error_occurred) {
                     objectPathSuccess = YES;
-                    NSLog(@"GTKMenuImporter: DEFENSIVE: success flag set for objectPath property retrieval");
+                    NSDebugLog(@"GTKMenuImporter: DEFENSIVE: success flag set for objectPath property retrieval");
                     
                     if (gtkScans <= 2) {
-                        NSLog(@"GTKMenuImporter: Window %lu has _GTK_MENUBAR_OBJECT_PATH: %s", (unsigned long)window, objectPathProp);
+                        NSDebugLog(@"GTKMenuImporter: Window %lu has _GTK_MENUBAR_OBJECT_PATH: %s", (unsigned long)window, objectPathProp);
                     }
                     
                     NSString *busName = [NSString stringWithUTF8String:(char *)busNameProp];
@@ -538,12 +538,12 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                     // Check if this is a new window
                     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:(unsigned long)window];
                     if (![_registeredWindows objectForKey:windowKey]) {
-                        NSLog(@"GTKMenuImporter: Found GTK window %lu with bus=%@ path=%@", (unsigned long)window, busName, objectPath);
+                        NSDebugLog(@"GTKMenuImporter: Found GTK window %lu with bus=%@ path=%@", (unsigned long)window, busName, objectPath);
                         newWindows++;
                     } else {
                         // Only log this on first few scans to show what we have
                         if (gtkScans <= 2) {
-                            NSLog(@"GTKMenuImporter: Registered GTK window %lu with service=%@ menuPath=%@ actionPath=%@", 
+                            NSDebugLog(@"GTKMenuImporter: Registered GTK window %lu with service=%@ menuPath=%@ actionPath=%@", 
                                   (unsigned long)window, busName, objectPath, objectPath);
                         }
                     }
@@ -555,7 +555,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                 
                 // DEFENSIVE: Only free if the property was successfully retrieved
                 if (objectPathSuccess && objectPathProp != NULL) {
-                    NSLog(@"GTKMenuImporter: DEFENSIVE: freeing objectPath property safely");
+                    NSDebugLog(@"GTKMenuImporter: DEFENSIVE: freeing objectPath property safely");
                     XFree(objectPathProp);
                     objectPathProp = NULL;
                 }
@@ -563,18 +563,18 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
             
             // DEFENSIVE: Only free if the property was successfully retrieved
             if (busNameSuccess && busNameProp != NULL) {
-                NSLog(@"GTKMenuImporter: DEFENSIVE: freeing busName property safely");
+                NSDebugLog(@"GTKMenuImporter: DEFENSIVE: freeing busName property safely");
                 XFree(busNameProp);
                 busNameProp = NULL;
             }
         }
         XFree(clientWindows);
-        NSLog(@"GTKMenuImporter: Finished processing client windows, freed memory");
+        NSDebugLog(@"GTKMenuImporter: Finished processing client windows, freed memory");
     } else {
         // Fallback to root window children if _NET_CLIENT_LIST is not available
-        NSLog(@"GTKMenuImporter: Client list query failed, using fallback method");
+        NSDebugLog(@"GTKMenuImporter: Client list query failed, using fallback method");
         if (gtkScans <= 2) {
-            NSLog(@"GTKMenuImporter: _NET_CLIENT_LIST not available, falling back to root children");
+            NSDebugLog(@"GTKMenuImporter: _NET_CLIENT_LIST not available, falling back to root children");
         }
         
         Window parent, *children;
@@ -616,7 +616,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                         // Check if this is a new window
                         NSNumber *windowKey = [NSNumber numberWithUnsignedLong:(unsigned long)window];
                         if (![_registeredWindows objectForKey:windowKey]) {
-                            NSLog(@"GTKMenuImporter: Found GTK window %lu with bus=%@ path=%@", (unsigned long)window, busName, objectPath);
+                            NSDebugLog(@"GTKMenuImporter: Found GTK window %lu with bus=%@ path=%@", (unsigned long)window, busName, objectPath);
                             newWindows++;
                         }
                         
@@ -642,21 +642,21 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
         }
     }
     
-    NSLog(@"GTKMenuImporter: About to close X11 display");
+    NSDebugLog(@"GTKMenuImporter: About to close X11 display");
     
     // Restore synchronous mode and error handler before closing
     XSynchronize(display, False);
     XSetErrorHandler(oldHandler);
     
     XCloseDisplay(display);
-    NSLog(@"GTKMenuImporter: X11 display closed");
+    NSDebugLog(@"GTKMenuImporter: X11 display closed");
     
     // Only log when we find new windows or on initial scans
     if (gtkScans <= 3 || newWindows > 0) {
-        NSLog(@"GTKMenuImporter: Found %lu GTK windows with menus", (unsigned long)gtkWindows);
+        NSDebugLog(@"GTKMenuImporter: Found %lu GTK windows with menus", (unsigned long)gtkWindows);
     }
     
-    NSLog(@"GTKMenuImporter: scanForExistingMenuServices COMPLETED");
+    NSDebugLog(@"GTKMenuImporter: scanForExistingMenuServices COMPLETED");
 }
 
 - (NSString *)getMenuServiceForWindow:(unsigned long)windowId
@@ -673,7 +673,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
 
 - (void)cleanup
 {
-    NSLog(@"GTKMenuImporter: Cleaning up GTK menu protocol handler...");
+    NSDebugLog(@"GTKMenuImporter: Cleaning up GTK menu protocol handler...");
     
     [_registeredWindows removeAllObjects];
     [_windowMenuPaths removeAllObjects];
@@ -722,7 +722,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
             
             // Check if this service exports GTK menu interfaces
             if ([xml containsString:@"org.gtk.Menus"] || [xml containsString:@"org.gtk.Actions"]) {
-                NSLog(@"GTKMenuImporter: Service %@ exports GTK interfaces at path %@", serviceName, path);
+                NSDebugLog(@"GTKMenuImporter: Service %@ exports GTK interfaces at path %@", serviceName, path);
                 return YES;
             }
         }
@@ -735,7 +735,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                        menuPath:(NSString *)menuPath 
                      actionPath:(NSString *)actionPath
 {
-    NSLog(@"GTKMenuImporter: Loading GTK menu from service=%@ menuPath=%@ actionPath=%@", 
+    NSDebugLog(@"GTKMenuImporter: Loading GTK menu from service=%@ menuPath=%@ actionPath=%@", 
           serviceName, menuPath, actionPath);
     
     // First, introspect the menu path to see what's available
@@ -746,7 +746,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                                             arguments:nil];
     
     if (!introspectResult) {
-        NSLog(@"GTKMenuImporter: Failed to introspect GTK menu service");
+        NSDebugLog(@"GTKMenuImporter: Failed to introspect GTK menu service");
         return nil;
     }
     
@@ -762,7 +762,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                                       arguments:@[subscriptionIds]];
     
     if (!menuResult) {
-        NSLog(@"GTKMenuImporter: Failed to get GTK menu structure via Start method");
+        NSDebugLog(@"GTKMenuImporter: Failed to get GTK menu structure via Start method");
         
         // Try alternative: GetMenus method (less common)
         menuResult = [_dbusConnection callMethod:@"GetMenus"
@@ -773,12 +773,12 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     }
     
     if (!menuResult) {
-        NSLog(@"GTKMenuImporter: No GTK menu data available");
+        NSDebugLog(@"GTKMenuImporter: No GTK menu data available");
         return nil;
     }
     
-    NSLog(@"GTKMenuImporter: GTK menu result type: %@", [menuResult class]);
-    NSLog(@"GTKMenuImporter: GTK menu result: %@", menuResult);
+    NSDebugLog(@"GTKMenuImporter: GTK menu result type: %@", [menuResult class]);
+    NSDebugLog(@"GTKMenuImporter: GTK menu result: %@", menuResult);
     
     // Parse the GTK menu structure
     // The format is different from canonical dbusmenu - it's a GMenuModel serialization
@@ -788,7 +788,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                                               dbusConnection:_dbusConnection];
     
     if (!menu) {
-        NSLog(@"GTKMenuImporter: Failed to parse GTK menu structure, creating placeholder");
+        NSDebugLog(@"GTKMenuImporter: Failed to parse GTK menu structure, creating placeholder");
         menu = [[NSMenu alloc] initWithTitle:@"GTK App Menu"];
         
         // Add placeholder items to indicate this is a GTK app
@@ -813,20 +813,20 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     NSString *actionPath = [_windowActionPaths objectForKey:windowKey];
     
     if (!serviceName || !actionPath) {
-        NSLog(@"GTKMenuImporter: Cannot re-register shortcuts - missing service/action path");
+        NSDebugLog(@"GTKMenuImporter: Cannot re-register shortcuts - missing service/action path");
         return;
     }
     
     // Get fresh DBus connection for cached menu shortcut re-registration
     if (!_dbusConnection || ![_dbusConnection isConnected]) {
-        NSLog(@"GTKMenuImporter: Refreshing DBus connection for cached menu shortcuts");
+        NSDebugLog(@"GTKMenuImporter: Refreshing DBus connection for cached menu shortcuts");
         if (![self connectToDBus]) {
-            NSLog(@"GTKMenuImporter: Failed to refresh DBus connection for shortcuts");
+            NSDebugLog(@"GTKMenuImporter: Failed to refresh DBus connection for shortcuts");
             return;
         }
     }
     
-    NSLog(@"GTKMenuImporter: Re-registering shortcuts for GTK menu (window %lu) with fresh DBus connection", windowId);
+    NSDebugLog(@"GTKMenuImporter: Re-registering shortcuts for GTK menu (window %lu) with fresh DBus connection", windowId);
     [self reregisterShortcutsForMenuItems:[menu itemArray] serviceName:serviceName actionPath:actionPath];
 }
 
@@ -851,7 +851,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
                     actionName = [actionName stringByReplacingOccurrencesOfString:@" " withString:@"-"];
                 }
                 
-                NSLog(@"GTKMenuImporter: Re-registering GTK shortcut: %@ (action: %@)", [item title], actionName);
+                NSDebugLog(@"GTKMenuImporter: Re-registering GTK shortcut: %@ (action: %@)", [item title], actionName);
                 
                 // Re-register through GTKActionHandler
                 [GTKActionHandler setupActionForMenuItem:item
@@ -875,7 +875,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
 
 - (void)cleanupStaleEntries:(NSTimer *)timer
 {
-    NSLog(@"GTKMenuImporter: Cleanup timer - %lu GTK windows registered", 
+    NSDebugLog(@"GTKMenuImporter: Cleanup timer - %lu GTK windows registered", 
           (unsigned long)[_registeredWindows count]);
     
     // In a full implementation, we would check if windows still exist

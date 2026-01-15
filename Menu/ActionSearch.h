@@ -29,11 +29,13 @@
 /**
  * ActionSearchController - Manages the search popup and results menu
  */
-@interface ActionSearchController : NSObject <NSTextFieldDelegate>
+@interface ActionSearchController : NSObject <NSTextFieldDelegate, NSTableViewDataSource, NSTableViewDelegate>
 
 @property (nonatomic, strong) NSPanel *searchPanel;
 @property (nonatomic, strong) NSTextField *searchField;
-@property (nonatomic, strong) NSMenu *resultsMenu;
+@property (nonatomic, strong) NSMenu *resultsMenu; // legacy (kept for compatibility, unused)
+@property (nonatomic, strong) NSPanel *resultsPanel;
+@property (nonatomic, strong) NSTableView *resultsTable;
 @property (nonatomic, strong) NSMutableArray *allMenuItems;
 @property (nonatomic, strong) NSMutableArray *filteredResults;
 @property (nonatomic, weak) AppMenuWidget *appMenuWidget;
@@ -60,6 +62,7 @@
  * Toggle the search popup
  */
 - (void)toggleSearchPopupAtPoint:(NSPoint)point;
+
 
 /**
  * Collect all menu items from the current application menu

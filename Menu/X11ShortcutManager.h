@@ -57,14 +57,21 @@
  * @param target The target object for the action
  * @param action The selector to call on the target
  */
-- (void)registerDirectShortcutForMenuItem:(NSMenuItem *)menuItem
+- (BOOL)registerDirectShortcutForMenuItem:(NSMenuItem *)menuItem
                                    target:(id)target
-                                   action:(SEL)action;
+                                   action:(SEL)action; // Returns YES on success, NO on failure
 
 /**
  * Unregister all global shortcuts
  */
 - (void)unregisterAllShortcuts;
+
+/**
+ * Unregister shortcuts that were registered from DBus/app menus (non-direct shortcuts).
+ * This preserves direct shortcuts (those registered with registerDirectShortcutForMenuItem:)
+ * so global hotkeys like Cmd/Alt+Space remain active across application switches.
+ */
+- (void)unregisterNonDirectShortcuts;
 
 /**
  * Check if Ctrl/Alt swapping is enabled

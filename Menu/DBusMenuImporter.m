@@ -40,14 +40,14 @@
 
 - (BOOL)connectToDBus
 {
-    NSLog(@"DBusMenuImporter: Attempting to connect to DBus session bus...");
+    NSDebugLog(@"DBusMenuImporter: Attempting to connect to DBus session bus...");
     self.dbusConnection = [GNUDBusConnection sessionBus];
     
-    NSLog(@"DBusMenuImporter: DBus connection object: %@", self.dbusConnection);
+    NSDebugLog(@"DBusMenuImporter: DBus connection object: %@", self.dbusConnection);
     
     if (![self.dbusConnection isConnected]) {
-        NSLog(@"DBusMenuImporter: Failed to get DBus connection");
-        NSLog(@"DBusMenuImporter: DBus session bus address: %@", 
+        NSDebugLog(@"DBusMenuImporter: Failed to get DBus connection");
+        NSDebugLog(@"DBusMenuImporter: DBus session bus address: %@", 
               [[NSProcessInfo processInfo] environment][@"DBUS_SESSION_BUS_ADDRESS"]);
         
         [self showDBusErrorAndExit];
@@ -56,54 +56,54 @@
     
     // Try to register the AppMenu.Registrar service
     if ([self.dbusConnection registerService:@"com.canonical.AppMenu.Registrar"]) {
-        NSLog(@"DBusMenuImporter: Successfully registered as AppMenu.Registrar service");
+        NSDebugLog(@"DBusMenuImporter: Successfully registered as AppMenu.Registrar service");
         
         // Register object path for the registrar interface
         if (![self.dbusConnection registerObjectPath:@"/com/canonical/AppMenu/Registrar"
                                        interface:@"com.canonical.AppMenu.Registrar"
                                          handler:self]) {
-            NSLog(@"DBusMenuImporter: Failed to register object path");
+            NSDebugLog(@"DBusMenuImporter: Failed to register object path");
             return NO;
         }
         
-        NSLog(@"DBusMenuImporter: Successfully connected to DBus and registered service");
+        NSDebugLog(@"DBusMenuImporter: Successfully connected to DBus and registered service");
         
         // Now that we're connected and the run loop is running, set up the cleanup timer
         if (!self.cleanupTimer) {
-            NSLog(@"DBusMenuImporter: Setting up cleanup timer...");
+            NSDebugLog(@"DBusMenuImporter: Setting up cleanup timer...");
             self.cleanupTimer = [NSTimer scheduledTimerWithTimeInterval:30.0
                                                             target:self
                                                           selector:@selector(cleanupStaleEntries:)
                                                           userInfo:nil
                                                            repeats:YES];
-            NSLog(@"DBusMenuImporter: Cleanup timer scheduled");
+            NSDebugLog(@"DBusMenuImporter: Cleanup timer scheduled");
         }
         
-        NSLog(@"DBusMenuImporter: About to scan for existing menu services...");
+        NSDebugLog(@"DBusMenuImporter: About to scan for existing menu services...");
         [self scanForExistingMenuServices];
-        NSLog(@"DBusMenuImporter: Finished scanning for existing menu services");
+        NSDebugLog(@"DBusMenuImporter: Finished scanning for existing menu services");
         return YES;
     } else {
-        NSLog(@"DBusMenuImporter: Could not register as primary AppMenu.Registrar");
-        NSLog(@"DBusMenuImporter: Another application is likely providing this service");
-        NSLog(@"DBusMenuImporter: Continuing in monitoring mode...");
+        NSDebugLog(@"DBusMenuImporter: Could not register as primary AppMenu.Registrar");
+        NSDebugLog(@"DBusMenuImporter: Another application is likely providing this service");
+        NSDebugLog(@"DBusMenuImporter: Continuing in monitoring mode...");
         
         // Set up cleanup timer for monitoring mode too
         if (!self.cleanupTimer) {
-            NSLog(@"DBusMenuImporter: Setting up cleanup timer (monitoring mode)...");
+            NSDebugLog(@"DBusMenuImporter: Setting up cleanup timer (monitoring mode)...");
             self.cleanupTimer = [NSTimer scheduledTimerWithTimeInterval:30.0
                                                             target:self
                                                           selector:@selector(cleanupStaleEntries:)
                                                           userInfo:nil
                                                            repeats:YES];
-            NSLog(@"DBusMenuImporter: Cleanup timer scheduled (monitoring mode)");
+            NSDebugLog(@"DBusMenuImporter: Cleanup timer scheduled (monitoring mode)");
         }
         
         // Even if we can't register as the primary service, we can still monitor
         // and display menus by watching for applications that export menus
-        NSLog(@"DBusMenuImporter: About to scan for existing menu services (monitoring mode)...");
+        NSDebugLog(@"DBusMenuImporter: About to scan for existing menu services (monitoring mode)...");
         [self scanForExistingMenuServices];
-        NSLog(@"DBusMenuImporter: Finished scanning for existing menu services (monitoring mode)");
+        NSDebugLog(@"DBusMenuImporter: Finished scanning for existing menu services (monitoring mode)");
         return YES; // Return YES to continue operating
     }
 }
@@ -119,13 +119,13 @@
     // Early validation - skip only obvious invalid IDs (0). Some toolkits transiently
     // report windows as unmapped during creation, so don't hard-fail on isWindowValid.
     if (windowId == 0) {
-        NSLog(@"DBusMenuImporter: Window %lu is invalid (0), skipping menu lookup", windowId);
+        NSDebugLog(@"DBusMenuImporter: Window %lu is invalid (0), skipping menu lookup", windowId);
         return nil;
     }
     
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
     
-    NSLog(@"DBusMenuImporter: Looking for menu for window %lu", windowId);
+    NSDebugLog(@"DBusMenuImporter: Looking for menu for window %lu", windowId);
     
     // Safely get registration info with minimal lock time
     NSString *serviceName = nil;
@@ -133,8 +133,8 @@
     NSMenu *legacyCachedMenu = nil;
     
     @synchronized(_windowRegistryLock) {
-        NSLog(@"DBusMenuImporter: Currently registered windows: %@", self.registeredWindows);
-        NSLog(@"DBusMenuImporter: Window menu paths: %@", self.windowMenuPaths);
+        NSDebugLog(@"DBusMenuImporter: Currently registered windows: %@", self.registeredWindows);
+        NSDebugLog(@"DBusMenuImporter: Window menu paths: %@", self.windowMenuPaths);
         
         // Get copies to work with outside the lock
         NSString *svc = [self.registeredWindows objectForKey:windowKey];
@@ -150,7 +150,7 @@
     NSMenu *cachedMenu = [cacheManager getCachedMenuForWindow:windowId
                                         validateServiceName:serviceName];
     if (cachedMenu) {
-        NSLog(@"DBusMenuImporter: Returning enhanced cached menu for window %lu - re-registering shortcuts", windowId);
+        NSDebugLog(@"DBusMenuImporter: Returning enhanced cached menu for window %lu - re-registering shortcuts", windowId);
         
         // Re-register shortcuts for cached menu since they may have been unregistered
         // when the window lost focus
@@ -164,7 +164,7 @@
     
     // Fall back to legacy cache check for backward compatibility
     if (legacyCachedMenu) {
-        NSLog(@"DBusMenuImporter: Found menu in legacy cache, migrating to enhanced cache");
+        NSDebugLog(@"DBusMenuImporter: Found menu in legacy cache, migrating to enhanced cache");
         
         // Get application name for this window
         NSString *appName = [MenuUtils getApplicationNameForWindow:windowId];
@@ -195,7 +195,7 @@
         NSString *x11Path = [MenuUtils getWindowMenuPath:windowId];
         
         if (x11Service && x11Path) {
-            NSLog(@"DBusMenuImporter: Found X11 properties for window %lu: service=%@ path=%@", 
+            NSDebugLog(@"DBusMenuImporter: Found X11 properties for window %lu: service=%@ path=%@", 
                   windowId, x11Service, x11Path);
             
             // Register this window with the discovered properties
@@ -203,12 +203,12 @@
             serviceName = x11Service;
             objectPath = x11Path;
         } else {
-            NSLog(@"DBusMenuImporter: No service/path found for window %lu (checked both DBus registry and X11 properties)", windowId);
+            NSDebugLog(@"DBusMenuImporter: No service/path found for window %lu (checked both DBus registry and X11 properties)", windowId);
 
         }
     }
     
-    NSLog(@"DBusMenuImporter: Loading menu for window %lu from %@%@", windowId, serviceName, objectPath);
+    NSDebugLog(@"DBusMenuImporter: Loading menu for window %lu from %@%@", windowId, serviceName, objectPath);
     
     // Get the menu layout from DBus
     NSMenu *menu = [self loadMenuFromDBus:serviceName objectPath:objectPath];
@@ -223,12 +223,12 @@
                      objectPath:objectPath
                 applicationName:appName];
         
-        NSLog(@"DBusMenuImporter: Successfully loaded and cached menu with %lu items", 
+        NSDebugLog(@"DBusMenuImporter: Successfully loaded and cached menu with %lu items", 
               (unsigned long)[[menu itemArray] count]);
     } else {
-        NSLog(@"DBusMenuImporter: Failed to load menu for registered window %lu from %@%@", windowId, serviceName, objectPath);
+        NSDebugLog(@"DBusMenuImporter: Failed to load menu for registered window %lu from %@%@", windowId, serviceName, objectPath);
         // Unregister this window since its DBus object is gone (likely the app closed the window)
-        NSLog(@"DBusMenuImporter: Unregistering window %lu due to failed menu load", windowId);
+        NSDebugLog(@"DBusMenuImporter: Unregistering window %lu due to failed menu load", windowId);
         [self unregisterWindow:windowId];
         // For registered windows that fail to load, return nil instead of fallback
         // This indicates the application should handle its own menus
@@ -242,16 +242,16 @@
 {
     // Validate inputs before making DBus calls
     if (!serviceName || [serviceName length] == 0 || !objectPath || [objectPath length] == 0) {
-        NSLog(@"DBusMenuImporter: Cannot load menu - invalid service name or object path");
+        NSDebugLog(@"DBusMenuImporter: Cannot load menu - invalid service name or object path");
         return nil;
     }
     
     if (!self.dbusConnection || ![self.dbusConnection isConnected]) {
-        NSLog(@"DBusMenuImporter: Cannot load menu - DBus connection not available");
+        NSDebugLog(@"DBusMenuImporter: Cannot load menu - DBus connection not available");
         return nil;
     }
     
-    NSLog(@"DBusMenuImporter: Attempting to load menu from service=%@ path=%@", serviceName, objectPath);
+    NSDebugLog(@"DBusMenuImporter: Attempting to load menu from service=%@ path=%@", serviceName, objectPath);
     
     id result = nil;
     
@@ -265,9 +265,9 @@
                                                 arguments:nil];
     
         if (introspectResult) {
-            NSLog(@"DBusMenuImporter: Service introspection successful");
+            NSDebugLog(@"DBusMenuImporter: Service introspection successful");
         } else {
-            NSLog(@"DBusMenuImporter: Service introspection failed - service may not be available");
+            NSDebugLog(@"DBusMenuImporter: Service introspection failed - service may not be available");
         }
     
         // Call GetLayout method on the dbusmenu interface
@@ -278,7 +278,7 @@
                              [NSArray array],               // propertyNames (empty = all properties)
                              nil];
     
-        NSLog(@"DBusMenuImporter: Calling GetLayout with parentId=0, recursionDepth=-1, propertyNames=[]");
+        NSDebugLog(@"DBusMenuImporter: Calling GetLayout with parentId=0, recursionDepth=-1, propertyNames=[]");
     
         result = [self.dbusConnection callMethod:@"GetLayout"
                                       onService:serviceName
@@ -287,30 +287,30 @@
                                       arguments:arguments];
     
         if (!result) {
-            NSLog(@"DBusMenuImporter: Failed to get menu layout from %@%@ - DBus call failed", serviceName, objectPath);
-            NSLog(@"DBusMenuImporter: Application registered for menus but GetLayout call failed");
-            NSLog(@"DBusMenuImporter: This may indicate a problem with the application's menu export");
+            NSDebugLog(@"DBusMenuImporter: Failed to get menu layout from %@%@ - DBus call failed", serviceName, objectPath);
+            NSDebugLog(@"DBusMenuImporter: Application registered for menus but GetLayout call failed");
+            NSDebugLog(@"DBusMenuImporter: This may indicate a problem with the application's menu export");
             return nil;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"DBusMenuImporter: Exception during DBus menu load from %@%@: %@", serviceName, objectPath, exception);
+        NSDebugLog(@"DBusMenuImporter: Exception during DBus menu load from %@%@: %@", serviceName, objectPath, exception);
         return nil;
     }
     
-    NSLog(@"DBusMenuImporter: Received menu layout from %@%@", serviceName, objectPath);
-    NSLog(@"DBusMenuImporter: Raw result object: %@", result);
-    NSLog(@"DBusMenuImporter: Raw result class: %@", [result class]);
-    NSLog(@"DBusMenuImporter: Raw result description: %@", [result description]);
+    NSDebugLog(@"DBusMenuImporter: Received menu layout from %@%@", serviceName, objectPath);
+    NSDebugLog(@"DBusMenuImporter: Raw result object: %@", result);
+    NSDebugLog(@"DBusMenuImporter: Raw result class: %@", [result class]);
+    NSDebugLog(@"DBusMenuImporter: Raw result description: %@", [result description]);
     
     // Log the result in detail
     if ([result respondsToSelector:@selector(count)]) {
-        NSLog(@"DBusMenuImporter: Result has count: %lu", (unsigned long)[result count]);
+        NSDebugLog(@"DBusMenuImporter: Result has count: %lu", (unsigned long)[result count]);
     }
     if ([result respondsToSelector:@selector(objectAtIndex:)] && [result count] > 0) {
         for (NSUInteger i = 0; i < [result count]; i++) {
             id item = [result objectAtIndex:i];
-            NSLog(@"DBusMenuImporter: Result[%lu]: %@ (%@)", i, item, [item class]);
+            NSDebugLog(@"DBusMenuImporter: Result[%lu]: %@ (%@)", i, item, [item class]);
         }
     }
     
@@ -323,7 +323,7 @@
     
     if (!menu) {
         // Fallback: create a simple placeholder menu if parsing fails
-        NSLog(@"DBusMenuImporter: Failed to parse menu structure, creating placeholder");
+        NSDebugLog(@"DBusMenuImporter: Failed to parse menu structure, creating placeholder");
         menu = [[NSMenu alloc] initWithTitle:@"App Menu"];
         
         // Add some placeholder menu items
@@ -347,14 +347,14 @@
 
 - (void)activateMenuItem:(NSMenuItem *)menuItem forWindow:(unsigned long)windowId
 {
-    NSLog(@"DBusMenuImporter: Activating menu item '%@' for window %lu", [menuItem title], windowId);
+    NSDebugLog(@"DBusMenuImporter: Activating menu item '%@' for window %lu", [menuItem title], windowId);
     
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
     NSString *serviceName = [self.registeredWindows objectForKey:windowKey];
     NSString *objectPath = [self.windowMenuPaths objectForKey:windowKey];
     
     if (!serviceName || !objectPath) {
-        NSLog(@"DBusMenuImporter: No service/path found for window %lu", windowId);
+        NSDebugLog(@"DBusMenuImporter: No service/path found for window %lu", windowId);
         return;
     }
     
@@ -398,13 +398,13 @@
                                                   path:objectPath 
                                              forWindow:windowId];
         if (success) {
-            NSLog(@"DBusMenuImporter: Set X11 properties for Chrome/Firefox compatibility on window %lu", windowId);
+            NSDebugLog(@"DBusMenuImporter: Set X11 properties for Chrome/Firefox compatibility on window %lu", windowId);
         } else {
-            NSLog(@"DBusMenuImporter: Failed to set X11 properties for window %lu", windowId);
+            NSDebugLog(@"DBusMenuImporter: Failed to set X11 properties for window %lu", windowId);
         }
     }
     
-    NSLog(@"DBusMenuImporter: Registered window %lu with service %@ path %@", 
+    NSDebugLog(@"DBusMenuImporter: Registered window %lu with service %@ path %@", 
           windowId, serviceName, objectPath);
     
     // Check if this newly registered window is the currently active window
@@ -420,7 +420,7 @@
                                        userInfo:userInfo
                                         repeats:NO];
     } else {
-        NSLog(@"DBusMenuImporter: AppMenuWidget not set, cannot check for immediate menu display");
+        NSDebugLog(@"DBusMenuImporter: AppMenuWidget not set, cannot check for immediate menu display");
     }
 }
 
@@ -444,14 +444,14 @@
         }
         
         if (svc && self.appMenuWidget) {
-            NSLog(@"DBusMenuImporter: Deferred menu check for window %lu - window still registered", windowId);
+            NSDebugLog(@"DBusMenuImporter: Deferred menu check for window %lu - window still registered", windowId);
             [self.appMenuWidget checkAndDisplayMenuForNewlyRegisteredWindow:windowId];
         } else if (!svc) {
-            NSLog(@"DBusMenuImporter: Window %lu was unregistered before menu could be loaded (closed quickly)", windowId);
+            NSDebugLog(@"DBusMenuImporter: Window %lu was unregistered before menu could be loaded (closed quickly)", windowId);
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"DBusMenuImporter: Exception in deferred menu check for window %lu: %@", windowId, exception);
+        NSDebugLog(@"DBusMenuImporter: Exception in deferred menu check for window %lu: %@", windowId, exception);
     }
 }
 
@@ -478,10 +478,10 @@
             [DBusSubmenuManager cleanupDelegatesForService:serviceName];
         }
         
-        NSLog(@"DBusMenuImporter: Unregistered window %lu", windowId);
+        NSDebugLog(@"DBusMenuImporter: Unregistered window %lu", windowId);
     }
     @catch (NSException *exception) {
-        NSLog(@"DBusMenuImporter: Exception during unregisterWindow %lu: %@", windowId, exception);
+        NSDebugLog(@"DBusMenuImporter: Exception during unregisterWindow %lu: %@", windowId, exception);
     }
 }
 
@@ -489,7 +489,7 @@
 {
     // In a real implementation, we would check if windows still exist
     // and remove entries for windows that have been closed
-    NSLog(@"DBusMenuImporter: Cleanup timer - %lu windows registered", 
+    NSDebugLog(@"DBusMenuImporter: Cleanup timer - %lu windows registered", 
           (unsigned long)[self.registeredWindows count]);
 }
 
@@ -500,10 +500,10 @@
     NSString *interface = [callInfo objectForKey:@"interface"];
     DBusMessage *message = (DBusMessage *)[[callInfo objectForKey:@"message"] pointerValue];
     
-    NSLog(@"DBusMenuImporter: Handling method call: %@.%@", interface, method);
+    NSDebugLog(@"DBusMenuImporter: Handling method call: %@.%@", interface, method);
     
     if (![interface isEqualToString:@"com.canonical.AppMenu.Registrar"]) {
-        NSLog(@"DBusMenuImporter: Unknown interface: %@", interface);
+        NSDebugLog(@"DBusMenuImporter: Unknown interface: %@", interface);
         return;
     }
     
@@ -534,14 +534,14 @@
             unsigned long windowId = [[arguments objectAtIndex:0] unsignedLongValue];
             NSString *objectPath = [arguments objectAtIndex:1];
             
-            NSLog(@"DBusMenuImporter: RegisterWindow called by %@ for window %lu with path %@", 
+            NSDebugLog(@"DBusMenuImporter: RegisterWindow called by %@ for window %lu with path %@", 
                   serviceName, windowId, objectPath);
             
             @try {
                 [self registerWindow:windowId serviceName:serviceName objectPath:objectPath];
             }
             @catch (NSException *exception) {
-                NSLog(@"DBusMenuImporter: Exception during registerWindow: %@", exception);
+                NSDebugLog(@"DBusMenuImporter: Exception during registerWindow: %@", exception);
             }
             
             // Send empty reply
@@ -550,23 +550,23 @@
                 dbus_connection_send([_dbusConnection rawConnection], reply, NULL);
                 dbus_connection_flush([_dbusConnection rawConnection]);
                 dbus_message_unref(reply);
-                NSLog(@"DBusMenuImporter: Sent reply for RegisterWindow");
+                NSDebugLog(@"DBusMenuImporter: Sent reply for RegisterWindow");
             } else {
-                NSLog(@"DBusMenuImporter: Failed to create reply for RegisterWindow");
+                NSDebugLog(@"DBusMenuImporter: Failed to create reply for RegisterWindow");
             }
         }
     } else if ([method isEqualToString:@"UnregisterWindow"]) {
         if ([arguments count] >= 1) {
             unsigned long windowId = [[arguments objectAtIndex:0] unsignedLongValue];
             
-            NSLog(@"DBusMenuImporter: UnregisterWindow called by %@ for window %lu", 
+            NSDebugLog(@"DBusMenuImporter: UnregisterWindow called by %@ for window %lu", 
                   serviceName, windowId);
             
             @try {
                 [self unregisterWindow:windowId];
             }
             @catch (NSException *exception) {
-                NSLog(@"DBusMenuImporter: Exception during unregisterWindow: %@", exception);
+                NSDebugLog(@"DBusMenuImporter: Exception during unregisterWindow: %@", exception);
             }
             
             // Send empty reply
@@ -575,9 +575,9 @@
                 dbus_connection_send([_dbusConnection rawConnection], reply, NULL);
                 dbus_connection_flush([_dbusConnection rawConnection]);
                 dbus_message_unref(reply);
-                NSLog(@"DBusMenuImporter: Sent reply for UnregisterWindow");
+                NSDebugLog(@"DBusMenuImporter: Sent reply for UnregisterWindow");
             } else {
-                NSLog(@"DBusMenuImporter: Failed to create reply for UnregisterWindow");
+                NSDebugLog(@"DBusMenuImporter: Failed to create reply for UnregisterWindow");
             }
         }
     } else if ([method isEqualToString:@"GetMenuForWindow"]) {
@@ -588,7 +588,7 @@
             NSString *service = [_registeredWindows objectForKey:windowKey];
             NSString *path = [_windowMenuPaths objectForKey:windowKey];
             
-            NSLog(@"DBusMenuImporter: GetMenuForWindow called for window %lu, returning service=%@ path=%@", 
+            NSDebugLog(@"DBusMenuImporter: GetMenuForWindow called for window %lu, returning service=%@ path=%@", 
                   windowId, service ? service : @"(none)", path ? path : @"(none)");
             
             // Send reply with service name and object path
@@ -605,20 +605,20 @@
                 dbus_connection_send([_dbusConnection rawConnection], reply, NULL);
                 dbus_connection_flush([_dbusConnection rawConnection]);
                 dbus_message_unref(reply);
-                NSLog(@"DBusMenuImporter: Sent reply for GetMenuForWindow");
+                NSDebugLog(@"DBusMenuImporter: Sent reply for GetMenuForWindow");
             } else {
-                NSLog(@"DBusMenuImporter: Failed to create reply for GetMenuForWindow");
+                NSDebugLog(@"DBusMenuImporter: Failed to create reply for GetMenuForWindow");
             }
         }
     } else {
-        NSLog(@"DBusMenuImporter: Unknown method: %@", method);
+        NSDebugLog(@"DBusMenuImporter: Unknown method: %@", method);
     }
 }
 
 - (void)handleRegisterWindow:(NSArray *)arguments
 {
     if ([arguments count] < 2) {
-        NSLog(@"DBusMenuImporter: Invalid RegisterWindow arguments");
+        NSDebugLog(@"DBusMenuImporter: Invalid RegisterWindow arguments");
         return;
     }
     
@@ -634,7 +634,7 @@
 - (void)handleUnregisterWindow:(NSArray *)arguments
 {
     if ([arguments count] < 1) {
-        NSLog(@"DBusMenuImporter: Invalid UnregisterWindow arguments");
+        NSDebugLog(@"DBusMenuImporter: Invalid UnregisterWindow arguments");
         return;
     }
     
@@ -645,7 +645,7 @@
 - (NSString *)handleGetMenuForWindow:(NSArray *)arguments
 {
     if ([arguments count] < 1) {
-        NSLog(@"DBusMenuImporter: Invalid GetMenuForWindow arguments");
+        NSDebugLog(@"DBusMenuImporter: Invalid GetMenuForWindow arguments");
         return nil;
     }
     
@@ -662,20 +662,20 @@
 
 - (void)scanForExistingMenuServices
 {
-    NSLog(@"DBusMenuImporter: scanForExistingMenuServices STARTED");
+    NSDebugLog(@"DBusMenuImporter: scanForExistingMenuServices STARTED");
     
     static int dbusScans = 0;
     dbusScans++;
     
     // Only log occasionally to avoid spam
     if (dbusScans % 20 == 1 || dbusScans <= 2) {
-        NSLog(@"DBusMenuImporter: Scanning for existing menu services... (scan #%d)", dbusScans);
+        NSDebugLog(@"DBusMenuImporter: Scanning for existing menu services... (scan #%d)", dbusScans);
     }
     
     // Scan all windows for menu properties
-    NSLog(@"DBusMenuImporter: About to get all windows via MenuUtils");
+    NSDebugLog(@"DBusMenuImporter: About to get all windows via MenuUtils");
     NSArray *allWindows = [MenuUtils getAllWindows];
-    NSLog(@"DBusMenuImporter: Got %lu windows to scan", (unsigned long)[allWindows count]);
+    NSDebugLog(@"DBusMenuImporter: Got %lu windows to scan", (unsigned long)[allWindows count]);
     int foundMenus = 0;
     
     for (NSNumber *windowIdNum in allWindows) {
@@ -689,7 +689,7 @@
             // Only log when we actually find new menus
             NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
             if (![_registeredWindows objectForKey:windowKey]) {
-                NSLog(@"DBusMenuImporter: Found NEW menu service for window %lu: %@ %@", 
+                NSDebugLog(@"DBusMenuImporter: Found NEW menu service for window %lu: %@ %@", 
                       windowId, serviceName, objectPath);
             }
             
@@ -698,14 +698,14 @@
         }
     }
     
-    NSLog(@"DBusMenuImporter: Finished scanning %lu windows", (unsigned long)[allWindows count]);
+    NSDebugLog(@"DBusMenuImporter: Finished scanning %lu windows", (unsigned long)[allWindows count]);
     
     // Only log completion on first few scans or when we find menus
     if (dbusScans <= 3 || foundMenus > 0) {
-        NSLog(@"DBusMenuImporter: Menu service scanning completed - found %d windows with menus", foundMenus);
+        NSDebugLog(@"DBusMenuImporter: Menu service scanning completed - found %d windows with menus", foundMenus);
     }
     
-    NSLog(@"DBusMenuImporter: scanForExistingMenuServices COMPLETED");
+    NSDebugLog(@"DBusMenuImporter: scanForExistingMenuServices COMPLETED");
 }
 
 - (NSString *)getMenuServiceForWindow:(unsigned long)windowId
@@ -722,7 +722,7 @@
 
 - (NSMenu *)createTestMenu
 {
-    NSLog(@"DBusMenuImporter: Creating test menu for demonstration");
+    NSDebugLog(@"DBusMenuImporter: Creating test menu for demonstration");
     
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Test App Menu"];
     
@@ -749,7 +749,7 @@
     [menu addItem:helpItem];
     
     // Log the menu titles we're creating
-    NSLog(@"DBusMenuImporter: Created test menu with titles: %@, %@, %@, %@", 
+    NSDebugLog(@"DBusMenuImporter: Created test menu with titles: %@, %@, %@, %@", 
           [fileItem title], [editItem title], [viewItem title], [helpItem title]);
     
     return menu;
@@ -784,7 +784,7 @@
 
 - (void)showDBusErrorAndExit
 {
-    NSLog(@"DBusMenuImporter: Showing error alert...");
+    NSDebugLog(@"DBusMenuImporter: Showing error alert...");
     
     NSAlert *alert = [[NSAlert alloc] init];
     [alert setMessageText:NSLocalizedString(@"DBus Connection Error", @"DBus error dialog title")];
@@ -792,9 +792,9 @@
     [alert addButtonWithTitle:NSLocalizedString(@"OK", @"OK button")];
     [alert setAlertStyle:NSCriticalAlertStyle];
     
-    NSLog(@"DBusMenuImporter: Running modal alert...");
+    NSDebugLog(@"DBusMenuImporter: Running modal alert...");
     [alert runModal];
-    NSLog(@"DBusMenuImporter: Alert dismissed, exiting application...");
+    NSDebugLog(@"DBusMenuImporter: Alert dismissed, exiting application...");
     exit(1);
 }
 
@@ -809,11 +809,11 @@
     NSString *objectPath = [self.windowMenuPaths objectForKey:windowKey];
     
     if (!serviceName || !objectPath) {
-        NSLog(@"DBusMenuImporter: Cannot re-register shortcuts - missing service/object path");
+        NSDebugLog(@"DBusMenuImporter: Cannot re-register shortcuts - missing service/object path");
         return;
     }
     
-    NSLog(@"DBusMenuImporter: Re-registering shortcuts for DBus menu (window %lu)", windowId);
+    NSDebugLog(@"DBusMenuImporter: Re-registering shortcuts for DBus menu (window %lu)", windowId);
     [self reregisterShortcutsForMenuItems:[menu itemArray] serviceName:serviceName objectPath:objectPath];
 }
 
@@ -830,7 +830,7 @@
             BOOL hasNoModifiers = (modifierMask == 0);
             
             if (!hasNoModifiers && !hasShiftOnly) {
-                NSLog(@"DBusMenuImporter: Re-registering DBus shortcut: %@", [item title]);
+                NSDebugLog(@"DBusMenuImporter: Re-registering DBus shortcut: %@", [item title]);
                 
                 // Re-register through DBusMenuActionHandler
                 [DBusMenuActionHandler setupActionForMenuItem:item

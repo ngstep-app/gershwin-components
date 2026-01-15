@@ -73,7 +73,20 @@ static const CGFloat kMaxResultsShown = 15;
 
 #pragma mark - ActionSearchController
 
+@interface ActionSearchController ()
+@property (nonatomic, assign) BOOL resultsMenuTracking;
+@end
+
 @implementation ActionSearchController
+
+- (void)_deferredFocusToSearchField
+{
+    if ([self.searchPanel isVisible]) {
+        [self.searchPanel makeKeyWindow];
+        [self.searchPanel makeFirstResponder:self.searchField];
+        [self.searchField selectText:nil];
+    }
+}
 
 + (instancetype)sharedController
 {
@@ -102,22 +115,24 @@ static const CGFloat kMaxResultsShown = 15;
 {
     // Create a small panel just for the search field
     // Use borderless style - keyboard routing is handled in MenuApplication.sendEvent:
-    NSRect panelRect = NSMakeRect(0, 0, kSearchFieldWidth + 16, kSearchFieldHeight + 12);
+    // Reduce vertical padding and make the panel transparent so the results menu can sit flush
+    NSRect panelRect = NSMakeRect(0, 0, kSearchFieldWidth + 16, kSearchFieldHeight + 4);
     
     self.searchPanel = [[ActionSearchPanel alloc] initWithContentRect:panelRect
                                                   styleMask:NSBorderlessWindowMask
                                                     backing:NSBackingStoreBuffered
                                                       defer:NO];
     [self.searchPanel setLevel:NSPopUpMenuWindowLevel];
-    [self.searchPanel setHasShadow:YES];
-    [self.searchPanel setOpaque:YES];
-    [self.searchPanel setBackgroundColor:[[GSTheme theme] menuBackgroundColor]];
+    [self.searchPanel setHasShadow:NO];
+    // Use a transparent background so there is no visible gap between field and results menu
+    [self.searchPanel setOpaque:NO];
+    [self.searchPanel setBackgroundColor:[NSColor clearColor]];
     [self.searchPanel setBecomesKeyOnlyIfNeeded:NO];
     [self.searchPanel setReleasedWhenClosed:NO];
     
-    // Create search field
+    // Create search field (positioned close to bottom edge)
     self.searchField = [[NSTextField alloc] initWithFrame:
-        NSMakeRect(8, 6, kSearchFieldWidth, kSearchFieldHeight)];
+        NSMakeRect(8, 2, kSearchFieldWidth, kSearchFieldHeight)];
     [self.searchField setDelegate:self];
     [self.searchField setBordered:YES];
     [self.searchField setBezeled:YES];
@@ -137,6 +152,16 @@ static const CGFloat kMaxResultsShown = 15;
     [[self.searchField cell] setPlaceholderAttributedString:placeholder];
     
     [[self.searchPanel contentView] addSubview:self.searchField];
+
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    [center addObserver:self
+               selector:@selector(searchPanelDidResignKey:)
+                   name:NSWindowDidResignKeyNotification
+                 object:self.searchPanel];
+    [center addObserver:self
+               selector:@selector(applicationDidResignActive:)
+                   name:NSApplicationDidResignActiveNotification
+                 object:nil];
     
     NSLog(@"ActionSearchController: Created search panel");
 }
@@ -145,6 +170,19 @@ static const CGFloat kMaxResultsShown = 15;
 {
     self.resultsMenu = [[NSMenu alloc] initWithTitle:@"Search Results"];
     [self.resultsMenu setAutoenablesItems:NO];
+
+    // Use delegate methods to prevent the menu opening when the search panel is not visible
+    [self.resultsMenu setDelegate:self];
+
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    [center addObserver:self
+               selector:@selector(resultsMenuDidBeginTracking:)
+                   name:NSMenuDidBeginTrackingNotification
+                 object:self.resultsMenu];
+    [center addObserver:self
+               selector:@selector(resultsMenuDidEndTracking:)
+                   name:NSMenuDidEndTrackingNotification
+                 object:self.resultsMenu];
     
     NSLog(@"ActionSearchController: Created results menu");
 }
@@ -166,34 +204,67 @@ static const CGFloat kMaxResultsShown = 15;
     [self.searchField setStringValue:@""];
     [self.filteredResults removeAllObjects];
     
-    // Store location for showing results menu
+    // Store location for showing results menu (unused, we position at left edge)
     self.popupLocation = point;
-    
-    // Position panel below click point
+
+    // Position panel directly underneath the menu bar at the left edge of the screen
     NSRect panelFrame = [self.searchPanel frame];
-    panelFrame.origin.x = point.x - panelFrame.size.width / 2;
-    panelFrame.origin.y = point.y - panelFrame.size.height;
-    
-    // Keep on screen
     NSRect screenFrame = [[NSScreen mainScreen] frame];
-    if (NSMaxX(panelFrame) > NSMaxX(screenFrame)) {
-        panelFrame.origin.x = NSMaxX(screenFrame) - panelFrame.size.width - 10;
-    }
-    if (panelFrame.origin.x < screenFrame.origin.x) {
-        panelFrame.origin.x = screenFrame.origin.x + 10;
-    }
-    
+    const CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight];
+
+    // Left edge margin
+    CGFloat leftMargin = screenFrame.origin.x + 8;
+
+    panelFrame.origin.x = leftMargin;
+    // Place panel such that its top aligns with the bottom of the menu bar
+    panelFrame.origin.y = screenFrame.origin.y + screenFrame.size.height - menuBarHeight - panelFrame.size.height;
+
     [self.searchPanel setFrame:panelFrame display:YES];
+
+    // Ensure our application is active so the search field receives key events immediately
+    [NSApp activateIgnoringOtherApps:YES];
+
     [self.searchPanel makeKeyAndOrderFront:nil];
-    
-    // Focus the search field
+
+    // Focus and select the search field so the caret is ready and typing works without extra click
+    // Some window managers / race conditions require a short deferred make-first-responder to be reliable
     [self.searchPanel makeFirstResponder:self.searchField];
-    
-    NSLog(@"ActionSearchController: Showing search popup at %.0f, %.0f", point.x, point.y);
+    [self.searchField selectText:nil];
+
+    // Also enforce focus on the next runloop tick to handle edge cases where focus isn't accepted immediately
+    [self performSelector:@selector(_deferredFocusToSearchField) withObject:nil afterDelay:0.01];
+
+    // Some window managers are flaky about initial focus; attempt multiple re-assertions of
+    // activation and first-responder to make sure typing works without an extra click.
+    [NSApp activateIgnoringOtherApps:YES];
+    [self.searchPanel makeKeyWindow];
+    [self.searchPanel makeFirstResponder:self.searchField];
+    [self.searchField selectText:nil];
+    // Additional deferred enforcement in case focus is stolen by the WM during stacking
+    [self performSelector:@selector(_deferredFocusToSearchField) withObject:nil afterDelay:0.05];
+    [self performSelector:@selector(_deferredFocusToSearchField) withObject:nil afterDelay:0.2];
+
+    // We rely on MenuApplication.sendEvent: to detect outside clicks and hide the search popup
+    self.resultsMenuTracking = NO;
+
+    NSLog(@"ActionSearchController: Showing search popup at left edge x=%.0f, y=%.0f", panelFrame.origin.x, panelFrame.origin.y);
 }
 
 - (void)hideSearchPopup
 {
+    if (self.resultsMenuTracking) {
+        if ([self.resultsMenu respondsToSelector:@selector(cancelTracking)]) {
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+            [self.resultsMenu performSelector:@selector(cancelTracking)];
+            #pragma clang diagnostic pop
+        }
+        self.resultsMenuTracking = NO;
+    }
+
+    // Ensure there are no stray menu windows left open
+    [self closeAllMenuWindows];
+
     [self.searchPanel orderOut:nil];
     [[X11ShortcutManager sharedManager] resumeKeyGrabs];
     NSLog(@"ActionSearchController: Hiding search popup");
@@ -206,6 +277,27 @@ static const CGFloat kMaxResultsShown = 15;
     } else {
         [self showSearchPopupAtPoint:point];
     }
+}
+
+- (void)toggleSearch:(id)sender
+{
+    // If we have a stored location from a previous click, use it? 
+    // Or just default to center of screen or under the mouse?
+    // For Cmd-Space, let's put it in the center of the screen
+    
+    if ([self.searchPanel isVisible]) {
+        [self hideSearchPopup];
+        return;
+    }
+    
+    // Default to center of screen if not triggered by mouse click in potential menu
+    NSRect screenFrame = [[NSScreen mainScreen] frame];
+    NSPoint centerPoint = NSMakePoint(
+        screenFrame.origin.x + screenFrame.size.width / 2,
+        screenFrame.origin.y + screenFrame.size.height / 2 + 200 // Slightly above center
+    );
+    
+    [self showSearchPopupAtPoint:centerPoint];
 }
 
 #pragma mark - Menu Collection
@@ -236,6 +328,9 @@ static const CGFloat kMaxResultsShown = 15;
     
     for (NSMenuItem *item in [menu itemArray]) {
         if ([item isSeparatorItem]) continue;
+        
+        // Skip the Search... menu item to avoid the search results containing itself
+        if ([[item title] isEqualToString:@"Search..."]) continue;
         
         NSString *itemPath;
         NSString *itemTitle = [item title];
@@ -295,6 +390,18 @@ static const CGFloat kMaxResultsShown = 15;
 
 - (void)showResultsMenu
 {
+    // Don't show results unless the search panel is visible and there is a query
+    if (![self.searchPanel isVisible]) {
+        NSLog(@"ActionSearchController: Not showing results menu because search panel is not visible");
+        return;
+    }
+
+    NSString *currentQuery = [[self.searchField stringValue] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    if ([currentQuery length] == 0) {
+        // Nothing to show
+        return;
+    }
+
     // Clear old items
     [self.resultsMenu removeAllItems];
     
@@ -339,11 +446,27 @@ static const CGFloat kMaxResultsShown = 15;
         previousTopLevelMenu = topLevelMenu;
     }
     
-    // Position menu below the search panel
+    // Position menu below the search panel at the left edge of the screen
     NSRect panelFrame = [self.searchPanel frame];
-    NSPoint menuLocation = NSMakePoint(panelFrame.origin.x, panelFrame.origin.y);
+    NSRect screenFrame = [[NSScreen mainScreen] frame];
+    CGFloat leftX = screenFrame.origin.x + 8;
     
-    // Pop up the menu
+    // If a menu is already tracking, cancel it so we can re-populate and re-open
+    if (self.resultsMenuTracking) {
+        if ([self.resultsMenu respondsToSelector:@selector(cancelTracking)]) {
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+            [self.resultsMenu performSelector:@selector(cancelTracking)];
+            #pragma clang diagnostic pop
+        }
+        self.resultsMenuTracking = NO;
+    }
+
+    // Align menu with the left edge and show it directly under the search panel
+    NSPoint menuLocation = NSMakePoint(leftX, panelFrame.origin.y - 1);
+
+    // Pop up the menu in screen coordinates (inView:nil) so it's flush with screen edge
+    self.resultsMenuTracking = YES;
     [self.resultsMenu popUpMenuPositioningItem:nil 
                                     atLocation:menuLocation 
                                         inView:nil];
@@ -397,17 +520,172 @@ static const CGFloat kMaxResultsShown = 15;
     [self searchWithString:searchString];
 }
 
+#pragma mark - Focus Tracking
+
+- (void)closeAllMenuWindows
+{
+    // Iterate over all app windows and close any that appear to be menu windows (NSMenu panels)
+    for (NSWindow *win in [NSApp windows]) {
+        NSString *cls = NSStringFromClass([win class]);
+        if ([cls hasPrefix:@"NSMenu"] || [cls hasPrefix:@"NSStatusBar"]) {
+            // Order out the menu window to ensure it disappears
+            @try {
+                [win orderOut:nil];
+                NSLog(@"ActionSearchController: Closed menu window of class %@", cls);
+            } @catch (NSException *e) {
+                (void)e;
+            }
+        }
+    }
+}
+
+
+- (void)searchPanelDidResignKey:(NSNotification *)notification
+{
+    (void)notification;
+    if (self.resultsMenuTracking) {
+        return;
+    }
+    [self hideSearchPopup];
+}
+
+- (void)applicationDidResignActive:(NSNotification *)notification
+{
+    (void)notification;
+    [self hideSearchPopup];
+}
+
+- (void)resultsMenuDidBeginTracking:(NSNotification *)notification
+{
+    (void)notification;
+    self.resultsMenuTracking = YES;
+}
+
+- (void)resultsMenuDidEndTracking:(NSNotification *)notification
+{
+    (void)notification;
+    self.resultsMenuTracking = NO;
+    // Hide search UI whenever results tracking ends unless the search panel is the key window
+    // (user might have clicked back into the search field)
+    if (![self.searchPanel isKeyWindow]) {
+        [self hideSearchPopup];
+    } else {
+        // If search panel is still key (user clicked back into field), keep it open but stop tracking state
+    }
+}
+
+#pragma mark - NSMenuDelegate
+
+- (void)menuWillOpen:(NSMenu *)menu
+{
+    if (menu == self.resultsMenu) {
+        // Prevent the results menu from opening unless the search panel is visible
+        if (![self.searchPanel isVisible]) {
+            NSLog(@"ActionSearchController: Preventing results menu open because search panel is hidden");
+            // Explicitly close any menu windows to ensure no stray menu remains
+            [self closeAllMenuWindows];
+            self.resultsMenuTracking = NO;
+        }
+    }
+}
+
+- (void)menuDidClose:(NSMenu *)menu
+{
+    if (menu == self.resultsMenu) {
+        self.resultsMenuTracking = NO;
+    }
+}
+
 - (BOOL)control:(NSControl *)control textView:(NSTextView *)textView doCommandBySelector:(SEL)commandSelector
 {
     (void)control;
     (void)textView;
-    
-    if (commandSelector == @selector(cancelOperation:)) {
-        // Escape key - hide popup
-        [self hideSearchPopup];
+
+    // Handle common text commands for the search field
+    if (commandSelector == @selector(selectAll:)) {
+        [textView selectAll:nil];
         return YES;
     }
-    
+    if (commandSelector == @selector(copy:)) {
+        [textView copy:nil];
+        return YES;
+    }
+    if (commandSelector == @selector(paste:)) {
+        [textView paste:nil];
+        return YES;
+    }
+
+    // Arrow down should show results and highlight the first result if present
+    if (commandSelector == @selector(moveDown:)) {
+        if ([self.filteredResults count] > 0) {
+            [self showResultsMenu];
+
+            // Highlight the first selectable item if possible
+            NSInteger firstIndex = -1;
+            NSArray *items = [self.resultsMenu itemArray];
+            for (NSInteger ii = 0; ii < (NSInteger)[items count]; ii++) {
+                NSMenuItem *mi = [items objectAtIndex:ii];
+                if (![mi isSeparatorItem] && [mi isEnabled]) { firstIndex = ii; break; }
+            }
+            if (firstIndex >= 0) {
+                if ([self.resultsMenu respondsToSelector:@selector(setHighlightedItemIndex:)]) {
+                    // Use NSInvocation to call selector with NSInteger argument safely
+                    SEL sel = @selector(setHighlightedItemIndex:);
+                    NSMethodSignature *sig = [self.resultsMenu methodSignatureForSelector:sel];
+                    if (sig) {
+                        NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+                        [inv setSelector:sel];
+                        [inv setTarget:self.resultsMenu];
+                        NSInteger idx = firstIndex;
+                        [inv setArgument:&idx atIndex:2];
+                        [inv invoke];
+                    }
+                }
+            }
+            return YES;
+        }
+        return NO;
+    }
+
+    // Arrow up should show results and highlight the last item
+    if (commandSelector == @selector(moveUp:)) {
+        if ([self.filteredResults count] > 0) {
+            [self showResultsMenu];
+            // Find last selectable enabled item and highlight it
+            NSInteger lastIndex = -1;
+            NSArray *items = [self.resultsMenu itemArray];
+            for (NSInteger ii = (NSInteger)[items count] - 1; ii >= 0; ii--) {
+                NSMenuItem *mi = [items objectAtIndex:ii];
+                if (![mi isSeparatorItem] && [mi isEnabled]) { lastIndex = ii; break; }
+            }
+            if (lastIndex >= 0 && [self.resultsMenu respondsToSelector:@selector(setHighlightedItemIndex:)]) {
+                SEL sel = @selector(setHighlightedItemIndex:);
+                NSMethodSignature *sig = [self.resultsMenu methodSignatureForSelector:sel];
+                if (sig) {
+                    NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+                    [inv setSelector:sel];
+                    [inv setTarget:self.resultsMenu];
+                    NSInteger idx = lastIndex;
+                    [inv setArgument:&idx atIndex:2];
+                    [inv invoke];
+                }
+            }
+            return YES;
+        }
+        return NO;
+    }
+
+    if (commandSelector == @selector(cancelOperation:)) {
+        // Escape key - hide popup and reset, then return focus to other app
+        [self.searchField setStringValue:@""];
+        [self hideSearchPopup];
+
+        // Deactivate the Menu application so other apps regain keyboard focus
+        [NSApp deactivate];
+
+        return YES;
+    }
+
     return NO;
 }
 

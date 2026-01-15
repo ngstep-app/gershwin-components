@@ -12,6 +12,7 @@
 #import "DBusConnection.h"
 #import "MenuCacheManager.h"
 #import "CustomMenuPanel.h"
+#import "ActionSearch.h"
 #import <signal.h>
 #import <unistd.h>
 #import <objc/runtime.h>
@@ -350,18 +351,31 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     // Log events for debugging if needed
     NSEventType eventType = [event type];
     if (eventType == NSKeyDown) {
-        // Log KeyDown events and route to key window
+        // Log KeyDown events and route to key window / search panel
         NSWindow *keyWin = [self keyWindow];
         NSLog(@"MenuApplication: KeyDown event, key window: %@, characters: %@", 
               keyWin, [event characters]);
-        
-        // If no key window, check if action search panel is visible and route to it
+
+        // If Action Search is visible, route KeyDown events to it first to make sure
+        // typing, arrows and escape are handled immediately (covers various WMs).
+        ActionSearchController *search = [ActionSearchController sharedController];
+        if ([search.searchPanel isVisible]) {
+            // Reassert application activation and first-responder on each key event to
+            // handle window-manager focus races where the panel appears but does not
+            // receive keyboard input until clicked.
+            [NSApp activateIgnoringOtherApps:YES];
+            [search.searchPanel makeKeyWindow];
+            [search.searchPanel makeFirstResponder:search.searchField];
+            NSLog(@"MenuApplication: Ensured focus on ActionSearchPanel before routing key");
+            [search.searchPanel sendEvent:event];
+            return;
+        }
+
+        // If there is no key window, try to find an ActionSearchPanel among windows as fallback
         if (!keyWin) {
-            // Find the ActionSearchPanel if visible
             for (NSWindow *window in [self windows]) {
-                if ([window isVisible] && 
-                    [[window className] isEqualToString:@"ActionSearchPanel"]) {
-                    NSLog(@"MenuApplication: Routing KeyDown to ActionSearchPanel");
+                if ([window isVisible] && [[window className] isEqualToString:@"ActionSearchPanel"]) {
+                    NSLog(@"MenuApplication: Routing KeyDown to ActionSearchPanel (found by class)");
                     [window sendEvent:event];
                     return;
                 }
@@ -370,6 +384,20 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
             NSLog(@"MenuApplication: Forwarding KeyDown to key window");
             [keyWin sendEvent:event];
             return;
+        }
+    } else if (eventType == NSLeftMouseDown || eventType == NSRightMouseDown) {
+        // If the action search panel is visible and the click is outside it and not in an NSMenu, close the popup
+        ActionSearchController *search = [ActionSearchController sharedController];
+        if ([search.searchPanel isVisible]) {
+            NSWindow *evtWin = [event window];
+            if (evtWin == nil) {
+                [search hideSearchPopup];
+            } else {
+                NSString *classname = NSStringFromClass([evtWin class]);
+                if (![classname hasPrefix:@"NSMenu"] && evtWin != search.searchPanel) {
+                    [search hideSearchPopup];
+                }
+            }
         }
     } else if (eventType == NSMouseMoved) {
         // Suppress frequent event logging

@@ -25,6 +25,13 @@
 // Delayed fallback timers keyed by window id -> NSTimer
 @property (nonatomic, strong) NSMutableDictionary *fallbackTimers;
 
+// The system submenu (contains Search, System Preferences, and dynamic application list)
+@property (nonatomic, strong) NSMenu *systemMenu;
+// Guard flag to prevent reentrant / repeated updates while we're populating the system menu
+@property (nonatomic, assign) BOOL isUpdatingSystemMenu;
+// Timestamp (CFAbsoluteTime) of the last system menu population — used to throttle frequent updates
+@property (nonatomic, assign) NSTimeInterval lastSystemMenuUpdateTime;
+
 - (void)updateForActiveWindow;
 - (void)clearMenu;
 - (void)displayMenuForWindow:(unsigned long)windowId;
@@ -36,6 +43,10 @@
 - (void)closeWindow:(NSMenuItem *)sender;
 - (void)closeActiveWindow:(NSMenuItem *)sender;
 - (void)sendAltF4ToWindow:(unsigned long)windowId;
+
+// Open system utilities and apps from System submenu
+- (void)openSystemPreferences:(NSMenuItem *)sender;
+- (void)openApplicationBundle:(NSMenuItem *)sender;
 
 // Debug methods
 - (void)debugLogCurrentMenuState;

@@ -298,8 +298,8 @@
     self.menuBarView = [[MenuBarView alloc] initWithFrame:NSMakeRect(0, 0, self.screenSize.width, menuBarHeight)];
     NSLog(@"MenuController: Created MenuBarView: %@", self.menuBarView);
     
-    // Create app menu widget for displaying menus - use larger width to accommodate more menu items
-    CGFloat menuWidgetWidth = self.screenSize.width - 60; // Leave space for time menu
+    // Create app menu widget for displaying menus - leave space for time menu
+    CGFloat menuWidgetWidth = self.screenSize.width - 67; // 60px clock + 7px padding
     self.appMenuWidget = [[AppMenuWidget alloc] initWithFrame:NSMakeRect(0, 0, menuWidgetWidth, menuBarHeight)];
     NSLog(@"MenuController: AppMenuWidget created successfully");
     
@@ -327,15 +327,7 @@
     [self createTimeMenu];
     NSLog(@"MenuController: Time menu created");
     
-    // Create Action Search menu item - positioned between app menus and time menu
-    NSLog(@"MenuController: About to create action search view");
-    CGFloat searchWidth = 32;  // Just enough for the icon
-    CGFloat timeMenuWidth = 60;
-    CGFloat searchX = self.screenSize.width - timeMenuWidth - searchWidth - 10;
-    self.actionSearchView = [[ActionSearchMenuView alloc] initWithFrame:NSMakeRect(searchX, 0, searchWidth, menuBarHeight)];
-    [self.actionSearchView setAppMenuWidget:self.appMenuWidget];
-    [self.actionSearchView setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin | NSViewMinYMargin];
-    NSLog(@"MenuController: Action search view created");
+    // Remove the Action Search icon from the menu bar (search remains accessible via Command menu)
     
     // probono: Create rounded corners view for black top corners like in old/src/mainwindow.cpp
     // Position it at the top of the menu bar, with height enough for the corner radius effect
@@ -345,14 +337,47 @@
     // Add subviews in the correct order (background first, then content, then corners on top)
     [[self.menuBar contentView] addSubview:self.menuBarView];
     [[self.menuBar contentView] addSubview:self.appMenuWidget];
-    [[self.menuBar contentView] addSubview:self.actionSearchView];
     [[self.menuBar contentView] addSubview:self.timeMenuView];
     [[self.menuBar contentView] addSubview:self.roundedCornersView];
     
     // Show the window and slide it in from above with animation
     [self.menuBar makeKeyAndOrderFront:self];
     [self.menuBar orderFront:self];
-    
+
+    // Register global Cmd-Space shortcut to toggle the Action Search panel (if available)
+    // NOTE: What we call "Cmd" here is actually the "Alt" key technically but we refer to it as "Cmd" in the UI
+    NSString *cmdSpaceShortcut = @"alt+space";
+    X11ShortcutManager *mgr = [X11ShortcutManager sharedManager];
+    if (mgr && ![mgr isShortcutAlreadyTaken:cmdSpaceShortcut]) {
+        NSMenuItem *cmdSpaceItem = [[NSMenuItem alloc] initWithTitle:@"Toggle Action Search"
+                                                               action:@selector(toggleSearch:)
+                                                        keyEquivalent:@" "];
+        [cmdSpaceItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+        // Register directly to call the ActionSearchController without DBus
+        BOOL regOK = [mgr registerDirectShortcutForMenuItem:cmdSpaceItem
+                                                     target:[ActionSearchController sharedController]
+                                                     action:@selector(toggleSearch:)];
+        if (regOK) {
+            NSLog(@"MenuController: Registered global shortcut Cmd-Space for Action Search");
+        } else {
+            NSLog(@"MenuController: Failed to register Cmd-Space as global shortcut");
+            // Notify user with alert so failure is visible
+            NSAlert *alert = [[NSAlert alloc] init];
+            [alert setMessageText:NSLocalizedString(@"Cannot register global shortcut", @"Alert title for shortcut failure")];
+            [alert setInformativeText:NSLocalizedString(@"Menu.app failed to register the Cmd-Space global shortcut. Please check for conflicts or permissions.", @"Alert text for shortcut failure")];
+            [alert addButtonWithTitle:NSLocalizedString(@"OK", @"OK button")];
+            [alert setAlertStyle:NSWarningAlertStyle];
+            // Run non-modally to avoid blocking the app startup
+            [alert beginSheetModalForWindow:self.menuBar completionHandler:nil];
+        }
+    } else {
+        if (!mgr) {
+            NSLog(@"MenuController: Warning - cannot register Cmd-Space because X11ShortcutManager is unavailable");
+        } else {
+            NSLog(@"MenuController: Cmd-Space already taken - not registering global shortcut");
+        }
+    }
+
     // Wait 50ms then animate menu sliding in from above and reveal AppMenuWidget after animation
     [self performSelector:@selector(animateMenuSlideIn) withObject:nil afterDelay:0.05];
     NSLog(@"MenuController: Window shown, menu will slide in with animation after 50ms delay");
