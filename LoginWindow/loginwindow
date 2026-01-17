@@ -25,7 +25,8 @@ load_rc_config ${name}
 moused & # 'REQUIRE: moused' would result in way too late start
 sleep 1 # FIXME: Find a way without this
 command="/usr/sbin/daemon"
-procname="/System/Applications/LoginWindow.app/LoginWindow"
+# procname="/System/Applications/LoginWindow.app/LoginWindow"
+procname="/System/Library/Scripts/LoginWindow.sh" # TODO: Port to LoginWindow?
 pidfile="/var/run/${name}.pid"
 logfile="/var/log/LoginWindow.log"
 rm -f ${logfile}
