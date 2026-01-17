@@ -72,6 +72,26 @@ static void ConsoleDebugLog(NSString *format, ...)
     }
 }
 
+static NSString *FindExecutable(NSString *name)
+{
+    // If the name contains a slash, treat it as a path
+    if ([name rangeOfString:@"/"].location != NSNotFound) {
+        if ([[NSFileManager defaultManager] isExecutableFileAtPath:name]) return name;
+        return nil;
+    }
+
+    NSString *pathEnv = [[[NSProcessInfo processInfo] environment] objectForKey:@"PATH"];
+    if (!pathEnv) pathEnv = @"/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin";
+    NSArray *paths = [pathEnv componentsSeparatedByString:@":" ];
+
+    NSFileManager *fm = [NSFileManager defaultManager];
+    for (NSString *dir in paths) {
+        NSString *full = [dir stringByAppendingPathComponent:name];
+        if ([fm isExecutableFileAtPath:full]) return full;
+    }
+    return nil;
+}
+
 static NSArray *TailLines(NSString *path, NSUInteger maxLines)
 {
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:path];
@@ -218,7 +238,8 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
     if (stat("/run/systemd/system", &st) != 0) {
         return NO;
     }
-    return ([[NSFileManager defaultManager] isExecutableFileAtPath:@"/usr/bin/journalctl"]);
+    NSString *journalctlPath = FindExecutable(@"journalctl");
+    return (journalctlPath != nil);
 }
 
 - (void)start
@@ -255,7 +276,18 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     
     _journalctlTask = [[NSTask alloc] init];
-    [_journalctlTask setLaunchPath:@"/usr/bin/journalctl"];
+    NSString *journalctlPath = FindExecutable(@"journalctl");
+    if (!journalctlPath) {
+        NSError *error = [NSError errorWithDomain:@"LogSourceError"
+                                             code:2
+                                         userInfo:@{NSLocalizedDescriptionKey: @"journalctl not found in PATH"}];
+        callDelegateOnMainThread(_delegate, @selector(logSource:didEncounterError:), self, error);
+        [_journalctlTask release];
+        _journalctlTask = nil;
+        [pool drain];
+        return;
+    }
+    [_journalctlTask setLaunchPath:journalctlPath];
     [_journalctlTask setArguments:@[@"--follow", @"--all", @"--output=json"]];
     
     NSPipe *pipe = [NSPipe pipe];
@@ -622,8 +654,22 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
     
     // Run dmesg command
     NSTask *task = [[NSTask alloc] init];
-    [task setLaunchPath:@"/bin/dmesg"];
-    [task setArguments:@[]];
+    NSString *dmesgPath = FindExecutable(@"dmesg");
+    if (dmesgPath) {
+        [task setLaunchPath:dmesgPath];
+        [task setArguments:@[]];
+    } else {
+        NSString *envPath = FindExecutable(@"env");
+        if (envPath) {
+            [task setLaunchPath:envPath];
+            [task setArguments:@[@"dmesg"]];
+        } else {
+            ConsoleDebugLog(@"dmesg not found; skipping kernel poll");
+            [task release];
+            [pool drain];
+            return;
+        }
+    }
     
     NSPipe *pipe = [NSPipe pipe];
     [task setStandardOutput:pipe];
