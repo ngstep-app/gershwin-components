@@ -1,8 +1,9 @@
 #!/bin/sh
 
 # Run before everything else; loginwindow waits until /tmp is mounted and then starts X server and shows the login screen
+# FIXME: For now, added back LOGIN but this results in LoginWindow to come up WAY too late
 # PROVIDE: loginwindow
-# REQUIRE: tmp var_run cleanvar FILESYSTEMS zfs
+# REQUIRE: tmp var_run cleanvar FILESYSTEMS zfs LOGIN
 # KEYWORD: shutdown
 #
 # Add the following lines to /etc/rc.conf to enable the LoginWindow:
