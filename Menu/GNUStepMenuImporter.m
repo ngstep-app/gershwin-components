@@ -135,10 +135,71 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
                           menuData:(NSDictionary *)menuData
                         clientName:(NSString *)clientName
 {
-    // Reduce verbose logging for frequent menu updates
-    if (!windowId || !menuData || !clientName) {
-        NSLog(@"GNUStepMenuImporter: Invalid update payload");
+    // Defensive checks for remote calls
+    if (!windowId || ![windowId isKindOfClass:[NSNumber class]] ||
+        !menuData || ![menuData isKindOfClass:[NSDictionary class]] ||
+        !clientName || ![clientName isKindOfClass:[NSString class]]) {
+        NSLog(@"GNUStepMenuImporter: Invalid update payload (types) - windowId:%@ menuData:%@ clientName:%@", windowId, [menuData class], [clientName class]);
         return;
+    }
+
+    // Make thread-safe, non-proxy copies before hopping threads.
+    NSNumber *safeWindowId = [windowId copy];
+    NSString *safeClientName = [clientName copy];
+    NSDictionary *safeMenuData = nil;
+
+    @try {
+        NSError *plistError = nil;
+        NSData *plist = [NSPropertyListSerialization dataWithPropertyList:menuData
+                                                                   format:NSPropertyListBinaryFormat_v1_0
+                                                                  options:0
+                                                                    error:&plistError];
+        if (plist && !plistError) {
+            safeMenuData = [NSPropertyListSerialization propertyListWithData:plist
+                                                                      options:NSPropertyListImmutable
+                                                                       format:nil
+                                                                        error:&plistError];
+        }
+        if (!safeMenuData || plistError) {
+            safeMenuData = [menuData copy];
+        }
+    } @catch (NSException *ex) {
+        NSLog(@"GNUStepMenuImporter: Failed to copy menuData safely: %@", ex);
+        safeMenuData = [menuData copy];
+    }
+
+    // Bundle payload and dispatch to main thread; AppKit types must be created on main thread
+    NSDictionary *payload = @{ @"windowId": safeWindowId ?: windowId,
+                               @"menuData": safeMenuData ?: menuData,
+                               @"clientName": safeClientName ?: clientName };
+    if ([NSThread isMainThread]) {
+        [self processMenuUpdateWithPayload:payload];
+    } else {
+        [self performSelectorOnMainThread:@selector(processMenuUpdateWithPayload:) withObject:payload waitUntilDone:NO];
+    }
+}
+
+- (void)processMenuUpdateWithPayload:(NSDictionary *)payload
+{
+    NSNumber *windowId = payload[@"windowId"];
+    NSDictionary *menuData = payload[@"menuData"];
+    NSString *clientName = payload[@"clientName"];
+
+    // Safety: ensure this runs on main thread
+    if (![NSThread isMainThread]) {
+        NSLog(@"GNUStepMenuImporter: WARNING - processMenuUpdateWithPayload executing off main thread!");
+    }
+
+    // Attempt to capture the incoming menuData to /tmp for reproduction if something goes wrong
+    @try {
+        NSData *json = [NSJSONSerialization dataWithJSONObject:menuData options:NSJSONWritingPrettyPrinted error:nil];
+        if (json) {
+            NSString *fname = [NSString stringWithFormat:@"/tmp/menu-update-%@-window-%@.json", [[NSUUID UUID] UUIDString], windowId];
+            [json writeToFile:fname atomically:YES];
+            NSLog(@"GNUStepMenuImporter: Saved incoming menuData to %@", fname);
+        }
+    } @catch (NSException *ex) {
+        NSLog(@"GNUStepMenuImporter: Could not serialize menuData: %@", ex);
     }
 
     NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
@@ -209,7 +270,19 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
               clientName:(NSString *)clientName
                    path:(NSArray *)path
 {
-    NSString *title = [menuData objectForKey:@"title"] ?: @"";
+    // Defensive checks: limit recursion depth to avoid stack overflows and avoid bad types
+    const NSUInteger MAX_DEPTH = 64;
+    if ([path count] > MAX_DEPTH) {
+        NSLog(@"GNUStepMenuImporter: menuFromData exceeded max depth (%lu) for window %lu", (unsigned long)MAX_DEPTH, windowId);
+        return nil;
+    }
+
+    NSString *title = @"";
+    id rawTitle = [menuData objectForKey:@"title"];
+    if ([rawTitle isKindOfClass:[NSString class]]) {
+        title = rawTitle;
+    }
+
     NSArray *itemsData = [menuData objectForKey:@"items"];
     if (![itemsData isKindOfClass:[NSArray class]]) {
         itemsData = @[];
@@ -219,10 +292,11 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
     [menu setAutoenablesItems:NO];
 
     for (NSUInteger i = 0; i < [itemsData count]; i++) {
-        NSDictionary *itemData = [itemsData objectAtIndex:i];
-        if (![itemData isKindOfClass:[NSDictionary class]]) {
+        id itemObj = [itemsData objectAtIndex:i];
+        if (![itemObj isKindOfClass:[NSDictionary class]]) {
             continue;
         }
+        NSDictionary *itemData = (NSDictionary *)itemObj;
 
         NSNumber *isSeparator = [itemData objectForKey:@"isSeparator"];
         if ([isSeparator boolValue]) {
@@ -230,8 +304,17 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
             continue;
         }
 
-        NSString *itemTitle = [itemData objectForKey:@"title"] ?: @"";
-        NSString *keyEquivalent = [itemData objectForKey:@"keyEquivalent"] ?: @"";
+        NSString *itemTitle = @"";
+        id rawItemTitle = [itemData objectForKey:@"title"];
+        if ([rawItemTitle isKindOfClass:[NSString class]]) {
+            itemTitle = rawItemTitle;
+        }
+        NSString *keyEquivalent = @"";
+        id rawKey = [itemData objectForKey:@"keyEquivalent"];
+        if ([rawKey isKindOfClass:[NSString class]]) {
+            keyEquivalent = rawKey;
+        }
+
         NSMenuItem *menuItem = [[NSMenuItem alloc] initWithTitle:itemTitle
                                                          action:nil
                                                   keyEquivalent:keyEquivalent];
@@ -240,17 +323,17 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         NSNumber *state = [itemData objectForKey:@"state"];
         NSNumber *modifierMask = [itemData objectForKey:@"keyEquivalentModifierMask"];
 
-        if (enabled) {
+        if ([enabled isKindOfClass:[NSNumber class]]) {
             [menuItem setEnabled:[enabled boolValue]];
         }
-        if (state) {
+        if ([state isKindOfClass:[NSNumber class]]) {
             [menuItem setState:[state integerValue]];
         }
-        if (modifierMask) {
+        if ([modifierMask isKindOfClass:[NSNumber class]]) {
             [menuItem setKeyEquivalentModifierMask:[modifierMask unsignedIntegerValue]];
         }
 
-        NSDictionary *submenuData = [itemData objectForKey:@"submenu"];
+        id submenuData = [itemData objectForKey:@"submenu"];
         NSArray *itemPath = [path arrayByAddingObject:@(i)];
 
         if ([submenuData isKindOfClass:[NSDictionary class]]) {
@@ -264,11 +347,13 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         } else {
             [menuItem setTarget:[GNUStepMenuActionHandler class]];
             [menuItem setAction:@selector(performMenuAction:)];
-            [menuItem setRepresentedObject:@{
-                @"windowId": @(windowId),
-                @"clientName": clientName ?: @"",
-                @"indexPath": itemPath
-            }];
+
+            // Build a safe representedObject using simple types
+            NSArray *safeIndexPath = [NSArray arrayWithArray:itemPath];
+            NSDictionary *repObj = @{ @"windowId": @(windowId),
+                                      @"clientName": clientName ?: @"",
+                                      @"indexPath": safeIndexPath };
+            [menuItem setRepresentedObject:repObj];
         }
 
         [menu addItem:menuItem];
