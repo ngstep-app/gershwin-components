@@ -39,7 +39,9 @@ Menu_OBJC_FILES = \
 	X11ShortcutManager.m \
 	RoundedCornersView.m \
 	MenuCacheManager.m \
-	ActionSearch.m
+	ActionSearch.m \
+	StatusItemManager.m \
+	StatusItemsView.m
 
 # Header files
 Menu_HEADER_FILES = \
@@ -66,7 +68,10 @@ Menu_HEADER_FILES = \
 	X11ShortcutManager.h \
 	RoundedCornersView.h \
 	MenuCacheManager.h \
-	ActionSearch.h
+	ActionSearch.h \
+	StatusItemProvider.h \
+	StatusItemManager.h \
+	StatusItemsView.h
 
 # Resources
 Menu_RESOURCE_FILES = \
@@ -112,6 +117,10 @@ custom-install: $(APP_NAME).app
 		cp -R $(APP_NAME).app $(DESTDIR)$(INSTALL_APPS_DIR)/; \
 		mkdir -p $(DESTDIR)$(INSTALL_APPS_DIR)/$(APP_NAME).app/Resources; \
 		cp Menu.png $(DESTDIR)$(INSTALL_APPS_DIR)/$(APP_NAME).app/Resources/; \
+		echo "Installing status item bundles..."; \
+		mkdir -p $(DESTDIR)/System/Library/Menu/StatusItems; \
+		cp -R StatusItems/SystemMonitor/SystemMonitor.bundle $(DESTDIR)/System/Library/Menu/StatusItems/ || true; \
+		cp -R StatusItems/TimeDisplay/TimeDisplay.bundle $(DESTDIR)/System/Library/Menu/StatusItems/ || true; \
 	else \
 		echo "Installing $(APP_NAME) to $(INSTALL_APPS_DIR)"; \
 		sudo -A rm -rf $(GNUSTEP_SYSTEM_APPS)/$(APP_NAME).app || true; \
@@ -119,8 +128,11 @@ custom-install: $(APP_NAME).app
 		sudo -A cp -R $(APP_NAME).app $(INSTALL_APPS_DIR)/; \
 		sudo -A mkdir -p $(INSTALL_APPS_DIR)/$(APP_NAME).app/Resources; \
 		sudo -A cp Menu.png $(INSTALL_APPS_DIR)/$(APP_NAME).app/Resources/; \
+			echo "Installing status item bundles..."; \
+			sudo -A mkdir -p /System/Library/Menu/StatusItems; \
+			sudo -A cp -R StatusItems/SystemMonitor/SystemMonitor.bundle /System/Library/Menu/StatusItems/ || true; \
+			sudo -A cp -R StatusItems/TimeDisplay/TimeDisplay.bundle /System/Library/Menu/StatusItems/ || true; \
 	fi
-
 # Override uninstall target to properly support DESTDIR and PREFIX
 uninstall:: custom-uninstall
 
