@@ -24,6 +24,7 @@
 #import <X11/Xutil.h>
 #import <sys/select.h>
 #import <errno.h>
+#import <dispatch/dispatch.h>
 
 @interface TimeMenuView : NSMenuView
 @end
@@ -53,9 +54,9 @@
 - (void)dbusFileDescriptorReady:(NSNotification *)notification {
     // Always handle DBus traffic on the main thread to avoid races with UI work
     if (![NSThread isMainThread]) {
-        [self performSelectorOnMainThread:@selector(dbusFileDescriptorReady:)
-                                   withObject:notification
-                                waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self dbusFileDescriptorReady:notification];
+        });
         return;
     }
 
@@ -95,9 +96,7 @@
     self = [super init];
     if (self) {
         // Initialize trailing-edge debounce properties to prevent infinite loops
-        self.clientListDebounceTimer = nil;
-        self.pendingClientListEvents = 0;
-        self.totalScans = 0;
+        self.lastActiveWindowScanTime = 0;
         NSLog(@"MenuController: Controller initialized successfully");
     }
     return self;
@@ -202,7 +201,9 @@
     
     // Register D-Bus service immediately - run loop is active
     NSLog(@"MenuController: Registering D-Bus service now...");
-    [self performSelector:@selector(registerDBusServiceWhenReady) withObject:nil afterDelay:0.0];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self registerDBusServiceWhenReady];
+    });
 }
 
 - (void)registerDBusServiceWhenReady
@@ -439,7 +440,9 @@
     }
 
     // Animate menu sliding in immediately - no delay
-    [self performSelector:@selector(animateMenuSlideIn) withObject:nil afterDelay:0.0];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self animateMenuSlideIn];
+    });
     NSLog(@"MenuController: Window shown, menu will slide in immediately");
 }
 
@@ -553,15 +556,11 @@
     
     self.rootWindow = DefaultRootWindow(self.display);
     self.netActiveWindowAtom = XInternAtom(self.display, "_NET_ACTIVE_WINDOW", False);
-    Atom netClientListAtom = XInternAtom(self.display, "_NET_CLIENT_LIST", False);
     
-    // Select PropertyNotify events on the root window to detect both active window and client list changes
+    // Select PropertyNotify events on the root window to detect active window changes
     XSelectInput(self.display, self.rootWindow, PropertyChangeMask);
     
-    // Store the client list atom for monitoring
-    self.netClientListAtom = netClientListAtom;
-    
-    NSLog(@"MenuController: X11 display opened, monitoring _NET_ACTIVE_WINDOW and _NET_CLIENT_LIST property changes");
+    NSLog(@"MenuController: X11 display opened, monitoring _NET_ACTIVE_WINDOW property changes");
     
     // Start X11 event loop in a separate NSThread
     self.x11Thread = [[NSThread alloc] initWithTarget:self
@@ -659,99 +658,6 @@
     }
 }
 
-- (void)scheduleClientListScan
-{
-    // Must be called on main thread since NSTimer needs a run loop
-    if (![NSThread isMainThread]) {
-        [self performSelectorOnMainThread:@selector(scheduleClientListScan)
-                               withObject:nil
-                            waitUntilDone:NO];
-        return;
-    }
-    
-    // Cancel existing timer if any
-    if (self.clientListDebounceTimer) {
-        [self.clientListDebounceTimer invalidate];
-    }
-    
-    // Schedule new timer for 50ms from now
-    self.clientListDebounceTimer = [NSTimer scheduledTimerWithTimeInterval:0.05 // 50ms
-                                                                     target:self
-                                                                   selector:@selector(performDebouncedClientListScan:)
-                                                                   userInfo:nil
-                                                                    repeats:NO];
-}
-
-- (void)performDebouncedClientListScan:(NSTimer *)timer
-{
-    // This is called 50ms after the last _NET_CLIENT_LIST PropertyNotify
-    // Log the scan with detailed information
-    self.totalScans++;
-    int eventCount = self.pendingClientListEvents;
-    self.pendingClientListEvents = 0; // Reset counter
-
-    static NSTimeInterval startupTime = 0;
-    static NSTimeInterval lastScanTime = 0;
-    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
-    if (startupTime == 0) {
-        startupTime = now;
-    }
-
-    // Skip scanning during the initial startup burst
-    if ((now - startupTime) < 15.0) {
-        NSLog(@"MenuController: Skipping client list scan during startup burst (%.1fs)", now - startupTime);
-        self.clientListDebounceTimer = nil;
-        return;
-    }
-
-    // Rate-limit scans to at most once per second
-    if ((now - lastScanTime) < 1.0) {
-        NSLog(@"MenuController: Skipping client list scan (rate limited)");
-        self.clientListDebounceTimer = nil;
-        return;
-    }
-    lastScanTime = now;
-    
-    NSLog(@"MenuController: SCAN #%d - Performing debounced scan after %d _NET_CLIENT_LIST events",
-          self.totalScans, eventCount);
-    
-    // Get current client list to log what changed
-    Display *display = self.display;
-    if (display) {
-        Atom actualType;
-        int actualFormat;
-        unsigned long nWindows, bytesAfter;
-        unsigned char *data = NULL;
-        
-        int result = XGetWindowProperty(display, self.rootWindow,
-                                       self.netClientListAtom,
-                                       0, (~0L), False, XA_WINDOW,
-                                       &actualType, &actualFormat,
-                                       &nWindows, &bytesAfter, &data);
-        
-        if (result == Success && data) {
-            NSLog(@"MenuController: Current _NET_CLIENT_LIST has %lu windows", nWindows);
-            
-            // Log window IDs to help identify what's changing
-            Window *windows = (Window *)data;
-            if (nWindows > 0 && nWindows <= 20) { // Only log if reasonable number
-                NSMutableString *windowList = [NSMutableString stringWithString:@"Window IDs: "];
-                for (unsigned long i = 0; i < nWindows; i++) {
-                    [windowList appendFormat:@"0x%lx%s", windows[i], (i < nWindows-1) ? ", " : ""];
-                }
-                NSLog(@"MenuController: %@", windowList);
-            }
-            XFree(data);
-        }
-    }
-    
-    // Perform the actual scan
-    [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
-    
-    // Clear the timer reference
-    self.clientListDebounceTimer = nil;
-}
-
 - (void)x11ActiveWindowMonitor
 {
     NSLog(@"MenuController: X11 _NET_ACTIVE_WINDOW monitor thread started");
@@ -762,9 +668,9 @@
         // This makes startup instant instead of blocking for 15 seconds
         
         // Schedule desktop menu load on main thread (lightweight operation)
-        [self performSelectorOnMainThread:@selector(loadDesktopMenuIfAvailable)
-                               withObject:nil
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self loadDesktopMenuIfAvailable];
+        });
         
         // Get X11 connection file descriptor
         int x11_fd = ConnectionNumber(self.display);
@@ -788,32 +694,19 @@
                     // Update the app menu widget for the new active window
                     // IMPORTANT: Perform UI updates on main thread to avoid race conditions
                     if (self.appMenuWidget) {
-                        [self.appMenuWidget performSelectorOnMainThread:@selector(updateForActiveWindow)
-                                                             withObject:nil
-                                                          waitUntilDone:NO];
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            [self.appMenuWidget updateForActiveWindow];
+                            
+                            // After updating for active window, scan for menus
+                            // Applications may register menus after window activation
+                            NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+                            if ((now - self.lastActiveWindowScanTime) > 3.0) { // Only scan once every 3 seconds max
+                                NSLog(@"MenuController: Active window changed, triggering scan to discover new menus");
+                                self.lastActiveWindowScanTime = now;
+                                [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
+                            }
+                        });
                     }
-                }
-                // Check if this is a PropertyNotify event for _NET_CLIENT_LIST (new windows)
-                else if (event.type == PropertyNotify && 
-                         event.xproperty.window == self.rootWindow &&
-                         event.xproperty.atom == self.netClientListAtom) {
-                    
-                    // TRAILING-EDGE DEBOUNCE: Only scan 50ms after the last _NET_CLIENT_LIST change
-                    // This prevents infinite loops where scanning triggers more PropertyNotify events
-                    
-                    self.pendingClientListEvents++;
-                    NSLog(@"MenuController: _NET_CLIENT_LIST PropertyNotify #%d received", self.pendingClientListEvents);
-                    
-                    // Cancel any existing debounce timer
-                    if (self.clientListDebounceTimer) {
-                        [self.clientListDebounceTimer invalidate];
-                    }
-                    
-                    // Schedule a new scan for 50ms from now (on main thread to access timer)
-                    // If another event comes in before 50ms, this timer will be cancelled
-                    [self performSelectorOnMainThread:@selector(scheduleClientListScan)
-                                           withObject:nil
-                                        waitUntilDone:NO];
                 }
             }
             

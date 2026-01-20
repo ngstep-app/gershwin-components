@@ -188,7 +188,9 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         
         // Defer placeholder menu setup until after initialization completes
         // This ensures the view is fully ready before we try to set up and draw the menu
-        [self performSelector:@selector(setupPlaceholderMenu) withObject:nil afterDelay:0.0];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self setupPlaceholderMenu];
+        });
     }
     return self;
 }

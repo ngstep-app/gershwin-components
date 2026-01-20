@@ -39,7 +39,6 @@
 @property (nonatomic, assign) Display *display;
 @property (nonatomic, assign) Window rootWindow;
 @property (nonatomic, assign) Atom netActiveWindowAtom;
-@property (nonatomic, assign) Atom netClientListAtom;
 @property (nonatomic, strong) NSThread *x11Thread;
 @property (nonatomic, assign) BOOL shouldStopMonitoring;
 @property (nonatomic, assign) int dbusFileDescriptor;
@@ -49,10 +48,7 @@
 @property (nonatomic, strong) NSTimer *slideInAnimationTimer;
 @property (nonatomic, assign) NSTimeInterval slideInStartTime;
 @property (nonatomic, assign) CGFloat slideInStartY;
-// Trailing-edge debounce for _NET_CLIENT_LIST to prevent infinite loops
-@property (nonatomic, strong) NSTimer *clientListDebounceTimer;
-@property (nonatomic, assign) int pendingClientListEvents;
-@property (nonatomic, assign) int totalScans;
+@property (nonatomic, assign) NSTimeInterval lastActiveWindowScanTime;
 
 - (id)init;
 - (NSColor *)backgroundColor;

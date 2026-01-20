@@ -10,6 +10,7 @@
 #import <Foundation/Foundation.h>
 #import <X11/Xlib.h>
 #import <X11/keysym.h>
+#import <dispatch/dispatch.h>
 
 // Global variable to track X11 errors during key grabbing
 static BOOL x11_grab_error_occurred = NO;
@@ -983,9 +984,9 @@ static int handleX11GrabError(Display *display, XErrorEvent *event)
                             if (menuItemKey) {
                                 NSLog(@"X11ShortcutManager: Found matching shortcut for key: %@", keycodeModifierKey);
                                 // Trigger the menu action on the main thread
-                                [self performSelectorOnMainThread:@selector(triggerMenuActionForKey:)
-                                                       withObject:menuItemKey
-                                                    waitUntilDone:NO];
+                                dispatch_async(dispatch_get_main_queue(), ^{
+                                    [self triggerMenuActionForKey:menuItemKey];
+                                });
                             } else {
                                 NSLog(@"X11ShortcutManager: No matching shortcut found for key: %@", keycodeModifierKey);
                                 

@@ -6,6 +6,7 @@
 
 #import "StatusItemManager.h"
 #import "GNUstepGUI/GSTheme.h"
+#import <dispatch/dispatch.h>
 
 @implementation StatusItemManager
 
@@ -383,13 +384,17 @@
 {
     // Throttle relayout requests - coalesce multiple rapid calls into one
     if (![NSThread isMainThread]) {
-        [self performSelectorOnMainThread:@selector(requestRelayout) withObject:nil waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self requestRelayout];
+        });
         return;
     }
     
     // Cancel any pending relayout and schedule a new one after a short delay
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(performRelayout) object:nil];
-    [self performSelector:@selector(performRelayout) withObject:nil afterDelay:0.1];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self performRelayout];
+    });
 }
 
 - (void)performRelayout

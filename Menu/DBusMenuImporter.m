@@ -13,6 +13,7 @@
 #import "AppMenuWidget.h"
 #import "MenuCacheManager.h"
 #import <dbus/dbus.h>
+#import <dispatch/dispatch.h>
 
 // Forward declare the sendReply method to avoid header issues
 @interface GNUDBusConnection (Reply)
@@ -782,9 +783,9 @@
 {
     // Always process DBus traffic on the main thread and avoid re-entrancy
     if (![NSThread isMainThread]) {
-        [self performSelectorOnMainThread:@selector(processDBusMessages)
-                               withObject:nil
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self processDBusMessages];
+        });
         return;
     }
 
