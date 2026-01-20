@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <grp.h>
 #include <pwd.h>
+#include <sys/utsname.h>
 
 #pragma mark - PrinterInfo Implementation
 
@@ -234,6 +235,45 @@ static void deviceCallback(const char *device_class,
     return NO;
 }
 
+- (NSString *)getAdminGroupName
+{
+    struct utsname unameData;
+    if (uname(&unameData) == 0) {
+        NSString *sysname = [NSString stringWithUTF8String:unameData.sysname];
+        
+        // Linux uses lpadmin
+        if ([sysname isEqualToString:@"Linux"]) {
+            return [self findExistingGroupAmong:@[@"lpadmin", @"printadmin", @"cups"]];
+        }
+        // FreeBSD uses cups
+        else if ([sysname isEqualToString:@"FreeBSD"]) {
+            return [self findExistingGroupAmong:@[@"cups", @"lpadmin", @"printadmin"]];
+        }
+        // macOS might use different groups
+        else if ([sysname isEqualToString:@"Darwin"]) {
+            return [self findExistingGroupAmong:@[@"_lpadmin", @"lpadmin", @"cups", @"printadmin"]];
+        }
+        // For other systems, try common names in order
+        else {
+            return [self findExistingGroupAmong:@[@"lpadmin", @"cups", @"printadmin", @"print"]];
+        }
+    }
+    // If uname fails, default to lpadmin
+    return @"lpadmin";
+}
+
+- (NSString *)findExistingGroupAmong:(NSArray *)groupNames
+{
+    for (NSString *groupName in groupNames) {
+        struct group *grp = getgrnam([groupName UTF8String]);
+        if (grp) {
+            return groupName;
+        }
+    }
+    // Fallback to first in list if none exist
+    return [groupNames firstObject] ?: @"lpadmin";
+}
+
 - (BOOL)isUserInLpadminGroup
 {
     // Get current user's UID
@@ -246,10 +286,13 @@ static void deviceCallback(const char *device_class,
         return NO;
     }
     
-    // Get lpadmin group info
-    struct group *grp = getgrnam("lpadmin");
+    // Get admin group name for this system
+    NSString *adminGroupName = [self getAdminGroupName];
+    
+    // Get admin group info
+    struct group *grp = getgrnam([adminGroupName UTF8String]);
     if (!grp) {
-        NSLog(@"[Printers] Warning: lpadmin group not found on system");
+        NSLog(@"[Printers] Warning: %@ group not found on system", adminGroupName);
         return NO;
     }
     
@@ -263,12 +306,12 @@ static void deviceCallback(const char *device_class,
         getgroups(ngroups, groups);
     }
     
-    // Check if lpadmin group is in user's groups
+    // Check if admin group is in user's groups
     BOOL found = NO;
-    gid_t lpadmin_gid = grp->gr_gid;
+    gid_t admin_gid = grp->gr_gid;
     
     for (int i = 0; i < ngroups; i++) {
-        if (groups[i] == lpadmin_gid) {
+        if (groups[i] == admin_gid) {
             found = YES;
             break;
         }
@@ -285,14 +328,15 @@ static void deviceCallback(const char *device_class,
 {
     if (!userInLpadminGroup && cupsAvailable) {
         NSString *username = [NSString stringWithUTF8String:getenv("USER") ?: "current user"];
+        NSString *adminGroupName = [self getAdminGroupName];
         
         NSAlert *alert = [[NSAlert alloc] init];
         [alert setMessageText:@"Insufficient Privileges"];
         [alert setInformativeText:[NSString stringWithFormat:
-            @"You are not a member of the 'lpadmin' group.\n\n"
+            @"You are not a member of the '%@' group.\n\n"
             @"To manage printers, run this command and then log out and back in:\n\n"
-            @"sudo usermod -a -G lpadmin %@",
-            username]];
+            @"sudo usermod -a -G %@ %@",
+            adminGroupName, adminGroupName, username]];
         [alert addButtonWithTitle:@"OK"];
         [alert setAlertStyle:NSWarningAlertStyle];
         [alert runModal];
@@ -337,7 +381,8 @@ static void deviceCallback(const char *device_class,
         
         warningHeight = 25;
         privilegeWarningLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 362, 520, 18)];
-        [privilegeWarningLabel setStringValue:@"⚠️  Not in 'lpadmin' group - printer management disabled"];
+        NSString *adminGroupName = [self getAdminGroupName];
+        [privilegeWarningLabel setStringValue:[NSString stringWithFormat:@"Not in '%@' group - printer management disabled", adminGroupName]];
         [privilegeWarningLabel setBezeled:NO];
         [privilegeWarningLabel setDrawsBackground:NO];
         [privilegeWarningLabel setEditable:NO];
