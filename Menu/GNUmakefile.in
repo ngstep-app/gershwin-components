@@ -108,6 +108,10 @@ include $(GNUSTEP_MAKEFILES)/application.make
 install:: custom-install
 
 custom-install: $(APP_NAME).app
+	@echo "Building status item bundles..."
+	@(cd StatusItems/SystemMonitor && GNUSTEP_MAKEFILES=$(GNUSTEP_MAKEFILES) gmake all)
+	@(cd StatusItems/TimeDisplay && GNUSTEP_MAKEFILES=$(GNUSTEP_MAKEFILES) gmake all)
+	@echo "Status item bundles built successfully"
 	@if [ -n "$(DESTDIR)" ]; then \
 		echo "Installing $(APP_NAME) to $(DESTDIR)$(INSTALL_APPS_DIR)"; \
 		rm -rf $(DESTDIR)/System/Applications/$(APP_NAME).app || true; \
