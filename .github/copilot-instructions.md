@@ -1,4 +1,4 @@
-- Write GNUstep compatible code. Don't use features unavailable in GNUstep such as CoreFoundation, Grand Central Dispatch, etc.
+- Write GNUstep compatible code. Don't use features unavailable in GNUstep such as CoreFoundation.
 - Use commands from `$PATH`, not hardcoded paths.
 - Use `gmake`, not `make`.
 - We may be running on Linux or on FreeBSD.
@@ -20,4 +20,4 @@
 - Use `NSLocalizedString` for all user-facing strings to ensure they are localizable.
 - Unless specifically asked to do so never write test cases; instead, use the existing real applications to verify functionality.
 - NEVER write any .md or other summary files, unless specifically requested to do so. Never summarize successes.
-- The GCD dispatch functions aren't available.
+- The GCD dispatch functions are available and should be used.
