@@ -10,6 +10,7 @@
 #import <Foundation/NSConnection.h>
 #import <AppKit/NSMenu.h>
 #import <AppKit/NSMenuItem.h>
+#import <dispatch/dispatch.h>
 
 static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServer";
 
@@ -249,7 +250,9 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         if ([NSThread isMainThread]) {
             [self processMenuUpdateWithPayload:payload];
         } else {
-            [self performSelectorOnMainThread:@selector(processMenuUpdateWithPayload:) withObject:payload waitUntilDone:NO];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self processMenuUpdateWithPayload:payload];
+            });
         }
     }
     @catch (NSException *exception) {

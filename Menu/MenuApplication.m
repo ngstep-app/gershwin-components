@@ -17,6 +17,7 @@
 #import <unistd.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <dispatch/dispatch.h>
 
 // Global reference for cleanup in signal handlers
 static MenuController *g_controller = nil;
@@ -166,9 +167,9 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
 - (void)checkForExistingMenuApplicationAsync
 {
     // Run the check in a background thread to avoid blocking startup
-    [NSThread detachNewThreadSelector:@selector(checkForExistingMenuApplicationBackground)
-                             toTarget:self
-                           withObject:nil];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self checkForExistingMenuApplicationBackground];
+    });
 }
 
 - (void)checkForExistingMenuApplicationBackground
@@ -207,9 +208,9 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
             NSLog(@"MenuApplication: Found existing AppMenu.Registrar service - another menu application is running");
             
             // Show NSAlert to inform user on main thread
-            [self performSelectorOnMainThread:@selector(showMenuConflictAlert)
-                                   withObject:nil
-                                waitUntilDone:NO];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self showMenuConflictAlert];
+            });
         } else {
             NSLog(@"MenuApplication: No conflicting menu applications found");
         }

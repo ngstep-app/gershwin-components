@@ -10,6 +10,7 @@
 #import "X11ShortcutManager.h"
 #import <GNUstepGUI/GSTheme.h>
 #import <pthread.h>
+#import <dispatch/dispatch.h>
 
 // Singleton instance
 static ActionSearchController *_sharedController = nil;
@@ -232,7 +233,9 @@ static const CGFloat kMaxResultsShown = 15;
     [self.searchField selectText:nil];
 
     // Also enforce focus on the next runloop tick to handle edge cases where focus isn't accepted immediately
-    [self performSelector:@selector(_deferredFocusToSearchField) withObject:nil afterDelay:0.01];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.01 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self _deferredFocusToSearchField];
+    });
 
     // Some window managers are flaky about initial focus; attempt multiple re-assertions of
     // activation and first-responder to make sure typing works without an extra click.
@@ -241,8 +244,12 @@ static const CGFloat kMaxResultsShown = 15;
     [self.searchPanel makeFirstResponder:self.searchField];
     [self.searchField selectText:nil];
     // Additional deferred enforcement in case focus is stolen by the WM during stacking
-    [self performSelector:@selector(_deferredFocusToSearchField) withObject:nil afterDelay:0.05];
-    [self performSelector:@selector(_deferredFocusToSearchField) withObject:nil afterDelay:0.2];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self _deferredFocusToSearchField];
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self _deferredFocusToSearchField];
+    });
 
     // We rely on MenuApplication.sendEvent: to detect outside clicks and hide the search popup
     self.resultsMenuTracking = NO;
