@@ -81,7 +81,7 @@ Menu_RESOURCE_FILES = \
 
 # Libraries and frameworks - configured by configure script
 Menu_TOOL_LIBS += @DBUS_LIBS@ -lX11
-Menu_GUI_LIBS += -L/System/Library/Libraries -lgnustep-gui -lgnustep-base -lobjc
+Menu_GUI_LIBS += -L/System/Library/Libraries -lgnustep-gui -lgnustep-base -lobjc -ldispatch
 Menu_LDFLAGS += -Wl,--export-dynamic -L/System/Library/Libraries -Wl,-rpath,/System/Library/Libraries -Wl,--no-as-needed
 
 # Compiler flags - Force use of /System GNUstep and objc2 with ARC
