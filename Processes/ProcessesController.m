@@ -8,6 +8,7 @@
 #import <dirent.h>
 #import <pwd.h>
 #import <sys/stat.h>
+#include <stdint.h>
 #ifndef __linux__
 #import <sys/sysctl.h>
 #endif
@@ -33,13 +34,39 @@ static long getTotalSystemMemoryKB(void) {
         fclose(memFile);
     }
 #else
-    // BSD: Use sysctl
-    int mib[2] = {CTL_HW, HW_MEMSIZE};
-    unsigned long memsize;
+    // BSD and other Unix-like systems: prefer sysctlbyname for portability
+    uint64_t memsize = 0;
     size_t len = sizeof(memsize);
-    if (sysctl(mib, 2, &memsize, &len, NULL, 0) == 0) {
-        totalMemory = memsize / 1024; // Convert bytes to KB
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+    // Try several common sysctl names across BSDs/macOS
+    const char *names[] = { "hw.memsize", "hw.physmem", "hw.realmem", "hw.physmem64", NULL };
+    const char **n;
+    for (n = names; *n != NULL; n++) {
+        len = sizeof(memsize);
+        if (sysctlbyname(*n, &memsize, &len, NULL, 0) == 0 && len > 0) {
+            totalMemory = (long)(memsize / 1024);
+            break;
+        }
     }
+    if (totalMemory == 0) {
+#ifdef HW_MEMSIZE
+        int mib[2] = {CTL_HW, HW_MEMSIZE};
+        len = sizeof(memsize);
+        if (sysctl(mib, 2, &memsize, &len, NULL, 0) == 0) {
+            totalMemory = (long)(memsize / 1024);
+        }
+#endif
+    }
+#else
+#ifdef HW_MEMSIZE
+    int mib[2] = {CTL_HW, HW_MEMSIZE};
+    unsigned long memsize_ul = 0;
+    size_t len_ul = sizeof(memsize_ul);
+    if (sysctl(mib, 2, &memsize_ul, &len_ul, NULL, 0) == 0) {
+        totalMemory = memsize_ul / 1024;
+    }
+#endif
+#endif
 #endif
     
     return totalMemory;
