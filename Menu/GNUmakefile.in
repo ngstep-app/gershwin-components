@@ -109,8 +109,8 @@ install:: custom-install
 
 custom-install: $(APP_NAME).app
 	@echo "Building status item bundles..."
-	@(cd StatusItems/SystemMonitor && GNUSTEP_MAKEFILES=$(GNUSTEP_MAKEFILES) gmake all)
-	@(cd StatusItems/TimeDisplay && GNUSTEP_MAKEFILES=$(GNUSTEP_MAKEFILES) gmake all)
+	@(cd StatusItems/SystemMonitor && GNUSTEP_MAKEFILES=$(GNUSTEP_MAKEFILES) $(MAKE) all)
+	@(cd StatusItems/TimeDisplay && GNUSTEP_MAKEFILES=$(GNUSTEP_MAKEFILES) $(MAKE) all)
 	@echo "Status item bundles built successfully"
 	@if [ -n "$(DESTDIR)" ]; then \
 		echo "Installing $(APP_NAME) to $(DESTDIR)$(INSTALL_APPS_DIR)"; \
