@@ -41,7 +41,9 @@ Menu_OBJC_FILES = \
 	MenuCacheManager.m \
 	ActionSearch.m \
 	StatusItemManager.m \
-	StatusItemsView.m
+	StatusItemsView.m \
+	WindowMonitor.m \
+	AppMenuImporter.m
 
 # Header files
 Menu_HEADER_FILES = \
@@ -71,7 +73,9 @@ Menu_HEADER_FILES = \
 	ActionSearch.h \
 	StatusItemProvider.h \
 	StatusItemManager.h \
-	StatusItemsView.h
+	StatusItemsView.h \
+	WindowMonitor.h \
+	AppMenuImporter.h
 
 # Resources
 Menu_RESOURCE_FILES = \
