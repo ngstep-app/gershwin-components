@@ -752,13 +752,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // We no longer draw the application name text here
         // It has been replaced by the "Command" menu item
     
-    // Draw drop shadow below the menu bar (GNUstep compatible)
-    NSLog(@"AppMenuWidget: Drawing shadow");
-    NSRect shadowRect = NSMakeRect(0, [self bounds].size.height - 2, [self bounds].size.width, 6);
-    NSColor *shadowColor = [NSColor colorWithCalibratedWhite:0.0 alpha:0.18];
-    [shadowColor set];
-    NSRectFillUsingOperation(shadowRect, NSCompositeSourceOver);
-    
     NSLog(@"AppMenuWidget: drawRect completed");
 
 }
