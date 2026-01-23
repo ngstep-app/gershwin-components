@@ -22,7 +22,7 @@ BUNDLE_EXTENSION = .prefPane
 include $(GNUSTEP_MAKEFILES)/bundle.make
 
 # Build the network-helper as a standalone C program (no GNUstep dependency)
-# This allows it to run via sudo without needing GNUstep libraries in the path
+# This allows it to run with elevated privileges without needing GNUstep libraries in the path
 HELPER_SRC = network-helper.c
 HELPER_BIN = obj/network-helper
 
@@ -54,9 +54,9 @@ custom-install: $(BUNDLE_NAME)$(BUNDLE_EXTENSION) $(HELPER_BIN)
 	else \
 		echo "Installing $(BUNDLE_NAME) to $(PREF_INSTALL_DIR)"; \
 		mkdir -p $(PREF_INSTALL_DIR); \
-		sudo -A cp -R $(BUNDLE_NAME)$(BUNDLE_EXTENSION) $(PREF_INSTALL_DIR)/; \
+		cp -R $(BUNDLE_NAME)$(BUNDLE_EXTENSION) $(PREF_INSTALL_DIR)/; \
 		echo "Installing network-helper to $(HELPER_INSTALL_DIR)"; \
-		sudo -A cp $(HELPER_BIN) $(HELPER_INSTALL_DIR)/; \
+		cp $(HELPER_BIN) $(HELPER_INSTALL_DIR)/; \
 	fi
 
 # Override uninstall target to properly support DESTDIR
@@ -69,8 +69,8 @@ custom-uninstall:
 		rm -f $(DESTDIR)$(HELPER_INSTALL_DIR)/network-helper; \
 	else \
 		echo "Uninstalling $(BUNDLE_NAME) from $(PREF_INSTALL_DIR)"; \
-		sudo -A rm -rf $(PREF_INSTALL_DIR)/$(BUNDLE_NAME)$(BUNDLE_EXTENSION); \
-		sudo -A rm -f $(HELPER_INSTALL_DIR)/network-helper; \
+		rm -rf $(PREF_INSTALL_DIR)/$(BUNDLE_NAME)$(BUNDLE_EXTENSION); \
+		rm -f $(HELPER_INSTALL_DIR)/network-helper; \
 	fi
 
 # Override built-in install targets to do nothing

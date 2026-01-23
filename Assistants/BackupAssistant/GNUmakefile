@@ -60,13 +60,13 @@ custom-install: $(APP_NAME)$(EXEEXT)
 	else \
 		echo "Installing $(APP_NAME) to $(GNUSTEP_SYSTEM_APPS)"; \
 		mkdir -p $(GNUSTEP_SYSTEM_APPS); \
-		sudo -A cp -R $(APP_NAME).app $(GNUSTEP_SYSTEM_APPS)/; \
+		cp -R $(APP_NAME).app $(GNUSTEP_SYSTEM_APPS)/; \
 	fi
 
 # Create launch script for easy execution
 launch:
 	@echo '#!/bin/sh' > launch.sh
 	@echo 'cd "$(shell pwd)"' >> launch.sh
-	@echo 'sudo -A -E ./$(APP_NAME).app/$(APP_NAME)' >> launch.sh
+	@echo './$(APP_NAME).app/$(APP_NAME)' >> launch.sh
 	@chmod +x launch.sh
 	@echo "Created launch script: launch.sh"

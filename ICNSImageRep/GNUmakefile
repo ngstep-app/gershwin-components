@@ -17,5 +17,5 @@ include $(GNUSTEP_MAKEFILES)/bundle.make
 
 after-install::
 	@echo "Installing NSICNSImageRep bundle to /System/Library/Bundles/"
-	sudo -A mkdir -p /System/Library/Bundles
-	sudo -A cp -R NSICNSImageRep.bundle /System/Library/Bundles/
+		mkdir -p /System/Library/Bundles
+		cp -R NSICNSImageRep.bundle /System/Library/Bundles/

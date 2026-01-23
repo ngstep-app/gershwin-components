@@ -41,17 +41,17 @@ custom-install:
 			fi; \
 		done; \
 	else \
-		echo "Installing to system (requires sudo)"; \
+		echo "Installing to system (requires elevated privileges)"; \
 		for file in $(INSTALL_FILES); do \
 			if [ -f "$$file" ]; then \
 				dest_dir="$$(dirname "$$file" | sed 's|^files||')"; \
 				dest_file="$$(echo "$$file" | sed 's|^files||')"; \
 				echo "  Installing $$file to $$dest_file"; \
-				sudo -A mkdir -p "$$dest_dir"; \
-				sudo -A cp "$$file" "$$dest_file"; \
-				sudo -A chmod 644 "$$dest_file"; \
+				mkdir -p "$$dest_dir"; \
+				cp "$$file" "$$dest_file"; \
+				chmod 644 "$$dest_file"; \
 				if echo "$$file" | grep -q "/rc.d/"; then \
-					sudo -A chmod 755 "$$dest_file"; \
+					chmod 755 "$$dest_file"; \
 				fi; \
 			else \
 				echo "Warning: File $$file not found"; \
@@ -75,12 +75,12 @@ custom-uninstall:
 			fi; \
 		done; \
 	else \
-		echo "Uninstalling from system (requires sudo)"; \
+		echo "Uninstalling from system (requires elevated privileges)"; \
 		for file in $(INSTALL_FILES); do \
 			dest_file="$$(echo "$$file" | sed 's|^files||')"; \
 			if [ -f "$$dest_file" ]; then \
 				echo "  Removing $$dest_file"; \
-				sudo -A rm -f "$$dest_file"; \
+				rm -f "$$dest_file"; \
 			fi; \
 		done; \
 	fi

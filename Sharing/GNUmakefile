@@ -21,7 +21,7 @@ BUNDLE_EXTENSION = .prefPane
 include $(GNUSTEP_MAKEFILES)/bundle.make
 
 # Build the sharing-helper as a standalone C program (no GNUstep dependency)
-# This allows it to run via sudo without needing GNUstep libraries in the path
+# This allows it to run with elevated privileges without needing GNUstep libraries in the path
 HELPER_SRC = sharing-helper.c
 HELPER_BIN = obj/sharing-helper
 

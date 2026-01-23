@@ -34,8 +34,8 @@ install:: all
 		(cd .; tar chfX - /System/Library/Makefiles/tar-exclude-list $(APP_NAME).app) | (cd "$(DESTDIR)$(INSTALL_APPS_DIR)"; tar xf -); \
 	else \
 		echo "Installing to $(INSTALL_APPS_DIR)"; \
-		sudo -A /System/Library/Makefiles/mkinstalldirs "$(INSTALL_APPS_DIR)"; \
-		(cd .; tar chfX - /System/Library/Makefiles/tar-exclude-list $(APP_NAME).app) | sudo -A sh -c 'cd "$(INSTALL_APPS_DIR)" && tar xf -'; \
+		/System/Library/Makefiles/mkinstalldirs "$(INSTALL_APPS_DIR)"; \
+		(cd .; tar chfX - /System/Library/Makefiles/tar-exclude-list $(APP_NAME).app) | sh -c 'cd "$(INSTALL_APPS_DIR)" && tar xf -'; \
 	fi
 	@echo "Installing rc.d script..."
 	@if [ -n "$(DESTDIR)" ]; then \
@@ -45,7 +45,7 @@ install:: all
 	else \
 		if [ -d "/usr/local/etc/rc.d" ]; then \
 			echo "Installing to /usr/local/etc/rc.d/loginwindow (system install)"; \
-			sudo -A install -m 555 loginwindow /usr/local/etc/rc.d/loginwindow; \
+			install -m 555 loginwindow /usr/local/etc/rc.d/loginwindow; \
 		else \
 			echo "/usr/local/etc/rc.d does not exist, skipping rc.d script install."; \
 		fi; \

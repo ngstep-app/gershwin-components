@@ -80,16 +80,16 @@ ifeq ($(HAVE_DNS_SD_HEADER),yes)
     ADDITIONAL_OBJCFLAGS += -DHAVE_DNS_SD=1
   else
     $(error libdns_sd not found. Please install it:\
-      \n  - Debian/Ubuntu: sudo apt-get install libavahi-compat-libdnssd-dev\
-      \n  - Fedora/RHEL: sudo dnf install avahi-compat-libdns_sd-devel\
-      \n  - FreeBSD/OpenBSD: sudo pkg install mDNSResponder\
+      \n  - Debian/Ubuntu: apt-get install libavahi-compat-libdnssd-dev\
+      \n  - Fedora/RHEL: dnf install avahi-compat-libdns_sd-devel\
+      \n  - FreeBSD/OpenBSD: pkg install mDNSResponder\
       \n  - macOS: Should be included in System Framework)
   endif
 else
   $(error dns_sd.h header not found. Please install libdns_sd development files:\
-    \n  - Debian/Ubuntu: sudo apt-get install libavahi-compat-libdnssd-dev\
-    \n  - Fedora/RHEL: sudo dnf install avahi-compat-libdns_sd-devel\
-    \n  - FreeBSD/OpenBSD: sudo pkg install mDNSResponder\
+    \n  - Debian/Ubuntu: apt-get install libavahi-compat-libdnssd-dev\
+    \n  - Fedora/RHEL: dnf install avahi-compat-libdns_sd-devel\
+    \n  - FreeBSD/OpenBSD: pkg install mDNSResponder\
     \n  - macOS: Xcode Command Line Tools (xcode-select --install))
 endif
 

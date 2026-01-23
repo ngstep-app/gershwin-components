@@ -22,8 +22,8 @@ custom-install: $(APP_NAME).app
 		echo "Installing $(APP_NAME) to $(GNUSTEP_SYSTEM_APPS)"; \
 		mkdir -p $(GNUSTEP_SYSTEM_APPS); \
 		mkdir -p $(GNUSTEP_SYSTEM_TOOLS); \
-		sudo -A cp -R $(APP_NAME).app $(GNUSTEP_SYSTEM_APPS)/; \
-		sudo -A ln -sf $(GNUSTEP_SYSTEM_APPS)/$(APP_NAME).app/$(APP_NAME) $(GNUSTEP_SYSTEM_TOOLS)/$(APP_NAME); \
+		cp -R $(APP_NAME).app $(GNUSTEP_SYSTEM_APPS)/; \
+		ln -sf $(GNUSTEP_SYSTEM_APPS)/$(APP_NAME).app/$(APP_NAME) $(GNUSTEP_SYSTEM_TOOLS)/$(APP_NAME); \
 	fi
 
 # Override uninstall target to properly support DESTDIR
@@ -36,8 +36,8 @@ custom-uninstall:
 		rm -f $(DESTDIR)$(GNUSTEP_SYSTEM_TOOLS)/$(APP_NAME); \
 	else \
 		echo "Uninstalling $(APP_NAME) from $(GNUSTEP_SYSTEM_APPS)"; \
-		sudo -A rm -rf $(GNUSTEP_SYSTEM_APPS)/$(APP_NAME).app; \
-		sudo -A rm -f $(GNUSTEP_SYSTEM_TOOLS)/$(APP_NAME); \
+		rm -rf $(GNUSTEP_SYSTEM_APPS)/$(APP_NAME).app; \
+		rm -f $(GNUSTEP_SYSTEM_TOOLS)/$(APP_NAME); \
 	fi
 
 # Override built-in install targets to do nothing

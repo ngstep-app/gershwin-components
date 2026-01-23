@@ -70,7 +70,7 @@ custom-install: $(FRAMEWORK_NAME).framework
 	else \
 		echo "Installing $(FRAMEWORK_NAME) to $(FRAMEWORK_INSTALL_DIR)"; \
 		mkdir -p $(FRAMEWORK_INSTALL_DIR); \
-		sudo -A cp -R $(FRAMEWORK_NAME).framework $(FRAMEWORK_INSTALL_DIR)/; \
+		cp -R $(FRAMEWORK_NAME).framework $(FRAMEWORK_INSTALL_DIR)/; \
 	fi
 
 # Override uninstall target to properly support DESTDIR
@@ -82,7 +82,7 @@ custom-uninstall:
 		rm -rf $(DESTDIR)$(FRAMEWORK_INSTALL_DIR)/$(FRAMEWORK_NAME).framework; \
 	else \
 		echo "Uninstalling $(FRAMEWORK_NAME) from $(FRAMEWORK_INSTALL_DIR)"; \
-		sudo -A rm -rf $(FRAMEWORK_INSTALL_DIR)/$(FRAMEWORK_NAME).framework; \
+		rm -rf $(FRAMEWORK_INSTALL_DIR)/$(FRAMEWORK_NAME).framework; \
 	fi
 
 # Override built-in install targets to do nothing

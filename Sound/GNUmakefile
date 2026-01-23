@@ -34,7 +34,7 @@ custom-install: $(BUNDLE_NAME)$(BUNDLE_EXTENSION)
 	else \
 		echo "Installing $(BUNDLE_NAME) to $(PREF_INSTALL_DIR)"; \
 		mkdir -p $(PREF_INSTALL_DIR); \
-		sudo -A cp -R $(BUNDLE_NAME)$(BUNDLE_EXTENSION) $(PREF_INSTALL_DIR)/; \
+		cp -R $(BUNDLE_NAME)$(BUNDLE_EXTENSION) $(PREF_INSTALL_DIR)/; \
 	fi
 
 uninstall:: custom-uninstall
@@ -45,5 +45,5 @@ custom-uninstall:
 		rm -rf $(DESTDIR)$(PREF_INSTALL_DIR)/$(BUNDLE_NAME)$(BUNDLE_EXTENSION); \
 	else \
 		echo "Removing $(BUNDLE_NAME) from $(PREF_INSTALL_DIR)"; \
-		sudo -A rm -rf $(PREF_INSTALL_DIR)/$(BUNDLE_NAME)$(BUNDLE_EXTENSION); \
+		rm -rf $(PREF_INSTALL_DIR)/$(BUNDLE_NAME)$(BUNDLE_EXTENSION); \
 	fi
