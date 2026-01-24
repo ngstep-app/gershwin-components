@@ -5,7 +5,7 @@
  */
 
 #import <AppKit/AppKit.h>
-#import "../ItemFlowView.h"
+#import <ItemFlow/ItemFlow.h>
 
 @interface AppDelegate : NSObject <NSApplicationDelegate, ItemFlowViewDataSource, ItemFlowViewDelegate>
 @end

@@ -17,8 +17,13 @@
 #define CAMERA_Y 0.3f
 #define REFLECTION_OPACITY 0.4f
 
+// Track indices we've logged with missing textures to avoid spamming logs
+static NSMutableIndexSet *gItemFlowMissingLogged = nil;
+static dispatch_once_t onceTokenMissingLogged;
+
 @interface ItemFlowView () {
     NSMutableArray *_textures; 
+    GLuint _placeholderTexID;
     CGFloat _currentPosition;
     CGFloat _targetPosition;
     NSTimer *_animationTimer;
@@ -47,13 +52,21 @@
         _textures = [NSMutableArray array];
         _currentPosition = 0.0f;
         _targetPosition = 0.0f;
+        dispatch_once(&onceTokenMissingLogged, ^{
+            gItemFlowMissingLogged = [[NSMutableIndexSet alloc] init];
+        });
     }
     return self;
+
+// In drawItemAtIndex we'll detect missing textures and log them once per index.
 }
 
 - (void)dealloc {
     [_animationTimer invalidate];
     _animationTimer = nil;
+    if (_placeholderTexID != 0) {
+        glDeleteTextures(1, &_placeholderTexID);
+    }
 }
 
 - (NSUInteger)selectedIndex {
@@ -124,6 +137,17 @@
     
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Black background
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+
+    // Create a plain grey placeholder texture
+    glGenTextures(1, &_placeholderTexID);
+    glBindTexture(GL_TEXTURE_2D, _placeholderTexID);
+    GLubyte data[4*4*4]; // 4x4 RGBA
+    for (int i = 0; i < 4*4*4; i+=4) {
+        data[i] = 180; data[i+1] = 180; data[i+2] = 180; data[i+3] = 255; // Grey
+    }
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 }
 
 - (void)reshape {
@@ -246,7 +270,7 @@
     glRotatef(rotateY, 0.0f, 1.0f, 0.0f);
     
     GLuint texID = [_textures[index] unsignedIntValue];
-    glBindTexture(GL_TEXTURE_2D, texID ? texID : 0);
+    glBindTexture(GL_TEXTURE_2D, texID ? texID : _placeholderTexID);
     
     // 1. Draw Reflection w/ Gradient Alpha
     // Save state
@@ -294,7 +318,7 @@
 
 - (GLuint)createTextureFromImage:(NSImage *)image {
     if (!image) return 0;
-    
+
     NSBitmapImageRep *bitmap = nil;
     for (NSImageRep *rep in [image representations]) {
         if ([rep isKindOfClass:[NSBitmapImageRep class]]) {
@@ -303,30 +327,51 @@
         }
     }
     if (!bitmap) {
-        bitmap = [NSBitmapImageRep imageRepWithData:[image TIFFRepresentation]];
+        NSData *tiff = [image TIFFRepresentation];
+        if (tiff) {
+            bitmap = [NSBitmapImageRep imageRepWithData:tiff];
+            NSLog(@"[ItemFlow] createTextureFromImage: created bitmap rep from TIFF (bytes=%tu)", tiff ? tiff.length : 0);
+        }
     }
-    if (!bitmap) return 0;
-    
-    GLuint texID;
+    if (!bitmap) {
+        NSLog(@"[ItemFlow] createTextureFromImage: failed to obtain NSBitmapImageRep for image size=%@", NSStringFromSize([image size]));
+        return 0;
+    }
+
+    GLuint texID = 0;
     glGenTextures(1, &texID);
     glBindTexture(GL_TEXTURE_2D, texID);
-    
+
     // Linear filtering ensures it looks okay when shrunk/rotated
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    
+
     // Clamp to edge to avoid border artifacts
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    
+
     unsigned char *data = [bitmap bitmapData];
+    if (!data) {
+        NSLog(@"[ItemFlow] createTextureFromImage: bitmap has no raw data, attempting to use TIFFRepresentation fallback");
+        NSData *tiff = [image TIFFRepresentation];
+        if (tiff) {
+            NSBitmapImageRep *b2 = [NSBitmapImageRep imageRepWithData:tiff];
+            data = [b2 bitmapData];
+            bitmap = b2;
+        }
+    }
     if (data) {
         GLenum format = [bitmap hasAlpha] ? GL_RGBA : GL_RGB;
-        // pixelWide/High are NSInteger
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)[bitmap pixelsWide], (GLsizei)[bitmap pixelsHigh],
+        NSInteger w = [bitmap pixelsWide];
+        NSInteger h = [bitmap pixelsHigh];
+        NSLog(@"[ItemFlow] createTextureFromImage: uploading texture w=%ld h=%ld alpha=%d", (long)w, (long)h, [bitmap hasAlpha]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)w, (GLsizei)h,
                     0, format, GL_UNSIGNED_BYTE, data);
+    } else {
+        NSLog(@"[ItemFlow] createTextureFromImage: no pixel data available for image size=%@", NSStringFromSize([image size]));
     }
-    
+
+    NSLog(@"[ItemFlow] createTextureFromImage: created texID=%u", (unsigned)texID);
     return texID;
 }
 
@@ -334,16 +379,15 @@
     [[self openGLContext] makeCurrentContext];
     for (NSNumber *texNum in _textures) {
         GLuint t = [texNum unsignedIntValue];
-        glDeleteTextures(1, &t);
+        if (t != 0) glDeleteTextures(1, &t);
     }
     [_textures removeAllObjects];
     
     if (dataSource) {
         NSUInteger count = [dataSource numberOfItemsInItemFlowView:self];
+        NSLog(@"[ItemFlow] reloadData: count=%tu (fast path)", count);
         for (NSUInteger i = 0; i < count; i++) {
-            NSImage *img = [dataSource itemFlowView:self imageAtIndex:i];
-            GLuint t = img ? [self createTextureFromImage:img] : 0;
-            [_textures addObject:@(t)];
+            [_textures addObject:@(0)];
         }
     }
     
@@ -356,6 +400,66 @@
         _currentPosition = 0;
     }
     
+    [self setNeedsDisplay:YES];
+}
+
+- (void)updateTexturesForIndices:(NSIndexSet *)indices {
+    if (!indices || indices.count == 0) return;
+
+    [[self openGLContext] makeCurrentContext];
+
+    NSUInteger itemCount = _textures.count;
+    if (itemCount == 0 && dataSource) {
+        itemCount = [dataSource numberOfItemsInItemFlowView:self];
+        while (_textures.count < itemCount) [_textures addObject:@(0)];
+    }
+
+    __block int uploadsThisTick = 0;
+    static NSTimeInterval lastTick = 0;
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    if (now - lastTick > 0.15) {
+        uploadsThisTick = 0;
+        lastTick = now;
+    }
+
+    NSMutableIndexSet *pendingIndices = [NSMutableIndexSet indexSet];
+
+    [indices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        if (idx >= _textures.count) return;
+
+        NSImage *img = [dataSource itemFlowView:self imageAtIndex:idx];
+        if (!img) {
+            // No image available yet from data source
+            return;
+        }
+
+        // Check if we already have a texture here that is NOT the placeholder
+        GLuint currentTex = [_textures[idx] unsignedIntValue];
+        if (currentTex != 0) {
+            // We already have a real texture (presumably). 
+            // In a more complex app we'd check if it changed, but for now skip.
+            return;
+        }
+
+        if (uploadsThisTick >= 2) {
+            [pendingIndices addIndex:idx];
+            return;
+        }
+
+        GLuint t = [self createTextureFromImage:img];
+        if (t != 0) {
+            _textures[idx] = @(t);
+            uploadsThisTick++;
+            NSLog(@"[ItemFlow] updateTexturesForIndices: assigned texture=%u for index=%tu", (unsigned)t, idx);
+        }
+    }];
+
+    if (pendingIndices.count > 0) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(100 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+            [self updateTexturesForIndices:pendingIndices];
+        });
+    }
+
     [self setNeedsDisplay:YES];
 }
 

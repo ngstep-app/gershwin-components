@@ -26,4 +26,6 @@
 
 - (void)reloadData;
 
+- (void)updateTexturesForIndices:(NSIndexSet *)indices;
+
 @end
