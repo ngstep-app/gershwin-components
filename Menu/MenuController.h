@@ -42,6 +42,7 @@
 @property (nonatomic, assign) NSTimeInterval lastProcessedTime;
 @property (nonatomic, assign) int dbusFileDescriptor;
 @property (nonatomic, strong) NSFileHandle *dbusFileHandle;
+@property (nonatomic, strong) NSTimer *dbusPollingTimer;
 @property (nonatomic, assign) Display *strutDisplay;
 @property (nonatomic, assign) Window strutWindow;
 @property (nonatomic, strong) NSTimer *slideInAnimationTimer;

@@ -165,21 +165,9 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
             [self checkActiveWindow];
         } else if (event.type == DestroyNotify || event.type == UnmapNotify) {
             Window affected = (event.type == DestroyNotify) ? event.xdestroywindow.window : event.xunmap.window;
-            if (affected != 0) {
-                // Core fix: immediately clear current active window track if any window is destroyed/unmapped
-                if (affected == _currentActiveWindow) {
-                    NSLog(@"WindowMonitor: Active window %lu destroyed/unmapped - clearing internal state", affected);
-                    _currentActiveWindow = 0;
-                }
-
-                // Notify that a window was lost, providing the windowId that was lost.
-                // We use performSelectorOnMainThread because GCD main queue might not be pumped in all environments.
-                NSDictionary *userInfo = @{ @"windowId": @(0), @"lostWindowId": @(affected) };
-                [self performSelectorOnMainThread:@selector(_postWindowNotification:)
-                                       withObject:userInfo
-                                    waitUntilDone:NO];
-
-                // Proactively re-check active window from root property in case it changed due to this window closing
+            if (affected != 0 && affected == _currentActiveWindow) {
+                // Window that was active is now gone - check what the new active window is
+                NSLog(@"WindowMonitor: Active window %lu destroyed/unmapped - checking for new active window", affected);
                 [self checkActiveWindow];
             }
         }
@@ -204,13 +192,19 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         XFree(prop);
     }
 
+    // Same logic as checkActiveWindow - trust WM unless window is explicitly unmapped
     if (newActiveWindow != 0) {
         XWindowAttributes attrs;
-        if (!XGetWindowAttributes(_display, (Window)newActiveWindow, &attrs) ||
-            attrs.map_state == IsUnmapped) {
+        BOOL canGetAttrs = XGetWindowAttributes(_display, (Window)newActiveWindow, &attrs);
+        
+        if (canGetAttrs && attrs.map_state == IsUnmapped) {
+            NSLog(@"WindowMonitor: Initial active window %lu is unmapped", newActiveWindow);
             newActiveWindow = 0;
-        } else {
-            // Select for destruction and unmap events on the client window itself
+        } else if (!canGetAttrs) {
+            NSLog(@"WindowMonitor: Cannot get attributes for initial window %lu - trusting WM", newActiveWindow);
+        }
+        
+        if (newActiveWindow != 0) {
             XSelectInput(_display, (Window)newActiveWindow, StructureNotifyMask | PropertyChangeMask);
         }
     }
@@ -243,14 +237,28 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         XFree(prop);
     }
 
+    // FIX: Don't report window==0 unless X11 truly says there's no active window
+    // If XGetWindowProperty returns a window ID, trust it - even if we can't query its attributes
+    // Window attributes can fail during WM operations (reparenting, etc) but the window is still valid
     if (newActiveWindow != 0) {
         XWindowAttributes attrs;
-        if (!XGetWindowAttributes(_display, (Window)newActiveWindow, &attrs) ||
-            attrs.map_state == IsUnmapped) {
+        // Try to get attributes, but don't reject the window if this fails
+        // The window manager set this as active, so trust it
+        BOOL canGetAttrs = XGetWindowAttributes(_display, (Window)newActiveWindow, &attrs);
+        
+        if (canGetAttrs && attrs.map_state == IsUnmapped) {
+            // Window is explicitly unmapped - this is a valid "no window" state
+            NSLog(@"WindowMonitor: Active window %lu is unmapped - treating as no active window", newActiveWindow);
             newActiveWindow = 0;
-        } else {
-            // Select for destruction and unmap events on the client window itself
-            // to ensure we catch them instantly even in reparenting WMs.
+        } else if (!canGetAttrs) {
+            // Can't get attributes - might be during WM operation
+            // Only ignore if we get a BadWindow error, otherwise keep it
+            // For now, trust the window manager's report
+            NSLog(@"WindowMonitor: Cannot get attributes for active window %lu - trusting WM report anyway", newActiveWindow);
+        }
+        
+        // Select for events on this window if we can
+        if (newActiveWindow != 0) {
             XSelectInput(_display, (Window)newActiveWindow, StructureNotifyMask | PropertyChangeMask);
         }
     }
@@ -263,6 +271,9 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         [self performSelectorOnMainThread:@selector(_postWindowNotification:)
                                withObject:userInfo
                             waitUntilDone:NO];
+    } else {
+        // Window hasn't changed - suppress notification to avoid spam
+        // This can happen during WM operations or when we check after a window closes
     }
 }
 

@@ -92,6 +92,25 @@
     }
 }
 
+- (void)pollDBusMessages:(NSTimer *)timer
+{
+    // Always handle DBus traffic on the main thread
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self pollDBusMessages:timer];
+        });
+        return;
+    }
+    
+    // Process any pending D-Bus messages
+    @try {
+        [[MenuProtocolManager sharedManager] processDBusMessages];
+    }
+    @catch (NSException *exception) {
+        NSLog(@"MenuController: Exception polling DBus messages: %@", exception);
+    }
+}
+
 - (id)init
 {
     NSLog(@"MenuController: Initializing controller...");
@@ -498,6 +517,15 @@
         } else {
             NSLog(@"MenuController: Failed to get DBus file descriptor");
         }
+        
+        // Set up timer-based D-Bus polling as a reliable fallback
+        // This ensures D-Bus messages are processed even if file descriptor monitoring fails
+        self.dbusPollingTimer = [NSTimer scheduledTimerWithTimeInterval:0.05 // Poll every 50ms
+                                                                  target:self
+                                                                selector:@selector(pollDBusMessages:)
+                                                                userInfo:nil
+                                                                 repeats:YES];
+        NSLog(@"MenuController: D-Bus polling timer set up (50ms interval)");
     }
     
     // Set the app menu widget reference
@@ -618,20 +646,8 @@ self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
     self.lastProcessedWindowId = windowId;
     self.lastProcessedTime = [[NSDate date] timeIntervalSince1970];
 
-    // If there is no active window (0),
-    // clear and hide the menu immediately to avoid showing stale menus.
-    if (windowId == 0) {
-        NSLog(@"MenuController: Active window is nil (0x0) - clearing menu and hiding view");
-        if (self.appMenuWidget) {
-            [self.appMenuWidget clearMenuAndHideView];
-            // Record last cleared info
-            self.lastClearedWindowId = windowId;
-            self.lastClearedTime = [[NSDate date] timeIntervalSince1970];
-            self.lastClearSuppressUntil = 0; // Disable suppression
-        }
-        return;
-    }
-
+    // Always use updateForActiveWindowId - it has proper anti-flicker handling
+    // including grace periods for windowId == 0 (transient no-window states)
     NSLog(@"MenuController: Active window changed (notification) to 0x%lx", windowId);
 
     if (self.appMenuWidget) {
@@ -664,7 +680,26 @@ self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
 
         NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
 
-        // If the shown window is no longer valid or no longer mapped, clear and hide the menu
+        // CRITICAL FIX: Only validate the shown window if it's still the active window
+        // If we've switched to a different window, don't clear the menu for the OLD window
+        if (activeWindow != 0 && shownWindow != activeWindow) {
+            // We've switched to a different window - the shown window ID is stale
+            // Don't validate it, let the normal window change handling take care of it
+            return;
+        }
+
+        // CRITICAL: If shown window IS the active window AND we have a menu for it, DON'T clear it!
+        // The window manager says this is the active window, so trust that it exists
+        // Only clear if we have NO menu (meaning menu failed to load/register)
+        if (shownWindow == activeWindow && self.appMenuWidget.currentMenu != nil) {
+            // We have a menu for the current active window - keep it!
+            // Don't validate with X11 calls that might fail during WM operations
+            return;
+        }
+
+        // Only validate and potentially clear if:
+        // 1. Window is shown but we have no menu for it, OR
+        // 2. Active window is 0 (no window focused)
         if (![MenuUtils isWindowValid:shownWindow] || ![MenuUtils isWindowMapped:shownWindow]) {
             NSLog(@"MenuController: Watchdog detected invalid/closed window 0x%lx - clearing menu", shownWindow);
             [self.appMenuWidget clearMenuAndHideView];

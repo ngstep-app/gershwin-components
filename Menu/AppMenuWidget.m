@@ -125,7 +125,10 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 @end
 
 @interface AppMenuWidget ()
-@property (nonatomic, strong) NSTimer *clearMenuTimer;
+@property (nonatomic, assign) pid_t lastWindowPID;
+@property (nonatomic, assign) NSTimeInterval lastWindowSwitchTime;
+@property (nonatomic, strong) NSTimer *noMenuGracePeriodTimer;
+@property (nonatomic, assign) unsigned long pendingClearWindowId;
 
 - (unsigned long)findDesktopWindowId;
 - (BOOL)displayDesktopMenuIfAvailableWithReason:(NSString *)reason;
@@ -316,11 +319,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // If we focus on the menu bar or its components, we want to keep the current app menu.
     if (activeWindow != 0 && [NSApp windowWithWindowNumber:activeWindow] != nil) {
         NSLog(@"AppMenuWidget: Focus is on Menu app itself (0x%lx) - ignoring update to preserve current menu", activeWindow);
-        // Cancel any pending clear, as we have "valid" focus (on ourselves)
-        if (self.clearMenuTimer) {
-            [self.clearMenuTimer invalidate];
-            self.clearMenuTimer = nil;
-        }
         return;
     }
 
@@ -332,34 +330,42 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         if (oldPid != 0 && oldPid == newPid) {
             NSLog(@"AppMenuWidget: Focus changed within same PID %d (0x%lx -> 0x%lx) - preserving current menu", (int)newPid, self.currentWindowId, activeWindow);
             self.currentWindowId = activeWindow;
-            // Cancel any pending clear
-            if (self.clearMenuTimer) {
-                [self.clearMenuTimer invalidate];
-                self.clearMenuTimer = nil;
-            }
             return;
         }
     }
 
-    // If no active window (0), do not attempt a Desktop/Workspace fallback (no built-in fallbacks)
+    // New anti-flicker mechanism: If no active window (0), check if within 0.2s we might switch 
+    // to a window of the same PID. If so, don't clear the menu yet.
     if (activeWindow == 0) {
-        // Debounce: don't clear immediately. Wait 0.2s.
-        if (self.clearMenuTimer && [self.clearMenuTimer isValid]) {
-             return; // Already scheduled
+        NSTimeInterval currentTime = [NSDate timeIntervalSinceReferenceDate];
+        NSTimeInterval timeSinceLastSwitch = currentTime - self.lastWindowSwitchTime;
+        
+        // ANTI-FLICKER: Preserve menu for 0.2s grace period when window becomes 0
+        // This handles:
+        // 1. Rapid window switches (closing one window while opening another)
+        // 2. Transient X11 "no active window" states during window manager operations
+        // 3. Window manager delays in reporting the actual active window
+        if (timeSinceLastSwitch < 0.2 && self.lastWindowPID != 0) {
+            NSLog(@"AppMenuWidget: Active window is 0 but within 0.2s grace period (%.3fs) - preserving menu for PID %d", 
+                  timeSinceLastSwitch, (int)self.lastWindowPID);
+            return;
         }
         
-        // Only schedule if we actually have something to clear
-        if (self.currentWindowId != 0 || self.menuView.menu != nil) {
-            NSLog(@"AppMenuWidget: Active window is 0 - scheduling clear in 0.2s (anti-flicker)");
-            self.clearMenuTimer = [NSTimer scheduledTimerWithTimeInterval:0.2 target:self selector:@selector(clearMenuTimerFired:) userInfo:nil repeats:NO];
+        // If we have a menu and this is the first time seeing window==0, preserve it briefly
+        // This handles cases where lastWindowSwitchTime is very old or zero
+        if (self.currentMenu != nil && self.currentWindowId != 0) {
+            NSLog(@"AppMenuWidget: Active window is 0, have current menu from window %lu - preserving briefly", self.currentWindowId);
+            // Update timestamp so subsequent calls within 0.2s will use the grace period above
+            self.lastWindowSwitchTime = currentTime;
+            return;
         }
+        
+        // Otherwise, clear the menu (past grace period and no current menu to preserve)
+        NSLog(@"AppMenuWidget: Active window is 0 and past grace period (%.3fs) - clearing menu", timeSinceLastSwitch);
+        [self clearMenuAndHideView];
+        self.lastWindowPID = 0;
+        self.lastWindowSwitchTime = currentTime;
         return;
-    }
-    
-    // Valid window: Cancel any pending clear
-    if (self.clearMenuTimer) {
-        [self.clearMenuTimer invalidate];
-        self.clearMenuTimer = nil;
     }
 
     BOOL shouldUpdate = (activeWindow != self.currentWindowId);
@@ -395,6 +401,11 @@ static int handleX11Error(Display *display, XErrorEvent *event)
                              ![self.currentApplicationName isEqualToString:newAppName];
 
         self.currentWindowId = activeWindow;
+        
+        // Track PID and timestamp for the new anti-flicker mechanism
+        pid_t newPid = [MenuUtils getWindowPID:activeWindow];
+        self.lastWindowPID = newPid;
+        self.lastWindowSwitchTime = [NSDate timeIntervalSinceReferenceDate];
 
         // Use @try/@catch to prevent crashes during menu setup for invalid/transitioning windows
         @try {
@@ -411,14 +422,37 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     }
 }
 
-- (void)clearMenuTimerFired:(NSTimer *)timer
+- (void)noMenuGracePeriodExpired:(NSTimer *)timer
 {
-    // Re-check: if active window is still 0 (or invalid), clear.
-    // We can't easily check actual active window here without X11 call, 
-    // but the fact the timer fired means no new valid window canceled it.
-    NSLog(@"AppMenuWidget: No active window persist - clearing menu");
+    NSNumber *windowIdNum = [timer userInfo];
+    unsigned long windowId = [windowIdNum unsignedLongValue];
+    
+    self.noMenuGracePeriodTimer = nil;
+    self.pendingClearWindowId = 0;
+    
+    NSLog(@"AppMenuWidget: Grace period expired for window %lu - checking if menu now available", windowId);
+    
+    // CRITICAL: Only clear menu if we're still on the same window
+    // If we've switched to a different window, this timer is stale
+    if (self.currentWindowId != windowId) {
+        NSLog(@"AppMenuWidget: Window changed from %lu to %lu - ignoring stale grace period timer", windowId, self.currentWindowId);
+        return;
+    }
+    
+    // Check if this window now has a menu registered
+    if ([self.protocolManager hasMenuForWindow:windowId]) {
+        NSLog(@"AppMenuWidget: Window %lu now has menu - loading it", windowId);
+        // Trigger a refresh to load the newly available menu
+        [self updateForActiveWindowId:windowId];
+        return;
+    }
+    
+    // Still no menu after grace period AND still on same window - clear the old menu
+    NSLog(@"AppMenuWidget: Window %lu still has no menu after grace period - clearing", windowId);
+    if ([self displayDesktopMenuIfAvailableWithReason:@"grace period expired, no menu"]) {
+        return;
+    }
     [self clearMenuAndHideView];
-    self.clearMenuTimer = nil;
 }
 
 - (unsigned long)findDesktopWindowId
@@ -462,6 +496,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (void)clearMenuAndHideView
 {
+    // Cancel any pending grace period timer
+    if (self.noMenuGracePeriodTimer) {
+        [self.noMenuGracePeriodTimer invalidate];
+        self.noMenuGracePeriodTimer = nil;
+        self.pendingClearWindowId = 0;
+    }
+    
     [self clearMenu:YES];
     self.currentMenu = nil;
     self.currentWindowId = 0; // Ensure we stop showing menus for this window
@@ -478,34 +519,29 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (void)clearMenu:(BOOL)shouldUnregisterShortcuts
 {
-    // Only unregister shortcuts when switching to a different application
-    if (shouldUnregisterShortcuts) {
-        NSLog(@"AppMenuWidget: Unregistering only non-direct (DBus) shortcuts for application change");
-        [[X11ShortcutManager sharedManager] unregisterNonDirectShortcuts];
-    } else {
-        NSLog(@"AppMenuWidget: Keeping shortcuts registered (same application)");
-    }
+    // ANTI-FLICKER: Shortcut management is now handled in loadMenu based on actual PID comparison
+    // This parameter is kept for API compatibility but ignored
+    (void)shouldUnregisterShortcuts;
     
-    // Core fix: Remove "waiting" state and anti-flickering.
-    // When clearing, we should actually clear NOW.
+    // Clear waiting state
     self.isWaitingForMenu = NO;
-    NSLog(@"AppMenuWidget: Clearing menu immediately (anti-flicker disabled)");
+    NSLog(@"AppMenuWidget: Clearing menu state");
     
     self.currentApplicationName = nil;
-    // Remove observer and clear any cached reference to the system submenu when clearing the menu
+    
+    // Remove observer and clear any cached reference to the system submenu
     if (self.systemMenu) {
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
         [nc removeObserver:self name:NSMenuDidBeginTrackingNotification object:self.systemMenu];
         self.systemMenu = nil;
     }
     
-    // Always clear visual states immediately
+    // Clear visual states
     self.currentMenu = nil;
     self.currentWindowId = 0;
     self.needsRedraw = YES;
     
     if (self.menuView) {
-        // Clear out the menu view completely
         [self.menuView setMenu:nil];
         [self.menuView setHidden:YES];
     }
@@ -528,7 +564,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         return;
     }
     
-    [self clearMenu:isDifferentApp];
+    // ANTI-FLICKER: Don't clear the old menu yet - keep it visible while loading the new one
+    // We'll clear it after successfully loading the new menu
     
     // If no window specified, always try Desktop fallback first; if not available, clear immediately
     if (windowId == 0) {
@@ -622,12 +659,41 @@ static int handleX11Error(Display *display, XErrorEvent *event)
                 return;
             }
 
-            // No Desktop fallback; clear immediately (no built-in fallback menus)
+            // ANTI-FLICKER: Don't clear immediately - app might be registering its menu
+            // Keep old menu visible for 0.2s grace period, then clear if still no menu
+            if (self.currentMenu != nil) {
+                NSLog(@"AppMenuWidget: Window %lu has no menu yet - keeping old menu visible for 0.2s grace period", windowId);
+                
+                // Cancel any existing grace period timer
+                if (self.noMenuGracePeriodTimer) {
+                    [self.noMenuGracePeriodTimer invalidate];
+                    self.noMenuGracePeriodTimer = nil;
+                }
+                
+                // Schedule timer to clear menu after grace period
+                self.pendingClearWindowId = windowId;
+                self.noMenuGracePeriodTimer = [NSTimer scheduledTimerWithTimeInterval:0.2
+                                                                                target:self
+                                                                              selector:@selector(noMenuGracePeriodExpired:)
+                                                                              userInfo:[NSNumber numberWithUnsignedLong:windowId]
+                                                                               repeats:NO];
+                return;
+            }
+            
+            // No current menu to preserve - clear immediately
             [self clearMenuAndHideView];
             return;
         } else {
             // If we already have a menu, ensure we don't have any scheduled fallback (no-op in current flow)
             [self cancelScheduledFallbackForWindow:windowId];
+            
+            // Cancel grace period timer if this is the window we were waiting for
+            if (self.noMenuGracePeriodTimer && self.pendingClearWindowId == windowId) {
+                NSLog(@"AppMenuWidget: Window %lu now has a menu - canceling grace period timer", windowId);
+                [self.noMenuGracePeriodTimer invalidate];
+                self.noMenuGracePeriodTimer = nil;
+                self.pendingClearWindowId = 0;
+            }
         }
     }
     @catch (NSException *exception) {
@@ -1523,6 +1589,22 @@ static int handleX11Error(Display *display, XErrorEvent *event)
               [item hasSubmenu] ? (unsigned long)[[[item submenu] itemArray] count] : 0);
     }
     
+    // ANTI-FLICKER: Clear shortcuts ONLY if switching to a different application
+    // This must happen before setupMenuViewWithMenu to avoid conflicts
+    if (self.currentWindowId != windowId) {
+        pid_t oldPid = (self.currentWindowId != 0) ? [MenuUtils getWindowPID:self.currentWindowId] : 0;
+        pid_t newPid = [MenuUtils getWindowPID:windowId];
+        BOOL switchingToDifferentApp = (oldPid == 0 || newPid == 0 || oldPid != newPid);
+        
+        if (switchingToDifferentApp) {
+            NSLog(@"AppMenuWidget: Switching to different app (PID %d -> %d) - clearing non-direct shortcuts", 
+                  (int)oldPid, (int)newPid);
+            [[X11ShortcutManager sharedManager] unregisterNonDirectShortcuts];
+        } else {
+            NSLog(@"AppMenuWidget: Same app (PID %d) - keeping shortcuts registered", (int)newPid);
+        }
+    }
+    
     @try {
         [self setupMenuViewWithMenu:menu];
         NSLog(@"AppMenuWidget: setupMenuViewWithMenu completed successfully");
@@ -1532,7 +1614,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         NSLog(@"AppMenuWidget: Exception details - name: %@, reason: %@", [exception name], [exception reason]);
     }
     
-    // Re-register shortcuts for this menu since we cleared them in clearMenu
+    // Re-register shortcuts for this menu since we may have cleared them above
     [self reregisterShortcutsForMenu:menu];
     
     NSLog(@"AppMenuWidget: Successfully loaded fallback menu with %lu items", (unsigned long)[[menu itemArray] count]);
