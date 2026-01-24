@@ -867,7 +867,7 @@ static void ShowErrorAlert(NSString *title, NSString *message)
   // Create the launcher script using the sanitized command
   NSString *script = [NSString stringWithFormat:
     @"#!/bin/sh\n"
-    @"# Auto-generated launcher script from desktop file Exec field\n"
+    @"# Auto-generated launcher script\n"
     @"exec %@ \"$@\"\n",
     sanitized];
 
