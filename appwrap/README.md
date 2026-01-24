@@ -6,11 +6,14 @@
 
 ```bash
 appwrap [OPTIONS] /path/to/application.desktop [output_directory]
+appwrap [OPTIONS] -c|--command "command to run" [-i|--icon /path/to/icon.png] [output_directory]
 ```
 
 ### Arguments
 
-- `/path/to/application.desktop` - Path to a freedesktop .desktop file
+- `/path/to/application.desktop` - Path to a freedesktop .desktop file (default mode)
+- `-c, --command "command"` - Provide a command line to execute instead of a .desktop file
+- `-i, --icon /path/to/icon` - (Optional) Explicit path to an icon file to use for the bundle
 - `[output_directory]` - (Optional) Directory where the app bundle will be created. 
   - If not specified for non-root users: `~/Applications` (created if it doesn't exist)
   - If not specified for root: `/Local/Applications` (created if it doesn't exist)
@@ -18,7 +21,27 @@ appwrap [OPTIONS] /path/to/application.desktop [output_directory]
 ### Options
 
 - `-f, --force` - Overwrite existing app bundle without asking for confirmation
+- `-c, --command` - Provide a command line to execute instead of a .desktop file (accepts additional unquoted args)
+- `-i, --icon` - Use the specified icon file (overrides desktop Icon lookup)
+- `-N, --name` - Explicit application name to use for the bundle (overrides auto-derivation)
+- `-a, --append-arg ARG` - Append an argument to the command (can be used multiple times)
+- `-p, --prepend-arg ARG` - Prepend an argument to the command (can be used multiple times)
+- `-h, --help` - Show this help message
 
+Note: If your command contains tokens that look like appwrap options (for example `-N` or `-i`), either quote the full `--command` value or use `--` to stop option parsing. Example:
+
+```bash
+# Using -- to stop option parsing and pass -n to the command
+appwrap --command /bin/echo -- -n hello /tmp
+
+# Or quote the full command
+appwrap --command "/bin/echo -n hello" /tmp
+
+# Examples using append/prepend args to build a VS Code launcher that forces --no-sandbox
+appwrap -c /home/user/VSCode-linux-x64/bin/code -a --no-sandbox -N "Visual Studio Code"
+# Or with prepend (rare):
+appwrap -c /usr/bin/env -p "DISPLAY=:0" -a --someflag -N "My Env App"
+```
 ## Examples
 
 Create a Chromium app bundle in the default location (~Applications as non-root):
@@ -31,10 +54,15 @@ Create a Firefox app bundle in a custom directory:
 appwrap /usr/share/applications/firefox.desktop /opt/applications
 ```
 
+Create a bundle that runs an arbitrary command, using a specific icon:
+```bash
+appwrap --command "/usr/bin/firefox --new-window" --icon /usr/share/icons/hicolor/256x256/apps/firefox.png
+```
+
 Overwrite an existing app bundle without confirmation:
 ```bash
 appwrap -f /usr/share/applications/chromium.desktop
-appwrap --force /usr/share/applications/firefox.desktop /opt/applications
+appwrap --force /home/user/Applications/myapp.app
 ```
 
 ### Overwrite Behavior

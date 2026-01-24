@@ -6,12 +6,19 @@
 
 
 /*
- * appwrap - Create GNUstep application bundles from .desktop files
+ * appwrap - Create GNUstep application bundles from .desktop files or raw commands
  * 
- * Usage: appwrap /path/to/application.desktop
+ * Usage: appwrap [OPTIONS] /path/to/application.desktop [output_dir]
+ *        appwrap [OPTIONS] -c|--command "command to run" [-i|--icon /path/to/icon.png] [output_dir]
  * 
- * This tool takes a freedesktop .desktop file and creates a GNUstep
- * application bundle that can be launched from the system.
+ * Options:
+ *   -c, --command  Provide a command line to execute instead of a .desktop file
+ *   -i, --icon     Path to an icon file to use (overrides .desktop Icon resolution)
+ *   -f, --force    Overwrite existing app bundle without asking
+ *   -h, --help     Show this help message
+ *
+ * This tool takes a freedesktop .desktop file (default) or a command line and creates
+ * a GNUstep application bundle that can be launched from the system.
  */
 
 #import <Foundation/Foundation.h>
@@ -20,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 
 // Show an NSAlert if possible; otherwise log and print to stderr.
 // If APPWRAP_NO_GUI=1 or we're not attached to a TTY, avoid modal alerts to allow
@@ -174,6 +182,10 @@ static void ShowErrorAlert(NSString *title, NSString *message)
 
 - (BOOL)createBundleFromDesktopFile:(NSString *)desktopPath
                            outputDir:(NSString *)outputDir;
+- (BOOL)createBundleFromCommand:(NSString *)command
+                        appName:(NSString *)appName
+                        iconPath:(NSString *)iconPath
+                        outputDir:(NSString *)outputDir;
 - (BOOL)createBundleStructure:(NSString *)appPath
                   withAppName:(NSString *)appName;
 - (BOOL)createInfoPlist:(NSString *)appPath
@@ -646,6 +658,53 @@ static void ShowErrorAlert(NSString *title, NSString *message)
 
   NSLog(@"Successfully created application bundle: %@", appPath);
   [parser release];
+  return YES;
+}
+
+- (BOOL)createBundleFromCommand:(NSString *)command
+                        appName:(NSString *)appName
+                        iconPath:(NSString *)iconPath
+                        outputDir:(NSString *)outputDir
+{
+  if (!command || !appName || !outputDir) return NO;
+  NSString *sanAppName = [self sanitizeFileName:appName];
+  NSLog(@"Starting bundle creation from command: %@ (appName=%@)", command, sanAppName);
+
+  NSString *appPath = [NSString stringWithFormat:@"%@/%@.app", outputDir, sanAppName];
+
+  // Create bundle structure
+  if (![self createBundleStructure:appPath withAppName:sanAppName])
+    {
+      NSString *msg = [NSString stringWithFormat:@"Failed to create bundle structure at %@", appPath];
+      ShowErrorAlert(@"Error", msg);
+      return NO;
+    }
+
+  // Create the launcher script with the provided command
+  if (![self createLauncherScript:appPath execCommand:command iconPath:iconPath scriptName:sanAppName])
+    {
+      NSString *msg = [NSString stringWithFormat:@"Failed to create launcher script for %@", appName];
+      ShowErrorAlert(@"Error", msg);
+      return NO;
+    }
+
+  // Copy icon if provided and get the resulting filename
+  NSString *copiedIconFilename = nil;
+  if (iconPath && [iconPath length] > 0)
+    {
+      copiedIconFilename = [self copyIconToBundle:iconPath toBundleResources:[NSString stringWithFormat:@"%@/Resources", appPath] appName:sanAppName];
+      NSLog(@"Resulting icon filename in bundle: %@", copiedIconFilename);
+    }
+
+  // Create Info.plist
+  if (![self createInfoPlist:appPath desktopInfo:nil appName:appName execPath:command iconFilename:copiedIconFilename])
+    {
+      NSString *msg = [NSString stringWithFormat:@"Failed to create Info.plist for %@", appName];
+      ShowErrorAlert(@"Error", msg);
+      return NO;
+    }
+
+  NSLog(@"Successfully created application bundle: %@", appPath);
   return YES;
 }
 
@@ -1548,6 +1607,23 @@ static void ShowErrorAlert(NSString *title, NSString *message)
 @end
 
 // Main entry point
+static void print_usage(const char *prog)
+{
+  fprintf(stderr, "Usage: %s [OPTIONS] /path/to/application.desktop [output_dir]\n", prog);
+  fprintf(stderr, "       %s [OPTIONS] -c|--command \"command to run\" [-i|--icon /path/to/icon.png] [output_dir]\n", prog);
+  fprintf(stderr, "\nIf output_dir is not specified:\n");
+  fprintf(stderr, "  - ~/Applications is used for non-root users\n");
+  fprintf(stderr, "  - /Local/Applications is used for root\n");
+  fprintf(stderr, "\nOptions:\n");
+  fprintf(stderr, "  -f, --force    Overwrite existing app bundle without asking\n");
+  fprintf(stderr, "  -c, --command  Provide a command line to execute instead of a .desktop file (accepts args; use -- or quote your command)\n");
+  fprintf(stderr, "  -i, --icon     Path to an icon file to use (overrides .desktop Icon resolution)\n");
+  fprintf(stderr, "  -N, --name     Explicit application name to use for the bundle\n");
+  fprintf(stderr, "  -a, --append-arg ARG   Append ARG to the command (may be used multiple times)\n");
+  fprintf(stderr, "  -p, --prepend-arg ARG  Prepend ARG to the command (may be used multiple times)\n");
+  fprintf(stderr, "  -h, --help     Show this help\n");
+}
+
 int main(int argc, char *argv[])
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -1556,64 +1632,160 @@ int main(int argc, char *argv[])
   [[NSUserDefaults standardUserDefaults] setBool: YES forKey: @"NSApplicationSuppressPSN"];
   NSApplication *app __attribute__((unused)) = [NSApplication sharedApplication];
 
-  if (argc < 2)
-    {
-      fprintf(stderr, "Usage: %s [OPTIONS] /path/to/application.desktop [output_dir]\n", argv[0]);
-      fprintf(stderr, "  If output_dir is not specified:\n");
-      fprintf(stderr, "    - ~/Applications is used for non-root users\n");
-      fprintf(stderr, "    - /Local/Applications is used for root\n");
-      fprintf(stderr, "\nOptions:\n");
-      fprintf(stderr, "  -f, --force    Overwrite existing app bundle without asking\n");
-      [pool release];
-      exit(EXIT_FAILURE);
-    }
-
   BOOL forceOverwrite = NO;
-  int desktopFileArgIdx = 1;
+  char *commandArg = NULL;
+  char *iconArg = NULL;
+  char *nameArg = NULL;
 
-  // Parse options
-  for (int i = 1; i < argc; i++)
+  // Support multiple prepend/append args
+  NSMutableArray *prependArgs = [NSMutableArray array];
+  NSMutableArray *appendArgs = [NSMutableArray array];
+
+  static struct option long_options[] = {
+    {"force", no_argument, 0, 'f'},
+    {"command", required_argument, 0, 'c'},
+    {"icon", required_argument, 0, 'i'},
+    {"name", required_argument, 0, 'N'},
+    {"append-arg", required_argument, 0, 'a'},
+    {"prepend-arg", required_argument, 0, 'p'},
+    {"help", no_argument, 0, 'h'},
+    {0, 0, 0, 0}
+  };
+
+  int opt;
+  int option_index = 0;
+  while ((opt = getopt_long(argc, argv, "fc:i:hN:a:p:", long_options, &option_index)) != -1)
     {
-      NSString *arg = [NSString stringWithUTF8String:argv[i]];
-      if ([arg isEqualToString:@"-f"] || [arg isEqualToString:@"--force"])
+      switch (opt)
         {
+        case 'f':
           forceOverwrite = YES;
-          desktopFileArgIdx = i + 1;
+          break;
+        case 'c':
+          commandArg = optarg;
+          break;
+        case 'i':
+          iconArg = optarg;
+          break;
+        case 'N':
+          nameArg = optarg;
+          break;
+        case 'a':
+          if (optarg) [appendArgs addObject:[NSString stringWithUTF8String:optarg]];
+          break;
+        case 'p':
+          if (optarg) [prependArgs addObject:[NSString stringWithUTF8String:optarg]];
+          break;
+        case 'h':
+          print_usage(argv[0]);
+          [pool release];
+          exit(EXIT_SUCCESS);
+          break;
+        default:
+          print_usage(argv[0]);
+          [pool release];
+          exit(EXIT_FAILURE);
         }
     }
 
-  // Check if we have a desktop file argument
-  if (desktopFileArgIdx >= argc)
-    {
-      fprintf(stderr, "Error: Desktop file path required\n");
-      [pool release];
-      exit(EXIT_FAILURE);
-    }
+  BOOL commandMode = (commandArg != NULL);
 
-  NSString *desktopFilePath = [NSString stringWithUTF8String:argv[desktopFileArgIdx]];
+  NSString *desktopFilePath = nil;
   NSString *outputDir = nil;
+  NSString *iconPath = nil;
+  NSString *commandStr = nil;
 
-  // Get output directory
-  if (desktopFileArgIdx + 1 < argc)
+  // Positional arguments handling for desktop-mode or command-mode
+  if (commandMode)
     {
-      outputDir = [NSString stringWithUTF8String:argv[desktopFileArgIdx + 1]];
+      commandStr = [NSString stringWithUTF8String:commandArg];
+      if (!commandStr || [commandStr length] == 0)
+        {
+          ShowErrorAlert(@"Error", @"Empty --command value");
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+
+      // Collect remaining positionals; these may be additional command args and/or an output_dir
+      NSMutableArray *positionals = [NSMutableArray array];
+      for (int i = optind; i < argc; i++)
+        {
+          [positionals addObject:[NSString stringWithUTF8String:argv[i]]];
+        }
+
+      // If the last positional appears path-like (contains '/','~', or starts with '/'), treat it as outputDir
+      if ([positionals count] > 0)
+        {
+          NSString *last = [positionals lastObject];
+          if ([last hasPrefix:@"/"] || [last hasPrefix:@"~"] || [last rangeOfString:@"/"].location != NSNotFound)
+            {
+              outputDir = last;
+              [positionals removeLastObject];
+            }
+        }
+
+      // Default output dir if none provided
+      if (!outputDir)
+        {
+          if (geteuid() == 0)
+            outputDir = @"/Local/Applications";
+          else
+            outputDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Applications"];
+        }
+
+      // Append remaining positional tokens to the command (so --command can be used without quotes)
+      for (NSString *p in positionals)
+        {
+          commandStr = [commandStr stringByAppendingFormat:@" %@", p];
+        }
+
+      // Prepend args, if any
+      for (NSString *p in prependArgs)
+        {
+          commandStr = [NSString stringWithFormat:@"%@ %@", p, commandStr];
+        }
+
+      // Append args, if any
+      for (NSString *p in appendArgs)
+        {
+          commandStr = [commandStr stringByAppendingFormat:@" %@", p];
+        }
+
+      if (iconArg)
+        iconPath = [NSString stringWithUTF8String:iconArg];
+
+      if (nameArg)
+        {
+          // Explicit name provided
+          // nameStr will be used later when deriving bundle name
+        }
     }
   else
     {
-      // Use conditional directory based on whether running as root
-      if (geteuid() == 0)
+      if (optind >= argc)
         {
-          outputDir = @"/Local/Applications";
+          fprintf(stderr, "Error: Desktop file path required\n");
+          print_usage(argv[0]);
+          [pool release];
+          exit(EXIT_FAILURE);
         }
+
+      desktopFilePath = [NSString stringWithUTF8String:argv[optind]];
+      if (optind + 1 < argc)
+        outputDir = [NSString stringWithUTF8String:argv[optind + 1]];
       else
         {
-          outputDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Applications"];
+          if (geteuid() == 0)
+            outputDir = @"/Local/Applications";
+          else
+            outputDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Applications"];
         }
     }
 
   // Expand ~ in paths
-  desktopFilePath = [desktopFilePath stringByExpandingTildeInPath];
-  outputDir = [outputDir stringByExpandingTildeInPath];
+  if (desktopFilePath) desktopFilePath = [desktopFilePath stringByExpandingTildeInPath];
+  if (outputDir) outputDir = [outputDir stringByExpandingTildeInPath];
+  if (iconPath) iconPath = [iconPath stringByExpandingTildeInPath];
 
   // Create output directory if it doesn't exist
   NSFileManager *fm = [NSFileManager defaultManager];
@@ -1632,66 +1804,12 @@ int main(int argc, char *argv[])
         }
     }
 
-  // Check if desktop file exists
-  if (![fm fileExistsAtPath:desktopFilePath])
+  // In desktop mode, validate the desktop file exists
+  if (!commandMode)
     {
-      NSString *msg = [NSString stringWithFormat:@"Desktop file not found: %@", desktopFilePath];
-      ShowErrorAlert(@"Error", msg);
-      [pool release];
-      exit(EXIT_FAILURE);
-    }
-
-  // Parse the desktop file to get the app name
-  DesktopFileParser *parser = [[DesktopFileParser alloc] initWithFile:desktopFilePath];
-  if (!parser)
-    {
-      NSString *msg = [NSString stringWithFormat:@"Failed to parse desktop file: %@", desktopFilePath];
-      ShowErrorAlert(@"Error", msg);
-      [pool release];
-      exit(EXIT_FAILURE);
-    }
-
-  NSString *appName = [parser stringForKey:@"Name"];
-  [parser release];
-
-  if (!appName)
-    {
-      NSString *msg = @"Desktop file has no Name field";
-      ShowErrorAlert(@"Error", msg);
-      [pool release];
-      exit(EXIT_FAILURE);
-    }
-
-  // Create bundle path (preserve whitespace in directory name)
-  NSString *bundleName = appName;
-  NSString *bundlePath = [NSString stringWithFormat:@"%@/%@.app", 
-                         outputDir, bundleName];
-
-  // Check if bundle already exists
-  if ([fm fileExistsAtPath:bundlePath])
-    {
-      if (!forceOverwrite)
+      if (![fm fileExistsAtPath:desktopFilePath])
         {
-          // Ask user for confirmation
-          fprintf(stderr, "Warning: Application bundle already exists: %s\n", 
-                  [bundlePath UTF8String]);
-          fprintf(stderr, "Overwrite? (y/n) ");
-          fflush(stderr);
-
-          int response = getchar();
-          if (response != 'y' && response != 'Y')
-            {
-              fprintf(stderr, "Cancelled.\n");
-              [pool release];
-              exit(EXIT_FAILURE);
-            }
-        }
-
-      // Delete the existing bundle
-      NSError *error = nil;
-      if (![fm removeItemAtPath:bundlePath error:&error])
-        {
-          NSString *msg = [NSString stringWithFormat:@"Failed to remove existing bundle: %@", [error localizedDescription]];
+          NSString *msg = [NSString stringWithFormat:@"Desktop file not found: %@", desktopFilePath];
           ShowErrorAlert(@"Error", msg);
           [pool release];
           exit(EXIT_FAILURE);
@@ -1700,8 +1818,121 @@ int main(int argc, char *argv[])
 
   // Create the bundle
   AppBundleCreator *creator = [[AppBundleCreator alloc] init];
-  BOOL success = [creator createBundleFromDesktopFile:desktopFilePath
-                                             outputDir:outputDir];
+  BOOL success = NO;
+
+  if (commandMode)
+    {
+      // Derive an app name from the first token of the command if necessary
+      NSString *firstToken = nil;
+      NSScanner *sc = [NSScanner scannerWithString:commandStr];
+      [sc scanUpToCharactersFromSet:[NSCharacterSet whitespaceCharacterSet] intoString:&firstToken];
+      if (!firstToken || [firstToken length] == 0)
+        firstToken = commandStr;
+
+      NSString *candidate = [[firstToken lastPathComponent] stringByDeletingPathExtension];
+
+      // If user provided an explicit name via --name/-N, use that; otherwise use the derived candidate
+      NSString *appNameToUse = nil;
+      if (nameArg && strlen(nameArg) > 0)
+        {
+          appNameToUse = [NSString stringWithUTF8String:nameArg];
+        }
+      else
+        {
+          appNameToUse = candidate;
+        }
+
+      NSString *bundleName = [creator sanitizeFileName:appNameToUse];
+
+      // Check for existing bundle and ask/overwrite depending on force
+      NSString *bundlePath = [NSString stringWithFormat:@"%@/%@.app", outputDir, bundleName];
+      if ([fm fileExistsAtPath:bundlePath])
+        {
+          if (!forceOverwrite)
+            {
+              fprintf(stderr, "Warning: Application bundle already exists: %s\n", [bundlePath UTF8String]);
+              fprintf(stderr, "Overwrite? (y/n) "); fflush(stderr);
+              int response = getchar();
+              if (response != 'y' && response != 'Y')
+                {
+                  fprintf(stderr, "Cancelled.\n");
+                  [creator release];
+                  [pool release];
+                  exit(EXIT_FAILURE);
+                }
+            }
+
+          NSError *remErr = nil;
+          if (![fm removeItemAtPath:bundlePath error:&remErr])
+            {
+              NSString *msg = [NSString stringWithFormat:@"Failed to remove existing bundle: %@", [remErr localizedDescription]];
+              ShowErrorAlert(@"Error", msg);
+              [creator release];
+              [pool release];
+              exit(EXIT_FAILURE);
+            }
+        }
+
+      success = [creator createBundleFromCommand:commandStr appName:appNameToUse iconPath:iconPath outputDir:outputDir];
+    }
+  else
+    {
+      // Desktop file mode - reuse existing flow
+      DesktopFileParser *parser = [[DesktopFileParser alloc] initWithFile:desktopFilePath];
+      if (!parser)
+        {
+          NSString *msg = [NSString stringWithFormat:@"Failed to parse desktop file: %@", desktopFilePath];
+          ShowErrorAlert(@"Error", msg);
+          [creator release];
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+
+      NSString *appName = [parser stringForKey:@"Name"];
+      [parser release];
+
+      if (!appName)
+        {
+          NSString *msg = @"Desktop file has no Name field";
+          ShowErrorAlert(@"Error", msg);
+          [creator release];
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+
+      NSString *bundleName = appName;
+      NSString *bundlePath = [NSString stringWithFormat:@"%@/%@.app", outputDir, bundleName];
+
+      if ([fm fileExistsAtPath:bundlePath])
+        {
+          if (!forceOverwrite)
+            {
+              fprintf(stderr, "Warning: Application bundle already exists: %s\n", [bundlePath UTF8String]);
+              fprintf(stderr, "Overwrite? (y/n) "); fflush(stderr);
+              int response = getchar();
+              if (response != 'y' && response != 'Y')
+                {
+                  fprintf(stderr, "Cancelled.\n");
+                  [creator release];
+                  [pool release];
+                  exit(EXIT_FAILURE);
+                }
+            }
+
+          NSError *remErr = nil;
+          if (![fm removeItemAtPath:bundlePath error:&remErr])
+            {
+              NSString *msg = [NSString stringWithFormat:@"Failed to remove existing bundle: %@", [remErr localizedDescription]];
+              ShowErrorAlert(@"Error", msg);
+              [creator release];
+              [pool release];
+              exit(EXIT_FAILURE);
+            }
+        }
+
+      success = [creator createBundleFromDesktopFile:desktopFilePath outputDir:outputDir];
+    }
+
   [creator release];
 
   [pool release];
