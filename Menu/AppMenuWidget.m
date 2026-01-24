@@ -312,6 +312,35 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         activeWindow = 0;
     }
 
+    // Exclude the Menu application itself from triggering updates.
+    // If we focus on the menu bar or its components, we want to keep the current app menu.
+    if (activeWindow != 0 && [NSApp windowWithWindowNumber:activeWindow] != nil) {
+        NSLog(@"AppMenuWidget: Focus is on Menu app itself (0x%lx) - ignoring update to preserve current menu", activeWindow);
+        // Cancel any pending clear, as we have "valid" focus (on ourselves)
+        if (self.clearMenuTimer) {
+            [self.clearMenuTimer invalidate];
+            self.clearMenuTimer = nil;
+        }
+        return;
+    }
+
+    // Similarly, ignore and preserve if the process that launched the old and new menu have the same PID.
+    // This avoids flickering or clearing menus when switching between windows of the same application.
+    if (activeWindow != 0 && self.currentWindowId != 0 && activeWindow != self.currentWindowId) {
+        pid_t oldPid = [MenuUtils getWindowPID:self.currentWindowId];
+        pid_t newPid = [MenuUtils getWindowPID:activeWindow];
+        if (oldPid != 0 && oldPid == newPid) {
+            NSLog(@"AppMenuWidget: Focus changed within same PID %d (0x%lx -> 0x%lx) - preserving current menu", (int)newPid, self.currentWindowId, activeWindow);
+            self.currentWindowId = activeWindow;
+            // Cancel any pending clear
+            if (self.clearMenuTimer) {
+                [self.clearMenuTimer invalidate];
+                self.clearMenuTimer = nil;
+            }
+            return;
+        }
+    }
+
     // If no active window (0), do not attempt a Desktop/Workspace fallback (no built-in fallbacks)
     if (activeWindow == 0) {
         // Debounce: don't clear immediately. Wait 0.2s.

@@ -75,25 +75,28 @@
 {
     self = [super init];
     if (self) {
+        // Disable caching entirely for now to ensure instantaneous menu updates
         self.cache = [[NSMutableDictionary alloc] init];
         self.lruOrder = [[NSMutableArray alloc] init];
-        _maxCacheSize = 50;    // Increased cache size for complex apps like GIMP
-        _maxCacheAge = 1800.0; // 30 minutes cache age for better persistence
+        _maxCacheSize = 0;    // caching disabled
+        _maxCacheAge = 0.0;   // caching disabled
         
         // Initialize statistics
         self.cacheHits = 0;
         self.cacheMisses = 0;
         self.cacheEvictions = 0;
         
-        // Set up periodic maintenance (less frequent to avoid disruption)
-        self.cleanupTimer = [NSTimer scheduledTimerWithTimeInterval:120.0  // Every 2 minutes
-                                                        target:self
-                                                      selector:@selector(performMaintenance)
-                                                      userInfo:nil
-                                                       repeats:YES];
+        // Disable periodic maintenance timer to avoid async cache work
+        if (self.cleanupTimer) {
+            [self.cleanupTimer invalidate];
+            self.cleanupTimer = nil;
+        }
         
-        NSLog(@"MenuCacheManager: Initialized with maxSize=%lu maxAge=%.1fs", 
-              (unsigned long)_maxCacheSize, _maxCacheAge);
+        // Ensure cache is clear
+        [self.cache removeAllObjects];
+        [self.lruOrder removeAllObjects];
+        
+        NSLog(@"MenuCacheManager: CACHING DISABLED (maxSize=0 maxAge=0)");
     }
     return self;
 }
@@ -108,46 +111,11 @@
 - (NSMenu *)getCachedMenuForWindow:(unsigned long)windowId 
          validateServiceName:(NSString *)expectedServiceName
 {
-    NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
-    MenuCacheEntry *entry = [self.cache objectForKey:windowKey];
-    
-    if (!entry) {
-        self.cacheMisses++;
-        NSLog(@"MenuCacheManager: Cache MISS for window %lu", windowId);
-        return nil;
-    }
-    
-    // Validate service name if provided - this prevents returning stale menus
-    // when a window ID is reused by a different DBus service (e.g., after closing
-    // and reopening a file manager window)
-    if (expectedServiceName && [entry serviceName]) {
-        if (![expectedServiceName isEqualToString:[entry serviceName]]) {
-            NSLog(@"MenuCacheManager: Cache INVALID for window %lu - service name mismatch (cached: %@, expected: %@)",
-                  windowId, [entry serviceName], expectedServiceName);
-            [self invalidateCacheForWindow:windowId];
-            self.cacheMisses++;
-            return nil;
-        }
-    }
-    
-    // Check if entry is stale
-    if ([entry isStale:self.maxCacheAge]) {
-        NSLog(@"MenuCacheManager: Cache entry for window %lu is stale (age: %.1fs), removing", 
-              windowId, [entry age]);
-        [self invalidateCacheForWindow:windowId];
-        self.cacheMisses++;
-        return nil;
-    }
-    
-    // Update access tracking
-    [entry touch];
-    [self moveToFront:windowKey];
-    
-    self.cacheHits++;
-    NSLog(@"MenuCacheManager: Cache HIT for window %lu (accessed %lu times, age: %.1fs)", 
-          windowId, (unsigned long)[entry accessCount], [entry age]);
-    
-    return [entry menu];
+    // Caching is disabled - always return nil so menus are loaded fresh on every change
+    (void)expectedServiceName;
+    self.cacheMisses++;
+    NSLog(@"MenuCacheManager: CACHING DISABLED - returning nil for window %lu", windowId);
+    return nil;
 }
 
 - (void)cacheMenu:(NSMenu *)menu 
@@ -156,33 +124,10 @@
        objectPath:(NSString *)objectPath
   applicationName:(NSString *)applicationName
 {
-    if (!menu) {
-        NSLog(@"MenuCacheManager: Cannot cache nil menu for window %lu", windowId);
-        return;
-    }
-    
-    NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
-    
-    // Remove existing entry if present
-    [self invalidateCacheForWindow:windowId];
-    
-    // Ensure we don't exceed cache size limit
-    while ([self.cache count] >= self.maxCacheSize && [self.lruOrder count] > 0) {
-        [self evictLRUEntry];
-    }
-    
-    // Create new cache entry
-    MenuCacheEntry *entry = [[MenuCacheEntry alloc] initWithMenu:menu
-                                                     serviceName:serviceName
-                                                      objectPath:objectPath
-                                                 applicationName:applicationName];
-    
-    [self.cache setObject:entry forKey:windowKey];
-    [self.lruOrder insertObject:windowKey atIndex:0];  // Add to front (most recent)
-    
-    NSLog(@"MenuCacheManager: Cached menu for window %lu (%@ - %@) with %lu items", 
-          windowId, applicationName ?: @"Unknown App", serviceName, 
-          (unsigned long)[[menu itemArray] count]);
+    // Caching disabled - do not store any menus
+    (void)menu; (void)serviceName; (void)objectPath; (void)applicationName;
+    NSLog(@"MenuCacheManager: CACHING DISABLED - not caching menu for window %lu", windowId);
+    return;
 }
 
 - (void)invalidateCacheForWindow:(unsigned long)windowId

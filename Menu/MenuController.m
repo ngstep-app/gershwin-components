@@ -593,6 +593,28 @@ self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
     NSNumber *windowIdNum = notification.userInfo[@"windowId"];
     unsigned long windowId = windowIdNum ? [windowIdNum unsignedLongValue] : 0;
     
+    // Check if the focus changed to the Menu application itself.
+    // If so, we ignore the change to keep the previous application's menu visible.
+    if (windowId != 0 && [NSApp windowWithWindowNumber:windowId] != nil) {
+        NSLog(@"MenuController: Focus changed to Menu app window (0x%lx) - ignoring to preserve current menu", windowId);
+        return;
+    }
+
+    // Similarly, ignore and preserve if the process that launched the old and new menu have the same PID.
+    // This avoids flickering or clearing menus when switching between windows of the same application.
+    if (windowId != 0 && self.appMenuWidget && self.appMenuWidget.currentWindowId != 0 && windowId != self.appMenuWidget.currentWindowId) {
+        pid_t oldPid = [MenuUtils getWindowPID:self.appMenuWidget.currentWindowId];
+        pid_t newPid = [MenuUtils getWindowPID:windowId];
+        if (oldPid != 0 && oldPid == newPid) {
+            NSLog(@"MenuController: Focus changed to another window (0x%lx) of the same process (PID %d) - ignoring to preserve current menu", windowId, (int)newPid);
+             // We still update the window tracking in both Controller and Widget but skip the menu reload
+             self.lastProcessedWindowId = windowId;
+             self.lastProcessedTime = [[NSDate date] timeIntervalSince1970];
+             self.appMenuWidget.currentWindowId = windowId;
+             return;
+        }
+    }
+
     self.lastProcessedWindowId = windowId;
     self.lastProcessedTime = [[NSDate date] timeIntervalSince1970];
 
