@@ -6,6 +6,8 @@
 
 #import "ItemFlowView.h"
 #import <AppKit/NSOpenGL.h>
+#import <AppKit/NSScrollView.h>
+#import <AppKit/NSClipView.h>
 #import <GL/gl.h>
 #import <math.h>
 
@@ -16,6 +18,7 @@
 #define CAMERA_Z -3.8f
 #define CAMERA_Y 0.3f
 #define REFLECTION_OPACITY 0.4f
+#define ITEM_WIDTH_PX 60.0f // Virtual pixels per item for scroll bar
 
 // Track indices we've logged with missing textures to avoid spamming logs
 static NSMutableIndexSet *gItemFlowMissingLogged = nil;
@@ -28,7 +31,9 @@ static dispatch_once_t onceTokenMissingLogged;
     CGFloat _targetPosition;
     NSTimer *_animationTimer;
     NSTimeInterval _lastTime;
+    BOOL _isSyncingScroll;
 }
+- (void)updateScrollFrame;
 @end
 
 @implementation ItemFlowView
@@ -52,6 +57,7 @@ static dispatch_once_t onceTokenMissingLogged;
         _textures = [NSMutableArray array];
         _currentPosition = 0.0f;
         _targetPosition = 0.0f;
+        _isSyncingScroll = NO;
         dispatch_once(&onceTokenMissingLogged, ^{
             gItemFlowMissingLogged = [[NSMutableIndexSet alloc] init];
         });
@@ -61,7 +67,55 @@ static dispatch_once_t onceTokenMissingLogged;
 // In drawItemAtIndex we'll detect missing textures and log them once per index.
 }
 
+- (void)viewDidMoveToSuperview {
+    [super viewDidMoveToSuperview];
+    if ([self superview] && [[self superview] isKindOfClass:[NSClipView class]]) {
+        NSClipView *clipView = (NSClipView *)[self superview];
+        [clipView setPostsBoundsChangedNotifications:YES];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(boundDidChange:)
+                                                     name:NSViewBoundsDidChangeNotification
+                                                   object:clipView];
+    }
+}
+
+- (void)boundDidChange:(NSNotification *)notification {
+    if (_isSyncingScroll) return;
+
+    NSRect visibleRect = [self visibleRect];
+    CGFloat contentWidth = visibleRect.size.width;
+    CGFloat totalWidth = [self frame].size.width;
+    
+    if (totalWidth > contentWidth) {
+        CGFloat maxScroll = totalWidth - contentWidth;
+        CGFloat scrollPos = visibleRect.origin.x;
+        CGFloat t = scrollPos / (maxScroll > 0 ? maxScroll : 1.0f);
+        
+        NSUInteger count = _textures.count;
+        if (count > 1) {
+             _targetPosition = t * (count - 1);
+             [self startAnimation];
+        }
+    }
+}
+
+- (void)updateScrollFrame {
+    if ([self superview] && [[self superview] isKindOfClass:[NSClipView class]]) {
+        NSView *scrollView = [[self superview] superview];
+        CGFloat minWidth = [scrollView bounds].size.width;
+        NSUInteger count = _textures.count;
+        CGFloat desiredWidth = MAX(minWidth, (CGFloat)count * ITEM_WIDTH_PX);
+        
+        NSRect frame = [self frame];
+        if (frame.size.width != desiredWidth) {
+            frame.size.width = desiredWidth;
+            [self setFrame:frame];
+        }
+    }
+}
+
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_animationTimer invalidate];
     _animationTimer = nil;
     if (_placeholderTexID != 0) {
@@ -121,6 +175,23 @@ static dispatch_once_t onceTokenMissingLogged;
     } else {
         _currentPosition += change;
     }
+
+    // Sync scroll bar if not already syncing from scroll bar
+    if ([self superview] && [[self superview] isKindOfClass:[NSClipView class]]) {
+        _isSyncingScroll = YES;
+        NSRect visibleRect = [self visibleRect];
+        CGFloat totalWidth = [self frame].size.width;
+        CGFloat contentWidth = visibleRect.size.width;
+        NSUInteger count = _textures.count;
+        if (count > 1 && totalWidth > contentWidth) {
+            CGFloat t = _currentPosition / (CGFloat)(count - 1);
+            CGFloat maxScroll = totalWidth - contentWidth;
+            NSPoint scrollPoint = NSMakePoint(t * maxScroll, 0);
+            [(NSClipView *)[self superview] scrollToPoint:scrollPoint];
+            [(NSScrollView *)[[self superview] superview] reflectScrolledClipView:(NSClipView *)[self superview]];
+        }
+        _isSyncingScroll = NO;
+    }
     
     [self setNeedsDisplay:YES];
 }
@@ -153,9 +224,13 @@ static dispatch_once_t onceTokenMissingLogged;
 - (void)reshape {
     [super reshape];
     NSRect bounds = [self bounds];
+    // If we are in a scroll view, use the visible bounds for perspective aspect ratio
+    if ([self superview] && [[self superview] isKindOfClass:[NSClipView class]]) {
+        bounds = [[self superview] bounds];
+    }
     GLsizei w = (GLsizei)bounds.size.width;
     GLsizei h = (GLsizei)bounds.size.height;
-    glViewport(0, 0, w, h);
+    glViewport(0, 0, (GLsizei)[self bounds].size.width, (GLsizei)[self bounds].size.height);
     
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -181,6 +256,18 @@ static dispatch_once_t onceTokenMissingLogged;
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glLoadIdentity();
     
+    // Offset camera so it's always centered in the visible part of the view
+    NSRect visibleRect = [self visibleRect];
+    CGFloat viewWidth = [self bounds].size.width;
+    if (viewWidth > visibleRect.size.width) {
+        CGFloat offsetX = NSMidX(visibleRect) - (viewWidth / 2.0f);
+        float aspect = (float)visibleRect.size.width / (float)visibleRect.size.height;
+        float h = tanf(50.0f / 360.0f * (float)M_PI) * fabsf(CAMERA_Z);
+        float w = h * aspect;
+        float glOffsetX = ((float)offsetX / (float)visibleRect.size.width) * (w * 2.0f);
+        glTranslatef(glOffsetX, 0.0f, 0.0f);
+    }
+
     glTranslatef(0.0f, CAMERA_Y, CAMERA_Z);
     
     [self drawItems];
@@ -390,6 +477,8 @@ static dispatch_once_t onceTokenMissingLogged;
             [_textures addObject:@(0)];
         }
     }
+    
+    [self updateScrollFrame];
     
     // Reset positions? Only if out of bounds
     if (_textures.count > 0 && _targetPosition >= _textures.count) {
