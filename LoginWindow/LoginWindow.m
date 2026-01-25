@@ -633,7 +633,9 @@ void signalHandler(int sig) {
         return;
     }
         
-    NSLog(@"[DEBUG] authenticateUser:password: will be called");
+    // Attempting authentication — empty password is allowed by design for some environments
+    // (e.g., GhostBSD Live ISOs) where PAM permits passwordless login.
+    NSLog(@"[DEBUG] authenticateUser:password: will be called (password empty: %s)", ([password length] == 0) ? "yes" : "no");
     if ([self authenticateUser:username password:password]) {
         NSLog(@"[DEBUG] authenticateUser:password: returned YES");
         [self saveLastLoggedInUser:username];
@@ -2839,6 +2841,8 @@ void signalHandler(int sig) {
     }
 }
 
+// Allow login without password (works e.g., on GhostBSD Live ISOs)
+// Enabling login when username is present even if password is empty. PAM policy may accept empty passwords in some environments (Live ISOs).
 - (void)updateLoginButtonState
 {
     NSString *username = [usernameField stringValue];
@@ -2846,7 +2850,8 @@ void signalHandler(int sig) {
     
     BOOL hasUsername = username && [username length] > 0;
     BOOL hasPassword = password && [password length] > 0;
-    BOOL shouldEnable = hasUsername && hasPassword;
+    // Allow login without password if username is present.
+    BOOL shouldEnable = hasUsername;
     
     [loginButton setEnabled:shouldEnable];
     
