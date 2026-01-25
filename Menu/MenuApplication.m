@@ -18,10 +18,6 @@
 #import <objc/message.h>
 #import <dispatch/dispatch.h>
 
-// For crash backtraces
-#include <execinfo.h>
-#include <fcntl.h>
-
 // Global reference for cleanup in signal handlers
 static MenuController *g_controller = nil;
 static volatile sig_atomic_t cleanup_in_progress = 0;
@@ -81,17 +77,6 @@ static void signalHandler(int sig)
     // Exit gracefully
     NSLog(@"Menu.app: Cleanup complete, exiting...");
     exit(0);
-}
-
-// Crash handler placed at file scope so it can be used in sigaction registrations
-static void crashHandler(int sig, siginfo_t *si, void *unused) {
-    int fd = open("/tmp/menu_crash_backtrace.log", O_CREAT|O_WRONLY|O_APPEND, 0644);
-    if (fd >= 0) {
-        dprintf(fd, "Menu.app CRASH: signal %d (si_code=%d, si_addr=%p) pid=%d\n", sig, si?si->si_code:0, si?si->si_addr:NULL, getpid());
-        // Backtrace unavailable on this platform without linking execinfo; keep minimal info.
-        close(fd);
-    }
-    _exit(128 + sig);
 }
 
 // Forward declare our custom drawRect function
@@ -337,19 +322,6 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
         NSLog(@"MenuApplication: Warning: Failed to register atexit handler");
     } else {
         NSLog(@"MenuApplication: atexit handler registered");
-    }
-
-    // Register crash handler (the handler is defined at file scope) for SIGSEGV and SIGBUS
-    {
-        struct sigaction sa;
-        memset(&sa, 0, sizeof(sa));
-        sa.sa_sigaction = crashHandler;
-        sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
-        sigemptyset(&sa.sa_mask);
-        sigaction(SIGSEGV, &sa, NULL);
-        sigaction(SIGBUS, &sa, NULL);
-
-        NSLog(@"MenuApplication: Crash handlers for SIGSEGV and SIGBUS registered (writing to /tmp/menu_crash_backtrace.log)");
     }
 
     NSLog(@"MenuApplication: Starting DBus global menu bar");
