@@ -743,7 +743,7 @@ static ProcessesController *sharedController = nil;
 - (void)setupMenu
 {
     NSMenu *mainMenu = [[NSMenu alloc] initWithTitle:@"Processes"];
-    NSMenuItem *appMenuItem = [mainMenu addItemWithTitle:@"Processes" action:NULL keyEquivalent:@""];
+    NSMenuItem *appMenuItem = (NSMenuItem *)[mainMenu addItemWithTitle:@"Processes" action:NULL keyEquivalent:@""];
     NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Processes"];
     
     [appMenu addItemWithTitle:@"About Processes" action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
@@ -757,7 +757,7 @@ static ProcessesController *sharedController = nil;
     [mainMenu setSubmenu:appMenu forItem:appMenuItem];
     
     // Window Menu
-    NSMenuItem *windowMenuItem = [mainMenu addItemWithTitle:@"Window" action:NULL keyEquivalent:@""];
+    NSMenuItem *windowMenuItem = (NSMenuItem *)[mainMenu addItemWithTitle:@"Window" action:NULL keyEquivalent:@""];
     NSMenu *windowMenu = [[NSMenu alloc] initWithTitle:@"Window"];
     [windowMenu addItemWithTitle:@"Minimize" action:@selector(performMiniaturize:) keyEquivalent:@"m"];
     [windowMenu addItemWithTitle:@"Zoom" action:@selector(performZoom:) keyEquivalent:@""];
