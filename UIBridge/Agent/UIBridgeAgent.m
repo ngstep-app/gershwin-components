@@ -28,6 +28,11 @@
 #pragma mark - JSON safety helpers
 
 - (id)jsonSafeObject:(id)obj {
+    return [self jsonSafeObject:obj depth:0];
+}
+
+- (id)jsonSafeObject:(id)obj depth:(int)depth {
+    if (depth > 5) return @"<Reached Max Depth>";
     if (!obj || obj == [NSNull null]) return [NSNull null];
     if ([obj isKindOfClass:[NSString class]] || [obj isKindOfClass:[NSNumber class]]) return obj;
     if ([obj isKindOfClass:[NSData class]]) {
@@ -48,7 +53,7 @@
     if ([obj isKindOfClass:[NSArray class]]) {
         NSMutableArray *arr = [NSMutableArray arrayWithCapacity:[(NSArray*)obj count]];
         for (id sub in (NSArray*)obj) {
-            [arr addObject:[self jsonSafeObject:sub]];
+            [arr addObject:[self jsonSafeObject:sub depth:depth + 1]];
         }
         return arr;
     }
@@ -57,7 +62,7 @@
         for (id key in (NSDictionary*)obj) {
             id val = [(NSDictionary*)obj objectForKey:key];
             NSString *k = [NSString stringWithFormat:@"%@", key];
-            d[k] = [self jsonSafeObject:val];
+            d[k] = [self jsonSafeObject:val depth:depth + 1];
         }
         return d;
     }
@@ -178,6 +183,17 @@ static void *RegistrationThread(void *arg) {
             [subviews addObject:[self serializeObject:sub detailed:NO]];
         }
         dict[@"subviews"] = subviews;
+        
+        // Extra details for common view types
+        if ([view respondsToSelector:@selector(string)]) {
+             dict[@"string"] = [view performSelector:@selector(string)];
+        } else if ([view respondsToSelector:@selector(stringValue)]) {
+             dict[@"string"] = [view performSelector:@selector(stringValue)];
+        }
+        
+        if ([view respondsToSelector:@selector(title)]) {
+             dict[@"title"] = [view performSelector:@selector(title)];
+        }
     }
     
     if (detailed && [obj isKindOfClass:[NSWindow class]]) {
@@ -199,24 +215,93 @@ static void *RegistrationThread(void *arg) {
         dict[@"title"] = [item title];
         dict[@"enabled"] = @([item isEnabled]);
         dict[@"hasSubmenu"] = @([item hasSubmenu]);
+        // Add common menu item metadata
+        if ([item respondsToSelector:@selector(action)]) {
+            SEL sel = [item action];
+            dict[@"action"] = sel ? NSStringFromSelector(sel) : @"";
+        }
+        if ([item respondsToSelector:@selector(keyEquivalent)]) {
+            dict[@"keyEquivalent"] = [item keyEquivalent] ?: @"";
+        }
+        if ([item respondsToSelector:@selector(keyEquivalentModifierMask)]) {
+            dict[@"keyModifiers"] = @([item keyEquivalentModifierMask]);
+        }
+        if ([item respondsToSelector:@selector(tag)]) {
+            dict[@"tag"] = @([item tag]);
+        }
+        if ([item respondsToSelector:@selector(state)]) {
+            dict[@"state"] = @([item state]);
+        }
+        if ([item respondsToSelector:@selector(representedObject)]) {
+            id rep = [item representedObject];
+            if (rep) dict[@"representedObject"] = [self jsonSafeObject:rep];
+        }
+        if ([item respondsToSelector:@selector(target)]) {
+            id tgt = [item target];
+            if (tgt) dict[@"target"] = [self objectIDForObject:tgt];
+        }
         if ([item hasSubmenu]) {
-            dict[@"submenu"] = [self serializeObject:[item submenu] detailed:YES];
+            dict[@"submenu"] = [self serializeObject:[item submenu] detailed:NO];
         }
     }
     return dict;
 }
 
 // List all menus in the app (main menu and submenus)
-- (NSArray *)listMenus {
+- (bycopy NSArray *)listMenus {
+    // Ensure menu inspection happens on the main thread to safely access AppKit objects
+    id res = [self runOnMainThread:@selector(_main_listMenus:) withObject:nil];
+    return [self jsonSafeObject:res];
+}
+
+- (void)_main_listMenus:(NSDictionary *)params {
+    UIBridgeResultContainer *container = params[@"container"];
     NSMutableArray *menus = [NSMutableArray array];
     NSMenu *mainMenu = [NSApp mainMenu];
     if (mainMenu) {
-        [menus addObject:[self serializeObject:mainMenu detailed:YES]];
+        NSLog(@"[UIBridge] Traversing menus starting from %@", mainMenu);
+        // Iterative traversal to avoid stack overflow and cycles
+        NSMutableSet *visited = [NSMutableSet setWithObject:[NSValue valueWithPointer:mainMenu]];
+        NSMutableArray *queue = [NSMutableArray arrayWithObject:mainMenu];
+        int count = 0;
+        while ([queue count] > 0 && count < 200) {
+            NSMenu *menu = [[queue firstObject] retain];
+            [queue removeObjectAtIndex:0];
+            count++;
+            
+            NSLog(@"[UIBridge] Processing menu %d: %@", count, [menu title]);
+            
+            // Serialize menu
+            NSMutableDictionary *menuDict = [[self serializeObject:menu detailed:YES] mutableCopy];
+            // Traverse items for submenus
+            NSMutableArray *submenuIDs = [NSMutableArray array];
+            for (NSMenuItem *item in [menu itemArray]) {
+                if ([item hasSubmenu]) {
+                    NSMenu *submenu = [item submenu];
+                    if (submenu) {
+                        NSValue *val = [NSValue valueWithPointer:submenu];
+                        if (![visited containsObject:val]) {
+                            [visited addObject:val];
+                            [queue addObject:submenu];
+                        }
+                        [submenuIDs addObject:[self objectIDForObject:submenu]];
+                    }
+                }
+            }
+            menuDict[@"submenus"] = submenuIDs;
+            [menus addObject:menuDict];
+            [menuDict release];
+            [menu release];
+        }
+        if (count >= 200) {
+            NSLog(@"[UIBridge] WARNING: Reached menu traversal limit (200)");
+        }
     }
-    return menus;
+    NSLog(@"[UIBridge] Menu traversal complete. Found %lu menus.", (unsigned long)[menus count]);
+    [container setResult:menus];
 }
 
-- (NSString *)listMenusJSON {
+- (bycopy NSString *)listMenusJSON {
     return [self jsonStringForObject:[self listMenus]];
 }
 
@@ -226,14 +311,37 @@ static void *RegistrationThread(void *arg) {
     return [self serializeObject:item detailed:YES];
 }
 
+- (void)_deferredInvoke:(NSMenuItem *)item {
+    [NSApp sendAction:[item action] to:[item target] from:item];
+}
+
+- (void)_main_invokeMenuItem:(NSDictionary *)params {
+    UIBridgeResultContainer *container = params[@"container"];
+    NSMenuItem *item = params[@"arg"];
+    [NSApp sendAction:[item action] to:[item target] from:item];
+    [container setResult:@YES];
+}
+
 // Invoke a menu item by objectID
 - (BOOL)invokeMenuItem:(NSString *)objectID {
     id obj = [self objectForID:objectID];
     if ([obj isKindOfClass:[NSMenuItem class]]) {
         NSMenuItem *item = (NSMenuItem *)obj;
         if ([item isEnabled]) {
-            [NSApp sendAction:[item action] to:[item target] from:item];
-            return YES;
+                SEL action = [item action];
+                NSString *selName = NSStringFromSelector(action);
+                // For quit actions, don't wait for execution because the process will exit
+                // and break the DO connection before we can return.
+                if (action == @selector(terminate:) || [selName containsString:@"terminate"] || [[item title] isEqualToString:@"Quit"]) {
+                    NSLog(@"[UIBridge] Quit/Terminate detected (%@), using deferred invoke", selName);
+                    // Use a small delay even on main thread to be extra safe
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        [NSApp sendAction:action to:[item target] from:item];
+                    });
+                    return YES;
+                }
+            id res = [self runOnMainThread:@selector(_main_invokeMenuItem:) withObject:item];
+            return [res boolValue];
         }
     }
     return NO;
@@ -317,31 +425,31 @@ static void *RegistrationThread(void *arg) {
 
 #pragma mark - UIBridgeProtocol
 
-- (NSString *)rootObjectsJSON {
+- (bycopy NSString *)rootObjectsJSON {
     return [self jsonStringForObject:[self runOnMainThread:@selector(_main_rootObjects:) withObject:nil]];
 }
 
-- (NSString *)detailsForObjectJSON:(NSString *)objID {
+- (bycopy NSString *)detailsForObjectJSON:(NSString *)objID {
     return [self jsonStringForObject:[self runOnMainThread:@selector(_main_detailsForObject:) withObject:objID]];
 }
 
-- (NSString *)invokeSelectorJSON:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args {
+- (bycopy NSString *)invokeSelectorJSON:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args {
     NSDictionary *p = @{@"selector": selectorName, @"object_id": objID, @"args": args};
     return [self jsonStringForObject:[self runOnMainThread:@selector(_main_invokeSelector:) withObject:p]];
 }
 
 // Typed (non-JSON) variants — return JSON-compatible Foundation objects directly to avoid NSData confusion
-- (id)rootObjects {
+- (bycopy id)rootObjects {
     id raw = [self runOnMainThread:@selector(_main_rootObjects:) withObject:nil];
     return [self jsonSafeObject:raw];
 }
 
-- (id)detailsForObject:(NSString *)objID {
+- (bycopy id)detailsForObject:(NSString *)objID {
     id raw = [self runOnMainThread:@selector(_main_detailsForObject:) withObject:objID];
     return [self jsonSafeObject:raw];
 }
 
-- (id)invokeSelector:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args {
+- (bycopy id)invokeSelector:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args {
     NSDictionary *p = @{@"selector": selectorName, @"object_id": objID, @"args": args};
     id raw = [self runOnMainThread:@selector(_main_invokeSelector:) withObject:p];
     return [self jsonSafeObject:raw];

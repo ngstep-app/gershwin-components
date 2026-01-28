@@ -8,6 +8,8 @@
 #import "../Common/UIBridgeProtocol.h"
 #import "X11Support.h"
 #import "LLDBController.h"
+#import <sys/select.h>
+#import <unistd.h>
 
 // Simple JSON helper
 static id ParseJSON(NSString *input) {
@@ -46,34 +48,57 @@ static void SendJSON(id obj) {
         NSLog(@"[Server] EXCEPTION in SendJSON: %@", e);
     }
 }
+// --- Static helper functions (must be at file scope) ---
 
 static id<UIBridgeProtocol> ConnectToAgent(int pid) {
-    NSString *connName = [NSString stringWithFormat:@"UIBridgeAgent%d", pid];
-    NSLog(@"[Server] Connecting to %@", connName);
-    id proxy = [NSConnection rootProxyForConnectionWithRegisteredName:connName host:nil];
-    if (proxy) {
-        [(NSDistantObject *)proxy setProtocolForProxy:@protocol(UIBridgeProtocol)];
-    } else {
-        NSLog(@"[Server] Failed to get proxy for %@", connName);
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if (pid > 0) {
+        NSString *connName = [NSString stringWithFormat:@"UIBridgeAgent%d", pid];
+        NSLog(@"[Server] Connecting to %@", connName);
+        id proxy = [NSConnection rootProxyForConnectionWithRegisteredName:connName host:nil];
+        if (proxy) {
+            [(NSDistantObject *)proxy setProtocolForProxy:@protocol(UIBridgeProtocol)];
+            // Avoid hanging on slow agent calls
+            [[proxy connectionForProxy] setRequestTimeout:10.0];
+            [[proxy connectionForProxy] setReplyTimeout:10.0];
+            return proxy;
+        } else {
+            NSLog(@"[Server] Failed to get proxy for %@", connName);
+        }
     }
-    return proxy;
-}
 
+    // Fallback: scan /proc for any running UIBridgeAgent registrations. This helps
+    // when the server wasn't the process that launched the app or if PID changed.
+    NSLog(@"[Server] Scanning /proc for UIBridgeAgent registrations as fallback");
+    NSArray *procEntries = [fm contentsOfDirectoryAtPath:@"/proc" error:nil];
+    for (NSString *entry in procEntries) {
+        NSCharacterSet *digits = [NSCharacterSet decimalDigitCharacterSet];
+        if ([entry rangeOfCharacterFromSet:[digits invertedSet]].location != NSNotFound) continue;
+        NSString *trialConn = [NSString stringWithFormat:@"UIBridgeAgent%@", entry];
+        id proxy = [NSConnection rootProxyForConnectionWithRegisteredName:trialConn host:nil];
+        if (proxy) {
+            NSLog(@"[Server] Found agent via fallback: %@", trialConn);
+            [(NSDistantObject *)proxy setProtocolForProxy:@protocol(UIBridgeProtocol)];
+            return proxy;
+        }
+    }
+
+    return nil;
+}
 
 static int LaunchApp(NSString *appPath) {
     NSTask *task = [[NSTask alloc] init];
-    
     NSString *appName = [[appPath lastPathComponent] stringByDeletingPathExtension];
     NSString *executable = [appPath stringByAppendingPathComponent:appName];
     [task setLaunchPath:executable];
-    
+
     // Set environment to inject agent
     NSMutableDictionary *env = [[[NSProcessInfo processInfo] environment] mutableCopy];
-    
+
     // Resolve absolute path to the agent dylib relative to the server's own directory
     NSString *serverPath = [[NSBundle mainBundle] executablePath];
     if (!serverPath) serverPath = [[NSProcessInfo processInfo] arguments][0];
-    
+
     NSString *baseDir = [serverPath stringByDeletingLastPathComponent];
     // Preferred agent path: use GNUSTEP_SYSTEM_LIBRARIES if set, otherwise fall back to conventional locations
     const char *gsLibs = getenv("GNUSTEP_SYSTEM_LIBRARIES");
@@ -99,15 +124,15 @@ static int LaunchApp(NSString *appPath) {
     }
     NSLog(@"[Server] Injecting agent from: %@", agentPath);
     env[@"LD_PRELOAD"] = agentPath;
-    env[@"UIBRIDGE_TARGET"] = appName;    
-    
+    env[@"UIBRIDGE_TARGET"] = appName;
+
     [task setEnvironment:env];
     [task launch];
-    
+
     int pid = [task processIdentifier];
     NSString *connName = [NSString stringWithFormat:@"UIBridgeAgent%d", pid];
     NSLog(@"[Server] Waiting for agent registration: %@", connName);
-    
+
     // Poll for registration (up to 15 seconds)
     BOOL registered = NO;
     for (int i = 0; i < 150; i++) {
@@ -119,11 +144,11 @@ static int LaunchApp(NSString *appPath) {
         }
         [NSThread sleepForTimeInterval:0.1];
     }
-    
+
     if (!registered) {
         NSLog(@"[Server] WARNING: Agent registration timed out for %@", connName);
     }
-    
+
     return pid;
 }
 
@@ -133,6 +158,8 @@ static void RedirectLogs(void) {
     NSLog(@"[Server] --- UIBridge Server Session Start ---");
 }
 
+
+
 @interface BridgeServer : NSObject
 @property (assign) int currentPID;
 - (void)checkInput:(NSTimer *)timer;
@@ -141,26 +168,40 @@ static void RedirectLogs(void) {
 @implementation BridgeServer
 
 - (void)checkInput:(NSTimer *)timer {
+    NSFileHandle *stdinHandle = [NSFileHandle fileHandleWithStandardInput];
+    int fd = [stdinHandle fileDescriptor];
     static BOOL hadData = NO;
-    NSData *data = [[NSFileHandle fileHandleWithStandardInput] availableData];
-    if ([data length] > 0) {
-        hadData = YES;
-        NSString *chunk = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        NSLog(@"[Server] Read chunk: %@", chunk);
-        NSArray *lines = [chunk componentsSeparatedByString:@"\n"];
-        
-        for (NSString *line in lines) {
-            NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            if ([trimmed length] == 0) continue;
+    
+    // Use select to check if data is available without blocking the runloop
+    fd_set set;
+    struct timeval tv;
+    FD_ZERO(&set);
+    FD_SET(fd, &set);
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    
+    if (select(fd + 1, &set, NULL, NULL, &tv) > 0) {
+        NSData *data = [stdinHandle availableData];
+        if ([data length] > 0) {
+            hadData = YES;
+            NSString *chunk = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            NSLog(@"[Server] Read chunk: %@", chunk);
+            NSArray *lines = [chunk componentsSeparatedByString:@"\n"];
             
-            NSDictionary *json = ParseJSON(trimmed);
-            if (!json) continue;
-            
-            [self processRequest:json];
+            for (NSString *line in lines) {
+                NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                if ([trimmed length] == 0) continue;
+                
+                NSDictionary *json = ParseJSON(trimmed);
+                if (!json) continue;
+                
+                [self processRequest:json];
+            }
+            [chunk release];
+        } else if (hadData) {
+            NSLog(@"[Server] EOF reached on stdin after data; continuing to run.");
+            hadData = NO;
         }
-    } else if (hadData) {
-        // EOF after having data
-        exit(0);
     }
 }
 
@@ -315,7 +356,18 @@ static void RedirectLogs(void) {
             }
         } else if ([toolName isEqualToString:@"list_apps"]) {
             NSFileManager *fm = [NSFileManager defaultManager];
-            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSAllApplicationsDirectory, NSAllDomainsMask, YES);
+            NSArray *domainPaths = NSSearchPathForDirectoriesInDomains(NSAllApplicationsDirectory, NSAllDomainsMask, YES);
+            NSMutableArray *paths = [NSMutableArray arrayWithArray:domainPaths];
+            
+            // Add some likely Gershwin locations if not already there
+            NSArray *extras = @[@"/System/Applications", @"/Local/Applications", @"/Network/Applications", [NSHomeDirectory() stringByAppendingPathComponent:@"Applications"]];
+            for (NSString *ext in extras) {
+                if (![paths containsObject:ext]) {
+                    [paths addObject:ext];
+                }
+            }
+
+            NSLog(@"[Server] Searching for apps in: %@", paths);
             NSMutableArray *apps = [NSMutableArray array];
             for (NSString *path in paths) {
                 NSError *error = nil;
@@ -326,7 +378,14 @@ static void RedirectLogs(void) {
                             NSString *fullPath = [path stringByAppendingPathComponent:item];
                             NSString *executable = [item stringByDeletingPathExtension];
                             NSString *execPath = [[fullPath stringByAppendingPathComponent:executable] stringByStandardizingPath];
-                            [apps addObject:@{@"name": item, @"path": fullPath, @"executable": execPath}];
+                            
+                            // Check if executable exists, if not, it might not be a valid app bundle for our terms
+                            if ([fm isExecutableFileAtPath:execPath]) {
+                                [apps addObject:@{@"name": item, @"path": fullPath, @"executable": execPath}];
+                            } else {
+                                // Try looking inside (maybe it's a newer layout or something)
+                                NSLog(@"[Server] App candidate has no top-level executable: %@", fullPath);
+                            }
                         }
                     }
                 }
@@ -356,7 +415,38 @@ static void RedirectLogs(void) {
                 errorMsg = @"Missing path";
             }
         } else if ([toolName isEqualToString:@"x11_list_windows"]) {
-            result = @{@"windows": [X11Support windowList]};
+            // Return detailed info for each X11 window: id, pid, title, geometry and app (when resolvable)
+            NSArray *winIDs = [X11Support windowList];
+            NSMutableArray *detailed = [NSMutableArray array];
+            for (NSNumber *n in winIDs) {
+                unsigned long xid = [n unsignedLongValue];
+                NSDictionary *info = [X11Support windowInfo:xid];
+                NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+                entry[@"id"] = @(xid);
+                if (info) {
+                    // Copy known keys and provide defaults
+                    entry[@"pid"] = info[@"pid"] ?: @0;
+                    entry[@"title"] = info[@"title"] ?: @"";
+                    entry[@"x"] = info[@"x"] ?: @0;
+                    entry[@"y"] = info[@"y"] ?: @0;
+                    entry[@"width"] = info[@"width"] ?: @0;
+                    entry[@"height"] = info[@"height"] ?: @0;
+
+                    // Try to resolve application name from PID (Linux /proc)
+                    NSNumber *pidNum = info[@"pid"];
+                    if (pidNum && [pidNum intValue] > 0) {
+                        NSString *commPath = [NSString stringWithFormat:@"/proc/%@/comm", pidNum];
+                        NSError *err = nil;
+                        NSString *comm = [NSString stringWithContentsOfFile:commPath encoding:NSUTF8StringEncoding error:&err];
+                        if (comm) {
+                            NSString *trim = [comm stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                            if ([trim length] > 0) entry[@"app"] = trim;
+                        }
+                    }
+                }
+                [detailed addObject:entry];
+            }
+            result = @{@"windows": detailed};
         } else if ([toolName isEqualToString:@"x11_window_info"]) {
             NSNumber *xid = callParams[@"xid"];
             if (xid) {
@@ -410,40 +500,26 @@ static void RedirectLogs(void) {
                     id jsonResult = nil; // may be NSString, NSData, NSDictionary, or NSArray
                     if ([toolName isEqualToString:@"get_root"]) {
                         NSLog(@"[Server] Requesting agent root objects...");
-                        if ([agent respondsToSelector:@selector(rootObjectsJSON)]) {
-                            jsonResult = [agent rootObjectsJSON];
-                        } else {
-                            jsonResult = [agent rootObjects];
-                        }
+                        jsonResult = [agent rootObjectsJSON];
+                        if (!jsonResult) jsonResult = [agent rootObjects];
                     } else if ([toolName isEqualToString:@"get_object_details"]) {
-                        if ([agent respondsToSelector:@selector(detailsForObjectJSON:)]) {
-                            jsonResult = [agent detailsForObjectJSON:callParams[@"object_id"]];
-                        } else {
-                            jsonResult = [agent detailsForObject:callParams[@"object_id"]];
-                        }
+                        jsonResult = [agent detailsForObjectJSON:callParams[@"object_id"]];
+                        if (!jsonResult) jsonResult = [agent detailsForObject:callParams[@"object_id"]];
                     } else if ([toolName isEqualToString:@"invoke_selector"]) {
-                        if ([agent respondsToSelector:@selector(invokeSelectorJSON:onObject:withArgs:)]) {
-                            jsonResult = [agent invokeSelectorJSON:callParams[@"selector"] onObject:callParams[@"object_id"] withArgs:callParams[@"args"]];
-                        } else {
-                            jsonResult = [agent invokeSelector:callParams[@"selector"] onObject:callParams[@"object_id"] withArgs:callParams[@"args"]];
-                        }
+                        jsonResult = [agent invokeSelectorJSON:callParams[@"selector"] onObject:callParams[@"object_id"] withArgs:callParams[@"args"]];
+                        if (!jsonResult) jsonResult = [agent invokeSelector:callParams[@"selector"] onObject:callParams[@"object_id"] withArgs:callParams[@"args"]];
                     } else if ([toolName isEqualToString:@"list_menus"]) {
-                        // Call listMenus via DO proxy (agent)
-                        if ([agent respondsToSelector:@selector(listMenus)]) {
-                            NSArray *menus = [agent performSelector:@selector(listMenus)];
-                            result = menus;
-                        } else if ([agent respondsToSelector:@selector(listMenusJSON)]) {
-                            NSString *menusJSON = [agent performSelector:@selector(listMenusJSON)];
+                        // Prefer JSON variant for reliability over DO
+                        NSString *menusJSON = [agent listMenusJSON];
+                        if (menusJSON) {
                             result = ParseJSON(menusJSON);
                         } else {
-                            errorMsg = @"Agent does not support menu listing";
+                            // Fallback to typed variant
+                            result = [agent listMenus];
                         }
                     } else if ([toolName isEqualToString:@"invoke_menu_item"]) {
                         // Call invokeMenuItem via DO proxy (agent)
-                        BOOL ok = NO;
-                        if ([agent respondsToSelector:@selector(invokeMenuItem:)]) {
-                            ok = [agent invokeMenuItem:callParams[@"object_id"]];
-                        }
+                        BOOL ok = [agent invokeMenuItem:callParams[@"object_id"]];
                         result = @{ @"status": ok ? @"invoked" : @"failed" };
                     } else {
                         errorMsg = [NSString stringWithFormat:@"Unknown tool: %@", toolName];
@@ -515,7 +591,19 @@ static void RedirectLogs(void) {
             // VS Code / MCP expectation: wrap in content array
             id contentItem = nil;
             if (result && ([result isKindOfClass:[NSDictionary class]] || [result isKindOfClass:[NSArray class]])) {
-                contentItem = @{ @"type": @"json", @"json": result };
+                NSLog(@"[Server] result is collection (class: %@), serializing content for MCP", NSStringFromClass([result class]));
+                NSError *error = nil;
+                NSData *jsonData = [NSJSONSerialization dataWithJSONObject:result 
+                                                                   options:NSJSONWritingPrettyPrinted 
+                                                                     error:&error];
+                if (jsonData) {
+                    NSString *jsonStr = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+                    contentItem = @{ @"type": @"text", @"text": jsonStr ?: [result description] };
+                    [jsonStr release];
+                } else {
+                    NSLog(@"[Server] NSJSONSerialization failed for result: %@", error);
+                    contentItem = @{ @"type": @"text", @"text": [result description] };
+                }
             } else if (result) {
                 contentItem = @{ @"type": @"text", @"text": [result description] };
             } else {
@@ -529,7 +617,7 @@ static void RedirectLogs(void) {
             resp[@"result"] = result ?: @{};
         }
     }
-    NSLog(@"[Server] Calling SendJSON...");
+    NSLog(@"[Server] Final response dictionary constructed. Calling SendJSON...");
     SendJSON(resp);
     NSLog(@"[Server] processRequest finished.");
 }
@@ -537,12 +625,29 @@ static void RedirectLogs(void) {
 @end
 
 int main(int argc, const char *argv[]) {
+    // Standard Gershwin environment setup
     setenv("GNUSTEP_SYSTEM_ROOT", "/System", 1);
+    setenv("GNUSTEP_LOCAL_ROOT", "/Local", 1);
+    setenv("GNUSTEP_NETWORK_ROOT", "/Network", 1);
+    
+    // Ensure we find the correct GNUstep.conf for Gershwin
+    NSArray *configCandidates = @[
+        @"/System/Library/Preferences/GNUstep.conf",
+        @"/Local/Library/Preferences/GNUstep.conf",
+        @"/etc/GNUstep/GNUstep.conf",
+        @"/home/devuan/gershwin-build/repos/gershwin-system/Library/Preferences/GNUstep.conf"
+    ];
+    for (NSString *conf in configCandidates) {
+        if ([[NSFileManager defaultManager] fileExistsAtPath:conf]) {
+            setenv("GNUSTEP_CONFIG_FILE", [conf UTF8String], 1);
+            break;
+        }
+    }
     
     // Set LD_LIBRARY_PATH for GNUstep libraries
     const char *ldpath = getenv("LD_LIBRARY_PATH");
     NSString *ldpathStr = ldpath ? [NSString stringWithUTF8String:ldpath] : @"";
-    NSString *newLdPath = [NSString stringWithFormat:@"/home/devuan/gershwin-build/repos/libs-base/Source/obj:/home/devuan/gershwin-build/repos/libs-gui/Source/obj:/home/devuan/gershwin-build/repos/UIBridge/Agent/obj%@%@", ldpath ? @":" : @"", ldpathStr];
+    NSString *newLdPath = [NSString stringWithFormat:@"/System/Library/Libraries:/Local/Library/Libraries:/home/devuan/gershwin-build/repos/libs-base/Source/obj:/home/devuan/gershwin-build/repos/libs-gui/Source/obj:/home/devuan/gershwin-build/repos/UIBridge/Agent/obj%@%@", ldpath ? @":" : @"", ldpathStr];
     setenv("LD_LIBRARY_PATH", [newLdPath UTF8String], 1);
     
     // Unbuffer stdout
@@ -554,9 +659,8 @@ int main(int argc, const char *argv[]) {
     
     BridgeServer *server = [[BridgeServer alloc] init];
 
-    // Use timer to poll for input. The scheduled timer is retained by the run loop so
-    // there is no need to keep a local reference here.
-    [NSTimer scheduledTimerWithTimeInterval:0.001 target:server selector:@selector(checkInput:) userInfo:nil repeats:YES];
+    // Use timer to poll for input.
+    [NSTimer scheduledTimerWithTimeInterval:0.05 target:server selector:@selector(checkInput:) userInfo:nil repeats:YES];
     
     // [[NSNotificationCenter defaultCenter] addObserver:server 
     //                                          selector:@selector(handleInput:) 

@@ -8,18 +8,18 @@
 
 @protocol UIBridgeProtocol <NSObject>
 
-- (NSString *)rootObjectsJSON;
-- (NSString *)detailsForObjectJSON:(NSString *)objID;
-- (NSString *)invokeSelectorJSON:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args;
+- (bycopy NSString *)rootObjectsJSON;
+- (bycopy NSString *)detailsForObjectJSON:(NSString *)objID;
+- (bycopy NSString *)invokeSelectorJSON:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args;
 
 // Typed variants
-- (id)rootObjects;
-- (id)detailsForObject:(NSString *)objID;
-- (id)invokeSelector:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args;
+- (bycopy id)rootObjects;
+- (bycopy id)detailsForObject:(NSString *)objID;
+- (bycopy id)invokeSelector:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args;
 
-- (NSArray *)listMenus;
+- (bycopy NSArray *)listMenus;
 // JSON string variant used by some server implementations
-- (NSString *)listMenusJSON;
+- (bycopy NSString *)listMenusJSON;
 - (BOOL)invokeMenuItem:(NSString *)objID;
 
 @end
