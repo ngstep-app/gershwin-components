@@ -189,7 +189,11 @@ static void RedirectLogs(void) {
                 @"resources": @{},
                 @"prompts": @{}
             },
-            @"serverInfo": @{@"name": @"uibridge", @"version": @"1.0.0"}
+            @"serverInfo": @{
+                @"name": @"uibridge", 
+                @"version": @"1.1.0",
+                @"description": @"UIBridge is a comprehensive automation and introspection server for GNUstep applications. It allows for deep inspection of Objective-C object trees, UI widget discovery, menu interaction, and raw X11 input simulation. Ideal for automated testing, debugging, and accessibility auditing."
+            }
         };
     } else if ([method isEqualToString:@"tools/list"] || [method isEqualToString:@"list_tools"]) {
         // Canonical MCP structure for tools: wrap success in content schema
@@ -212,30 +216,78 @@ static void RedirectLogs(void) {
 
         result = @{
             @"tools": @[
-                @{@"name": @"launch_app", @"description": @"Launch a GNUstep app with UIBridge agent injected. Returns when agent registers.", @"inputSchema": @{@"type": @"object", @"properties": @{@"app_path": @{@"type": @"string"}}}, @"outputSchema": contentSchema},
-                @{@"name": @"list_apps", @"description": @"List available GNUstep applications.", @"inputSchema": @{@"type": @"object", @"properties": @{}}, @"outputSchema": contentSchema},
-                @{@"name": @"list_files", @"description": @"List files in a directory.", @"inputSchema": @{@"type": @"object", @"properties": @{@"path": @{@"type": @"string"}}}, @"outputSchema": contentSchema},
-                @{@"name": @"read_file_content", @"description": @"Read the content of a file.", @"inputSchema": @{@"type": @"object", @"properties": @{@"path": @{@"type": @"string"}}}, @"outputSchema": contentSchema},
-                @{@"name": @"get_root", @"description": @"Get root objects (NSApp, windows) from the app.", @"inputSchema": @{@"type": @"object", @"properties": @{}}, @"outputSchema": contentSchema},
-                @{@"name": @"get_object_details", @"description": @"Inspect an object's properties.", @"inputSchema": @{@"type": @"object", @"properties": @{@"object_id": @{@"type": @"string"}}}, @"outputSchema": contentSchema},
-                @{@"name": @"invoke_selector", @"description": @"Invoke a selector on an object.", @"inputSchema": @{@"type": @"object", @"properties": @{@"object_id": @{@"type": @"string"}, @"selector": @{@"type": @"string"}, @"args": @{@"type": @"array", @"items": @{}}}}, @"outputSchema": contentSchema},
+                @{@"name": @"launch_app", @"description": @"Launches a GNUstep application with the UIBridge Agent automatically injected. This is usually the first tool you should call to start working with an app. It sets up the environment and allows subsequent tools to interact with the application's internal state (Objective-C objects).", @"inputSchema": @{@"type": @"object", @"properties": @{@"app_path": @{@"type": @"string", @"description": @"The absolute path to the .app bundle or its binary executable."}}}, @"outputSchema": contentSchema},
+                @{@"name": @"list_apps", @"description": @"Scans standard GNUstep application directories and returns a list of installed applications. Use this to discover which apps are available to be launched and tested on the current system.", @"inputSchema": @{@"type": @"object", @"properties": @{}}, @"outputSchema": contentSchema},
+                @{@"name": @"list_files", @"description": @"Lists files in a given directory path. Useful for exploring application resources, data bundles, or confirming the presence of specifically required files before or during testing.", @"inputSchema": @{@"type": @"object", @"properties": @{@"path": @{@"type": @"string", @"description": @"The directory path to list."}}}, @"outputSchema": contentSchema},
+                @{@"name": @"read_file_content", @"description": @"Reads the full text content of a file. Use this to inspect configuration files, logs, or other text-based data within the application's environment.", @"inputSchema": @{@"type": @"object", @"properties": @{@"path": @{@"type": @"string", @"description": @"The path to the file to read."}}}, @"outputSchema": contentSchema},
+                @{@"name": @"get_root", @"description": @"Retrieves the entry-level Objective-C objects for the currently running app: the NSApp instance and a list of all top-level windows. This provides the starting point for exploring the UI widget tree and application-wide state.", @"inputSchema": @{@"type": @"object", @"properties": @{}}, @"outputSchema": contentSchema},
+                @{@"name": @"get_object_details", @"description": @"Fetches comprehensive details about a specific Objective-C object within the target application. Returns its class name, window context, frame (for views/widgets), title/labels, and object pointers to children or subview components. Essential for verifying widget state in automated tests.", @"inputSchema": @{@"type": @"object", @"properties": @{@"object_id": @{@"type": @"string", @"description": @"The unique object identifier (e.g., 'objc:0x...') returned by other tools."}}}, @"outputSchema": contentSchema},
+                @{@"name": @"invoke_selector", @"description": @"Dynamically calls an Objective-C selector (method) on a remote object in the target application. This allows directly manipulating application state, triggering internal workflows, or simulating events at the model/controller level. Support passing an array of primitive arguments.", @"inputSchema": @{@"type": @"object", @"properties": @{@"object_id": @{@"type": @"string", @"description": @"The object identifier to call the method on."}, @"selector": @{@"type": @"string", @"description": @"The Objective-C selector name (e.g., 'setTitle:')."}, @"args": @{@"type": @"array", @"description": @"Optional array of arguments to pass to the method.", @"items": @{}}}}, @"outputSchema": contentSchema},
                 // Menu Tools
-                @{@"name": @"list_menus", @"description": @"List all menus in the app.", @"inputSchema": @{@"type": @"object", @"properties": @{}}, @"outputSchema": contentSchema},
-                @{@"name": @"invoke_menu_item", @"description": @"Invoke a menu item by object_id.", @"inputSchema": @{@"type": @"object", @"properties": @{@"object_id": @{@"type": @"string"}}}, @"outputSchema": contentSchema},
+                @{@"name": @"list_menus", @"description": @"Provides a hierarchical view of the application's entire menu system. Use this to identify available actions and find the object_id of menu items for goal-oriented automation.", @"inputSchema": @{@"type": @"object", @"properties": @{}}, @"outputSchema": contentSchema},
+                @{@"name": @"invoke_menu_item", @"description": @"Triggers the action associated with a specific menu item via its object_id. This is the preferred way to automate menu-driven interactions (e.g., 'File' -> 'Open') in the application.", @"inputSchema": @{@"type": @"object", @"properties": @{@"object_id": @{@"type": @"string", @"description": @"The object identifier of the NSMenuItem to invoke."}}}, @"outputSchema": contentSchema},
                 // X11 Tools
-                @{@"name": @"x11_list_windows", @"description": @"List all X11 windows.", @"inputSchema": @{@"type": @"object", @"properties": @{}}, @"outputSchema": contentSchema},
-                @{@"name": @"x11_window_info", @"description": @"Get details for an X11 window.", @"inputSchema": @{@"type": @"object", @"properties": @{@"xid": @{@"type": @"integer"}}}, @"outputSchema": contentSchema},
-                @{@"name": @"x11_mouse_move", @"description": @"Move mouse cursor.", @"inputSchema": @{@"type": @"object", @"properties": @{@"x": @{@"type": @"integer"}, @"y": @{@"type": @"integer"}}}, @"outputSchema": contentSchema},
-                @{@"name": @"x11_click", @"description": @"Click mouse button.", @"inputSchema": @{@"type": @"object", @"properties": @{@"button": @{@"type": @"integer", @"description": @"1=left, 2=middle, 3=right"}}}, @"outputSchema": contentSchema},
-                @{@"name": @"x11_type", @"description": @"Type a string.", @"inputSchema": @{@"type": @"object", @"properties": @{@"text": @{@"type": @"string"}}}, @"outputSchema": contentSchema},
+                @{@"name": @"x11_list_windows", @"description": @"Returns a low-level list of all X11 window IDs currently managed by the X server. Useful for cross-referencing GNUstep window objects with OS-level window management or debugging window positioning.", @"inputSchema": @{@"type": @"object", @"properties": @{}}, @"outputSchema": contentSchema},
+                @{@"name": @"x11_window_info", @"description": @"Gets detailed geometric and metadata information for a specific X11 window. Use this for precise coordinate-based input automation when internal Object-C inspection is not enough.", @"inputSchema": @{@"type": @"object", @"properties": @{@"xid": @{@"type": @"integer", @"description": @"The X11 window ID."}}}, @"outputSchema": contentSchema},
+                @{@"name": @"x11_mouse_move", @"description": @"Moves the system mouse cursor to the specified screen coordinates. Can be combined with x11_click for raw input automation tasks.", @"inputSchema": @{@"type": @"object", @"properties": @{@"x": @{@"type": @"integer", @"description": @"The X screen coordinate."}, @"y": @{@"type": @"integer", @"description": @"The Y screen coordinate."}}}, @"outputSchema": contentSchema},
+                @{@"name": @"x11_click", @"description": @"Simulates a hardware mouse button click at the current cursor position. Works for both system-level and application-level widgets.", @"inputSchema": @{@"type": @"object", @"properties": @{@"button": @{@"type": @"integer", @"description": @"The mouse button to click: 1=Left, 2=Middle, 3=Right."}}}, @"outputSchema": contentSchema},
+                @{@"name": @"x11_type", @"description": @"Simulates typing a UTF-8 string into the currently focused window. Useful for automating text entry in fields where direct Objective-C manipulation is not desired or to test actual keyboard event handling.", @"inputSchema": @{@"type": @"object", @"properties": @{@"text": @{@"type": @"string", @"description": @"The text string to type."}}}, @"outputSchema": contentSchema},
                 // LLDB Tools
-                @{@"name": @"lldb_exec", @"description": @"Execute an LLDB command on the attached app.", @"inputSchema": @{@"type": @"object", @"properties": @{@"command": @{@"type": @"string"}}}, @"outputSchema": contentSchema}
+                @{@"name": @"lldb_exec", @"description": @"Executes an arbitrary LLDB command against the target application while the debugger is attached. This provides the most powerful inspection and modification capabilities, including memory scanning, breakpoint management, and backtrace inspection. Note: this may briefly pause the application execution.", @"inputSchema": @{@"type": @"object", @"properties": @{@"command": @{@"type": @"string", @"description": @"The LLDB command to execute."}}}, @"outputSchema": contentSchema}
             ]
         };
     } else if ([method isEqualToString:@"resources/list"] || [method isEqualToString:@"list_resources"]) {
         result = @{@"resources": @[]};
     } else if ([method isEqualToString:@"prompts/list"] || [method isEqualToString:@"list_prompts"]) {
-        result = @{@"prompts": @[]};
+        result = @{@"prompts": @[
+            @{
+                @"name": @"inspect_ui",
+                @"description": @"Expert guide for inspecting a GNUstep application's UI hierarchy and discovering details about its buttons, views, and windows.",
+                @"arguments": @[
+                    @{@"name": @"app_path", @"description": @"Absolute path to the .app bundle to inspect", @"required": @YES}
+                ]
+            },
+            @{
+                @"name": @"automate_task",
+                @"description": @"Step-by-step assistant for automating a complex task within a GNUstep application using UIBridge tools.",
+                @"arguments": @[
+                    @{@"name": @"task_description", @"description": @"Detailed description of the task to automate (e.g., 'Open TextEdit and type Hello World')", @"required": @YES}
+                ]
+            }
+        ]};
+    } else if ([method isEqualToString:@"prompts/get"] || [method isEqualToString:@"get_prompt"]) {
+        NSString *name = params[@"name"];
+        if ([name isEqualToString:@"inspect_ui"]) {
+            NSString *appPath = params[@"arguments"][@"app_path"];
+            result = @{
+                @"description": @"UI Inspection Guide",
+                @"messages": @[
+                    @{
+                        @"role": @"user",
+                        @"content": @{
+                            @"type": @"text",
+                            @"text": [NSString stringWithFormat:@"I want to inspect the UI of the application at %@. Please start by launching it, then list its windows and browse the root objects to give me an overview of its widget tree.", appPath]
+                        }
+                    }
+                ]
+            };
+        } else if ([name isEqualToString:@"automate_task"]) {
+            NSString *task = params[@"arguments"][@"task_description"];
+            result = @{
+                @"description": @"Task Automation Assistant",
+                @"messages": @[
+                    @{
+                        @"role": @"user",
+                        @"content": @{
+                            @"type": @"text",
+                            @"text": [NSString stringWithFormat:@"I need to automate the following task: '%@'. Please analyze the application's menus and UI objects to find the best way to achieve this using UIBridge tools.", task]
+                        }
+                    }
+                ]
+            };
+        } else {
+            errorMsg = @"Prompt not found";
+        }
     } else if ([method isEqualToString:@"notifications/initialized"]) {
         // Notification, no result needed
         return;
