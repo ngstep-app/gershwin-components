@@ -6,7 +6,18 @@
 
 #import "SIPManager.h"
 #import "PreferencesController.h"
+
+/* Workaround: On FreeBSD the system <libutil.h> declares a different hexdump
+   signature which conflicts with libre's re_fmt.h declaration.
+   Rename the symbol locally while including the re headers to avoid the
+   conflicting prototype during compilation. */
+#ifdef __FreeBSD__
+#define hexdump libre_hexdump_for_freebsd_build
+#endif
 #import <re/re.h>
+#ifdef __FreeBSD__
+#undef hexdump
+#endif
 #define DEBUG_MODULE "Phone"
 #define DEBUG_LEVEL 7
 #import <re/re_dbg.h>
@@ -38,6 +49,7 @@ enum {
     BOOL _isOutgoing;
     BOOL _hasPromptedRegistrationFailure;
     volatile int _re_thread_ready; // 0 = not ready, 1 = ready
+    dispatch_semaphore_t _exitSem;
 } 
 @property (readwrite) BOOL isRegistered;
 @property (readwrite) BOOL isInCall;
@@ -56,27 +68,68 @@ static void sip_trace_handler_wr(bool tx, enum sip_transp tp, const struct sa *s
 
 static void mqueue_handler(int id, void *data, void *arg) {
     SIPManager *self = (__bridge SIPManager *)arg;
+    
+    // Explicitly enter RE thread context to satisfy Libre thread checks
+    re_thread_enter();
 
-    // The handler is called in the RE thread (dedicated thread running re_main), so no need to check re_thread_check
+    // The handler is called in the RE thread (dedicated thread running re_main)
     switch (id) {
         case CMD_UPDATE_SETTINGS: {
             char *addr = (char *)data;
+
+            // If the core hasn't been initialized yet, initialize it here in the RE context.
+            // This avoids blocking the main thread during app startup.
+            static int coreInitialized = 0;
+            if (!coreInitialized) {
+                // Configure SIP to use a non-privileged port to avoid EPERM
+                struct config *cfg = conf_config();
+
+                cfg->sip.local[0] = '\0'; // Let baresip pick a random high port
+                
+                // Initialize UA with UDP only first to narrow down EPERM issue
+                // Use software name "Phone"
+                int err = ua_init("Phone", YES, NO, NO);
+                
+                if (err == 0) {
+                    coreInitialized = 1;
+                    // Enable SIP trace and install handler within RE context
+                    uag_enable_sip_trace(true);
+                    sip_set_trace_handler(uag_sip(), sip_trace_handler_wr);
+                } else {
+                     NSLog(@"SIPManager: ua_init FATAL error (%d). Continuing anyway.", err);
+                }
+
+                // Load essential modules (non-blocking within RE thread)
+                const char *modpath = "/usr/lib/baresip/modules";
+                if (access(modpath, F_OK) == -1) modpath = "/usr/local/lib/baresip/modules";
+                
+                err = 0;
+                err |= module_load(modpath, "g711");
+                err |= module_load(modpath, "alsa");
+                err |= module_load(modpath, "ice");
+                err |= module_load(modpath, "srtp");
+                err |= module_load(modpath, "auconv");
+                err |= module_load(modpath, "auresamp");
+                err |= module_load(modpath, "aufile"); 
+                if (err) {
+                    NSLog(@"SIPManager: some modules failed to load (path: %s)", modpath);
+                }
+
+                // Register event handler
+                bevent_register(bevent_handler, (__bridge void *)self);
+            }
+
             if (self->_ua) {
-                // If we are calling ua functions from another thread (even via mqueue if it's not the re thread),
-                // we should be careful. But mqueue_handler is called by the RE thread.
                 mem_deref(self->_ua);
                 self->_ua = NULL;
             }
-            
+
             // Re-apply audio config in case it changed
             NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
             struct config *cfg = conf_config();
             NSString *audioIn = [defaults stringForKey:@"AudioInput"] ?: @"alsa";
             NSString *audioOut = [defaults stringForKey:@"AudioOutput"] ?: @"alsa";
-            
-            // Check if modules were previously loaded or if they need to be loaded
-            // Baresip might require modules to be loaded for these to work
-            
+
             strncpy(cfg->audio.src_mod, audioIn.UTF8String, sizeof(cfg->audio.src_mod)-1);
             strncpy(cfg->audio.play_mod, audioOut.UTF8String, sizeof(cfg->audio.play_mod)-1);
             strncpy(cfg->audio.alert_mod, audioOut.UTF8String, sizeof(cfg->audio.alert_mod)-1);
@@ -87,17 +140,17 @@ static void mqueue_handler(int id, void *data, void *arg) {
                 strncpy(cfg->audio.audio_path, resourcesPath.UTF8String, sizeof(cfg->audio.audio_path)-1);
             }
 
-            // Load aufile module for tone playback
-            module_load("/usr/local/lib/baresip/modules", "aufile");
-
-            int err = ua_alloc(&self->_ua, addr);
-            if (err) {
-                 NSLog(@"SIPManager: ua_alloc failed (%d) for addr: %s", err, addr);
+            int err2 = ua_alloc(&self->_ua, addr);
+            if (err2) {
+                 NSLog(@"SIPManager: ua_alloc failed (%d) for addr: %s", err2, addr);
                  [self handleError:@"Initialization Error" message:@"Failed to allocate User Agent."];
             } else {
+                 self->_current_call = NULL;
                  NSLog(@"SIPManager: User agent allocated for %s, registering...", addr);
-                 // Ensure the SIP trace handler is set from RE context so packet dumps are printed immediately
-                 sip_set_trace_handler(uag_sip(), sip_trace_handler_wr);
+
+                 // Update UI that we are working on it
+                 [self performSelectorOnMainThread:@selector(_notifyRegistrationStateChanged:) withObject:@"Registering..." waitUntilDone:NO];
+                 
                  ua_register(self->_ua);
             }
             
@@ -148,6 +201,8 @@ static void mqueue_handler(int id, void *data, void *arg) {
             break;
         }
     }
+    
+    re_thread_leave();
 }
 
 @implementation SIPManager
@@ -261,6 +316,8 @@ static void sip_trace_handler_wr(bool tx, enum sip_transp tp, const struct sa *s
     if (self) {
         int err;
 
+        _exitSem = dispatch_semaphore_create(0);
+        
         // Make stdout and stderr unbuffered for immediate log output
         setbuf(stdout, NULL);
         setbuf(stderr, NULL);
@@ -290,9 +347,13 @@ static void sip_trace_handler_wr(bool tx, enum sip_transp tp, const struct sa *s
         if (err) {
             NSLog(@"SIPManager: conf_configure failed (%d) - ignoring", err);
         }
+
+        // Configure SIP to use a non-privileged port to avoid EPERM
+        struct config *cfg = conf_config();
+        cfg->sip.local[0] = '\0'; // Let baresip pick a random high port
         
         // Initialize baresip core
-        err = baresip_init(conf_config());
+        err = baresip_init(cfg);
         if (err) {
             NSLog(@"SIPManager: baresip_init failed (%d)", err);
         }
@@ -306,45 +367,17 @@ static void sip_trace_handler_wr(bool tx, enum sip_transp tp, const struct sa *s
         
         // Update audio config from preferences
         NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-        struct config *cfg = conf_config();
         NSString *audioIn = [defaults stringForKey:@"AudioInput"] ?: @"alsa";
         NSString *audioOut = [defaults stringForKey:@"AudioOutput"] ?: @"alsa";
         strncpy(cfg->audio.src_mod, audioIn.UTF8String, sizeof(cfg->audio.src_mod)-1);
         strncpy(cfg->audio.play_mod, audioOut.UTF8String, sizeof(cfg->audio.play_mod)-1);
         strncpy(cfg->audio.alert_mod, audioOut.UTF8String, sizeof(cfg->audio.alert_mod)-1);
 
-        // Initialize baresip unit agent
-        err = ua_init("Phone", YES, YES, YES);
-        if (err) {
-            NSLog(@"SIPManager: ua_init failed (%d)", err);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if ([self.delegate respondsToSelector:@selector(sipManagerDidReceiveError:message:)]) {
-                    [self.delegate sipManagerDidReceiveError:@"SIP Initialization Failed" 
-                                                   message:[NSString stringWithFormat:@"Baresip UA failed to initialize (Error %d). Check network components.", err]];
-                }
-            });
-        }
-        
-        // Enable SIP trace for network debugging
-        uag_enable_sip_trace(true);
-        // Override the default trace handler to ensure immediate stderr output
-        sip_set_trace_handler(uag_sip(), sip_trace_handler_wr);
-
-        // Load modules - at minimum g711 and alsa
-        err = module_load("/usr/local/lib/baresip/modules", "g711");
-        err |= module_load("/usr/local/lib/baresip/modules", "alsa");
-        err |= module_load("/usr/local/lib/baresip/modules", "ice"); 
-        err |= module_load("/usr/local/lib/baresip/modules", "srtp");
-        err |= module_load("/usr/local/lib/baresip/modules", "auconv");
-        err |= module_load("/usr/local/lib/baresip/modules", "auresamp");
-        err |= module_load("/usr/local/lib/baresip/modules", "aufile");
-
-        if (err) {
-             NSLog(@"SIPManager: some modules failed to load (ignoring)");
-        }
-
-        // Register event handler
-        bevent_register(bevent_handler, (__bridge void *)self);
+        // Note: baresip core initialization (ua_init and module loading)
+        // may perform blocking operations; we defer core initialization
+        // until the RE thread is running and execute it in a RE-safe context
+        // (handled in CMD_UPDATE_SETTINGS via mqueue_handler) to avoid
+        // blocking the main GUI thread.
         
         re_thread_leave();
     }
@@ -357,7 +390,22 @@ static void *re_main_thread_func(void *arg) {
     // Mark RE thread as ready for mqueue operations
     self->_re_thread_ready = 1;
     re_main(NULL);
+    
+    // Cleanup in RE context
+    bevent_unregister(bevent_handler);
+    ua_close();
+    module_app_unload();
+    baresip_close();
+    libre_close();
+
+    if (self->_mq) {
+        mem_deref(self->_mq);
+        self->_mq = NULL;
+    }
+    
     re_thread_leave();
+    if (self->_exitSem) dispatch_semaphore_signal(self->_exitSem);
+    
     return NULL;
 }
 
@@ -370,45 +418,22 @@ static void *re_main_thread_func(void *arg) {
     } else {
         NSLog(@"SIPManager: Failed to create RE thread (%d)", err);
     }
-
-    // Give the RE thread a short moment to come up, then apply settings that will push work to the RE thread
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(200 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-        [self updateSettings];
-    });
 } 
 
 - (void)stop {
     NSLog(@"SIPManager: Stopping...");
 
-    // Perform cleanup on a background thread and wait for completion to avoid use-after-free
-    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    if (self->_re_thread_ready) {
         re_thread_enter();
-        bevent_unregister(bevent_handler);
-        ua_close();
-        module_app_unload();
-
-        // Stop the loop
         re_cancel();
-
-        baresip_close();
-        libre_close();
-
-        // Free the mqueue inside a RE context
-        if (_mq) {
-            mem_deref(_mq);
-            _mq = NULL;
-        }
-
         re_thread_leave();
-        NSLog(@"SIPManager: Stopped");
-
-        dispatch_semaphore_signal(sem);
-    });
-
-    // Wait synchronously for cleanup to finish. Safe to call from main thread.
-    dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+        
+        // Wait for cleanup to finish in the RE thread
+        if (self->_exitSem) {
+            dispatch_semaphore_wait(self->_exitSem, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+        }
+    }
+    NSLog(@"SIPManager: Stopped");
 }
 
 - (void)dealloc {
@@ -445,17 +470,20 @@ static void *re_main_thread_func(void *arg) {
         }
         freeifaddrs(ifaddr);
     }
-    if (!laddr) {
-        // Fallback to a default if no matching interface found
-        laddr = @"192.168.0.187";
-    }
     
     if (username.length > 0 && server.length > 0) {
         NSString *addr;
+        
+        // Use standard Baresip account string format with explicit parameters and display name.
+        // Some servers like Asterisk prefer auth_user and password as parameters.
         if (password.length > 0) {
-            addr = [NSString stringWithFormat:@"<sip:%@@%@>;laddr=%@;auth_pass=%@", username, server, laddr, password];
+            addr = [NSString stringWithFormat:@"\"%@\" <sip:%@@%@>;auth_user=%@;password=%@;transport=udp", username, username, server, username, password];
         } else {
-            addr = [NSString stringWithFormat:@"<sip:%@@%@>;laddr=%@", username, server, laddr];
+            addr = [NSString stringWithFormat:@"<sip:%@@%@>;transport=udp", username, server];
+        }
+        
+        if (laddr) {
+            addr = [addr stringByAppendingFormat:@";laddr=%@", laddr];
         }
         
         char *c_addr = mem_alloc(addr.length + 1, NULL);
@@ -569,11 +597,35 @@ static void *re_main_thread_func(void *arg) {
 }
 
 - (void)handleError:(NSString *)title message:(NSString *)message {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if ([self.delegate respondsToSelector:@selector(sipManagerDidReceiveError:message:)]) {
-            [self.delegate sipManagerDidReceiveError:title message:message];
-        }
-    });
+    NSDictionary *info = @{@"title": title ?: @"Error", @"message": message ?: @""};
+    [self performSelectorOnMainThread:@selector(_dispatchError:) withObject:info waitUntilDone:NO];
+}
+
+- (void)_dispatchError:(NSDictionary *)info {
+    NSString *title = info[@"title"];
+    NSString *message = info[@"message"];
+    if ([self.delegate respondsToSelector:@selector(sipManagerDidReceiveError:message:)]) {
+        [self.delegate sipManagerDidReceiveError:title message:message];
+    }
+}
+
+- (void)_notifyRegistrationStateChanged:(NSString *)state {
+    if ([self.delegate respondsToSelector:@selector(registrationStateChanged:)]) {
+        [self.delegate registrationStateChanged:state];
+    }
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"SIPRegistrationStateChanged" object:state];
+}
+
+- (void)_notifyCallStateChanged:(NSString *)state {
+    if ([self.delegate respondsToSelector:@selector(callStateChanged:)]) {
+        [self.delegate callStateChanged:state];
+    }
+}
+
+- (void)_notifyIncomingCall:(NSString *)number {
+    if ([self.delegate respondsToSelector:@selector(incomingCallFrom:)]) {
+        [self.delegate incomingCallFrom:number];
+    }
 }
 
 - (void)hangup {
@@ -640,113 +692,111 @@ static void bevent_handler(enum bevent_ev ev, struct bevent *event, void *arg) {
         re_thread_leave();
     }
 
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSString *stateStr = nil;
-        
-        switch (ev) {
-            case BEVENT_REGISTERING:
-                stateStr = @"Registering...";
-                break;
-            case BEVENT_REGISTER_OK:
-                stateStr = @"Registered";
-                self.isRegistered = YES;
-                self->_retryCount = 0;
-                // Reset the first-failure prompt so user will be notified again on future failures
-                self->_hasPromptedRegistrationFailure = NO;
-                break;
-            case BEVENT_REGISTER_FAIL: {
-                stateStr = @"Registration Failed";
-                self.isRegistered = NO;
-                
-                NSString *errorDetail = @"";
-                if (reason) {
-                    NSLog(@"SIPManager: Registration failed with status %d (%@)", scode, reason);
-                    errorDetail = [NSString stringWithFormat:@"%d %@", scode, reason];
-                } else if (text) {
-                    errorDetail = text;
-                }
+    NSString *stateStr = nil;
+    
+    switch (ev) {
+        case BEVENT_REGISTERING:
+            stateStr = @"Registering...";
+            break;
+        case BEVENT_REGISTER_OK:
+            stateStr = @"Registered";
+            self.isRegistered = YES;
+            self->_retryCount = 0;
+            self->_hasPromptedRegistrationFailure = NO;
+            break;
+        case BEVENT_REGISTER_FAIL: {
+            stateStr = @"Registration Failed";
+            self.isRegistered = NO;
+            
+            NSString *errorDetail = @"";
+            if (reason) {
+                errorDetail = [NSString stringWithFormat:@"%d %@", scode, reason];
+            } else if (text) {
+                errorDetail = text;
+            }
 
-                // If we haven't already notified the user, do it immediately on the FIRST failure
-                if (!self->_hasPromptedRegistrationFailure) {
-                    self->_hasPromptedRegistrationFailure = YES;
-                    NSString *msg = [NSString stringWithFormat:@"Failed to register. Check your credentials and server address. (Error: %@)", errorDetail];
-                    [self handleError:@"Registration Failed" message:msg];
+            if (!self->_hasPromptedRegistrationFailure) {
+                self->_hasPromptedRegistrationFailure = YES;
+                NSString *msg = [NSString stringWithFormat:@"Failed to register. Check your credentials and server address. (Error: %@)", errorDetail];
+                [self handleError:@"Registration Failed" message:msg];
 
-                    // Open Preferences to let the user fix configuration
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(200 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-                        NSLog(@"SIPManager: Opening Preferences due to registration failure (first attempt)");
-                        [[PreferencesController sharedController] showWindow:nil];
-                    });
-                }
+                [self performSelectorOnMainThread:@selector(_openPreferences) withObject:nil waitUntilDone:NO];
+            }
 
-                // Still attempt retries a few times in background
-                if (self->_retryCount < 3) {
-                    self->_retryCount++;
-                    [NSTimer scheduledTimerWithTimeInterval:10.0 target:self selector:@selector(retryRegistration:) userInfo:nil repeats:NO];
-                    stateStr = [NSString stringWithFormat:@"Registration failed (%@), retrying (%ld)...", errorDetail, (long)self->_retryCount];
-                } else {
-                    NSString *msg = [NSString stringWithFormat:@"Failed to register after multiple attempts. Check your credentials and server address. (Error: %@)", errorDetail];
-                    [self handleError:@"Registration Failed" message:msg];
-                }
-                break;
+            if (self->_retryCount < 3) {
+                self->_retryCount++;
+                // I'll just use performSelector:withObject:afterDelay: which is safer and works on main thread if called from there.
+                [self performSelectorOnMainThread:@selector(_scheduleRetry) withObject:nil waitUntilDone:NO];
+                stateStr = [NSString stringWithFormat:@"Registration failed (%@), retrying (%ld)...", errorDetail, (long)self->_retryCount];
+            } else {
+                NSString *msg = [NSString stringWithFormat:@"Failed to register after multiple attempts. Check your credentials and server address. (Error: %@)", errorDetail];
+                [self handleError:@"Registration Failed" message:msg];
             }
-            case BEVENT_UNREGISTERING:
-                stateStr = @"Unregistering...";
-                break;
-                
-            case BEVENT_CALL_INCOMING: {
-                self.current_call = call;
-                self->_wasAnswered = NO;
-                self->_isOutgoing = NO;
-                stateStr = @"Incoming Call";
-                NSString *caller = capturedPeer ?: @"Unknown";
-                if ([self.delegate respondsToSelector:@selector(incomingCallFrom:)]) {
-                    [self.delegate incomingCallFrom:caller];
-                }
-                break;
-            }
-            case BEVENT_CALL_RINGING:
-                stateStr = @"Ringing...";
-                break;
-            case BEVENT_CALL_PROGRESS:
-                stateStr = @"Calling...";
-                break;
-            case BEVENT_CALL_ESTABLISHED:
-                self->_wasAnswered = YES;
-                [self->_callTimer invalidate];
-                self->_callTimer = nil;
-                stateStr = @"Connected";
-                self.isInCall = YES;
-                self.current_call = call;
-                break;
-            case BEVENT_CALL_CLOSED: {
-                [self->_callTimer invalidate];
-                self->_callTimer = nil;
-                
-                if (!self->_isOutgoing && !self->_wasAnswered) {
-                     [self handleError:@"Missed Call" message:@"You had an incoming call that was not answered."];
-                }
-                
-                stateStr = @"Call Ended";
-                self.isInCall = NO;
-                self.current_call = NULL;
-                break;
-            }
-            default:
-                break;
+            break;
         }
-        
-        if (stateStr && [self.delegate respondsToSelector:@selector(callStateChanged:)]) {
-            [self.delegate callStateChanged:stateStr];
+        case BEVENT_UNREGISTERING:
+            stateStr = @"Unregistering...";
+            break;
+            
+        case BEVENT_CALL_INCOMING: {
+            self.current_call = call;
+            self->_wasAnswered = NO;
+            self->_isOutgoing = NO;
+            stateStr = @"Incoming Call";
+            NSString *caller = capturedPeer ?: @"Unknown";
+            [self performSelectorOnMainThread:@selector(_notifyIncomingCall:) withObject:caller waitUntilDone:NO];
+            break;
         }
-        
-        if (ev == BEVENT_REGISTER_OK || ev == BEVENT_REGISTER_FAIL) {
-             if ([self.delegate respondsToSelector:@selector(registrationStateChanged:)]) {
-                [self.delegate registrationStateChanged:stateStr];
+        case BEVENT_CALL_RINGING:
+            stateStr = @"Ringing...";
+            break;
+        case BEVENT_CALL_PROGRESS:
+            stateStr = @"Calling...";
+            break;
+        case BEVENT_CALL_ESTABLISHED:
+            self->_wasAnswered = YES;
+            // Need to invalidate timer on main thread
+            [self performSelectorOnMainThread:@selector(_invalidateCallTimer) withObject:nil waitUntilDone:NO];
+            stateStr = @"Connected";
+            self.isInCall = YES;
+            self.current_call = call;
+            break;
+        case BEVENT_CALL_CLOSED: {
+            [self performSelectorOnMainThread:@selector(_invalidateCallTimer) withObject:nil waitUntilDone:NO];
+            
+            if (!self->_isOutgoing && !self->_wasAnswered) {
+                 [self handleError:@"Missed Call" message:@"You had an incoming call that was not answered."];
             }
-            [[NSNotificationCenter defaultCenter] postNotificationName:@"SIPRegistrationStateChanged" object:stateStr];
+            
+            stateStr = @"Call Ended";
+            self.isInCall = NO;
+            self.current_call = NULL;
+            break;
         }
-    });
+        default:
+            break;
+    }
+
+    if (stateStr) {
+        if (ev == BEVENT_REGISTER_OK || ev == BEVENT_REGISTER_FAIL || ev == BEVENT_REGISTERING || ev == BEVENT_UNREGISTERING) {
+            [self performSelectorOnMainThread:@selector(_notifyRegistrationStateChanged:) withObject:stateStr waitUntilDone:NO];
+        } else {
+            [self performSelectorOnMainThread:@selector(_notifyCallStateChanged:) withObject:stateStr waitUntilDone:NO];
+        }
+    }
+}
+
+- (void)_openPreferences {
+    [[PreferencesController sharedController] showWindow:nil];
+}
+
+- (void)_scheduleRetry {
+    [NSTimer scheduledTimerWithTimeInterval:10.0 target:self selector:@selector(retryRegistration:) userInfo:nil repeats:NO];
+}
+
+- (void)_invalidateCallTimer {
+    [self->_callTimer invalidate];
+    self->_callTimer = nil;
 }
 
 @end

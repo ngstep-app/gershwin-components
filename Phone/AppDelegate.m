@@ -22,10 +22,13 @@
 	[appMenuItem setSubmenu:appMenu];
 	[mainMenu addItem:appMenuItem];
 	
-	[appMenu addItemWithTitle:@"About Phone" action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
-	[appMenu addItemWithTitle:@"Preferences..." action:@selector(showPreferences:) keyEquivalent:@","];
+	NSMenuItem *aboutItem = [appMenu addItemWithTitle:@"About Phone" action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
+	[aboutItem setTarget:self];
+	NSMenuItem *prefItem = [appMenu addItemWithTitle:@"Preferences..." action:@selector(showPreferences:) keyEquivalent:@","];
+	[prefItem setTarget:self];
 	[appMenu addItem:[NSMenuItem separatorItem]];
-	[appMenu addItemWithTitle:@"Quit Phone" action:@selector(terminate:) keyEquivalent:@"q"];
+	NSMenuItem *quitItem = [appMenu addItemWithTitle:@"Quit Phone" action:@selector(terminate:) keyEquivalent:@"q"];
+	[quitItem setTarget:self];
 	
     // Edit Menu (Standard)
     NSMenuItem *editMenuItem = [[NSMenuItem alloc] initWithTitle:@"Edit" action:NULL keyEquivalent:@""];
@@ -47,6 +50,8 @@
 	// Show Main Window
 	self.mainWindowController = [[MainWindowController alloc] initWithSIPManager:self.sipManager];
 	[self.mainWindowController showWindow:self];
+	// Ensure SIP settings are propagated promptly so UI doesn't stay in "Initializing..."
+	[self.sipManager updateSettings];
 
 	// Auto-open Preferences only when there is no SIP config
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];

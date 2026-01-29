@@ -169,6 +169,12 @@
 }
 
 - (void)showWindow:(id)sender {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self showWindow:sender];
+        });
+        return;
+    }
     NSLog(@"PreferencesController: showWindow called (before) - window instance: %@", self.window);
     if (self.window) {
         NSLog(@"PreferencesController: current frame before show: %@, visible: %d", NSStringFromRect(self.window.frame), self.window.isVisible);
@@ -198,6 +204,19 @@
     // Ensure the window is ordered front and key/visible
     [self.window makeKeyAndOrderFront:nil];
     [self.window makeMainWindow];
+
+    // Fallback for environments where makeKeyAndOrderFront may not be sufficient
+    if (!self.window.isVisible) {
+        NSLog(@"PreferencesController: window not visible after makeKeyAndOrderFront - applying fallback orderFront");
+        [self.window orderFront:nil];
+        [self.window makeKeyAndOrderFront:nil];
+    }
+
+    // Prevent the window from being released when closed on older GNUStep versions
+    if ([self.window respondsToSelector:@selector(setReleasedWhenClosed:)]) {
+        [self.window setReleasedWhenClosed:NO];
+    }
+
     NSLog(@"PreferencesController: showWindow called (after) - frame: %@, visible: %d", NSStringFromRect(self.window.frame), self.window.isVisible);
 }
 
@@ -244,7 +263,17 @@
         NSAlert *alert = [[NSAlert alloc] init];
         [alert setMessageText:@"Discovery Error"];
         [alert setInformativeText:@"avahi-browse not found. Please install avahi-utils."];
-        [alert runModal];
+        // Non-blocking: present as a sheet attached to the Preferences window if possible
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.window) {
+                [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse resp) {
+                    // no-op
+                }];
+            } else {
+                // Fallback to runModal if no window available (rare)
+                [alert runModal];
+            }
+        });
         return;
     }
 
