@@ -18,7 +18,15 @@
 
 @property (strong) NSMutableArray *contacts;
 @property (strong) NSTableView *tableView;
-@property (strong) NSAlert *activeAlert;
+
+// Persistent lightweight alert panel to avoid repeated NSAlert allocations
+@property (strong) NSWindow *persistentAlertPanel;
+@property (copy) void (^persistentAlertHandler)(void);
+
+// Helper: create or update a persistent lightweight panel
+- (void)ensurePersistentAlertPanel;
+- (void)showPersistentAlertWithTitle:(NSString *)title message:(NSString *)message buttonTitle:(NSString *)buttonTitle handler:(void(^)(void))handler;
+- (void)_persistentAlertOK:(id)sender;
 @end
 
 @implementation MainWindowController
@@ -178,6 +186,72 @@
     [contentView addSubview:self.statusBar];
 }
 
+- (void)ensurePersistentAlertPanel {
+    if (self.persistentAlertPanel) return;
+
+    NSRect frame = NSMakeRect(0, 0, 400, 160);
+    NSWindow *panel = [[NSWindow alloc] initWithContentRect:frame
+                                                    styleMask:(NSTitledWindowMask | NSClosableWindowMask)
+                                                      backing:NSBackingStoreBuffered
+                                                        defer:NO];
+    [panel setReleasedWhenClosed:NO];
+
+    NSView *content = [panel contentView];
+
+    NSTextField *titleField = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 110, 360, 24)];
+    [titleField setBezeled:NO];
+    [titleField setDrawsBackground:NO];
+    [titleField setEditable:NO];
+    [titleField setSelectable:NO];
+    [titleField setFont:[NSFont boldSystemFontOfSize:14]];
+    titleField.tag = 1001;
+    [content addSubview:titleField];
+
+    NSTextField *messageField = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 50, 360, 48)];
+    [messageField setBezeled:NO];
+    [messageField setDrawsBackground:NO];
+    [messageField setEditable:NO];
+    [messageField setSelectable:NO];
+    messageField.tag = 1002;
+    [content addSubview:messageField];
+
+    NSButton *ok = [[NSButton alloc] initWithFrame:NSMakeRect(160, 12, 80, 28)];
+    [ok setBezelStyle:NSRoundedBezelStyle];
+    [ok setTitle:@"OK"];
+    [ok setTarget:self];
+    [ok setAction:@selector(_persistentAlertOK:)];
+    ok.tag = 1003;
+    [content addSubview:ok];
+
+    self.persistentAlertPanel = panel;
+}
+
+- (void)showPersistentAlertWithTitle:(NSString *)title message:(NSString *)message buttonTitle:(NSString *)buttonTitle handler:(void(^)(void))handler {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self ensurePersistentAlertPanel];
+        NSView *content = [self.persistentAlertPanel contentView];
+        NSTextField *titleField = [content viewWithTag:1001];
+        NSTextField *messageField = [content viewWithTag:1002];
+        NSButton *ok = [content viewWithTag:1003];
+
+        [titleField setStringValue:title ?: @""];
+        [messageField setStringValue:message ?: @""];
+        [ok setTitle:buttonTitle ?: @"OK"];
+
+        self.persistentAlertHandler = handler;
+
+        [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
+        [self.persistentAlertPanel center];
+        [self.persistentAlertPanel makeKeyAndOrderFront:self];
+    });
+}
+
+- (void)_persistentAlertOK:(id)sender {
+    if (self.persistentAlertHandler) self.persistentAlertHandler();
+    [self.persistentAlertPanel orderOut:nil];
+    self.persistentAlertHandler = nil;
+}
+
 - (void)digitPressed:(id)sender {
     NSButton *btn = sender;
     NSString *digit = [btn title];
@@ -297,63 +371,41 @@
     }
     [self.statusBar setStringValue:[NSString stringWithFormat:@" Reg: %@", state]];
     [self.window setTitle:[NSString stringWithFormat:@"Phone - %@", state]];
+    
+    // Disable call button when not registered
+    BOOL isRegistered = [state isEqualToString:@"Registered"];
+    [self.callButton setEnabled:isRegistered];
 }
 
 - (void)incomingCallFrom:(NSString *)number {
     [self.numberField setStringValue:number];
     [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
     [self.window makeKeyAndOrderFront:self];
-    
-    if (self.activeAlert) {
-        [[self.activeAlert window] orderOut:nil];
-        self.activeAlert = nil;
-    }
 
-    self.activeAlert = [[NSAlert alloc] init];
-    [self.activeAlert setMessageText:@"Incoming Call"];
-    [self.activeAlert setInformativeText:[NSString stringWithFormat:@"Incoming call from %@", number]];
-    [self.activeAlert addButtonWithTitle:@"Answer"];
-    [self.activeAlert addButtonWithTitle:@"Ignore"];
-    
-    [self.activeAlert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
-        if (returnCode == NSAlertFirstButtonReturn) {
-            [self answerCall:nil];
-        } else {
-            [self hangup:nil];
-        }
-        self.activeAlert = nil;
-    }];
+    // Use a persistent lightweight panel for incoming calls to avoid layout churn
+    [self showPersistentAlertWithTitle:@"Incoming Call"
+                                message:[NSString stringWithFormat:@"Incoming call from %@", number]
+                           buttonTitle:@"Answer"
+                               handler:^{
+                                   [self answerCall:nil];
+                               }];
 }
 
 - (void)sipManagerDidReceiveError:(NSString *)title message:(NSString *)message {
-    if (self.activeAlert) {
-        [[self.activeAlert window] orderOut:nil];
-        self.activeAlert = nil;
-    }
-
-    self.activeAlert = [[NSAlert alloc] init];
-    [self.activeAlert setMessageText:title];
-    [self.activeAlert setInformativeText:message];
-    [self.activeAlert setAlertStyle:NSCriticalAlertStyle];
-    [self.activeAlert addButtonWithTitle:@"OK"];
-
-    // Present the alert safely on main thread
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self.activeAlert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
-            self.activeAlert = nil;
-        }];
-    });
+    // Show persistent lightweight alert to notify the user without creating new NSAlert each time
+    [self showPersistentAlertWithTitle:title
+                                message:message
+                           buttonTitle:@"OK"
+                               handler:^{
+                                   // No-op handler for OK
+                               }];
 }
 
 - (void)closeActiveAlert {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.activeAlert) {
-            NSWindow *w = [self.activeAlert window];
-            if (w && [w isKindOfClass:[NSWindow class]]) {
-                [NSApp endSheet:w returnCode:NSModalResponseCancel];
-                [w orderOut:nil];
-            }
-            self.activeAlert = nil;
+        if (self.persistentAlertPanel) {
+            [self.persistentAlertPanel orderOut:nil];
+            self.persistentAlertHandler = nil;
         }
     });
 }
