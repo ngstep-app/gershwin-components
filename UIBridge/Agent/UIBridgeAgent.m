@@ -215,6 +215,16 @@ static void *RegistrationThread(void *arg) {
         dict[@"frame"] = NSStringFromRect(frame);
         dict[@"hidden"] = @([view isHidden]);
         
+        // Always include title for buttons and text for text fields (not just detailed mode)
+        if ([view respondsToSelector:@selector(title)]) {
+            id title = [view performSelector:@selector(title)];
+            if (title && ![title isEqual:@""]) dict[@"title"] = title;
+        }
+        if ([view isKindOfClass:[NSTextField class]]) {
+            NSTextField *tf = (NSTextField *)view;
+            dict[@"stringValue"] = [tf stringValue] ?: @"";
+        }
+        
         // Computed coordinates
         @try {
             if ([view window]) {
@@ -558,21 +568,42 @@ static void *RegistrationThread(void *arg) {
         [container setResult:@{ @"error": @{ @"code": @-32601, @"message": @"Selector not found" } }];
         return;
     }
-    id result = nil; 
-    NSLog(@"[UIBridge] _main_invokeSelector will call selector %@ on object %@", callParams[@"selector"], obj);
-    @try {
-        NSArray *args = callParams[@"args"];
-        if ([args count] == 0) {
-            result = [obj performSelector:sel];
-        } else {
-            result = [obj performSelector:sel withObject:args[0]];
+
+    NSMethodSignature *sig = [obj methodSignatureForSelector:sel];
+    NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+    [inv setTarget:obj];
+    [inv setSelector:sel];
+
+    NSArray *args = callParams[@"args"];
+    if (args && [args isKindOfClass:[NSArray class]]) {
+        for (NSUInteger i = 0; i < [args count]; i++) {
+            if (i + 2 >= [sig numberOfArguments]) break;
+            id arg = args[i];
+            if (arg == [NSNull null]) arg = nil;
+            [inv setArgument:&arg atIndex:i + 2];
         }
+    }
+
+    @try {
+        [inv invoke];
     } @catch (NSException *e) {
         [container setResult:@{ @"error": @{ @"code": @-32001, @"message": [e description] } }];
         return;
     }
+
+    id result = nil;
+    if ([sig methodReturnLength] > 0) {
+        const char *retType = [sig methodReturnType];
+        if (retType[0] == '@' || retType[0] == '#') {
+            [inv getReturnValue:&result];
+        } else {
+            result = @"OK";
+        }
+    } else {
+        result = @"OK";
+    }
+
     id serres = [self serializeObject:result detailed:NO];
-    NSLog(@"[UIBridge] _main_invokeSelector returning class: %@", NSStringFromClass([serres class]));
     [container setResult:serres];
 }
 

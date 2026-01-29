@@ -58,9 +58,9 @@ static id<UIBridgeProtocol> ConnectToAgent(int pid) {
         id proxy = [NSConnection rootProxyForConnectionWithRegisteredName:connName host:nil];
         if (proxy) {
             [(NSDistantObject *)proxy setProtocolForProxy:@protocol(UIBridgeProtocol)];
-            // Avoid hanging on slow agent calls
-            [[proxy connectionForProxy] setRequestTimeout:10.0];
-            [[proxy connectionForProxy] setReplyTimeout:10.0];
+            // Use shorter timeouts to avoid hanging on modal dialogs
+            [[proxy connectionForProxy] setRequestTimeout:2.0];
+            [[proxy connectionForProxy] setReplyTimeout:2.0];
             return proxy;
         } else {
             NSLog(@"[Server] Failed to get proxy for %@", connName);
@@ -79,6 +79,8 @@ static id<UIBridgeProtocol> ConnectToAgent(int pid) {
         if (proxy) {
             NSLog(@"[Server] Found agent via fallback: %@", trialConn);
             [(NSDistantObject *)proxy setProtocolForProxy:@protocol(UIBridgeProtocol)];
+            [[proxy connectionForProxy] setRequestTimeout:2.0];
+            [[proxy connectionForProxy] setReplyTimeout:2.0];
             return proxy;
         }
     }
@@ -131,23 +133,7 @@ static int LaunchApp(NSString *appPath) {
 
     int pid = [task processIdentifier];
     NSString *connName = [NSString stringWithFormat:@"UIBridgeAgent%d", pid];
-    NSLog(@"[Server] Waiting for agent registration: %@", connName);
-
-    // Poll for registration (up to 15 seconds)
-    BOOL registered = NO;
-    for (int i = 0; i < 150; i++) {
-        id proxy = [NSConnection rootProxyForConnectionWithRegisteredName:connName host:nil];
-        if (proxy) {
-            registered = YES;
-            NSLog(@"[Server] Agent registration confirmed for PID %d", pid);
-            break;
-        }
-        [NSThread sleepForTimeInterval:0.1];
-    }
-
-    if (!registered) {
-        NSLog(@"[Server] WARNING: Agent registration timed out for %@", connName);
-    }
+    NSLog(@"[Server] Launched app with PID %d, agent should register as %@", pid, connName);
 
     return pid;
 }
@@ -616,14 +602,22 @@ static void RedirectLogs(void) {
             if (path) {
                 self.currentPID = LaunchApp(path);
                 if (self.currentPID > 0) {
-                    // Automatically enable watch when a new app is launched
-                    self.isWatching = YES;
-                    result = @{
-                        @"pid": @(self.currentPID), 
-                        @"status": @"launched",
-                        @"live_ui_log": @"/tmp/uibridge_live_ui.json",
-                        @"observation": @"I have enabled real-time UI logging and watching. You can see live events via notifications/ui_event, or read /tmp/uibridge_live_ui.json at any time to get the current full state of the UI including all child widgets and their coordinates."
-                    };
+                    // Wait a bit for agent to register
+                    [NSThread sleepForTimeInterval:2.0];
+                    // Verify agent connection
+                    id<UIBridgeProtocol> agent = ConnectToAgent(self.currentPID);
+                    if (agent) {
+                        // Automatically enable watch when a new app is launched
+                        self.isWatching = YES;
+                        result = @{
+                            @"pid": @(self.currentPID), 
+                            @"status": @"launched_with_agent",
+                            @"live_ui_log": @"/tmp/uibridge_live_ui.json",
+                            @"observation": @"Agent successfully injected and connected. Real-time UI logging and watching enabled. You can see live events via notifications/ui_event, or read /tmp/uibridge_live_ui.json at any time to get the current full state of the UI including all child widgets and their coordinates."
+                        };
+                    } else {
+                        errorMsg = @"App launched but agent injection failed - UI tools will not work";
+                    }
                 } else {
                      errorMsg = @"Failed to launch";
                 }
