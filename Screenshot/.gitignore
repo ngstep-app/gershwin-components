@@ -1,0 +1,4 @@
+# Ignore generated Info.plist in Resources; use top-level Info.plist as canonical source
+Resources/Info.plist
+obj/
+Screenshot.app

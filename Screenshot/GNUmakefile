@@ -22,7 +22,7 @@ Screenshot_LANGUAGES = English
 
 # Build-time generation of Info files
 Resources/Info.plist: Info.plist | Resources
-	$(ECHO_NOTHING)$(INSTALL_FILE) $< $@$(END_ECHO)
+	$(ECHO_NOTHING)if [ -n "$(INSTALL_FILE)" ]; then $(INSTALL_FILE) $< $@; else cp $< $@; fi$(END_ECHO)
 
 Resources/Info-gnustep.plist: Resources/Info.plist
 	$(ECHO_NOTHING)if command -v plmerge >/dev/null 2>&1; then \
