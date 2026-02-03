@@ -10,6 +10,21 @@
 #import <string.h>
 #import <pthread.h>
 
+#ifdef __linux__
+#include <sys/types.h>
+// Linux uses SO_PEERCRED instead of getpeereid()
+static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
+    struct ucred cred;
+    socklen_t len = sizeof(cred);
+    if (getsockopt(sock, SOL_SOCKET, SO_PEERCRED, &cred, &len) < 0) {
+        return -1;
+    }
+    *euid = cred.uid;
+    *egid = cred.gid;
+    return 0;
+}
+#endif
+
 @implementation DSHelper {
     int _serverSocket;
     int _discoverySocket;
