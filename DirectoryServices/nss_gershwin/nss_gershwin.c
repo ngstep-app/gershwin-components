@@ -11,12 +11,25 @@
 #include <errno.h>
 #include <pwd.h>
 #include <grp.h>
+#ifdef __linux__
 #include <shadow.h>
+#endif
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+
+#ifdef __linux__
 #include <nss.h>
+#else
+/* FreeBSD compatibility - define Linux NSS types for internal use */
+enum nss_status {
+    NSS_STATUS_TRYAGAIN = -2,
+    NSS_STATUS_UNAVAIL  = -1,
+    NSS_STATUS_NOTFOUND = 0,
+    NSS_STATUS_SUCCESS  = 1
+};
+#endif
 
 #define DS_SOCKET_PATH "/var/run/dshelper.sock"
 #define BUFFER_SIZE 4096
@@ -160,6 +173,7 @@ fail:
     return -1;
 }
 
+#ifdef __linux__
 /*
  * Parse shadow line: name:hash:lstchg:min:max:warn:inact:expire:flag
  * dshelper returns: name:hash:uid:gid:gecos:home:shell (passwd format)
@@ -212,6 +226,7 @@ fail:
     free(linecopy);
     return -1;
 }
+#endif /* __linux__ */
 
 /*
  * Parse group line: name:x:gid:member1,member2,...
@@ -403,6 +418,7 @@ _nss_gershwin_getgrgid_r(gid_t gid, struct group *grp,
     return NSS_STATUS_SUCCESS;
 }
 
+#ifdef __linux__
 /*
  * Shadow database lookup for Linux PAM authentication
  * pam_unix uses getspnam() to get password hashes on Linux
@@ -429,6 +445,7 @@ _nss_gershwin_getspnam_r(const char *name, struct spwd *spw,
 
     return NSS_STATUS_SUCCESS;
 }
+#endif /* __linux__ */
 
 #ifdef __FreeBSD__
 /*
