@@ -9,7 +9,7 @@ dscli_OBJC_FILES = \
 	DSPlatformLinux.m
 
 dscli_OBJCFLAGS = -fobjc-arc
-dscli_LDFLAGS = -lcrypt
+dscli_LDFLAGS = -lcrypt -Wl,-rpath,$(GNUSTEP_SYSTEM_LIBRARIES)
 
 # Install to /System/Library/Tools
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
