@@ -402,6 +402,16 @@ static int cmdUserAdd(NSArray *args) {
         NSMutableDictionary *userGroup = [NSMutableDictionary dictionary];
         userGroup[@"groupname"] = username;
         userGroup[@"gid"] = @(gid);
+        userGroup[@"members"] = @[username];
+        groups[username] = userGroup;
+    } else {
+        // Group already exists, ensure user is a member
+        NSMutableDictionary *userGroup = [groups[username] mutableCopy];
+        NSMutableArray *members = [userGroup[@"members"] mutableCopy] ?: [NSMutableArray array];
+        if (![members containsObject:username]) {
+            [members addObject:username];
+        }
+        userGroup[@"members"] = members;
         groups[username] = userGroup;
     }
 
