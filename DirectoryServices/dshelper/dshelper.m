@@ -1,3 +1,7 @@
+#ifdef __linux__
+#define _GNU_SOURCE
+#endif
+
 #import "dshelper.h"
 #import <sys/socket.h>
 #import <sys/un.h>

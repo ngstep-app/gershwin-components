@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <pwd.h>
 #include <grp.h>
+#include <shadow.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -143,11 +144,66 @@ parse_passwd(const char *line, struct passwd *pwd, char *buffer, size_t buflen)
     strcpy(buf, p);
     pwd->pw_shell = buf;
 
+#ifdef __FreeBSD__
     /* FreeBSD-specific fields */
     pwd->pw_class = "";
     pwd->pw_change = 0;
     pwd->pw_expire = 0;
     pwd->pw_fields = 0;
+#endif
+
+    free(linecopy);
+    return 0;
+
+fail:
+    free(linecopy);
+    return -1;
+}
+
+/*
+ * Parse shadow line: name:hash:lstchg:min:max:warn:inact:expire:flag
+ * dshelper returns: name:hash:uid:gid:gecos:home:shell (passwd format)
+ * We extract just name and hash for shadow struct
+ */
+static int
+parse_shadow(const char *line, struct spwd *spw, char *buffer, size_t buflen)
+{
+    char *p, *saveptr;
+    char *buf = buffer;
+    size_t remaining = buflen;
+
+    /* Make a copy we can tokenize */
+    char *linecopy = strdup(line);
+    if (!linecopy) {
+        return -1;
+    }
+
+    /* name */
+    p = strtok_r(linecopy, ":", &saveptr);
+    if (!p) goto fail;
+    size_t len = strlen(p) + 1;
+    if (len > remaining) goto fail;
+    strcpy(buf, p);
+    spw->sp_namp = buf;
+    buf += len;
+    remaining -= len;
+
+    /* password hash */
+    p = strtok_r(NULL, ":", &saveptr);
+    if (!p) goto fail;
+    len = strlen(p) + 1;
+    if (len > remaining) goto fail;
+    strcpy(buf, p);
+    spw->sp_pwdp = buf;
+
+    /* Set reasonable defaults for other fields */
+    spw->sp_lstchg = -1;  /* Password last changed: unknown */
+    spw->sp_min = -1;     /* Min days between changes: no limit */
+    spw->sp_max = -1;     /* Max days password valid: no limit */
+    spw->sp_warn = -1;    /* Days warning before expiry: none */
+    spw->sp_inact = -1;   /* Days after expiry to disable: never */
+    spw->sp_expire = -1;  /* Account expiration date: never */
+    spw->sp_flag = 0;     /* Reserved */
 
     free(linecopy);
     return 0;
@@ -347,6 +403,34 @@ _nss_gershwin_getgrgid_r(gid_t gid, struct group *grp,
     return NSS_STATUS_SUCCESS;
 }
 
+/*
+ * Shadow database lookup for Linux PAM authentication
+ * pam_unix uses getspnam() to get password hashes on Linux
+ */
+enum nss_status
+_nss_gershwin_getspnam_r(const char *name, struct spwd *spw,
+                          char *buffer, size_t buflen, int *errnop)
+{
+    char request[256];
+    char response[BUFFER_SIZE];
+
+    /* Use getpwnam which returns the password hash when called by root */
+    snprintf(request, sizeof(request), "getpwnam:%s", name);
+
+    if (query_dshelper(request, response, sizeof(response)) != 0) {
+        *errnop = ENOENT;
+        return NSS_STATUS_NOTFOUND;
+    }
+
+    if (parse_shadow(response, spw, buffer, buflen) != 0) {
+        *errnop = ERANGE;
+        return NSS_STATUS_TRYAGAIN;
+    }
+
+    return NSS_STATUS_SUCCESS;
+}
+
+#ifdef __FreeBSD__
 /*
  * FreeBSD NSS wrapper functions
  * These have the signature: int (*nss_method)(void *retval, void *mdata, va_list ap)
@@ -566,3 +650,4 @@ nss_module_register(const char *name __unused, unsigned int *size,
     *unregister = NULL;
     return methods;
 }
+#endif /* __FreeBSD__ */
