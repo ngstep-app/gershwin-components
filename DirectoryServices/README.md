@@ -134,6 +134,16 @@ Options for `user add` and `user edit`:
 --admin               Add user to admin group
 ```
 
+Options for `user passwd`:
+```
+--no-prompt           Read password from stdin (for scripts)
+```
+
+Example scripted password change:
+```sh
+echo "secret123" | dscli passwd jsmith --no-prompt
+```
+
 ### Group Commands
 
 ```sh

@@ -45,6 +45,7 @@ static void printUsage(const char *progname) {
     fprintf(stderr, "    --admin                     Add user to admin group\n");
     fprintf(stderr, "  user delete <username>        Delete a user\n");
     fprintf(stderr, "  user passwd <username>        Set user password\n");
+    fprintf(stderr, "    --no-prompt                 Read password from stdin (for scripts)\n");
     fprintf(stderr, "  user edit <username> [options] Modify user attributes\n");
     fprintf(stderr, "    --realname <name>           Change real name\n");
     fprintf(stderr, "    --shell <shell>             Change shell\n");
@@ -123,6 +124,19 @@ static NSString *readPassword(const char *prompt) {
     char *pass = getpass(prompt);
     if (!pass) return nil;
     return [NSString stringWithUTF8String:pass];
+}
+
+static NSString *readPasswordFromStdin(void) {
+    char buf[1024];
+    if (!fgets(buf, sizeof(buf), stdin)) {
+        return nil;
+    }
+    // Remove trailing newline
+    size_t len = strlen(buf);
+    if (len > 0 && buf[len - 1] == '\n') {
+        buf[len - 1] = '\0';
+    }
+    return [NSString stringWithUTF8String:buf];
 }
 
 static uid_t getUIDValue(id value) {
@@ -506,7 +520,7 @@ static int cmdUserDelete(NSString *username) {
     return 0;
 }
 
-static int cmdUserPasswd(NSString *username) {
+static int cmdUserPasswd(NSString *username, BOOL noPrompt) {
     NSMutableDictionary *users = loadPlist(getUsersPlistPath());
     NSMutableDictionary *user = [users[username] mutableCopy];
 
@@ -515,16 +529,24 @@ static int cmdUserPasswd(NSString *username) {
         return 1;
     }
 
-    NSString *pass1 = readPassword("New password: ");
+    NSString *pass1;
+    if (noPrompt) {
+        pass1 = readPasswordFromStdin();
+    } else {
+        pass1 = readPassword("New password: ");
+    }
+
     if (!pass1 || [pass1 length] == 0) {
         fprintf(stderr, "Password cannot be empty.\n");
         return 1;
     }
 
-    NSString *pass2 = readPassword("Confirm password: ");
-    if (![pass1 isEqualToString:pass2]) {
-        fprintf(stderr, "Passwords do not match.\n");
-        return 1;
+    if (!noPrompt) {
+        NSString *pass2 = readPassword("Confirm password: ");
+        if (![pass1 isEqualToString:pass2]) {
+            fprintf(stderr, "Passwords do not match.\n");
+            return 1;
+        }
     }
 
     NSString *hash = hashPassword(pass1);
@@ -1319,10 +1341,16 @@ int main(int argc, char *argv[]) {
         // Handle "passwd" as alias for "user passwd"
         if ([command isEqualToString:@"passwd"]) {
             if ([args count] < 2) {
-                fprintf(stderr, "Usage: dscli passwd <username>\n");
+                fprintf(stderr, "Usage: dscli passwd <username> [--no-prompt]\n");
                 return 1;
             }
-            return cmdUserPasswd(args[1]);
+            BOOL noPrompt = NO;
+            for (NSUInteger i = 2; i < [args count]; i++) {
+                if ([args[i] isEqualToString:@"--no-prompt"]) {
+                    noPrompt = YES;
+                }
+            }
+            return cmdUserPasswd(args[1], noPrompt);
         }
 
         // Handle "verify"
@@ -1392,10 +1420,16 @@ int main(int argc, char *argv[]) {
                 return cmdUserDelete(args[2]);
             } else if ([subcommand isEqualToString:@"passwd"]) {
                 if ([args count] < 3) {
-                    fprintf(stderr, "Usage: dscli user passwd <username>\n");
+                    fprintf(stderr, "Usage: dscli user passwd <username> [--no-prompt]\n");
                     return 1;
                 }
-                return cmdUserPasswd(args[2]);
+                BOOL noPrompt = NO;
+                for (NSUInteger i = 3; i < [args count]; i++) {
+                    if ([args[i] isEqualToString:@"--no-prompt"]) {
+                        noPrompt = YES;
+                    }
+                }
+                return cmdUserPasswd(args[2], noPrompt);
             } else if ([subcommand isEqualToString:@"edit"]) {
                 return cmdUserEdit([args subarrayWithRange:NSMakeRange(2, [args count] - 2)]);
             } else {
