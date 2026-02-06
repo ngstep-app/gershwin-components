@@ -32,24 +32,20 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     }
     [super drawRect:rect];
 }
-- (void)dealloc {
-    [_backgroundColor release];
-    [super dealloc];
-}
 @end
 
 // Rectangular translucent card view for installer content area (no rounded corners)
 @interface GSInstallerCardView : NSView
-@property (nonatomic, retain) NSColor *fillColor;   // With alpha, e.g., white 0.90–0.92
-@property (nonatomic, retain) NSColor *strokeColor; // Light gray stroke
+@property (nonatomic, strong) NSColor *fillColor;   // With alpha, e.g., white 0.90–0.92
+@property (nonatomic, strong) NSColor *strokeColor; // Light gray stroke
 @property (nonatomic, assign) CGFloat cornerRadius; // kept for compatibility, set to 0.0
 @end
 
 @implementation GSInstallerCardView
 - (instancetype)initWithFrame:(NSRect)frameRect {
     if ((self = [super initWithFrame:frameRect])) {
-        _fillColor = [[NSColor colorWithCalibratedWhite:1.0 alpha:0.33] retain];
-        _strokeColor = [[NSColor colorWithCalibratedWhite:0.72 alpha:1.0] retain];
+        _fillColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.33];
+        _strokeColor = [NSColor colorWithCalibratedWhite:0.72 alpha:1.0];
         _cornerRadius = 0.0; // rectangular
     }
     return self;
@@ -67,11 +63,6 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     [_strokeColor setStroke];
     [path setLineWidth:1.0];
     [path stroke];
-}
-- (void)dealloc {
-    [_fillColor release];
-    [_strokeColor release];
-    [super dealloc];
 }
 @end
 
@@ -232,7 +223,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
         _windowWidth = windowWidth;
         _windowHeight = windowHeight;
         _assistantTitle = [title copy];
-        _assistantIcon = [icon retain];
+        _assistantIcon = icon;
         _stepsArray = [[NSMutableArray alloc] initWithArray:steps];
         _currentIndex = 0;
         _showsProgressBar = (layoutStyle == GSAssistantLayoutStyleDefault);
@@ -256,36 +247,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
         }
     }
     
-    [window release];
     return self;
-}
-
-- (void)dealloc {
-    [_stepsArray release];
-    [_contentView release];
-    [_sidebarView release];
-    [_mainContentView release];
-    [_stepContentView release];
-    [_footerView release];
-    [_navigationView release];
-    [_sidebarImageView release];
-    [_stepLabels release];
-    [_titleLabel release];
-    [_stepTitleLabel release];
-    [_stepDescriptionLabel release];
-    [_backButton release];
-    [_continueButton release];
-    [_cancelButton release];
-    [_optionsButton release];
-    [_installerButtonAreaView release];
-    [_stepIndicatorViews release];
-    [_assistantTitle release];
-    [_assistantIcon release];
-    [_installerContentCardView release];
-    [_contentWatermarkImageView release];
-    [_installerStepTitleField release];
-    [_installerStepDescriptionField release];
-    [super dealloc];
 }
 
 #pragma mark - Window Setup
@@ -342,7 +304,6 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     // Add separator line
     NSView *separator = [[NSView alloc] initWithFrame:NSMakeRect(179, 0, 1, 500)];
     [_contentView addSubview:separator];
-    [separator release];
     
     // Background image area
     _sidebarImageView = [[NSImageView alloc] initWithFrame:NSMakeRect(10, 150, 160, 200)];
@@ -372,7 +333,6 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
         stepNumber.textColor = [NSColor colorWithCalibratedRed:0.2 green:0.2 blue:0.2 alpha:1.0];
         stepNumber.alignment = NSCenterTextAlignment;
         [stepContainer addSubview:stepNumber];
-        [stepNumber release];
         
         // Step title
         NSTextField *stepLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(25, 5, 125, 20)];
@@ -385,11 +345,9 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
         stepLabel.stringValue = [step stepTitle];
         stepLabel.textColor = [NSColor colorWithCalibratedRed:0.25 green:0.25 blue:0.25 alpha:1.0];
         [stepContainer addSubview:stepLabel];
-        [stepLabel release];
         
         [_sidebarView addSubview:stepContainer];
         [_stepLabels addObject:stepContainer];
-        [stepContainer release];
         
         currentY -= 35;
     }
@@ -446,7 +404,6 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     // Top border
     NSView *topBorder = [[NSView alloc] initWithFrame:NSMakeRect(0, 59, 700, 1)];
     [_footerView addSubview:topBorder];
-    [topBorder release];
     
     [self setupNavigationView];
 }
@@ -799,7 +756,6 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     _currentIndex = 0;
     [self showCurrentStep];
     
-    [errorStep release];
 }
 
 - (void)showSuccessPageWithTitle:(NSString *)title message:(NSString *)message {
@@ -813,7 +769,6 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     _currentIndex = 0;
     [self showCurrentStep];
     
-    [successStep release];
 }
 
 - (void)autoCompleteWithSuccessMessage:(NSString *)message {
@@ -830,8 +785,6 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     
     _currentIndex = 0;
     [self showCurrentStep];
-    
-    [successStep release];
     
     NSLog(@"[GSAssistantWindow] Auto-completion step displayed");
 }
@@ -876,7 +829,6 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
                 fraction:0.5];
         [faintIcon unlockFocus];
         [_contentWatermarkImageView setImage:faintIcon];
-        [faintIcon release];
         [_contentWatermarkImageView setAlphaValue:1.0];
         [_contentWatermarkImageView setAutoresizingMask:(NSViewMaxXMargin | NSViewMinYMargin | NSViewMaxYMargin)];
         // Place at the very back so it shines through both sidebar and content card
@@ -995,10 +947,6 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
         [stepRow addSubview:label];
         [_sidebarView addSubview:stepRow];
         [_stepIndicatorViews addObject:stepRow];
-
-        [bullet release];
-        [label release];
-        [stepRow release];
     }
 
     NSLog(@"[GSAssistantWindow] Created %lu step indicators", (unsigned long)_stepIndicatorViews.count);
@@ -1029,12 +977,12 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
 
 - (void)setupInstallerStepContent {
     // Remove previous title/description fields if any
-    if (_installerStepTitleField) { [_installerStepTitleField removeFromSuperview]; [_installerStepTitleField release]; _installerStepTitleField = nil; }
-    if (_installerStepDescriptionField) { [_installerStepDescriptionField removeFromSuperview]; [_installerStepDescriptionField release]; _installerStepDescriptionField = nil; }
+    if (_installerStepTitleField) { [_installerStepTitleField removeFromSuperview]; _installerStepTitleField = nil; }
+    if (_installerStepDescriptionField) { [_installerStepDescriptionField removeFromSuperview]; _installerStepDescriptionField = nil; }
 
     // Clear card subviews but keep any future background layers
     if (_installerContentCardView) {
-        NSArray *subviews = [[_installerContentCardView.subviews copy] autorelease];
+        NSArray *subviews = [_installerContentCardView.subviews copy];
         for (NSView *sub in subviews) {
             [sub removeFromSuperview];
         }
