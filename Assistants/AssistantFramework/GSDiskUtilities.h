@@ -15,10 +15,10 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface GSDisk : NSObject
-@property (nonatomic, retain) NSString *deviceName;
-@property (nonatomic, retain) NSString *description;
+@property (nonatomic, strong) NSString *deviceName;
+@property (nonatomic, strong) NSString *description;
 @property (nonatomic, assign) long long size;
-@property (nonatomic, retain) NSString *geomName;
+@property (nonatomic, strong) NSString *geomName;
 @property (nonatomic, assign) BOOL isRemovable;
 @property (nonatomic, assign) BOOL isWritable;
 @end

@@ -109,7 +109,7 @@ extern const CGFloat GSAssistantInstallerButtonAreaHeight;
  */
 @interface GSAssistantWindow : NSWindowController
 
-@property (nonatomic, assign, nullable) id<GSAssistantWindowDelegate> delegate;
+@property (nonatomic, weak, nullable) id<GSAssistantWindowDelegate> delegate;
 @property (nonatomic, strong, readonly) NSMutableArray<id<GSAssistantStepProtocol>> *steps;
 @property (nonatomic, assign, readonly) NSInteger currentStepIndex;
 @property (nonatomic, assign) GSAssistantAnimationType animationType;
@@ -174,7 +174,7 @@ extern const CGFloat GSAssistantInstallerButtonAreaHeight;
 @property (nonatomic, strong, nullable) NSString *customContinueTitle;
 @property (nonatomic, strong, nullable) NSString *customBackTitle;
 @property (nonatomic, assign) CGFloat progress; // 0.0 to 1.0
-@property (nonatomic, assign, nullable) GSAssistantWindow *assistantWindow; // Reference to parent window for notifications
+@property (nonatomic, weak, nullable) GSAssistantWindow *assistantWindow; // Reference to parent window for notifications
 
 - (instancetype)initWithTitle:(NSString *)title 
                   description:(NSString *)description 
