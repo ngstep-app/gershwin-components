@@ -71,7 +71,7 @@
 {
   if (!command) { return nil; }
 
-  NSLog(@"Sanitizing Exec field: %@", command);
+  NSDebugLog(@"Sanitizing Exec field: %@", command);
   NSMutableString *mutable = [NSMutableString stringWithString:command];
 
   // Remove common freedesktop field codes
@@ -99,7 +99,7 @@
       if ([p length] > 0) { [filtered addObject:p]; }
     }
   NSString *collapsed = [filtered componentsJoinedByString:@" "];
-  NSLog(@"Sanitized Exec field -> %@", collapsed);
+  NSDebugLog(@"Sanitized Exec field -> %@", collapsed);
   return collapsed;
 }
 
@@ -117,18 +117,18 @@
       NSString *candidate = [dir stringByAppendingPathComponent:name];
       if ([fm isExecutableFileAtPath:candidate])
         {
-          NSLog(@"Found executable '%@' at %@", name, candidate);
+          NSDebugLog(@"Found executable '%@' at %@", name, candidate);
           return candidate;
         }
     }
-  NSLog(@"Executable '%@' not found in PATH", name);
+  NSDebugLog(@"Executable '%@' not found in PATH", name);
   return nil;
 }
 
 + (BOOL)rasterizeSVG:(NSString *)svgPath toPNG:(NSString *)pngPath size:(int)size
 {
   NSFileManager *fm = [NSFileManager defaultManager];
-  NSLog(@"Attempting to rasterize SVG %@ -> %@ at %dx%d using GNUstep if available", svgPath, pngPath, size, size);
+  NSDebugLog(@"Attempting to rasterize SVG %@ -> %@ at %dx%d using GNUstep if available", svgPath, pngPath, size, size);
 
   // First try pure-GNUstep approach using NSImage drawing
   @try
@@ -136,7 +136,7 @@
       NSImage *img = [[NSImage alloc] initWithContentsOfFile:svgPath];
       if (img && [img isKindOfClass:[NSImage class]])
         {
-          NSLog(@"Loaded SVG into NSImage (size=%@). Rendering to %dx%d...", NSStringFromSize([img size]), size, size);
+          NSDebugLog(@"Loaded SVG into NSImage (size=%@). Rendering to %dx%d...", NSStringFromSize([img size]), size, size);
 
           // Create an alpha-enabled bitmap representation and draw into it using SourceOver
           NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL
@@ -150,7 +150,7 @@
                                                                          bytesPerRow:0
                                                                           bitsPerPixel:0];
 
-          NSLog(@"Created NSBitmapImageRep for rasterization (hasAlpha=%d)", [rep hasAlpha]);
+          NSDebugLog(@"Created NSBitmapImageRep for rasterization (hasAlpha=%d)", [rep hasAlpha]);
 
           if (rep)
             {
@@ -170,14 +170,14 @@
               NSData *pngData = [rep representationUsingType:NSPNGFileType properties:nil];
               if (pngData && [pngData writeToFile:pngPath atomically:YES])
                 {
-                  NSLog(@"GNUstep rasterization succeeded: %@", pngPath);
+                  NSDebugLog(@"GNUstep rasterization succeeded: %@", pngPath);
                   [rep release];
                   [img release];
                   return YES;
                 }
               else
                 {
-                  NSLog(@"GNUstep rasterization produced no data or failed to write to %@", pngPath);
+                  NSDebugLog(@"GNUstep rasterization produced no data or failed to write to %@", pngPath);
                 }
               [rep release];
             }
@@ -186,7 +186,7 @@
     }
   @catch (NSException *ex)
     {
-      NSLog(@"GNUstep rasterization failed with exception: %@", ex);
+      NSDebugLog(@"GNUstep rasterization failed with exception: %@", ex);
     }
 
   // If we get here, fallback to command-line tools found on PATH
@@ -196,7 +196,7 @@
       NSString *exe = [self findExecutableInPath:t];
       if (!exe) continue;
 
-      NSLog(@"Using external tool '%@' at %@ to rasterize", t, exe);
+      NSDebugLog(@"Using external tool '%@' at %@ to rasterize", t, exe);
       NSTask *task = [[NSTask alloc] init];
 
       if ([t isEqualToString:@"rsvg-convert"]) 
@@ -219,12 +219,12 @@
           [task release];
           if (status == 0 && [fm fileExistsAtPath:pngPath])
             {
-              NSLog(@"External tool '%@' rasterized SVG successfully to %@", t, pngPath);
+              NSDebugLog(@"External tool '%@' rasterized SVG successfully to %@", t, pngPath);
               return YES;
             }
           else
             {
-              NSLog(@"External tool '%@' failed (status %d)", t, status);
+              NSDebugLog(@"External tool '%@' failed (status %d)", t, status);
             }
         }
       @catch (NSException *e)
@@ -233,7 +233,7 @@
         }
     }
 
-  NSLog(@"All rasterization methods failed for %@", svgPath);
+  NSDebugLog(@"All rasterization methods failed for %@", svgPath);
   return NO;
 }
 
@@ -241,7 +241,7 @@
 {
   if (!mimeType) return nil;
 
-  NSLog(@"Looking up extensions for MIME type: %@", mimeType);
+  NSDebugLog(@"Looking up extensions for MIME type: %@", mimeType);
 
   NSFileManager *fm = [NSFileManager defaultManager];
   NSMutableSet *exts = [NSMutableSet set];
@@ -253,7 +253,7 @@
   for (NSString *dir in pkgDirs)
     {
       if (![fm fileExistsAtPath:dir]) continue;
-      NSLog(@"Scanning mime package dir: %@", dir);
+      NSDebugLog(@"Scanning mime package dir: %@", dir);
       NSDirectoryEnumerator *e = [fm enumeratorAtPath:dir];
       NSString *file;
       while ((file = [e nextObject]))
@@ -263,7 +263,7 @@
           NSString *content = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&readErr];
           if (!content)
             {
-              NSLog(@"Failed reading %@: %@", path, [readErr localizedDescription]);
+              NSDebugLog(@"Failed reading %@: %@", path, [readErr localizedDescription]);
               continue;
             }
 
@@ -305,7 +305,7 @@
 
       if ([exts count] > 0)
         {
-          NSLog(@"Found extensions via mime packages: %@", exts);
+          NSDebugLog(@"Found extensions via mime packages: %@", exts);
           return [[exts allObjects] sortedArrayUsingSelector:@selector(compare:)];
         }
     }
@@ -324,12 +324,12 @@
       NSString *content = [NSString stringWithContentsOfFile:gf encoding:NSUTF8StringEncoding error:&gErr];
       if (!content)
         {
-          NSLog(@"Failed reading %@: %@", gf, [gErr localizedDescription]);
+          NSDebugLog(@"Failed reading %@: %@", gf, [gErr localizedDescription]);
           continue;
         }
 
-      NSLog(@"Scanning globs file: %@", gf);
-      NSArray *lines = [content componentsSeparatedByString:@"\\n"];
+      NSDebugLog(@"Scanning globs file: %@", gf);
+      NSArray *lines = [content componentsSeparatedByString:@"\n"];
       for (NSString *line in lines)
         {
           if ([line rangeOfString:mimeType].location == NSNotFound) continue;
@@ -367,13 +367,13 @@
 
       if ([exts count] > 0)
         {
-          NSLog(@"Found extensions via globs file %@: %@", gf, exts);
+          NSDebugLog(@"Found extensions via globs file %@: %@", gf, exts);
           return [[exts allObjects] sortedArrayUsingSelector:@selector(compare:)];
         }
     }
 
   // 3) Fallback to small built-in mapping (only used if system DB not available)
-  NSLog(@"No shared-mime-info entries found for %@; falling back to built-in mapping", mimeType);
+  NSDebugLog(@"No shared-mime-info entries found for %@; falling back to built-in mapping", mimeType);
   static NSDictionary *mimeMap = nil;
   if (!mimeMap)
     {
