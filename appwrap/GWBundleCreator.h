@@ -1,4 +1,10 @@
-#import <Foundation/Foundation.h>
+/*
+ * Copyright (c) 2026 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+ #import <Foundation/Foundation.h>
 
 @class DesktopFileParser;
 
