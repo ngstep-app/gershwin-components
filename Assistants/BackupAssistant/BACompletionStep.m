@@ -45,7 +45,6 @@
     NSImage *icon = [NSImage imageNamed:NSImageNameInfo]; // We'll update this dynamically
     [iconView setImage:icon];
     [view addSubview:iconView];
-    [iconView release];
     
     // Result message
     NSTextField *resultLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 140, 390, 30)];
@@ -57,7 +56,6 @@
     [resultLabel setAlignment:NSTextAlignmentCenter];
     [[resultLabel cell] setWraps:YES];
     [view addSubview:resultLabel];
-    [resultLabel release];
     
     // Detailed information
     NSTextField *detailLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 90, 390, 40)];
@@ -69,7 +67,6 @@
     [detailLabel setAlignment:NSTextAlignmentCenter];
     [[detailLabel cell] setWraps:YES];
     [view addSubview:detailLabel];
-    [detailLabel release];
     
     // Next steps information
     NSTextField *nextStepsLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 40, 390, 40)];
@@ -82,7 +79,6 @@
     [nextStepsLabel setAlignment:NSTextAlignmentCenter];
     [[nextStepsLabel cell] setWraps:YES];
     [view addSubview:nextStepsLabel];
-    [nextStepsLabel release];
     
     // Disk safety reminder
     NSTextField *safetyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 10, 390, 20)];
@@ -95,9 +91,8 @@
     [safetyLabel setTextColor:[NSColor systemGreenColor]];
     [safetyLabel setAlignment:NSTextAlignmentCenter];
     [view addSubview:safetyLabel];
-    [safetyLabel release];
     
-    return [view autorelease];
+    return view;
 }
 
 - (void)stepWillAppear
