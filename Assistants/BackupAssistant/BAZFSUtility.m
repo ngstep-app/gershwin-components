@@ -34,13 +34,11 @@
         [task launch];
         [task waitUntilExit];
         BOOL available = ([task terminationStatus] == 0);
-        [task release];
         
         NSLog(@"BAZFSUtility: ZFS %@", available ? @"is available" : @"is not available");
         return available;
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Failed to check ZFS availability: %@", [exception reason]);
-        [task release];
         return NO;
     }
 }
@@ -147,14 +145,11 @@
         [zpoolCheck waitUntilExit];
         if ([zpoolCheck terminationStatus] != 0) {
             NSLog(@"ERROR: zpool command not found");
-            [zpoolCheck release];
             return NO;
         }
         NSLog(@"BAZFSUtility: zpool command is available");
-        [zpoolCheck release];
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Failed to check zpool command: %@", [exception reason]);
-        [zpoolCheck release];
         return NO;
     }
     
@@ -488,9 +483,6 @@
             NSLog(@"BAZFSUtility: STDERR: (empty)");
         }
         
-        [outputString release];
-        [errorString release];
-        [task release];
         
         if (success) {
             NSLog(@"BAZFSUtility: Successfully destroyed ZFS pool '%@' (or confirmed it was already gone)", poolName);
@@ -513,7 +505,6 @@
     } @catch (NSException *exception) {
         NSLog(@"CRITICAL ERROR: Exception while destroying ZFS pool %@: %@", poolName, [exception reason]);
         NSLog(@"CRITICAL ERROR: Exception details: %@", exception);
-        [task release];
         return NO;
     }
 }
@@ -541,13 +532,11 @@
         [task launch];
         [task waitUntilExit];
         BOOL hasZFS = ([task terminationStatus] == 0);
-        [task release];
         
         NSLog(@"BAZFSUtility: Disk %@ %@ ZFS pool", diskDevice, hasZFS ? @"has" : @"does not have");
         return hasZFS;
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Failed to check ZFS labels on disk %@: %@", diskDevice, [exception reason]);
-        [task release];
         return NO;
     }
 }
@@ -590,24 +579,18 @@
                         if ([nameValue hasPrefix:@"'"] && [nameValue hasSuffix:@"'"]) {
                             nameValue = [nameValue substringWithRange:NSMakeRange(1, [nameValue length] - 2)];
                         }
-                        [output release];
-                        [task release];
                         NSLog(@"BAZFSUtility: Found pool name '%@' on disk %@", nameValue, diskDevice);
                         return nameValue;
                     }
                 }
             }
-            [output release];
         } else {
             NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
             NSString *errorOutput = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
             NSLog(@"ERROR: zdb failed for disk %@: %@", diskDevice, errorOutput);
-            [errorOutput release];
         }
-        [task release];
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Failed to get pool name from disk %@: %@", diskDevice, [exception reason]);
-        [task release];
     }
     
     NSLog(@"BAZFSUtility: Could not determine pool name from disk %@", diskDevice);
@@ -760,8 +743,6 @@
             }
         }
         
-        [errorString release];
-        [task release];
         
         // === PHASE 5: VERIFY MOUNT STATUS ===
         NSLog(@"BAZFSUtility: PHASE 5: Verifying final mount status...");
@@ -818,7 +799,6 @@
         return YES;
     } @catch (NSException *exception) {
         NSLog(@"WARNING: Exception during mount operation: %@", [exception reason]);
-        [task release];
         
         // Return success even on exception to prevent Assistant failure
         NSLog(@"BAZFSUtility: ==========================================================");
@@ -1315,7 +1295,6 @@
         } @catch (NSException *exception) {
             NSLog(@"WARNING: Could not import pool %@: %@", poolName, [exception reason]);
         }
-        [importTask release];
     } else {
         NSLog(@"BAZFSUtility: Pool %@ is already imported", poolName);
     }
@@ -1339,7 +1318,6 @@
         if ([errorOutput length] > 0) {
             NSLog(@"BAZFSUtility: zpool list stderr: %@", errorOutput);
         }
-        [errorOutput release];
         
         if ([task terminationStatus] == 0) {
             NSData *data = [[outputPipe fileHandleForReading] readDataToEndOfFile];
@@ -1350,8 +1328,6 @@
             
             // Convert human-readable size to bytes
             long long bytes = [self convertSizeStringToBytes:freeSpace];
-            [output release];
-            [task release];
             
             NSLog(@"BAZFSUtility: Available space in ZFS pool %@: %lld bytes (converted from '%@')", poolName, bytes, freeSpace);
             return bytes;
@@ -1362,7 +1338,6 @@
         NSLog(@"ERROR: Failed to get ZFS pool space for %@: %@", diskDevice, [exception reason]);
     }
     
-    [task release];
     
     // Fallback: try using df on mounted filesystems
     NSTask *dfTask = [[NSTask alloc] init];
@@ -1394,20 +1369,16 @@
                 
                 if ([filteredColumns count] >= 4) {
                     long long availableSpace = [[filteredColumns objectAtIndex:3] longLongValue];
-                    [output release];
-                    [dfTask release];
                     
                     NSLog(@"BAZFSUtility: Available space on mounted filesystem %@: %lld bytes", diskDevice, availableSpace);
                     return availableSpace;
                 }
             }
-            [output release];
         }
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Failed to get available space for disk %@: %@", diskDevice, [exception reason]);
     }
     
-    [dfTask release];
     return 0;
 }
 
@@ -1416,7 +1387,6 @@
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
     [formatter setDateFormat:@"yyyyMMdd_HHmmss"];
     NSString *timestamp = [formatter stringFromDate:[NSDate date]];
-    [formatter release];
     return timestamp;
 }
 
@@ -1483,14 +1453,10 @@
             NSLog(@"ERROR: ZFS command failed with exit status %d", status);
         }
         
-        [outputString release];
-        [errorString release];
-        [task release];
-        return [result autorelease];
+        return result;
     } @catch (NSException *exception) {
         NSLog(@"CRITICAL ERROR: Exception while executing ZFS command %@: %@", arguments, [exception reason]);
         NSLog(@"CRITICAL ERROR: Exception details: %@", exception);
-        [task release];
         return nil;
     }
 }
@@ -1606,14 +1572,10 @@
             NSLog(@"BAZFSUtility: STDERR: (empty)");
         }
         
-        [outputString release];
-        [errorString release];
-        [task release];
         return success;
     } @catch (NSException *exception) {
         NSLog(@"CRITICAL ERROR: Exception while executing ZFS command %@: %@", arguments, [exception reason]);
         NSLog(@"CRITICAL ERROR: Exception details: %@", exception);
-        [task release];
         return NO;
     }
 }
@@ -1729,14 +1691,10 @@
             NSLog(@"BAZFSUtility: STDERR: (empty)");
         }
         
-        [outputString release];
-        [errorString release];
-        [task release];
         return success;
     } @catch (NSException *exception) {
         NSLog(@"CRITICAL ERROR: Exception while executing ZPool command %@: %@", arguments, [exception reason]);
         NSLog(@"CRITICAL ERROR: Exception details: %@", exception);
-        [task release];
         return NO;
     }
 }
@@ -1813,14 +1771,10 @@
             NSLog(@"ERROR: ZPool command failed with exit status %d", status);
         }
         
-        [outputString release];
-        [errorString release];
-        [task release];
-        return [result autorelease];
+        return result;
     } @catch (NSException *exception) {
         NSLog(@"CRITICAL ERROR: Exception while executing ZPool command %@: %@", arguments, [exception reason]);
         NSLog(@"CRITICAL ERROR: Exception details: %@", exception);
-        [task release];
         return nil;
     }
 }
@@ -1861,12 +1815,10 @@
             // Parse the size from the parsable output
             totalBytes = [self parseTotalSizeFromParsableOutput:sizeOutput];
             NSLog(@"BAZFSUtility: Detected transfer size: %lld bytes (%@)", totalBytes, [self formatBytes:totalBytes]);
-            [sizeOutput release];
         }
     } @catch (NSException *exception) {
         NSLog(@"WARNING: Could not determine transfer size: %@", [exception reason]);
     }
-    [sizeTask release];
     
     if (progressBlock) {
         progressBlock(0.15, NSLocalizedString(@"Starting ZFS transfer with real-time monitoring...", @"Backup progress"));
@@ -1911,15 +1863,11 @@
                                    baseProgress:0.15 
                                   progressRange:0.75];
         
-        [sendTask release];
-        [receiveTask release];
         
         return success;
         
     } @catch (NSException *exception) {
         NSLog(@"ERROR: ZFS send/receive failed with exception: %@", [exception reason]);
-        [sendTask release];
-        [receiveTask release];
         return NO;
     }
 }
@@ -1960,12 +1908,10 @@
             // Parse the size from the parsable output
             totalBytes = [self parseTotalSizeFromParsableOutput:sizeOutput];
             NSLog(@"BAZFSUtility: Detected incremental transfer size: %lld bytes (%@)", totalBytes, [self formatBytes:totalBytes]);
-            [sizeOutput release];
         }
     } @catch (NSException *exception) {
         NSLog(@"WARNING: Could not determine incremental transfer size: %@", [exception reason]);
     }
-    [sizeTask release];
     
     if (progressBlock) {
         progressBlock(0.15, NSLocalizedString(@"Starting incremental ZFS transfer with real-time monitoring...", @"Backup progress"));
@@ -2010,15 +1956,11 @@
                                    baseProgress:0.15 
                                   progressRange:0.75];
         
-        [sendTask release];
-        [receiveTask release];
         
         return success;
         
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Incremental ZFS send/receive failed with exception: %@", [exception reason]);
-        [sendTask release];
-        [receiveTask release];
         return NO;
     }
 }
@@ -2320,7 +2262,6 @@
                         }
                     }
                 }
-                 [output release];
             }
             
             // Try to read from receive task stderr for completion messages (non-blocking)
@@ -2348,7 +2289,6 @@
                     }
                 }
                 
-                [output release];
             }
             
             // Increment progress counter on every loop iteration (not just when data is available)
@@ -2498,13 +2438,11 @@
         if ([remainingSendData length] > 0) {
             NSString *sendError = [[NSString alloc] initWithData:remainingSendData encoding:NSUTF8StringEncoding];
             NSLog(@"ZFS Send Final Error: %@", sendError);
-            [sendError release];
         }
         
         if ([remainingReceiveData length] > 0) {
             NSString *receiveError = [[NSString alloc] initWithData:remainingReceiveData encoding:NSUTF8StringEncoding];
             NSLog(@"ZFS Receive Final Error: %@", receiveError);
-            [receiveError release];
         }
         
         if (progressBlock) {
@@ -2595,19 +2533,15 @@
                     if ([filtered count] > 0) {
                         NSString *dataset = [filtered objectAtIndex:0];
                         NSLog(@"BAZFSUtility: Found ZFS dataset: %@", dataset);
-                        [output release];
-                        [task release];
                         return dataset;
                     }
                 }
             }
-            [output release];
         }
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Failed to get ZFS dataset for path %@: %@", path, [exception reason]);
     }
     
-    [task release];
     
     NSLog(@"BAZFSUtility: Path %@ is not on ZFS", path);
     return nil;
@@ -2638,15 +2572,12 @@
             
             long long size = [sizeStr longLongValue];
             NSLog(@"BAZFSUtility: Raw disk size: %lld bytes", size);
-            [output release];
-            [task release];
             return size;
         }
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Failed to get raw disk size for %@: %@", diskDevice, [exception reason]);
     }
     
-    [task release];
     return 0;
 }
 
@@ -2719,11 +2650,9 @@
             NSLog(@"WARNING: Failed to unmount %@ (may not be mounted)", diskDevice);
         }
         
-        [task release];
         return success;
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Failed to unmount disk %@: %@", diskDevice, [exception reason]);
-        [task release];
         return NO;
     }
 }
@@ -2755,17 +2684,13 @@
                 NSString *sizeStr = [[components objectAtIndex:0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
                 long long size = [sizeStr longLongValue];
                 NSLog(@"BAZFSUtility: Directory size: %lld bytes", size);
-                [output release];
-                [task release];
                 return size;
             }
-            [output release];
         }
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Failed to calculate directory size for %@: %@", path, [exception reason]);
     }
     
-    [task release];
     return 0;
 }
 
@@ -2814,8 +2739,6 @@
             NSString *output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
             
             BOOL zfsLoaded = [output containsString:@"zfs"];
-            [output release];
-            [task release];
             
             if (!zfsLoaded) {
                 if (errorMessage) {
@@ -2831,7 +2754,6 @@
         NSLog(@"ERROR: Failed to validate ZFS system state: %@", [exception reason]);
     }
     
-    [task release];
     
     if (errorMessage) {
         *errorMessage = @"Failed to validate ZFS system state";
@@ -2973,16 +2895,12 @@
         [threadInfo setObject:[NSNumber numberWithLongLong:totalBytes] forKey:@"totalBytes"];
         [threadInfo setObject:[NSNumber numberWithFloat:baseProgress] forKey:@"baseProgress"];
         [threadInfo setObject:[NSNumber numberWithFloat:progressRange] forKey:@"progressRange"];
-        [threadInfo setObject:[[progressBlock copy] autorelease] forKey:@"progressBlock"];
+        [threadInfo setObject:[progressBlock copy] forKey:@"progressBlock"];
         [threadInfo setObject:[NSNumber numberWithBool:YES] forKey:@"shouldContinue"];
         
-        NSThread *monitorThread = [[NSThread alloc] initWithTarget:self 
-                                                          selector:@selector(monitorPipeProgress:) 
-                                                            object:threadInfo];
-        [monitorThread setName:@"ZFS Pipe Monitor"];
-        [monitorThread start];
-        [monitorThread release];
-        [threadInfo release];
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            [self monitorPipeProgress:threadInfo];
+        });
     }
     
     return pipe;
@@ -3080,13 +2998,9 @@
                     }
                     
                     // Update progress on main thread
-                    [self performSelectorOnMainThread:@selector(updateProgressOnMainThread:)
-                                            withObject:[NSArray arrayWithObjects:
-                                                       [NSNumber numberWithFloat:adjustedProgress],
-                                                       statusMsg,
-                                                       [[progressBlock copy] autorelease],
-                                                       nil]
-                                         waitUntilDone:NO];
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [self updateProgressOnMainThread:[NSArray arrayWithObjects: [NSNumber numberWithFloat:adjustedProgress], statusMsg, [progressBlock copy], nil]];
+                    });
                 }
                 
                 // Check if we've reached the end (only for known sizes)
@@ -3175,7 +3089,6 @@
                 }
             }
             
-            [output release];
             
             if (hasMountedDatasets) {
                 NSLog(@"BAZFSUtility: Pool had mounted datasets - attempted to unmount them");
@@ -3189,7 +3102,6 @@
         NSLog(@"ERROR: Failed to check mounted datasets for pool %@: %@", poolName, [exception reason]);
     }
     
-    [task release];
     
     // Check for any processes using files in the pool
     NSLog(@"BAZFSUtility: Checking for processes using pool '%@'", poolName);
@@ -3210,10 +3122,8 @@
             NSData *data = [[lsofPipe fileHandleForReading] readDataToEndOfFile];
             NSString *output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
             NSLog(@"BAZFSUtility: Processes using pool '%@':\n%@", poolName, output);
-            [output release];
             
             NSLog(@"BAZFSUtility: WARNING: Pool '%@' is in use by running processes", poolName);
-            [lsofTask release];
             return NO;
         } else {
             NSLog(@"BAZFSUtility: No processes found using pool '%@'", poolName);
@@ -3222,7 +3132,6 @@
         NSLog(@"WARNING: Could not check for processes using pool: %@", [exception reason]);
     }
     
-    [lsofTask release];
     return YES;
 }
 
