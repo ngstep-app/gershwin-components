@@ -33,7 +33,7 @@
     int _maxRetries;
 }
 
-@property (nonatomic, assign) id<CLMDownloaderDelegate> delegate;
+@property (nonatomic, weak) id<CLMDownloaderDelegate> delegate;
 @property (nonatomic, readonly) BOOL isDownloading;
 
 - (void)downloadFromURL:(NSString *)url toPath:(NSString *)path;

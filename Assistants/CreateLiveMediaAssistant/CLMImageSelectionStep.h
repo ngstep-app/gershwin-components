@@ -33,6 +33,6 @@
     BOOL _isLoading;
 }
 
-@property (nonatomic, assign) CLMController *controller;
+@property (nonatomic, weak) CLMController *controller;
 
 @end
