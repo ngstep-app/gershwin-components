@@ -60,9 +60,6 @@
 - (void)dealloc
 {
     [self disconnect];
-    [_hostname release];
-    [_password release];
-    [super dealloc];
 }
 
 #pragma mark - Class Methods
@@ -146,9 +143,10 @@ static rfbBool VNCMallocFrameBuffer(rfbClient *client)
     // Notify delegate on main thread
     if (vncClient->_delegate && [vncClient->_delegate respondsToSelector:@selector(vncClient:framebufferDidUpdate:)]) {
         NSRect fullRect = NSMakeRect(0, 0, client->width, client->height);
-        [vncClient performSelectorOnMainThread:@selector(notifyFramebufferUpdate:)
-                                    withObject:[NSValue valueWithRect:fullRect]
-                                 waitUntilDone:NO];
+        NSValue *rectValue = [NSValue valueWithRect:fullRect];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [vncClient notifyFramebufferUpdate:rectValue];
+        });
     }
     
     return TRUE;
@@ -165,9 +163,10 @@ static void VNCGotFrameBufferUpdate(rfbClient *client, int x, int y, int w, int 
     // Notify delegate on main thread
     if (vncClient->_delegate && [vncClient->_delegate respondsToSelector:@selector(vncClient:framebufferDidUpdate:)]) {
         NSRect updateRect = NSMakeRect(x, y, w, h);
-        [vncClient performSelectorOnMainThread:@selector(notifyFramebufferUpdate:)
-                                    withObject:[NSValue valueWithRect:updateRect]
-                                 waitUntilDone:NO];
+        NSValue *rectValue = [NSValue valueWithRect:updateRect];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [vncClient notifyFramebufferUpdate:rectValue];
+        });
     }
 }
 
@@ -218,20 +217,17 @@ static void VNCErr(const char *format, ...)
         return NO;
     }
     
-    [_hostname release];
     _hostname = [hostname copy];
     _port = port;
-    [_password release];
     _password = [password copy];
     
     _connecting = YES;
     _shouldStop = NO;
     
-    // Start connection in background thread
-    _connectionThread = [[NSThread alloc] initWithTarget:self 
-                                               selector:@selector(connectionThreadMain:) 
-                                                 object:nil];
-    [_connectionThread start];
+    // Start connection in background using GCD
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self connectionThreadMain:nil];
+    });
     
     return YES;
 }
@@ -258,7 +254,6 @@ static void VNCErr(const char *format, ...)
             [NSThread sleepForTimeInterval:0.1];
         }
     }
-    [_connectionThread release];
     _connectionThread = nil;
     
     // Free framebuffer
@@ -275,9 +270,10 @@ static void VNCErr(const char *format, ...)
     
     // Notify delegate
     if (_delegate && [_delegate respondsToSelector:@selector(vncClient:didDisconnect:)]) {
-        [self performSelectorOnMainThread:@selector(notifyDisconnect:)
-                               withObject:@"User requested disconnect"
-                            waitUntilDone:NO];
+        NSString *reason = @"User requested disconnect";
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self notifyDisconnect:reason];
+        });
     }
 }
 
@@ -285,7 +281,7 @@ static void VNCErr(const char *format, ...)
 
 - (void)connectionThreadMain:(id)object
 {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    @autoreleasepool {
     
     NSLog(@"VNCClient: Starting connection to %@:%ld", _hostname, (long)_port);
     
@@ -415,15 +411,16 @@ cleanup:
         [self notifyConnectionResult:NO error:@"Connection lost"];
     }
     
-    [pool release];
+    } // @autoreleasepool
 }
 
 - (void)notifyConnectionResult:(BOOL)success error:(NSString *)error
 {
     if (_delegate) {
-        [self performSelectorOnMainThread:@selector(notifyConnectionOnMainThread:)
-                               withObject:@{@"success": @(success), @"error": error ? error : @""}
-                            waitUntilDone:NO];
+        NSDictionary *info = @{@"success": @(success), @"error": error ? error : @""};
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self notifyConnectionOnMainThread:info];
+        });
     }
 }
 
@@ -558,9 +555,8 @@ cleanup:
     NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(_width, _height)];
     [image setCacheMode:NSImageCacheAlways];
     [image addRepresentation:bitmapRep];
-    [bitmapRep release];
     
-    return [image autorelease];
+    return image;
 }
 
 - (void)requestFramebufferUpdate:(NSRect)rect incremental:(BOOL)incremental

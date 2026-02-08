@@ -46,7 +46,6 @@
     [welcomeLabel setAlignment:NSTextAlignmentLeft];
     [[welcomeLabel cell] setWraps:YES];
     [view addSubview:welcomeLabel];
-    [welcomeLabel release];
     
     // Features list
     NSTextField *featuresLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 150, 390, 20)];
@@ -57,7 +56,6 @@
     [featuresLabel setSelectable:NO];
     [featuresLabel setFont:[NSFont boldSystemFontOfSize:13]];
     [view addSubview:featuresLabel];
-    [featuresLabel release];
     
     // Feature bullets
     NSArray *features = @[
@@ -78,7 +76,6 @@
         [featureLabel setSelectable:NO];
         [featureLabel setFont:[NSFont systemFontOfSize:12]];
         [view addSubview:featureLabel];
-        [featureLabel release];
         yPos -= 20;
     }
     
@@ -92,9 +89,8 @@
     [reqLabel setFont:[NSFont systemFontOfSize:11]];
     [reqLabel setTextColor:[NSColor secondaryLabelColor]];
     [view addSubview:reqLabel];
-    [reqLabel release];
     
-    return [view autorelease];
+    return view;
 }
 
 - (NSString *)continueButtonTitle

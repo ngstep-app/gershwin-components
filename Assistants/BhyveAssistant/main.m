@@ -52,11 +52,9 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
                 [task launch];
                 [task waitUntilExit];
                 int exitStatus = [task terminationStatus];
-                [task release];
                 return exitStatus;
             } @catch (NSException *exception) {
                 NSLog(@"ERROR: Failed to re-execute with sudo: %@", [exception reason]);
-                [task release];
                 
                 // Fall back to showing error
                 NSRunAlertPanel(@"Root Privileges Required",
@@ -81,9 +79,6 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
         
         // Run the application
         [app run];
-        
-        [controller release];
-        [appDelegate release];
     }
     
     NSLog(@"BhyveAssistant: main() exiting");

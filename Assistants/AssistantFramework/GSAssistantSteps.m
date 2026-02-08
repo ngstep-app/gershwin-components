@@ -289,10 +289,14 @@ static NSBundle *getFrameworkBundle() {
     
     // Update UI if the view exists
     if (self.view) {
-        // Use performSelectorOnMainThread instead of dispatch_async for GNUstep compatibility
-        [self performSelectorOnMainThread:@selector(updateProgressUI:) 
-              withObject:@{@"progress": @(progress), @"task": task ?: @"Processing..."} 
-              waitUntilDone:NO];
+        NSDictionary *params = @{@"progress": @(progress), @"task": task ?: @"Processing..."};
+        __weak typeof(self) weakSelf = self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (strongSelf) {
+                [strongSelf updateProgressUI:params];
+            }
+        });
     }
     
     // Check for auto-completion when progress reaches 100%
@@ -341,12 +345,6 @@ static NSBundle *getFrameworkBundle() {
 
 - (CGFloat)progressValue {
     return self.progress;
-}
-
-- (void)dealloc {
-    [_currentTask release];
-    [_completionMessage release];
-    [super dealloc];
 }
 
 @end
@@ -432,10 +430,8 @@ static NSBundle *getFrameworkBundle() {
         if (icon) {
             [statusIcon setImage:icon];
             [statusIcon setImageScaling:NSImageScaleProportionallyUpOrDown];
-            [icon release];
         }
         [containerView addSubview:statusIcon];
-        [statusIcon release];
     } else {
         // Fallback to Unicode characters - center in upper area
         NSTextField *statusIcon = [[NSTextField alloc] initWithFrame:NSMakeRect(157, 170, 64, 64)];
@@ -457,7 +453,6 @@ static NSBundle *getFrameworkBundle() {
         }
         
         [containerView addSubview:statusIcon];
-        [statusIcon release];
     }
     
     // Status message - use proper layout with word wrapping and centering within card bounds
@@ -478,19 +473,12 @@ static NSBundle *getFrameworkBundle() {
     [cell setLineBreakMode:NSLineBreakByWordWrapping];
     
     [containerView addSubview:statusLabel];
-    [statusLabel release]; // Release our reference since the container view retains it
     
     return containerView;
 }
 
 - (BOOL)canGoBack {
     return NO; // Never allow going back from completion steps
-}
-
-- (void)dealloc
-{
-    [_completionMessage release];
-    [super dealloc];
 }
 
 @end
@@ -530,7 +518,6 @@ static NSBundle *getFrameworkBundle() {
     titleLabel.font = [NSFont boldSystemFontOfSize:18.0];
     titleLabel.stringValue = title;
     [containerView addSubview:titleLabel];
-    [titleLabel release];
     
     // Text content in scroll view with proper spacing (24px from sides, 20px from bottom)
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(24, 20, 452, 276)];
@@ -555,17 +542,10 @@ static NSBundle *getFrameworkBundle() {
     [textView setFrame:NSMakeRect(0, 0, 452, MAX(276, textSize.height))];
     
     scrollView.documentView = textView;
-    [textView release];
     
     [containerView addSubview:scrollView];
-    [scrollView release];
     
-    return [containerView autorelease];
-}
-
-- (void)dealloc {
-    [_welcomeContent release];
-    [super dealloc];
+    return containerView;
 }
 
 @end
@@ -603,7 +583,6 @@ static NSBundle *getFrameworkBundle() {
     titleLabel.font = [NSFont boldSystemFontOfSize:18.0];
     titleLabel.stringValue = title;
     [containerView addSubview:titleLabel];
-    [titleLabel release];
     
     // Text content in scroll view with proper spacing (24px from sides, 20px from bottom)
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(24, 20, 452, 276)];
@@ -628,17 +607,10 @@ static NSBundle *getFrameworkBundle() {
     [textView setFrame:NSMakeRect(0, 0, 452, MAX(276, textSize.height))];
     
     scrollView.documentView = textView;
-    [textView release];
     
     [containerView addSubview:scrollView];
-    [scrollView release];
     
-    return [containerView autorelease];
-}
-
-- (void)dealloc {
-    [_readMeContent release];
-    [super dealloc];
+    return containerView;
 }
 
 @end
@@ -678,7 +650,6 @@ static NSBundle *getFrameworkBundle() {
     titleLabel.font = [NSFont boldSystemFontOfSize:18.0];
     titleLabel.stringValue = GSLocalizedString(@"Software License Agreement", @"License agreement title");
     [containerView addSubview:titleLabel];
-    [titleLabel release];
     
     // Determine scroll view frame based on whether acceptance checkbox is needed (24px from sides, spacing for checkbox)
     NSRect scrollFrame = requiresAcceptance ? 
@@ -709,10 +680,8 @@ static NSBundle *getFrameworkBundle() {
     [textView setFrame:NSMakeRect(0, 0, 452, MAX(scrollHeight, textSize.height))];
     
     scrollView.documentView = textView;
-    [textView release];
     
     [containerView addSubview:scrollView];
-    [scrollView release];
     
     // Add acceptance checkbox if required (24px from sides, 20px from bottom, 24px height)
     if (requiresAcceptance) {
@@ -722,10 +691,9 @@ static NSBundle *getFrameworkBundle() {
         acceptCheckbox.target = self;
         acceptCheckbox.action = @selector(acceptanceChanged:);
         [containerView addSubview:acceptCheckbox];
-        [acceptCheckbox release];
     }
     
-    return [containerView autorelease];
+    return containerView;
 }
 
 - (void)acceptanceChanged:(NSButton *)sender {
@@ -740,11 +708,6 @@ static NSBundle *getFrameworkBundle() {
 
 - (NSString *)continueButtonTitle {
     return GSLocalizedString(@"Continue", @"Continue button title");
-}
-
-- (void)dealloc {
-    [_licenseContent release];
-    [super dealloc];
 }
 
 @end

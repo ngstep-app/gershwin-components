@@ -28,25 +28,13 @@
     if (self = [super init]) {
         NSLog(@"GSSelectionStep: init");
         _items = [[NSMutableArray alloc] init];
-        _stepTitle = [@"Selection" retain];
-        _stepDescription = [@"Please make a selection" retain];
+        _stepTitle = @"Selection";
+        _stepDescription = @"Please make a selection";
         _allowsEmptySelection = NO;
         _allowsMultipleSelection = NO;
         [self setupView];
     }
     return self;
-}
-
-- (void)dealloc
-{
-    NSLog(@"GSSelectionStep: dealloc");
-    [_stepView release];
-    [_items release];
-    [_stepTitle release];
-    [_stepDescription release];
-    [_selectedItem release];
-    [_arrayController release];
-    [super dealloc];
 }
 
 - (void)setupView
@@ -71,7 +59,6 @@
     
     [scrollView setDocumentView:_tableView];
     [containerView addSubview:scrollView];
-    [scrollView release];
     
     // Create array controller
     _arrayController = [[NSArrayController alloc] init];
@@ -94,8 +81,6 @@
     
     // Let subclasses add additional views
     [self setupAdditionalViews:containerView];
-    
-    [containerView release];
 }
 
 - (void)setupTableColumns
@@ -122,8 +107,6 @@
         toObject:_arrayController 
      withKeyPath:[NSString stringWithFormat:@"arrangedObjects.%@", keyPath] 
          options:nil];
-    
-    [column release];
 }
 
 - (void)refreshItems
@@ -145,10 +128,8 @@
     NSInteger selectedRow = [_tableView selectedRow];
     
     if (selectedRow >= 0 && selectedRow < (NSInteger)[_items count]) {
-        [_selectedItem release];
-        _selectedItem = [[_items objectAtIndex:selectedRow] retain];
+        _selectedItem = [_items objectAtIndex:selectedRow];
     } else {
-        [_selectedItem release];
         _selectedItem = nil;
     }
     

@@ -55,7 +55,7 @@
 @property (nonatomic, assign) NSInteger width;
 @property (nonatomic, assign) NSInteger height;
 @property (nonatomic, assign) NSInteger depth;
-@property (nonatomic, assign) id<VNCClientDelegate> delegate;
+@property (nonatomic, weak) id<VNCClientDelegate> delegate;
 
 // Connection management
 - (BOOL)connectToHost:(NSString *)hostname port:(NSInteger)port;

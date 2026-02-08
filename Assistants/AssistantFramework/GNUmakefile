@@ -35,7 +35,7 @@ GSAssistantFramework_RESOURCE_FILES = \
 GSAssistantFramework_FRAMEWORKS_DEPEND_UPON = AppKit Foundation
 
 # Compiler and linker flags
-GSAssistantFramework_CPPFLAGS += -Wall -Wextra
+GSAssistantFramework_CPPFLAGS += -Wall -Wextra -fobjc-arc -Werror -O2
 
 # Installation directory
 FRAMEWORK_INSTALL_DIR = $(GNUSTEP_SYSTEM_LIBRARY)/Frameworks

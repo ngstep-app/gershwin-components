@@ -42,7 +42,7 @@ typedef NS_ENUM(NSInteger, GSProgressPhase) {
     
     NSString *_stepTitle;
     NSString *_stepDescription;
-    id<GSEnhancedProgressDelegate> _delegate;
+    __weak id<GSEnhancedProgressDelegate> _delegate;
     
     GSProgressPhase _currentPhase;
     float _progress;
@@ -54,13 +54,13 @@ typedef NS_ENUM(NSInteger, GSProgressPhase) {
     BOOL _wasSuccessful;
 }
 
-@property (nonatomic, retain) NSString *stepTitle;
-@property (nonatomic, retain) NSString *stepDescription;
-@property (nonatomic, assign) id<GSEnhancedProgressDelegate> delegate;
+@property (nonatomic, strong) NSString *stepTitle;
+@property (nonatomic, strong) NSString *stepDescription;
+@property (nonatomic, weak) id<GSEnhancedProgressDelegate> delegate;
 @property (nonatomic, assign) GSProgressPhase currentPhase;
 @property (nonatomic, assign) float progress;
-@property (nonatomic, retain) NSString *statusMessage;
-@property (nonatomic, retain) NSString *progressMessage;
+@property (nonatomic, strong) NSString *statusMessage;
+@property (nonatomic, strong) NSString *progressMessage;
 @property (nonatomic, assign) BOOL allowsCancellation;
 @property (nonatomic, readonly) BOOL isCompleted;
 @property (nonatomic, readonly) BOOL wasSuccessful;

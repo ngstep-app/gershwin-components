@@ -65,7 +65,7 @@
     [[_warningLabel cell] setWraps:YES];
     [_containerView addSubview:_warningLabel];
     
-    return [_containerView autorelease];
+    return _containerView;
 }
 
 - (void)stepWillAppear
@@ -90,7 +90,6 @@
     // Clear existing matrix if it exists
     if (_operationMatrix) {
         [_operationMatrix removeFromSuperview];
-        [_operationMatrix release];
         _operationMatrix = nil;
     }
     

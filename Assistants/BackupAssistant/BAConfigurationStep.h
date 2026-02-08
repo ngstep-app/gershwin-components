@@ -31,7 +31,7 @@
     BOOL _spaceCalculationInProgress;
 }
 
-@property (nonatomic, assign) BAController *controller;
+@property (nonatomic, weak) BAController *controller;
 
 - (id)initWithController:(BAController *)controller;
 - (void)updateConfigurationView;

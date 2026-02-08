@@ -26,13 +26,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    NSLog(@"BhyveISOSelectionStep: dealloc");
-    [_stepView release];
-    [super dealloc];
-}
-
 - (void)setupView
 {
     NSLog(@"BhyveISOSelectionStep: setupView");
@@ -50,7 +43,6 @@
     [instructionLabel setSelectable:NO];
     [[instructionLabel cell] setWraps:YES];
     [_stepView addSubview:instructionLabel];
-    [instructionLabel release];
     
     // Browse button
     _browseButton = [[NSButton alloc] initWithFrame:NSMakeRect(127, 110, 100, 32)];
@@ -96,7 +88,6 @@
     [formatsLabel setTextColor:[NSColor darkGrayColor]];
     [[formatsLabel cell] setWraps:YES];
     [_stepView addSubview:formatsLabel];
-    [formatsLabel release];
 }
 
 - (void)browseForISO:(id)sender

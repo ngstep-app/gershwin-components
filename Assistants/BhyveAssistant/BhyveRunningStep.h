@@ -25,7 +25,7 @@
     BhyveController *_controller;
 }
 
-@property (nonatomic, assign) BhyveController *controller;
+@property (nonatomic, weak) BhyveController *controller;
 
 - (void)updateStatus:(NSString *)status;
 

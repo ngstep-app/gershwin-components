@@ -28,7 +28,7 @@
     NSTimer *_refreshTimer;
 }
 
-@property (nonatomic, assign) CLMController *controller;
+@property (nonatomic, weak) CLMController *controller;
 
 // Disk refresh control
 - (void)stopRefreshTimer;

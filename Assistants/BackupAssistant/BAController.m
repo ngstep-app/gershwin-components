@@ -39,13 +39,13 @@
 {
     self = [super init];
     if (self) {
-        _homeDirectory = [@"/home" retain];  // Backup all user home directories
+        _homeDirectory = @"/home";  // Backup all user home directories
         _selectedOperation = BAOperationTypeNone;
         _diskAnalysisResult = BADiskAnalysisResultEmpty;
         _backupItems = [[NSMutableArray alloc] init];
         _restoreItems = [[NSMutableArray alloc] init];
         _operationSuccessful = NO;
-        _zfsPoolName = [@"backup_pool" retain];
+        _zfsPoolName = @"backup_pool";
         _requiredSpace = 0;
         _availableSpace = 0;
         _userConfirmedWipe = NO;
@@ -53,19 +53,6 @@
         NSLog(@"BackupAssistant: Controller initialized for home directories: %@", _homeDirectory);
     }
     return self;
-}
-
-- (void)dealloc
-{
-    [_selectedDiskDevice release];
-    [_homeDirectory release];
-    [_availableSnapshots release];
-    [_selectedSnapshot release];
-    [_backupItems release];
-    [_restoreItems release];
-    [_zfsPoolName release];
-    [_assistantWindow release];
-    [super dealloc];
 }
 
 - (void)showAssistant
@@ -90,32 +77,26 @@
     // Introduction step
     BAIntroStep *introStep = [[BAIntroStep alloc] init];
     [steps addObject:introStep];
-    [introStep release];
     
     // Disk selection step
     BADiskSelectionStep *diskStep = [[BADiskSelectionStep alloc] initWithController:self];
     [steps addObject:diskStep];
-    [diskStep release];
     
     // Operation selection step  
     BAOperationSelectionStep *operationStep = [[BAOperationSelectionStep alloc] initWithController:self];
     [steps addObject:operationStep];
-    [operationStep release];
     
     // Configuration step
     BAConfigurationStep *configStep = [[BAConfigurationStep alloc] initWithController:self];
     [steps addObject:configStep];
-    [configStep release];
     
     // Progress step
     BAProgressStep *progressStep = [[BAProgressStep alloc] initWithController:self];
     [steps addObject:progressStep];
-    [progressStep release];
     
     // Completion step
     BACompletionStep *completionStep = [[BACompletionStep alloc] initWithController:self];
     [steps addObject:completionStep];
-    [completionStep release];
     
     // Create the assistant window
     NSImage *icon = [NSImage imageNamed:@"backup_icon"];
@@ -299,19 +280,15 @@
             NSArray *components = [output componentsSeparatedByString:@"\t"];
             if ([components count] > 0) {
                 long long size = [[components objectAtIndex:0] longLongValue];
-                [output release];
-                [task release];
                 
                 NSLog(@"BackupAssistant: Calculated backup size: %lld bytes", size);
                 return size;
             }
-            [output release];
         }
     } @catch (NSException *exception) {
         NSLog(@"ERROR: Failed to calculate backup size: %@", [exception reason]);
     }
     
-    [task release];
     return 0;
 }
 

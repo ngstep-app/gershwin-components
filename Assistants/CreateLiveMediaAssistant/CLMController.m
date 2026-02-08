@@ -60,18 +60,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    NSLog(@"CLMController: dealloc");
-    [_assistantWindow release];
-    [_selectedImageURL release];
-    [_selectedImageName release];
-    [_selectedDiskDevice release];
-    [_availableRepositories release];
-    [_availableReleases release];
-    [super dealloc];
-}
-
 - (void)showAssistant
 {
     NSLog(@"CLMController: showAssistant");
@@ -151,9 +139,9 @@
     
     // Ensure we're on the main thread for UI updates
     if (![NSThread isMainThread]) {
-        [self performSelectorOnMainThread:@selector(showInstallationError:) 
-                               withObject:message 
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self showInstallationError:message];
+        });
         return;
     }
     

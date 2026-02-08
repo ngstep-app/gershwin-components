@@ -21,7 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface GSDownloader : NSObject
 {
-    id<GSDownloaderDelegate> _delegate;
+    __weak id<GSDownloaderDelegate> _delegate;
     NSString *_sourceURL;
     NSString *_destinationPath;
     NSURLConnection *_connection;
@@ -31,7 +31,7 @@ NS_ASSUME_NONNULL_BEGIN
     long long _receivedBytes;
 }
 
-@property (nonatomic, assign) id<GSDownloaderDelegate> delegate;
+@property (nonatomic, weak) id<GSDownloaderDelegate> delegate;
 @property (nonatomic, readonly) BOOL isDownloading;
 @property (nonatomic, readonly) long long totalBytes;
 @property (nonatomic, readonly) long long receivedBytes;

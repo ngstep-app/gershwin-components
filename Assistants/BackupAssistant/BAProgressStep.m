@@ -96,9 +96,8 @@
     [warningLabel setAlignment:NSTextAlignmentCenter];
     [[warningLabel cell] setWraps:YES];
     [view addSubview:warningLabel];
-    [warningLabel release];
     
-    return [view autorelease];
+    return view;
 }
 
 - (void)stepWillAppear
@@ -145,14 +144,14 @@
     NSLog(@"BAProgressStep: Starting operation: %ld", (long)_controller.selectedOperation);
     
     // Perform operation in background thread
-    [NSThread detachNewThreadSelector:@selector(performOperation) 
-                             toTarget:self 
-                           withObject:nil];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self performOperation];
+    });
 }
 
 - (void)performOperation
 {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    @autoreleasepool {
     
     BOOL success = NO;
     NSString *errorMessage = nil;
@@ -163,9 +162,9 @@
             @"progress": @(progress),
             @"task": currentTask ? currentTask : @""
         };
-        [self performSelectorOnMainThread:@selector(updateProgressFromBackground:) 
-                               withObject:progressInfo 
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self updateProgressFromBackground:progressInfo];
+        });
     };
     
     @try {
@@ -233,11 +232,11 @@
         @"errorMessage": errorMessage ? errorMessage : @""
     };
     
-    [self performSelectorOnMainThread:@selector(handleOperationResult:) 
-                           withObject:resultInfo 
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self handleOperationResult:resultInfo];
+    });
     
-    [pool release];
+    } // @autoreleasepool
 }
 
 - (void)updateProgressFromBackground:(NSDictionary *)progressInfo

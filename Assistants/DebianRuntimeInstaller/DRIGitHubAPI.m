@@ -40,7 +40,6 @@
 {
     NSLog(@"DRIGitHubAPI: dealloc");
     [self cancelCurrentRequest];
-    [super dealloc];
 }
 
 - (void)fetchReleasesIncludingPrereleases:(BOOL)includePrereleases
@@ -79,11 +78,9 @@
     if (_currentConnection) {
         NSLog(@"DRIGitHubAPI: canceling current request");
         [_currentConnection cancel];
-        [_currentConnection release];
         _currentConnection = nil;
     }
     if (_downloadData) {
-        [_downloadData release];
         _downloadData = nil;
     }
 }
@@ -134,7 +131,7 @@
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
     NSLog(@"DRIGitHubAPI: didReceiveResponse");
-    _response = [response retain];
+    _response = response;
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
@@ -147,11 +144,8 @@
     NSLog(@"DRIGitHubAPI: connection finished, data length: %lu", (unsigned long)[_downloadData length]);
     [self handleResponse:_response data:_downloadData error:nil];
     
-    [_response release];
     _response = nil;
-    [_currentConnection release];
     _currentConnection = nil;
-    [_downloadData release];
     _downloadData = nil;
 }
 
@@ -160,11 +154,8 @@
     NSLog(@"DRIGitHubAPI: connection failed with error: %@", error.localizedDescription);
     [self handleResponse:nil data:nil error:error];
     
-    [_response release];
     _response = nil;
-    [_currentConnection release];
     _currentConnection = nil;
-    [_downloadData release];
     _downloadData = nil;
 }
 
@@ -293,7 +284,6 @@
         // Return fallback data on error
         DRIGitHubAPI *fallbackAPI = [[DRIGitHubAPI alloc] initWithRepository:owner name:name];
         NSArray *fallbackReleases = [fallbackAPI createFallbackReleases];
-        [fallbackAPI release];
         return fallbackReleases;
     }
     
@@ -302,7 +292,6 @@
         // Return fallback data on HTTP error
         DRIGitHubAPI *fallbackAPI = [[DRIGitHubAPI alloc] initWithRepository:owner name:name];
         NSArray *fallbackReleases = [fallbackAPI createFallbackReleases];
-        [fallbackAPI release];
         return fallbackReleases;
     }
     
@@ -317,7 +306,6 @@
         // Return fallback data on JSON error
         DRIGitHubAPI *fallbackAPI = [[DRIGitHubAPI alloc] initWithRepository:owner name:name];
         NSArray *fallbackReleases = [fallbackAPI createFallbackReleases];
-        [fallbackAPI release];
         return fallbackReleases;
     }
     
@@ -335,7 +323,6 @@
         
         // Skip prereleases if not requested
         if (release.prerelease && !includePrereleases) {
-            [release release];
             continue;
         }
         
@@ -346,7 +333,6 @@
             [formatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss'Z'"];
             [formatter setTimeZone:[NSTimeZone timeZoneWithName:@"UTC"]];
             release.publishedAt = [formatter dateFromString:dateString];
-            [formatter release];
         }
         
         // Parse assets
@@ -370,18 +356,15 @@
                     [formatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss'Z'"];
                     [formatter setTimeZone:[NSTimeZone timeZoneWithName:@"UTC"]];
                     asset.updatedAt = [formatter dateFromString:assetDateString];
-                    [formatter release];
                 }
                 
                 [assetObjects addObject:asset];
-                [asset release];
             }
             
             release.assets = [assetObjects copy];
         }
         
         [releases addObject:release];
-        [release release];
     }
     
     NSLog(@"DRIGitHubAPI: successfully parsed %lu releases", (unsigned long)releases.count);

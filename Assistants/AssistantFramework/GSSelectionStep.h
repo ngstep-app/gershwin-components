@@ -29,12 +29,12 @@ NS_ASSUME_NONNULL_BEGIN
     BOOL _allowsMultipleSelection;
 }
 
-@property (nonatomic, retain) NSString *stepTitle;
-@property (nonatomic, retain) NSString *stepDescription;
+@property (nonatomic, strong) NSString *stepTitle;
+@property (nonatomic, strong) NSString *stepDescription;
 @property (nonatomic, readonly) NSTableView *tableView;
 @property (nonatomic, readonly) NSArrayController *arrayController;
 @property (nonatomic, readonly) NSMutableArray *items;
-@property (nonatomic, retain) id selectedItem;
+@property (nonatomic, strong) id selectedItem;
 @property (nonatomic, assign) BOOL allowsEmptySelection;
 @property (nonatomic, assign) BOOL allowsMultipleSelection;
 

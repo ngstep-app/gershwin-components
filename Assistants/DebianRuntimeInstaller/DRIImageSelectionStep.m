@@ -28,10 +28,9 @@
 {
     NSLog(@"DRIImageSelectionStep: dealloc");
     // Release retained subviews
-    if (_urlField) { [_urlField release]; _urlField = nil; }
-    if (_prereleaseCheckbox) { [_prereleaseCheckbox release]; _prereleaseCheckbox = nil; }
-    if (_refreshButton) { [_refreshButton release]; _refreshButton = nil; }
-    [super dealloc];
+    if (_urlField) { _urlField = nil; }
+    if (_prereleaseCheckbox) { _prereleaseCheckbox = nil; }
+    if (_refreshButton) { _refreshButton = nil; }
 }
 
 - (void)stepWillAppear
@@ -47,7 +46,6 @@
         [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")]; 
         [alert setAlertStyle:NSWarningAlertStyle];
         [alert runModal];
-        [alert release];
         return;
     }
     
@@ -62,7 +60,6 @@
         [alert setMessageText:@"Linux Runtime Already Installed"]; 
         [alert setInformativeText:@"A Linux Runtime is already installed. Remove the existing one from /compat if you would like to install another one."];
         [alert runModal];
-        [alert release];
         return;
     }
     
@@ -131,13 +128,11 @@
             [formatter setDateStyle:NSDateFormatterShortStyle];
             [formatter setTimeStyle:NSDateFormatterNoStyle];
             [item setObject:[formatter stringFromDate:date] forKey:@"dateFormatted"]; 
-            [formatter release];
         } else {
             [item setObject:@"Unknown" forKey:@"dateFormatted"]; 
         }
         
         [self.items addObject:item];
-        [item release];
     }
     
     NSLog(@"DRIImageSelectionStep: loaded %lu items", (unsigned long)self.items.count);
@@ -231,7 +226,6 @@
     [urlLabel setEditable:NO];
     [urlLabel setSelectable:NO];
     [containerView addSubview:urlLabel];
-    [urlLabel release];
     
     _urlField = [[NSTextField alloc] initWithFrame:NSMakeRect(100, 170, 172, 20)];
     [_urlField setStringValue:NSLocalizedString(@"", @"")]; 

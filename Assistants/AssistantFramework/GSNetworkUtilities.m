@@ -30,15 +30,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    NSLog(@"GSDownloader: dealloc");
-    [self cancelDownload];
-    [_sourceURL release];
-    [_destinationPath release];
-    [super dealloc];
-}
-
 - (void)downloadFromURL:(NSString *)url toPath:(NSString *)path
 {
     NSLog(@"GSDownloader: downloadFromURL: %@ toPath: %@", url, path);
@@ -48,11 +39,9 @@
         [self cancelDownload];
     }
     
-    [_sourceURL release];
-    _sourceURL = [url retain];
+    _sourceURL = url;
     
-    [_destinationPath release];
-    _destinationPath = [path retain];
+    _destinationPath = path;
     
     _isDownloading = YES;
     _totalBytes = 0;
@@ -86,7 +75,13 @@
     _totalBytes = [[attributes objectForKey:NSFileSize] longLongValue];
     
     // Start copying in background
-    [self performSelectorInBackground:@selector(performFileCopy:) withObject:sourcePath];
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (strongSelf) {
+            [strongSelf performFileCopy:sourcePath];
+        }
+    });
 }
 
 - (void)performFileCopy:(NSString *)sourcePath
@@ -134,9 +129,14 @@
         
         // Update progress on main thread
         float progress = (_totalBytes > 0) ? (float)_receivedBytes / (float)_totalBytes : 0.0;
-        [self performSelectorOnMainThread:@selector(updateProgress:)
-                               withObject:[NSNumber numberWithFloat:progress]
-                            waitUntilDone:NO];
+        NSNumber *progressNumber = [NSNumber numberWithFloat:progress];
+        __weak typeof(self) weakSelf = self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (strongSelf) {
+                [strongSelf updateProgress:progressNumber];
+            }
+        });
     }
     
     [sourceFile closeFile];
@@ -167,7 +167,7 @@
         return;
     }
     
-    _outputFile = [[NSFileHandle fileHandleForWritingAtPath:_destinationPath] retain];
+    _outputFile = [NSFileHandle fileHandleForWritingAtPath:_destinationPath];
     if (!_outputFile) {
         NSLog(@"GSDownloader: Could not open destination file for writing");
         [_delegate downloadCompleted:NO error:@"Could not open destination file for writing"];
@@ -180,7 +180,6 @@
     if (!_connection) {
         NSLog(@"GSDownloader: Could not create NSURLConnection");
         [_outputFile closeFile];
-        [_outputFile release];
         _outputFile = nil;
         [_delegate downloadCompleted:NO error:@"Could not create network connection"];
         _isDownloading = NO;
@@ -238,10 +237,8 @@
     NSLog(@"GSDownloader: connectionDidFinishLoading");
     
     [_outputFile closeFile];
-    [_outputFile release];
     _outputFile = nil;
     
-    [_connection release];
     _connection = nil;
     
     if (_isDownloading) {
@@ -256,10 +253,8 @@
     NSLog(@"GSDownloader: didFailWithError: %@", [error localizedDescription]);
     
     [_outputFile closeFile];
-    [_outputFile release];
     _outputFile = nil;
     
-    [_connection release];
     _connection = nil;
     
     [_delegate downloadCompleted:NO error:[error localizedDescription]];
@@ -280,13 +275,11 @@
     
     if (_connection) {
         [_connection cancel];
-        [_connection release];
         _connection = nil;
     }
     
     if (_outputFile) {
         [_outputFile closeFile];
-        [_outputFile release];
         _outputFile = nil;
     }
 }
@@ -371,8 +364,6 @@
         NSLog(@"GSNetworkUtilities: Error checking internet connection: %@", [exception reason]);
         connected = NO;
     }
-    
-    [task release];
     
     NSLog(@"GSNetworkUtilities: Internet connection check result: %d", connected);
     return connected;

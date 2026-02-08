@@ -59,10 +59,6 @@
 - (void)dealloc
 {
     [self disconnectFromVNC];
-    [_hostname release];
-    [_password release];
-    [_currentImage release];
-    [super dealloc];
 }
 
 #pragma mark - Setup Methods
@@ -105,7 +101,6 @@
     
     [placeholderImage unlockFocus];
     [_imageView setImage:placeholderImage];
-    [placeholderImage release];
 }
 
 - (void)setupEventHandling
@@ -144,7 +139,6 @@
         [alert setMessageText:NSLocalizedString(@"VNC Connection Failed", @"VNC error title")];
         [alert setInformativeText:NSLocalizedString(@"Failed to connect to VNC server. Please check that the server is running and the address is correct.", @"VNC connection error")];
         [alert runModal];
-        [alert release];
     }
     
     return result;
@@ -160,7 +154,6 @@
     if (_vncClient) {
         [_vncClient setDelegate:nil];
         [_vncClient disconnect];
-        [_vncClient release];
         _vncClient = nil;
     }
     
@@ -178,21 +171,20 @@
     NSImage *newImage = [_vncClient framebufferImage];
     if (newImage) {
         // Always update the image to avoid missing frames
-        [_currentImage release];
-        _currentImage = [newImage retain];
+        _currentImage = newImage;
         
         // Update on main thread but don't wait to avoid blocking
-        [self performSelectorOnMainThread:@selector(setImageOnMainThread:)
-                               withObject:_currentImage
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self setImageOnMainThread:_currentImage];
+        });
         
         // Update framebuffer size only when needed
         NSSize imageSize = [newImage size];
         if (!NSEqualSizes(_framebufferSize, imageSize)) {
             _framebufferSize = imageSize;
-            [self performSelectorOnMainThread:@selector(resizeWindowToFitFramebuffer)
-                                   withObject:nil
-                                waitUntilDone:NO];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self resizeWindowToFitFramebuffer];
+            });
         }
     }
 }
@@ -677,7 +669,6 @@
         [alert setMessageText:NSLocalizedString(@"VNC Connection Failed", @"VNC error title")];
         [alert setInformativeText:NSLocalizedString(@"Could not connect to the VNC server. Please ensure the server is running and accessible.", @"VNC connection failed message")];
         [alert runModal];
-        [alert release];
     }
 }
 
@@ -703,7 +694,6 @@
     
     [disconnectedImage unlockFocus];
     [_imageView setImage:disconnectedImage];
-    [disconnectedImage release];
 }
 
 - (void)vncClient:(VNCClient *)client didReceiveError:(NSString *)error
@@ -714,15 +704,14 @@
     [alert setMessageText:NSLocalizedString(@"VNC Error", @"VNC error title")];
     [alert setInformativeText:error];
     [alert runModal];
-    [alert release];
 }
 
 - (void)vncClient:(VNCClient *)client framebufferDidUpdate:(NSRect)rect
 {
     // Update display on main thread
-    [self performSelectorOnMainThread:@selector(updateDisplay)
-                           withObject:nil
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self updateDisplay];
+    });
 }
 
 @end

@@ -50,15 +50,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    NSLog(@"CLMImageSelectionStep: dealloc");
-    [_stepView release];
-    [_availableReleases release];
-    [_releaseArrayController release];
-    [super dealloc];
-}
-
 - (void)setupView
 {
     NSLog(@"CLMImageSelectionStep: setupView");
@@ -74,7 +65,6 @@
     [repoLabel setEditable:NO];
     [repoLabel setSelectable:NO];
     [_stepView addSubview:repoLabel];
-    [repoLabel release];
     
     _repositoryPopUp = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(96, 174, 250, 22)];
     [_repositoryPopUp addItemWithTitle:NSLocalizedString(@"probonopd/ghostbsd-build", @"")];
@@ -84,7 +74,6 @@
     [_repositoryPopUp setTarget:self];
     [_repositoryPopUp setAction:@selector(repositoryChanged:)];
     [_stepView addSubview:_repositoryPopUp];
-    [_repositoryPopUp release];
     
     // Prerelease checkbox
     _prereleaseCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(8, 152, 220, 18)];
@@ -94,14 +83,12 @@
     [_prereleaseCheckbox setTarget:self];
     [_prereleaseCheckbox setAction:@selector(prereleaseChanged:)];
     [_stepView addSubview:_prereleaseCheckbox];
-    [_prereleaseCheckbox release];
     
     // Loading indicator and label
     _loadingIndicator = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(240, 152, 16, 16)];
     [_loadingIndicator setStyle:NSProgressIndicatorSpinningStyle];
     [_loadingIndicator setDisplayedWhenStopped:NO];
     [_stepView addSubview:_loadingIndicator];
-    [_loadingIndicator release];
     
     _loadingLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(260, 150, 90, 18)];
     [_loadingLabel setStringValue:NSLocalizedString(@"Loading...", @"")];
@@ -111,7 +98,6 @@
     [_loadingLabel setSelectable:NO];
     [_loadingLabel setHidden:YES];
     [_stepView addSubview:_loadingLabel];
-    [_loadingLabel release];
     
     // Release table (compact)
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(8, 36, 338, 112)];
@@ -128,23 +114,19 @@
     [[nameColumn headerCell] setStringValue:NSLocalizedString(@"Release", @"")];
     [nameColumn setWidth:190];
     [_releaseTableView addTableColumn:nameColumn];
-    [nameColumn release];
     
     NSTableColumn *versionColumn = [[NSTableColumn alloc] initWithIdentifier:@"version"];
     [[versionColumn headerCell] setStringValue:NSLocalizedString(@"Version", @"")];
     [versionColumn setWidth:70];
     [_releaseTableView addTableColumn:versionColumn];
-    [versionColumn release];
     
     NSTableColumn *sizeColumn = [[NSTableColumn alloc] initWithIdentifier:@"sizeFormatted"];
     [[sizeColumn headerCell] setStringValue:NSLocalizedString(@"Size", @"")];
     [sizeColumn setWidth:70];
     [_releaseTableView addTableColumn:sizeColumn];
-    [sizeColumn release];
     
     [scrollView setDocumentView:_releaseTableView];
     [_stepView addSubview:scrollView];
-    [scrollView release];
     
     // Array controller for table data
     _releaseArrayController = [[NSArrayController alloc] init];
@@ -171,7 +153,6 @@
     [_dateLabel setSelectable:NO];
     [_dateLabel setFont:[NSFont systemFontOfSize:10]];
     [_stepView addSubview:_dateLabel];
-    [_dateLabel release];
     
     _urlLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(8, 6, 338, 14)];
     [_urlLabel setStringValue:NSLocalizedString(@"", @"")];
@@ -181,7 +162,6 @@
     [_urlLabel setSelectable:NO];
     [_urlLabel setFont:[NSFont systemFontOfSize:10]];
     [_stepView addSubview:_urlLabel];
-    [_urlLabel release];
     
     _sizeLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(8, -8, 338, 14)];
     [_sizeLabel setStringValue:NSLocalizedString(@"", @"")];
@@ -191,7 +171,6 @@
     [_sizeLabel setSelectable:NO];
     [_sizeLabel setFont:[NSFont systemFontOfSize:10]];
     [_stepView addSubview:_sizeLabel];
-    [_sizeLabel release];
 }
 
 - (void)repositoryChanged:(id)sender
@@ -212,7 +191,6 @@
         
         // Create a simple input dialog instead of using setAccessoryView
         NSInteger response = [alert runModal];
-        [input release];
         
         if (response == NSAlertDefaultReturn) {
             // For now, use a hardcoded URL or implement a proper input dialog
@@ -391,7 +369,6 @@
             [formatter setDateStyle:NSDateFormatterLongStyle];
             [formatter setTimeStyle:NSDateFormatterShortStyle];
             [_dateLabel setStringValue:[NSString stringWithFormat:@"Date: %@", [formatter stringFromDate:updatedAt]]];
-            [formatter release];
         } else {
             [_dateLabel setStringValue:NSLocalizedString(@"", @"")];
         }

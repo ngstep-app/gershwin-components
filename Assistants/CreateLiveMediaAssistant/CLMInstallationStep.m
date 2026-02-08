@@ -65,13 +65,6 @@
     NSLog(@"CLMInstallationStep: dealloc");
     [self stopStallDetectionTimer];
     [self stopDDProgressTimer];
-    [_downloader release];
-    [_directConnection release];
-    [_directOutputFile release];
-    [_devicePath release];
-    [_tempFilePath release];
-    [_stepView release];
-    [super dealloc];
 }
 
 - (void)setupView
@@ -92,7 +85,6 @@
     [_statusLabel setSelectable:NO];
     [[_statusLabel cell] setWraps:YES];
     [_stepView addSubview:_statusLabel];
-    [_statusLabel release];
     
     // Progress bar (centered, classic bar style)
     _progressBar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(32, 118, 290, 18)];
@@ -102,7 +94,6 @@
     [_progressBar setMaxValue:100.0];
     [_progressBar setDoubleValue:0.0];
     [_stepView addSubview:_progressBar];
-    [_progressBar release];
     
     // Progress text (under bar)
     _progressLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 94, 330, 18)];
@@ -114,7 +105,6 @@
     [_progressLabel setSelectable:NO];
     [_progressLabel setFont:[NSFont systemFontOfSize:11]];
     [_stepView addSubview:_progressLabel];
-    [_progressLabel release];
     
     // Info text (bottom)
     _infoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 18, 330, 64)];
@@ -127,7 +117,6 @@
     [_infoLabel setSelectable:NO];
     [[_infoLabel cell] setWraps:YES];
     [_stepView addSubview:_infoLabel];
-    [_infoLabel release];
 }
 
 - (void)startInstallation
@@ -162,7 +151,9 @@
     
     // Use a more direct approach similar to Python's urllib.request.urlretrieve()
     // This downloads directly to the block device without complex resume logic
-    [self performSelector:@selector(startDirectDownload) withObject:nil afterDelay:0.1];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self startDirectDownload];
+    });
 }
 
 #pragma mark - GSDownloaderDelegate
@@ -400,7 +391,9 @@
     [_controller stopDiskPolling];
     
     // Start installation automatically when step appears
-    [self performSelector:@selector(startInstallation) withObject:nil afterDelay:0.5];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self startInstallation];
+    });
 }
 
 - (void)stepDidAppear
@@ -425,7 +418,6 @@
                                                          selector:@selector(checkForStall:)
                                                          userInfo:nil
                                                           repeats:YES];
-    [_stallDetectionTimer retain];
     _lastProgressTime = [[NSDate date] timeIntervalSince1970];
     _lastProgressValue = -1.0;
 }
@@ -435,7 +427,6 @@
     if (_stallDetectionTimer) {
         NSLog(@"CLMInstallationStep: Stopping stall detection timer");
         [_stallDetectionTimer invalidate];
-        [_stallDetectionTimer release];
         _stallDetectionTimer = nil;
     }
 }
@@ -545,8 +536,7 @@
     }
     
     // Store device path
-    [_devicePath release];
-    _devicePath = [devicePath retain];
+    _devicePath = devicePath;
     
     // Check if device exists and is accessible
     NSFileManager *fileManager = [NSFileManager defaultManager];
@@ -571,7 +561,7 @@
     }
     
     // Open temporary file for writing
-    _directOutputFile = [[NSFileHandle fileHandleForWritingAtPath:tempFilePath] retain];
+    _directOutputFile = [NSFileHandle fileHandleForWritingAtPath:tempFilePath];
     if (!_directOutputFile) {
         [fileManager removeItemAtPath:tempFilePath error:nil];
         [self installationCompletedWithSuccess:NO 
@@ -580,8 +570,7 @@
     }
     
     // Store temp file path for cleanup and final copy
-    [_tempFilePath release];
-    _tempFilePath = [tempFilePath retain];
+    _tempFilePath = tempFilePath;
     
     // Create request
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
@@ -596,7 +585,6 @@
     _directConnection = [[NSURLConnection alloc] initWithRequest:request delegate:self];
     if (!_directConnection) {
         [_directOutputFile closeFile];
-        [_directOutputFile release];
         _directOutputFile = nil;
         [fileManager removeItemAtPath:tempFilePath error:nil];
         [self installationCompletedWithSuccess:NO error:@"Could not create network connection"];
@@ -691,14 +679,12 @@
     if (_directOutputFile) {
         [_directOutputFile synchronizeFile];
         [_directOutputFile closeFile];
-        [_directOutputFile release];
         _directOutputFile = nil;
     }
     
     [self stopStallDetectionTimer];
     
     // Clean up connection
-    [_directConnection release];
     _directConnection = nil;
     
     // Update progress to 50% - download complete, now starting device write
@@ -748,7 +734,6 @@
         // Clean up temp file
         NSFileManager *fileManager = [NSFileManager defaultManager];
         [fileManager removeItemAtPath:_tempFilePath error:nil];
-        [_tempFilePath release];
         _tempFilePath = nil;
         
         if (exitStatus == 0) {
@@ -765,7 +750,6 @@
             [syncTask setArguments:[NSArray arrayWithObjects:@"-c", syncCommand, nil]];
             [syncTask launch];
             [syncTask waitUntilExit];
-            [syncTask release];
             
             [self installationCompletedWithSuccess:YES error:nil];
         } else {
@@ -776,7 +760,6 @@
             NSLog(@"CLMInstallationStep: dd command failed with exit status %d: %@", exitStatus, errorString);
             [self installationCompletedWithSuccess:NO 
                                              error:[NSString stringWithFormat:@"Failed to write image to device (exit %d): %@", exitStatus, errorString]];
-            [errorString release];
         }
     } @catch (NSException *e) {
         // Stop progress timer
@@ -785,15 +768,12 @@
         // Clean up temp file
         NSFileManager *fileManager = [NSFileManager defaultManager];
         [fileManager removeItemAtPath:_tempFilePath error:nil];
-        [_tempFilePath release];
         _tempFilePath = nil;
         
         NSLog(@"CLMInstallationStep: Exception while copying to device: %@", [e reason]);
         [self installationCompletedWithSuccess:NO 
                                          error:[NSString stringWithFormat:@"Exception while writing to device: %@", [e reason]]];
     }
-    
-    [task release];
 }
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
@@ -814,13 +794,11 @@
     
     if (_directConnection) {
         [_directConnection cancel];
-        [_directConnection release];
         _directConnection = nil;
     }
     
     if (_directOutputFile) {
         [_directOutputFile closeFile];
-        [_directOutputFile release];
         _directOutputFile = nil;
     }
     
@@ -828,7 +806,6 @@
     if (_tempFilePath) {
         NSFileManager *fileManager = [NSFileManager defaultManager];
         [fileManager removeItemAtPath:_tempFilePath error:nil];
-        [_tempFilePath release];
         _tempFilePath = nil;
     }
     
@@ -849,7 +826,6 @@
                                                       selector:@selector(updateDDProgress:)
                                                       userInfo:nil
                                                        repeats:YES];
-    [_ddProgressTimer retain];
 }
 
 - (void)stopDDProgressTimer
@@ -857,7 +833,6 @@
     if (_ddProgressTimer) {
         NSLog(@"CLMInstallationStep: Stopping DD progress timer");
         [_ddProgressTimer invalidate];
-        [_ddProgressTimer release];
         _ddProgressTimer = nil;
     }
 }

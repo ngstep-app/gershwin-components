@@ -32,10 +32,6 @@
 {
     NSLog(@"CLMDiskSelectionStep: dealloc");
     [self stopRefreshTimer];
-    [_stepView release];
-    [_availableDisks release];
-    [_diskArrayController release];
-    [super dealloc];
 }
 
 - (void)setupView
@@ -55,7 +51,6 @@
     [_infoLabel setFont:[NSFont systemFontOfSize:11]];
     [[_infoLabel cell] setWraps:YES];
     [_stepView addSubview:_infoLabel];
-    [_infoLabel release];
     
     // Disk table (compact)
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(8, 56, 338, 116)];
@@ -72,23 +67,19 @@
     [[deviceColumn headerCell] setStringValue:NSLocalizedString(@"Device", @"")];
     [deviceColumn setWidth:80];
     [_diskTableView addTableColumn:deviceColumn];
-    [deviceColumn release];
     
     NSTableColumn *descColumn = [[NSTableColumn alloc] initWithIdentifier:@"description"];
     [[descColumn headerCell] setStringValue:NSLocalizedString(@"Description", @"")];
     [descColumn setWidth:180];
     [_diskTableView addTableColumn:descColumn];
-    [descColumn release];
     
     NSTableColumn *sizeColumn = [[NSTableColumn alloc] initWithIdentifier:@"sizeFormatted"];
     [[sizeColumn headerCell] setStringValue:NSLocalizedString(@"Size", @"")];
     [sizeColumn setWidth:70];
     [_diskTableView addTableColumn:sizeColumn];
-    [sizeColumn release];
     
     [scrollView setDocumentView:_diskTableView];
     [_stepView addSubview:scrollView];
-    [scrollView release];
     
     // Array controller for table data
     _diskArrayController = [[NSArrayController alloc] init];
@@ -117,7 +108,6 @@
     [_warningLabel setTextColor:[NSColor redColor]];
     [[_warningLabel cell] setWraps:YES];
     [_stepView addSubview:_warningLabel];
-    [_warningLabel release];
 }
 
 - (void)startRefreshTimer
@@ -130,7 +120,6 @@
                                                    selector:@selector(refreshDiskList)
                                                    userInfo:nil
                                                     repeats:YES];
-    [_refreshTimer retain];
 }
 
 - (void)stopRefreshTimer
@@ -139,7 +128,6 @@
     if (_refreshTimer) {
         NSLog(@"CLMDiskSelectionStep: Invalidating and releasing refresh timer");
         [_refreshTimer invalidate];
-        [_refreshTimer release];
         _refreshTimer = nil;
         NSLog(@"CLMDiskSelectionStep: Refresh timer stopped successfully");
     } else {

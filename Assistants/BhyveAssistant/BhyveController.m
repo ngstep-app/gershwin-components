@@ -54,18 +54,18 @@
         [self loadUserSettings];
         
         // Set defaults if no settings exist
-        if (!_selectedISOPath) _selectedISOPath = [@"" retain];
-        if (!_selectedISOName) _selectedISOName = [@"" retain];
+        if (!_selectedISOPath) _selectedISOPath = @"";
+        if (!_selectedISOName) _selectedISOName = @"";
         if (_selectedISOSize == 0) _selectedISOSize = 0;
-        if (!_vmName) _vmName = [@"FreeBSD-Live" retain];
+        if (!_vmName) _vmName = @"FreeBSD-Live";
         if (_allocatedRAM == 0) _allocatedRAM = 2048; // 2GB default
         if (_allocatedCPUs == 0) _allocatedCPUs = 2;
         if (_diskSize == 0) _diskSize = 20; // 20GB default
         _enableVNC = YES; // Always enable VNC
         if (_vncPort == 0) _vncPort = [self findUnusedVNCPort]; // Find unused port
-        if (!_vncWindowSize) _vncWindowSize = [@"1024 x 768" retain]; // Default size
-        if (!_networkMode) _networkMode = [@"bridge" retain];
-        if (!_bootMode) _bootMode = [@"uefi" retain]; // Default to UEFI boot mode
+        if (!_vncWindowSize) _vncWindowSize = @"1024 x 768"; // Default size
+        if (!_networkMode) _networkMode = @"bridge";
+        if (!_bootMode) _bootMode = @"uefi"; // Default to UEFI boot mode
         _vmRunning = NO;
         _bhyveTask = nil;
         _vncWindow = nil;
@@ -85,18 +85,8 @@
     [self closeLogWindow];
     if (_vncWindow) {
         [_vncWindow close];
-        [_vncWindow release];
         _vncWindow = nil;
     }
-    [_assistantWindow release];
-    [_selectedISOPath release];
-    [_selectedISOName release];
-    [_vmName release];
-    [_vncWindowSize release];
-    [_networkMode release];
-    [_bootMode release];
-    [_vmLogBuffer release];
-    [super dealloc];
 }
 
 - (void)showAssistant
@@ -161,15 +151,10 @@
         
         if (![osName isEqualToString:@"FreeBSD"]) {
             NSString *error = [NSString stringWithFormat:@"bhyve is only available on FreeBSD.\n\nCurrent operating system: %@\n\nThis assistant requires FreeBSD with bhyve support to create and run virtual machines.", osName];
-            [osName release];
-            [unameTask release];
             return error;
         }
-        [osName release];
-        [unameTask release];
     } @catch (NSException *exception) {
         NSLog(@"BhyveController: Error checking OS: %@", [exception reason]);
-        [unameTask release];
         return @"Unable to determine the operating system.\n\nThis assistant requires FreeBSD with bhyve support.";
     }
     
@@ -335,7 +320,6 @@
         [kldstatTask launch];
         [kldstatTask waitUntilExit];
         int kldstatStatus = [kldstatTask terminationStatus];
-        [kldstatTask release];
         
         if (kldstatStatus != 0) {
             NSLog(@"BhyveController: vmm kernel module not loaded, will attempt to load");
@@ -344,7 +328,6 @@
         }
     } @catch (NSException *exception) {
         NSLog(@"BhyveController: Error checking vmm module: %@", [exception reason]);
-        [kldstatTask release];
         // Continue anyway
     }
     
@@ -372,14 +355,11 @@
             } else {
                 NSLog(@"BhyveController: WARNING - Hardware virtualization (VMX) may not be enabled");
             }
-            [result release];
         } else {
             NSLog(@"BhyveController: Could not check hardware virtualization status");
         }
-        [hwVirtTask release];
     } @catch (NSException *exception) {
         NSLog(@"BhyveController: Error checking hardware virtualization: %@", [exception reason]);
-        [hwVirtTask release];
     }
     
     return YES;
@@ -560,17 +540,13 @@
             NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
             NSString *errorOutput = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
             NSLog(@"BhyveController: Failed to create virtual disk (exit code %d): %@", exitStatus, errorOutput);
-            [errorOutput release];
-            [task release];
             return NO;
         } else {
             NSLog(@"BhyveController: Created virtual disk at %@ (%ld GB)", diskPath, (long)_diskSize);
-            [task release];
             return YES;
         }
     } @catch (NSException *exception) {
         NSLog(@"BhyveController: Error creating virtual disk: %@", [exception reason]);
-        [task release];
         return NO;
     }
 }
@@ -622,10 +598,8 @@
         } else {
             NSLog(@"BhyveController: vmm module load failed (exit code %d) - may already be loaded", kldloadStatus);
         }
-        [kldloadTask release];
     } @catch (NSException *exception) {
         NSLog(@"BhyveController: Error loading vmm module: %@", [exception reason]);
-        [kldloadTask release];
         // Continue anyway - module might already be loaded
     }
     
@@ -660,13 +634,15 @@
             [self updateVMLog:startupLog];
             
             // Set up continuous log monitoring in background
-            [NSThread detachNewThreadSelector:@selector(monitorVMOutput:) 
-                                      toTarget:self 
-                                    withObject:@[outputPipe, errorPipe]];
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                [self monitorVMOutput:@[outputPipe, errorPipe]];
+            });
             
             // Start VNC viewer if enabled
             if (_enableVNC) {
-                [self performSelector:@selector(startVNCViewer) withObject:nil afterDelay:2.0];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    [self startVNCViewer];
+                });
             }
             
             NSLog(@"BhyveController: VM running with PID %d", [_bhyveTask processIdentifier]);
@@ -719,10 +695,7 @@
             NSLog(@"BhyveController: VM process died immediately (exit code %d): %@", exitStatus, fullOutput);
             [self showVMError:[NSString stringWithString:errorMessage]];
             
-            [errorOutput release];
-            [stdOutput release];
             _vmRunning = NO;
-            [_bhyveTask release];
             _bhyveTask = nil;
         }
         
@@ -730,7 +703,6 @@
         NSLog(@"BhyveController: Error starting VM: %@", [exception reason]);
         [self showVMError:[NSString stringWithFormat:@"Failed to start VM: %@", [exception reason]]];
         _vmRunning = NO;
-        [_bhyveTask release];
         _bhyveTask = nil;
     }
 }
@@ -748,7 +720,6 @@
     // Close existing VNC window if open
     if (_vncWindow) {
         [_vncWindow close];
-        [_vncWindow release];
         _vncWindow = nil;
     }
     
@@ -756,7 +727,9 @@
     [self showVMStatus:@"Waiting for VNC server to start..."];
     
     // Wait longer for bhyve VNC server to initialize properly
-    [self performSelector:@selector(tryVNCConnection) withObject:nil afterDelay:5.0];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self tryVNCConnection];
+    });
 }
 
 - (void)tryVNCConnection
@@ -777,9 +750,9 @@
     if (![self isVNCServerRunning]) {
         NSLog(@"BhyveController: VNC server not ready on port %ld, retrying in 3 seconds...", (long)_vncPort);
         [self showVMStatus:[NSString stringWithFormat:@"Waiting for VNC server... (attempt %ld/8)", (long)(retryCount + 1)]];
-        [self performSelector:@selector(retryVNCConnection:) 
-                   withObject:@(retryCount + 1) 
-                   afterDelay:3.0];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self retryVNCConnection:@(retryCount + 1)];
+        });
         return;
     }
     
@@ -807,16 +780,17 @@
         BOOL connected = [_vncWindow connectToVNC];
         if (connected) {
             [self showVMStatus:[NSString stringWithFormat:@"VNC viewer connected to 127.0.0.1:%ld", (long)_vncPort]];
-            [self performSelector:@selector(showVNCConnectionInfo) withObject:nil afterDelay:1.0];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self showVNCConnectionInfo];
+            });
         } else {
             NSLog(@"BhyveController: VNC connection failed, retrying...");
             [_vncWindow close];
-            [_vncWindow release];
             _vncWindow = nil;
             
-            [self performSelector:@selector(retryVNCConnection:) 
-                       withObject:@(retryCount + 1) 
-                       afterDelay:3.0];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self retryVNCConnection:@(retryCount + 1)];
+            });
         }
     } else {
         [self showVMError:@"Failed to create VNC viewer window"];
@@ -882,7 +856,6 @@
     if (_vncWindow) {
         [_vncWindow disconnectFromVNC];
         [_vncWindow close];
-        [_vncWindow release];
         _vncWindow = nil;
     }
     
@@ -890,7 +863,6 @@
     if (_bhyveTask && [_bhyveTask isRunning]) {
         [_bhyveTask terminate];
         [_bhyveTask waitUntilExit];
-        [_bhyveTask release];
         _bhyveTask = nil;
     }
     
@@ -906,10 +878,8 @@
     @try {
         [destroyTask launch];
         [destroyTask waitUntilExit];
-        [destroyTask release];
     } @catch (NSException *exception) {
         NSLog(@"BhyveController: Error destroying VM: %@", [exception reason]);
-        [destroyTask release];
     }
     
     _vmRunning = NO;
@@ -934,9 +904,9 @@
     
     // Ensure we're on the main thread for UI updates
     if (![NSThread isMainThread]) {
-        [self performSelectorOnMainThread:@selector(showVMError:) 
-                               withObject:message 
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self showVMError:message];
+        });
         return;
     }
     
@@ -1008,7 +978,6 @@
         [_logTextView scrollRangeToVisible:NSMakeRange([[_logTextView string] length], 0)];
     }
     
-    [scrollView release];
     [_logWindow makeKeyAndOrderFront:nil];
 }
 
@@ -1021,9 +990,10 @@
     
     // If log window is open, update it
     if (_logTextView) {
-        [self performSelectorOnMainThread:@selector(updateLogTextView:) 
-                               withObject:_vmLogBuffer 
-                            waitUntilDone:NO];
+        NSString *logContent = [NSString stringWithString:_vmLogBuffer];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self updateLogTextView:logContent];
+        });
     }
 }
 
@@ -1033,18 +1003,13 @@
     
     if (_logWindow) {
         [_logWindow close];
-        [_logWindow release];
         _logWindow = nil;
     }
     
-    if (_logTextView) {
-        [_logTextView release];
-        _logTextView = nil;
-    }
+    _logTextView = nil;
     
     if (_logFileHandle) {
         [_logFileHandle closeFile];
-        [_logFileHandle release];
         _logFileHandle = nil;
     }
 }
@@ -1077,7 +1042,6 @@
                 NSString *outputText = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
                 if (outputText) {
                     [self updateVMLog:outputText];
-                    [outputText release];
                 }
             }
             
@@ -1088,7 +1052,6 @@
                 if (errorText) {
                     NSString *prefixedError = [NSString stringWithFormat:@"[ERROR] %@", errorText];
                     [self updateVMLog:prefixedError];
-                    [errorText release];
                 }
             }
             
@@ -1103,7 +1066,6 @@
         NSString *finalText = [[NSString alloc] initWithData:finalOutput encoding:NSUTF8StringEncoding];
         if (finalText) {
             [self updateVMLog:finalText];
-            [finalText release];
         }
     }
     
@@ -1113,7 +1075,6 @@
         if (finalErrorText) {
             NSString *prefixedFinalError = [NSString stringWithFormat:@"[ERROR] %@", finalErrorText];
             [self updateVMLog:prefixedFinalError];
-            [finalErrorText release];
         }
     }
     
@@ -1155,10 +1116,8 @@
         if (exitStatus == 0) {
             NSLog(@"BhyveController: Cleaned up VM instance: %@", _vmName);
         }
-        [destroyTask release];
     } @catch (NSException *exception) {
         NSLog(@"BhyveController: Error during VM cleanup: %@", [exception reason]);
-        [destroyTask release];
     }
 }
 
@@ -1218,25 +1177,18 @@
             @try {
                 [destroyTask launch];
                 [destroyTask waitUntilExit];
-                [destroyTask release];
             } @catch (NSException *exception) {
                 NSLog(@"BhyveController: Error cleaning up test VM: %@", [exception reason]);
-                [destroyTask release];
             }
-            
-            [testTask release];
             return YES;
         } else {
             NSData *errorData = [[testPipe fileHandleForReading] readDataToEndOfFile];
             NSString *errorOutput = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
             NSLog(@"BhyveController: bhyve VM creation test failed (exit code %d): %@", testStatus, errorOutput);
-            [errorOutput release];
-            [testTask release];
             return NO;
         }
     } @catch (NSException *exception) {
         NSLog(@"BhyveController: Error running bhyve test: %@", [exception reason]);
-        [testTask release];
         return NO;
     }
 }
@@ -1346,12 +1298,12 @@
     // Load all persistent settings
     NSString *savedISOPath = [defaults stringForKey:@"BhyveAssistant.selectedISOPath"];
     if (savedISOPath) {
-        _selectedISOPath = [savedISOPath retain];
+        _selectedISOPath = savedISOPath;
     }
     
     NSString *savedISOName = [defaults stringForKey:@"BhyveAssistant.selectedISOName"];
     if (savedISOName) {
-        _selectedISOName = [savedISOName retain];
+        _selectedISOName = savedISOName;
     }
     
     NSInteger savedISOSize = [defaults integerForKey:@"BhyveAssistant.selectedISOSize"];
@@ -1361,7 +1313,7 @@
     
     NSString *savedVMName = [defaults stringForKey:@"BhyveAssistant.vmName"];
     if (savedVMName) {
-        _vmName = [savedVMName retain];
+        _vmName = savedVMName;
     }
     
     NSInteger savedRAM = [defaults integerForKey:@"BhyveAssistant.allocatedRAM"];
@@ -1384,12 +1336,12 @@
     
     NSString *savedNetworkMode = [defaults stringForKey:@"BhyveAssistant.networkMode"];
     if (savedNetworkMode) {
-        _networkMode = [savedNetworkMode retain];
+        _networkMode = savedNetworkMode;
     }
     
     NSString *savedBootMode = [defaults stringForKey:@"BhyveAssistant.bootMode"];
     if (savedBootMode) {
-        _bootMode = [savedBootMode retain];
+        _bootMode = savedBootMode;
     }
     
     NSInteger savedVNCPort = [defaults integerForKey:@"BhyveAssistant.vncPort"];
@@ -1399,7 +1351,7 @@
     
     NSString *savedVNCWindowSize = [defaults stringForKey:@"BhyveAssistant.vncWindowSize"];
     if (savedVNCWindowSize) {
-        _vncWindowSize = [savedVNCWindowSize retain];
+        _vncWindowSize = savedVNCWindowSize;
     }
     
     NSLog(@"BhyveController: Loaded settings - ISO: %@, VM: %@, RAM: %ld MB, CPUs: %ld, Disk: %ld GB, Network: %@, Boot: %@, VNC Port: %ld, VNC Size: %@", 
@@ -1456,8 +1408,7 @@
 - (void)setVmName:(NSString *)vmName
 {
     if (_vmName != vmName) {
-        [_vmName release];
-        _vmName = [vmName retain];
+        _vmName = vmName;
         [self saveUserSettings];
     }
 }
@@ -1497,8 +1448,7 @@
 - (void)setNetworkMode:(NSString *)networkMode
 {
     if (_networkMode != networkMode) {
-        [_networkMode release];
-        _networkMode = [networkMode retain];
+        _networkMode = networkMode;
         [self saveUserSettings];
     }
 }
@@ -1506,8 +1456,7 @@
 - (void)setBootMode:(NSString *)bootMode
 {
     if (_bootMode != bootMode) {
-        [_bootMode release];
-        _bootMode = [bootMode retain];
+        _bootMode = bootMode;
         [self saveUserSettings];
     }
 }
@@ -1515,8 +1464,7 @@
 - (void)setSelectedISOPath:(NSString *)selectedISOPath
 {
     if (_selectedISOPath != selectedISOPath) {
-        [_selectedISOPath release];
-        _selectedISOPath = [selectedISOPath retain];
+        _selectedISOPath = selectedISOPath;
         [self saveUserSettings];
     }
 }
@@ -1524,8 +1472,7 @@
 - (void)setSelectedISOName:(NSString *)selectedISOName
 {
     if (_selectedISOName != selectedISOName) {
-        [_selectedISOName release];
-        _selectedISOName = [selectedISOName retain];
+        _selectedISOName = selectedISOName;
         [self saveUserSettings];
     }
 }
@@ -1549,8 +1496,7 @@
 - (void)setVncWindowSize:(NSString *)vncWindowSize
 {
     if (_vncWindowSize != vncWindowSize) {
-        [_vncWindowSize release];
-        _vncWindowSize = [vncWindowSize retain];
+        _vncWindowSize = vncWindowSize;
         [self saveUserSettings];
     }
 }

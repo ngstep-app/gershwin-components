@@ -23,13 +23,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    NSLog(@"CLMIntroStep: dealloc");
-    [_stepView release];
-    [super dealloc];
-}
-
 - (void)setupView
 {
     NSLog(@"CLMIntroStep: setupView");
@@ -48,7 +41,6 @@
     [welcomeLabel setSelectable:NO];
     [[welcomeLabel cell] setWraps:YES];
     [_stepView addSubview:welcomeLabel];
-    [welcomeLabel release];
     
     // Feature bullets
     NSTextField *features = [[NSTextField alloc] initWithFrame:NSMakeRect(24, 56, 306, 88)];
@@ -60,7 +52,6 @@
     [features setSelectable:NO];
     [[features cell] setWraps:YES];
     [_stepView addSubview:features];
-    [features release];
     
     // Subtle warning
     NSTextField *warningLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 12, 322, 28)];
@@ -73,7 +64,6 @@
     [warningLabel setSelectable:NO];
     [warningLabel setTextColor:[NSColor redColor]];
     [_stepView addSubview:warningLabel];
-    [warningLabel release];
 }
 
 #pragma mark - GSAssistantStepProtocol

@@ -28,7 +28,7 @@
     NSMutableDictionary *_diskSpaceCache;  // Cache for disk space calculations
 }
 
-@property (nonatomic, assign) BAController *controller;
+@property (nonatomic, weak) BAController *controller;
 
 - (id)initWithController:(BAController *)controller;
 - (void)refreshDiskList;

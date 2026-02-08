@@ -36,15 +36,8 @@
     NSLog(@"DRIInstallationStep: dealloc");
     [_downloader cancelDownload];
     [_installer cancelInstallation];
-    if (_downloader) { [_downloader release]; _downloader = nil; }
-    if (_installer) { [_installer release]; _installer = nil; }
-    if (_stepView) { [_stepView release]; _stepView = nil; }
-    if (_progressBar) { [_progressBar release]; _progressBar = nil; }
-    if (_statusLabel) { [_statusLabel release]; _statusLabel = nil; }
-    if (_logView) { [_logView release]; _logView = nil; }
-    if (_downloadPath) { [_downloadPath release]; _downloadPath = nil; }
-    if (_currentTask) { [_currentTask release]; _currentTask = nil; }
-    [super dealloc];
+    _downloader = nil;
+    _installer = nil;
 }
 
 - (void)cancel
@@ -101,7 +94,6 @@
         
         [scrollView setDocumentView:_logView];
         [_stepView addSubview:scrollView];
-        [scrollView release];
     }
     return _stepView;
 }
@@ -152,7 +144,6 @@
     
     _currentProgress = progress;
     if (task) {
-        if (_currentTask) { [_currentTask release]; }
         _currentTask = [task copy];
     }
     
@@ -182,15 +173,14 @@
 - (void)stepDidAppear
 {
     NSLog(@"DRIInstallationStep: stepDidAppear - starting installation");
-    [self performSelector:@selector(startInstallation) withObject:nil afterDelay:1.0];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self startInstallation];
+    });
 }
 
 - (void)setSelectedImageURL:(NSString *)url
 {
-    if (_selectedImageURL != url) {
-        if (_selectedImageURL) { [_selectedImageURL release]; }
-        _selectedImageURL = [url copy];
-    }
+    _selectedImageURL = [url copy];
     NSLog(@"DRIInstallationStep: set selected image URL: %@", url);
 }
 
@@ -215,7 +205,6 @@
     
     // Create download path
     NSString *tmp = NSTemporaryDirectory();
-    if (_downloadPath) { [_downloadPath release]; }
     _downloadPath = [[tmp stringByAppendingPathComponent:@"debian-runtime.img"] copy];
     
     [self logMessage:[NSString stringWithFormat:@"Downloading from: %@", _selectedImageURL]];
@@ -399,8 +388,6 @@
         NSRange range = NSMakeRange([[_logView string] length], 0);
         [_logView scrollRangeToVisible:range];
     }
-    
-    [formatter release];
 }
 
 - (NSString *)formatFileSize:(long long)bytes

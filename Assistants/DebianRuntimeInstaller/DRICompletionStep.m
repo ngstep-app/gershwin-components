@@ -31,12 +31,11 @@
 
 - (void)dealloc
 {
-    if (_contentView) { [_contentView release]; _contentView = nil; }
-    if (_statusIcon) { [_statusIcon release]; _statusIcon = nil; }
-    if (_statusLabel) { [_statusLabel release]; _statusLabel = nil; }
-    if (_nextStepsView) { [_nextStepsView release]; _nextStepsView = nil; }
-    if (_completionMessage) { [_completionMessage release]; _completionMessage = nil; }
-    [super dealloc];
+    if (_contentView) { _contentView = nil; }
+    if (_statusIcon) { _statusIcon = nil; }
+    if (_statusLabel) { _statusLabel = nil; }
+    if (_nextStepsView) { _nextStepsView = nil; }
+    if (_completionMessage) { _completionMessage = nil; }
 }
 
 - (NSString *)stepTitle
@@ -96,7 +95,6 @@
     
     [scrollView setDocumentView:_nextStepsView];
     [_contentView addSubview:scrollView];
-    [scrollView release];
     
     return _contentView;
 }
@@ -131,7 +129,6 @@
 {
     NSLog(@"DRICompletionStep: setInstallationSuccessful: %@ message: %@", successful ? @"YES" : @"NO", message);
     _installationSuccessful = successful;
-    if (_completionMessage) { [_completionMessage release]; }
     _completionMessage = [message ? message : (_installationSuccessful ? @"Installation completed successfully." : @"Installation failed.") copy];
     [self updateUI];
 }
@@ -195,7 +192,6 @@
     
     [statusImage unlockFocus];
     [_statusIcon setImage:statusImage];
-    [statusImage release];
 }
 
 - (void)updateNextStepsText

@@ -16,14 +16,6 @@
 
 @synthesize deviceName, description, size, geomName, isRemovable, isWritable;
 
-- (void)dealloc
-{
-    [deviceName release];
-    [description release];
-    [geomName release];
-    [super dealloc];
-}
-
 @end
 
 @implementation CLMDiskUtility
@@ -78,13 +70,10 @@
             }
         }
         
-        [output release];
     }
     @catch (NSException *exception) {
         NSLog(@"CLMDiskUtility: Error running geom: %@", [exception reason]);
     }
-    
-    [task release];
     
     NSLog(@"CLMDiskUtility: Found %lu disks", (unsigned long)[disks count]);
     return disks;
@@ -155,24 +144,18 @@
             }
         }
         
-        [output release];
-        
         // Don't return CD-ROM drives for now
         if ([deviceName hasPrefix:@"cd"]) {
-            [disk release];
             disk = nil;
         }
         
     }
     @catch (NSException *exception) {
         NSLog(@"CLMDiskUtility: Error getting disk info: %@", [exception reason]);
-        [disk release];
         disk = nil;
     }
     
-    [task release];
-    
-    return [disk autorelease];
+    return disk;
 }
 
 + (BOOL)unmountPartitionsForDisk:(NSString *)deviceName
@@ -215,20 +198,15 @@
                 @catch (NSException *exception) {
                     NSLog(@"CLMDiskUtility: Could not unmount %@: %@", partition, [exception reason]);
                 }
-                
-                [umountTask release];
             }
         }
         
-        [output release];
     }
     @catch (NSException *exception) {
         NSLog(@"CLMDiskUtility: Error finding partitions: %@", [exception reason]);
-        [task release];
         return NO;
     }
     
-    [task release];
     return YES;
 }
 

@@ -48,6 +48,6 @@
     long long _directReceivedBytes;
 }
 
-@property (nonatomic, assign) CLMController *controller;
+@property (nonatomic, weak) CLMController *controller;
 
 @end

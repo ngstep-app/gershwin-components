@@ -26,13 +26,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    NSLog(@"BhyveConfigurationStep: dealloc");
-    [_stepView release];
-    [super dealloc];
-}
-
 - (void)setupView
 {
     NSLog(@"BhyveConfigurationStep: setupView");
@@ -51,7 +44,6 @@
     [vmNameLabel setEditable:NO];
     [vmNameLabel setSelectable:NO];
     [_stepView addSubview:vmNameLabel];
-    [vmNameLabel release];
     
     _vmNameField = [[NSTextField alloc] initWithFrame:NSMakeRect(100, yPos, 238, 20)];
     [_vmNameField setStringValue:@"FreeBSD-Live"];
@@ -70,7 +62,6 @@
     [ramTitleLabel setEditable:NO];
     [ramTitleLabel setSelectable:NO];
     [_stepView addSubview:ramTitleLabel];
-    [ramTitleLabel release];
     
     _ramSlider = [[NSSlider alloc] initWithFrame:NSMakeRect(100, yPos, 180, 20)];
     [_ramSlider setMinValue:512];
@@ -100,7 +91,6 @@
     [cpuTitleLabel setEditable:NO];
     [cpuTitleLabel setSelectable:NO];
     [_stepView addSubview:cpuTitleLabel];
-    [cpuTitleLabel release];
     
     _cpuSlider = [[NSSlider alloc] initWithFrame:NSMakeRect(100, yPos, 180, 20)];
     [_cpuSlider setMinValue:1];
@@ -130,7 +120,6 @@
     [diskTitleLabel setEditable:NO];
     [diskTitleLabel setSelectable:NO];
     [_stepView addSubview:diskTitleLabel];
-    [diskTitleLabel release];
     
     _diskSlider = [[NSSlider alloc] initWithFrame:NSMakeRect(100, yPos, 180, 20)];
     [_diskSlider setMinValue:1];
@@ -168,7 +157,6 @@
     [vncPortLabel setEditable:NO];
     [vncPortLabel setSelectable:NO];
     [_stepView addSubview:vncPortLabel];
-    [vncPortLabel release];
     
     _vncPortField = [[NSTextField alloc] initWithFrame:NSMakeRect(185, yPos, 60, 20)];
     [_vncPortField setStringValue:@"5900"];
@@ -184,7 +172,6 @@
     [vncSizeLabel setEditable:NO];
     [vncSizeLabel setSelectable:NO];
     [_stepView addSubview:vncSizeLabel];
-    [vncSizeLabel release];
     
     _vncSizePopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(295, yPos, 120, 20)];
     [self populateVNCResolutions];
@@ -203,7 +190,6 @@
     [networkLabel setEditable:NO];
     [networkLabel setSelectable:NO];
     [_stepView addSubview:networkLabel];
-    [networkLabel release];
     
     _networkPopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(100, yPos, 120, 22)];
     [_networkPopup addItemWithTitle:NSLocalizedString(@"Bridge", @"Bridge network")];
@@ -225,7 +211,6 @@
     [bootModeLabel setEditable:NO];
     [bootModeLabel setSelectable:NO];
     [_stepView addSubview:bootModeLabel];
-    [bootModeLabel release];
     
     _bootModePopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(100, yPos, 120, 22)];
     [_bootModePopup addItemWithTitle:NSLocalizedString(@"BIOS (Legacy)", @"BIOS boot mode")];

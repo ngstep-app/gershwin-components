@@ -23,13 +23,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    NSLog(@"BhyveIntroStep: dealloc");
-    [_stepView release];
-    [super dealloc];
-}
-
 - (void)setupView
 {
     NSLog(@"BhyveIntroStep: setupView");
@@ -48,7 +41,6 @@
     [welcomeLabel setSelectable:NO];
     [[welcomeLabel cell] setWraps:YES];
     [_stepView addSubview:welcomeLabel];
-    [welcomeLabel release];
     
     // Feature bullets
     NSTextField *features = [[NSTextField alloc] initWithFrame:NSMakeRect(24, 56, 306, 88)];
@@ -60,7 +52,6 @@
     [features setSelectable:NO];
     [[features cell] setWraps:YES];
     [_stepView addSubview:features];
-    [features release];
     
     // Requirements note
     NSTextField *requirementsLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 12, 322, 28)];
@@ -73,7 +64,6 @@
     [requirementsLabel setSelectable:NO];
     [requirementsLabel setTextColor:[NSColor colorWithCalibratedRed:0.0 green:0.4 blue:0.8 alpha:1.0]];
     [_stepView addSubview:requirementsLabel];
-    [requirementsLabel release];
 }
 
 #pragma mark - GSAssistantStepProtocol

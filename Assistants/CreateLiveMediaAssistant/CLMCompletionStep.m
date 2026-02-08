@@ -23,13 +23,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    NSLog(@"CLMCompletionStep: dealloc");
-    [_stepView release];
-    [super dealloc];
-}
-
 - (void)setupView
 {
     NSLog(@"CLMCompletionStep: setupView");
@@ -46,12 +39,10 @@
         NSImage *icon = [[NSImage alloc] initWithContentsOfFile:iconPath];
         if (icon) {
             [iconView setImage:icon];
-            [icon release];
         }
     }
     [iconView setImageScaling:NSImageScaleProportionallyUpOrDown];
     [_stepView addSubview:iconView];
-    [iconView release];
     
     // Success text
     NSTextField *successLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 100, 330, 24)];
@@ -63,7 +54,6 @@
     [successLabel setEditable:NO];
     [successLabel setSelectable:NO];
     [_stepView addSubview:successLabel];
-    [successLabel release];
     
     // Instructions text
     NSTextField *instructLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 54, 330, 40)];
@@ -76,7 +66,6 @@
     [instructLabel setSelectable:NO];
     [[instructLabel cell] setWraps:YES];
     [_stepView addSubview:instructLabel];
-    [instructLabel release];
     
     // Safety reminder
     NSTextField *safetyLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 16, 330, 18)];
@@ -89,7 +78,6 @@
     [safetyLabel setSelectable:NO];
     [safetyLabel setTextColor:[NSColor blueColor]];
     [_stepView addSubview:safetyLabel];
-    [safetyLabel release];
 }
 
 #pragma mark - GSAssistantStepProtocol
@@ -132,8 +120,6 @@
         @catch (NSException *exception) {
             NSLog(@"CLMCompletionStep: Could not play success sound: %@", [exception reason]);
         }
-        
-        [playTask release];
     }
 }
 

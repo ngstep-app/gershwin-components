@@ -26,13 +26,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    NSLog(@"BhyveRunningStep: dealloc");
-    [_stepView release];
-    [super dealloc];
-}
-
 - (void)setupView
 {
     NSLog(@"BhyveRunningStep: setupView");
@@ -88,7 +81,6 @@
     [instructionsLabel setTextColor:[NSColor darkGrayColor]];
     [[instructionsLabel cell] setWraps:YES];
     [_stepView addSubview:instructionsLabel];
-    [instructionsLabel release];
 }
 
 - (void)updateStatus:(NSString *)status
@@ -97,9 +89,9 @@
     
     // Ensure we're on the main thread for UI updates
     if (![NSThread isMainThread]) {
-        [self performSelectorOnMainThread:@selector(updateStatus:) 
-                               withObject:status 
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self updateStatus:status];
+        });
         return;
     }
     
@@ -167,7 +159,9 @@
             }
             
             // Start VM in background after a short delay to let UI update
-            [_controller performSelector:@selector(startVirtualMachine) withObject:nil afterDelay:0.5];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [_controller startVirtualMachine];
+            });
         } else {
             // VM is already running
             [self updateStatus:NSLocalizedString(@"Virtual machine is running", @"Running status")];
