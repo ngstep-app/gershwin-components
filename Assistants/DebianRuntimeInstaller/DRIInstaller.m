@@ -37,10 +37,8 @@
     NSLog(@"DRIInstaller: dealloc");
     [self cancelInstallation];
     if (_currentCompletion) {
-        [_currentCompletion release];
         _currentCompletion = nil;
     }
-    [super dealloc];
 }
 
 - (void)installRuntimeFromImagePath:(NSString *)imagePath
@@ -117,12 +115,10 @@
         NSLog(@"DRIInstaller: terminating current task PID %d", [_currentTask processIdentifier]);
         [_currentTask terminate];
         [_currentTask waitUntilExit]; // Wait for clean termination
-        [_currentTask release];
         _currentTask = nil;
     }
     
     if (_currentCompletion) {
-        [_currentCompletion release];
         _currentCompletion = nil;
     }
     
@@ -185,7 +181,6 @@
             NSLog(@"[DRIInstaller] *** ERROR: uname command failed with status %d", [task terminationStatus]);
             [self.delegate installer:self didCompleteSuccessfully:NO 
                          withMessage:@"System check failed: Could not determine operating system"];
-            [task release];
             return;
         }
         
@@ -200,21 +195,16 @@
             NSLog(@"[DRIInstaller] *** SYSTEM CHECK FAILED: not running on FreeBSD (detected: %@)", output);
             [self.delegate installer:self didCompleteSuccessfully:NO 
                          withMessage:[NSString stringWithFormat:@"This installer requires FreeBSD (detected: %@)", output]];
-            [output release];
-            [task release];
             return;
         }
         
         NSLog(@"[DRIInstaller] *** SYSTEM CHECK PASSED: FreeBSD detected, proceeding to Linux compatibility check");
-        [output release];
-        [task release];
         [self checkLinuxCompatibilityLayer];
         
     } @catch (NSException *exception) {
         NSLog(@"[DRIInstaller] *** EXCEPTION in checkSystemRequirements: %@ - %@", [exception name], [exception reason]);
         [self.delegate installer:self didCompleteSuccessfully:NO 
                      withMessage:[NSString stringWithFormat:@"System check failed: %@", [exception reason]]];
-        [task release];
     }
 }
 
@@ -564,7 +554,6 @@
     if (_currentTask) {
         NSLog(@"[DRIInstaller] *** WARNING: Previous task still running, terminating it");
         [_currentTask terminate];
-        [_currentTask release];
         _currentTask = nil;
     }
     
@@ -583,7 +572,6 @@
         if (completion) {
             completion(NO, errorMessage);
         }
-        [_currentCompletion release];
         _currentCompletion = nil;
         return;
     }
@@ -623,7 +611,6 @@
             
             if (_currentCompletion) {
                 _currentCompletion(NO, timeoutMessage);
-                [_currentCompletion release];
                 _currentCompletion = nil;
             }
             return;
@@ -660,7 +647,6 @@
             }
         }
         
-        [output release];
         
     } @catch (NSException *exception) {
         NSLog(@"[DRIInstaller] *** EXCEPTION during command execution: %@", [exception reason]);
@@ -675,11 +661,9 @@
         }
     } @finally {
         if (_currentTask) {
-            [_currentTask release];
             _currentTask = nil;
         }
         if (_currentCompletion) {
-            [_currentCompletion release];
             _currentCompletion = nil;
         }
     }
