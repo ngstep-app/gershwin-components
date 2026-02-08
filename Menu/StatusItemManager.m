@@ -252,6 +252,11 @@
             interval = [item updateInterval];
         }
         
+        // Clamp minimum interval to prevent CPU spin from misbehaving bundles
+        if (interval < 0.5) {
+            interval = 0.5;
+        }
+        
         NSNumber *key = @(interval);
         NSMutableArray *group = [intervalGroups objectForKey:key];
         if (!group) {

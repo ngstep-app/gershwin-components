@@ -17,20 +17,20 @@
                             actionPath:(NSString *)actionPath 
                         dbusConnection:(GNUDBusConnection *)dbusConnection
 {
-    NSLog(@"GTKMenuParser: ===== PARSING GTK MENU STRUCTURE =====");
-    NSLog(@"GTKMenuParser: Service: %@", serviceName);
-    NSLog(@"GTKMenuParser: Action path: %@", actionPath);
-    NSLog(@"GTKMenuParser: Result type: %@", [result class]);
-    NSLog(@"GTKMenuParser: Result: %@", result);
+    NSDebugLog(@"GTKMenuParser: ===== PARSING GTK MENU STRUCTURE =====");
+    NSDebugLog(@"GTKMenuParser: Service: %@", serviceName);
+    NSDebugLog(@"GTKMenuParser: Action path: %@", actionPath);
+    NSDebugLog(@"GTKMenuParser: Result type: %@", [result class]);
+    NSDebugLog(@"GTKMenuParser: Result: %@", result);
     
     if (![result isKindOfClass:[NSArray class]]) {
-        NSLog(@"GTKMenuParser: ERROR: Expected array but got %@", [result class]);
+        NSDebugLog(@"GTKMenuParser: ERROR: Expected array but got %@", [result class]);
         return nil;
     }
     
     NSArray *resultArray = (NSArray *)result;
     if ([resultArray count] == 0) {
-        NSLog(@"GTKMenuParser: Empty result array");
+        NSDebugLog(@"GTKMenuParser: Empty result array");
         return nil;
     }
     
@@ -52,7 +52,7 @@
             NSArray *menuKey = @[menuId, revision];
             [menuDict setObject:menuItems forKey:menuKey];
             
-            NSLog(@"GTKMenuParser: Menu ID %@ (revision %@) has %lu items", 
+            NSDebugLog(@"GTKMenuParser: Menu ID %@ (revision %@) has %lu items", 
                   menuId, revision, (unsigned long)[menuItems count]);
         }
     }
@@ -66,7 +66,7 @@
                              dbusConnection:dbusConnection];
     
     if (!rootMenu) {
-        NSLog(@"GTKMenuParser: Could not create root menu, creating placeholder");
+        NSDebugLog(@"GTKMenuParser: Could not create root menu, creating placeholder");
         rootMenu = [[NSMenu alloc] initWithTitle:@"GTK App Menu"];
     }
     
@@ -80,18 +80,18 @@
                 actionPath:(NSString *)actionPath
             dbusConnection:(GNUDBusConnection *)dbusConnection
 {
-    NSLog(@"GTKMenuParser: Exploring GTK menu %@ with labels %@", menuId, labelList);
+    NSDebugLog(@"GTKMenuParser: Exploring GTK menu %@ with labels %@", menuId, labelList);
     
     NSArray *menuItems = [menuDict objectForKey:menuId];
     if (!menuItems) {
-        NSLog(@"GTKMenuParser: No menu items found for menu ID %@", menuId);
+        NSDebugLog(@"GTKMenuParser: No menu items found for menu ID %@", menuId);
         return nil;
     }
     
     NSString *menuTitle = ([labelList count] > 0) ? [labelList lastObject] : @"GTK Menu";
     NSMenu *menu = [[NSMenu alloc] initWithTitle:menuTitle];
     
-    NSLog(@"GTKMenuParser: Processing %lu menu items for menu %@", 
+    NSDebugLog(@"GTKMenuParser: Processing %lu menu items for menu %@", 
           (unsigned long)[menuItems count], menuId);
 
     for (id menuItemData in menuItems) {
@@ -113,22 +113,22 @@
         }
         
         if ([menuItem count] == 0) {
-            NSLog(@"GTKMenuParser: Skipping invalid menu item: %@ (class: %@)", 
+            NSDebugLog(@"GTKMenuParser: Skipping invalid menu item: %@ (class: %@)", 
                   menuItemData, [menuItemData class]);
             continue;
         }
         
-        NSLog(@"GTKMenuParser: Processing merged menu item: %@", menuItem);
+        NSDebugLog(@"GTKMenuParser: Processing merged menu item: %@", menuItem);
         NSString *label = [menuItem objectForKey:@"label"];
         NSString *action = [menuItem objectForKey:@"action"];
         NSString *accel = [menuItem objectForKey:@"accel"];
         if (!accel) {
             accel = [menuItem objectForKey:@"x-canonical-accel"];
             if (accel) {
-                NSLog(@"GTKMenuParser: Found x-canonical-accel='%@' for label='%@'", accel, label);
+                NSDebugLog(@"GTKMenuParser: Found x-canonical-accel='%@' for label='%@'", accel, label);
             }
         } else {
-            NSLog(@"GTKMenuParser: Found accel='%@' for label='%@'", accel, label);
+            NSDebugLog(@"GTKMenuParser: Found accel='%@' for label='%@'", accel, label);
         }
         
         // Handle sections - these don't create menu items but contain other items
@@ -138,7 +138,7 @@
             NSArray *sectionArray = (NSArray *)sectionData;
             if ([sectionArray count] >= 2) {
                 NSArray *sectionMenuId = @[[sectionArray objectAtIndex:0], [sectionArray objectAtIndex:1]];
-                NSLog(@"GTKMenuParser: Following section reference from %@ to %@", menuId, sectionMenuId);
+                NSDebugLog(@"GTKMenuParser: Following section reference from %@ to %@", menuId, sectionMenuId);
                 NSMenu *sectionMenu = [self exploreGTKMenu:sectionMenuId
                                                 withLabels:labelList
                                                   menuDict:menuDict
@@ -147,13 +147,13 @@
                                             dbusConnection:dbusConnection];
                 
                 if (sectionMenu) {
-                    NSLog(@"GTKMenuParser: Section menu %@ has %lu items, adding to parent", 
+                    NSDebugLog(@"GTKMenuParser: Section menu %@ has %lu items, adding to parent", 
                           sectionMenuId, (unsigned long)[[sectionMenu itemArray] count]);
                     
                     // Add a separator before this section if there are already items in the menu
                     if ([menu numberOfItems] > 0) {
                         [menu addItem:[NSMenuItem separatorItem]];
-                        NSLog(@"GTKMenuParser: Added separator before section %@", sectionMenuId);
+                        NSDebugLog(@"GTKMenuParser: Added separator before section %@", sectionMenuId);
                     }
                     
                     // Add all items from the section to our menu
@@ -161,7 +161,7 @@
                         [menu addItem:[item copy]];
                     }
                 } else {
-                    NSLog(@"GTKMenuParser: Section menu %@ not found", sectionMenuId);
+                    NSDebugLog(@"GTKMenuParser: Section menu %@ not found", sectionMenuId);
                 }
             }
             continue;
@@ -173,7 +173,7 @@
             NSString *displayLabel = label;
             if ([displayLabel containsString:@"_"]) {
                 displayLabel = [displayLabel stringByReplacingOccurrencesOfString:@"_" withString:@""];
-                NSLog(@"GTKMenuParser: Transformed label '%@' -> '%@' (removed mnemonics)", label, displayLabel);
+                NSDebugLog(@"GTKMenuParser: Transformed label '%@' -> '%@' (removed mnemonics)", label, displayLabel);
             }
             
             NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:displayLabel action:nil keyEquivalent:@""];
@@ -193,11 +193,11 @@
                     if (hasControlKey) {
                         // Display as Command in menu (which GNUstep renders properly)
                         displayModifierMask = (modifierMask & ~NSControlKeyMask) | NSCommandKeyMask;
-                        NSLog(@"GTKMenuParser: Converting Control to Command for display");
+                        NSDebugLog(@"GTKMenuParser: Converting Control to Command for display");
                     }
                     
                     [item setKeyEquivalentModifierMask:displayModifierMask];
-                    NSLog(@"GTKMenuParser: Added shortcut '%@' to menu item '%@' (keyEq='%@', modifiers=%lu, display=%lu)", 
+                    NSDebugLog(@"GTKMenuParser: Added shortcut '%@' to menu item '%@' (keyEq='%@', modifiers=%lu, display=%lu)", 
                           accel, displayLabel, keyEquivalent, (unsigned long)modifierMask, (unsigned long)displayModifierMask);
                 }
             }
@@ -220,7 +220,7 @@
                     // Check if we already have the submenu data in our menuDict
                     if ([menuDict objectForKey:submenuMenuId]) {
                         // Data is already available - create submenu immediately (not lazy)
-                        NSLog(@"GTKMenuParser: Submenu data for '%@' already available, creating immediately", displayLabel);
+                        NSDebugLog(@"GTKMenuParser: Submenu data for '%@' already available, creating immediately", displayLabel);
                         
                         NSMenu *submenu = [self exploreGTKMenu:submenuMenuId
                                                     withLabels:newLabelList
@@ -231,14 +231,14 @@
                         
                         if (submenu) {
                             [item setSubmenu:submenu];
-                            NSLog(@"GTKMenuParser: Added immediate submenu to item '%@'", displayLabel);
+                            NSDebugLog(@"GTKMenuParser: Added immediate submenu to item '%@'", displayLabel);
                         } else {
-                            NSLog(@"GTKMenuParser: Failed to create immediate submenu for item '%@'", displayLabel);
+                            NSDebugLog(@"GTKMenuParser: Failed to create immediate submenu for item '%@'", displayLabel);
                         }
                     } else {
                         // Data not available - try to load it, then decide on lazy loading
                         NSNumber *groupId = [submenuArray objectAtIndex:0];
-                        NSLog(@"GTKMenuParser: Submenu data for '%@' not available, attempting to load group %@", displayLabel, groupId);
+                        NSDebugLog(@"GTKMenuParser: Submenu data for '%@' not available, attempting to load group %@", displayLabel, groupId);
                         
                         // Use the actual menu path for loading
                         NSString *menuPath = actionPath;
@@ -259,7 +259,7 @@
                                                               arguments:@[@[groupId]]];
                         
                         if (additionalResult && [additionalResult isKindOfClass:[NSArray class]]) {
-                            NSLog(@"GTKMenuParser: Successfully loaded additional menu group %@", groupId);
+                            NSDebugLog(@"GTKMenuParser: Successfully loaded additional menu group %@", groupId);
                             // Parse and add the new menu data to menuDict
                             [self parseMenuData:(NSArray *)additionalResult intoDict:menuDict];
                             
@@ -273,9 +273,9 @@
                             
                             if (submenu) {
                                 [item setSubmenu:submenu];
-                                NSLog(@"GTKMenuParser: Added loaded submenu to item '%@'", displayLabel);
+                                NSDebugLog(@"GTKMenuParser: Added loaded submenu to item '%@'", displayLabel);
                             } else {
-                                NSLog(@"GTKMenuParser: Failed to create loaded submenu for item '%@', falling back to lazy loading", displayLabel);
+                                NSDebugLog(@"GTKMenuParser: Failed to create loaded submenu for item '%@', falling back to lazy loading", displayLabel);
                                 // Fall back to lazy loading
                                 NSMenu *lazySubmenu = [[NSMenu alloc] initWithTitle:displayLabel];
                                 [GTKSubmenuManager setupSubmenu:lazySubmenu
@@ -288,7 +288,7 @@
                                                         menuDict:menuDict];
                             }
                         } else {
-                            NSLog(@"GTKMenuParser: Failed to load additional menu group %@, setting up lazy loading", groupId);
+                            NSDebugLog(@"GTKMenuParser: Failed to load additional menu group %@, setting up lazy loading", groupId);
                             // Set up lazy loading as fallback
                             NSMenu *lazySubmenu = [[NSMenu alloc] initWithTitle:displayLabel];
                             [GTKSubmenuManager setupSubmenu:lazySubmenu
@@ -299,7 +299,7 @@
                                               dbusConnection:dbusConnection
                                                      groupId:groupId
                                                     menuDict:menuDict];
-                            NSLog(@"GTKMenuParser: Set up lazy-loaded submenu for item '%@'", displayLabel);
+                            NSDebugLog(@"GTKMenuParser: Set up lazy-loaded submenu for item '%@'", displayLabel);
                         }
                     }
                 }
@@ -307,17 +307,17 @@
             
             [menu addItem:item];
             
-            NSLog(@"GTKMenuParser: Added GTK menu item: '%@' (action: %@)", displayLabel, action ?: @"none");
+            NSDebugLog(@"GTKMenuParser: Added GTK menu item: '%@' (action: %@)", displayLabel, action ?: @"none");
         }
     }
     
-    NSLog(@"GTKMenuParser: Created GTK menu '%@' with %lu items", menuTitle, (unsigned long)[menu numberOfItems]);
+    NSDebugLog(@"GTKMenuParser: Created GTK menu '%@' with %lu items", menuTitle, (unsigned long)[menu numberOfItems]);
     return menu;
 }
 
 + (void)parseMenuData:(NSArray *)menuData intoDict:(NSMutableDictionary *)menuDict
 {
-    NSLog(@"GTKMenuParser: Parsing additional menu data with %lu items", (unsigned long)[menuData count]);
+    NSDebugLog(@"GTKMenuParser: Parsing additional menu data with %lu items", (unsigned long)[menuData count]);
     
     for (id item in menuData) {
         if ([item isKindOfClass:[NSArray class]] && [item count] >= 3) {
@@ -328,7 +328,7 @@
             id menuItems = [menuEntry objectAtIndex:2];
             
             [menuDict setObject:menuItems forKey:menuId];
-            NSLog(@"GTKMenuParser: Added menu (%@, %@) with %lu items to dict", 
+            NSDebugLog(@"GTKMenuParser: Added menu (%@, %@) with %lu items to dict", 
                   menuId0, menuId1, 
                   [menuItems isKindOfClass:[NSArray class]] ? (unsigned long)[menuItems count] : 0);
         }
@@ -341,10 +341,10 @@
                      actionPath:(NSString *)actionPath 
                  dbusConnection:(GNUDBusConnection *)dbusConnection
 {
-    NSLog(@"GTKMenuParser: Parsing GMenuModel item %@ (root: %@)", modelItem, isRoot ? @"YES" : @"NO");
+    NSDebugLog(@"GTKMenuParser: Parsing GMenuModel item %@ (root: %@)", modelItem, isRoot ? @"YES" : @"NO");
     
     if (![modelItem isKindOfClass:[NSArray class]]) {
-        NSLog(@"GTKMenuParser: ERROR: Expected array for GMenuModel item");
+        NSDebugLog(@"GTKMenuParser: ERROR: Expected array for GMenuModel item");
         return nil;
     }
     
@@ -362,7 +362,7 @@
         }
     }
     
-    NSLog(@"GTKMenuParser: Created GMenuModel menu with %lu items", (unsigned long)[menu numberOfItems]);
+    NSDebugLog(@"GTKMenuParser: Created GMenuModel menu with %lu items", (unsigned long)[menu numberOfItems]);
     return menu;
 }
 
@@ -371,16 +371,16 @@
                                   actionPath:(NSString *)actionPath 
                               dbusConnection:(GNUDBusConnection *)dbusConnection
 {
-    NSLog(@"GTKMenuParser: Creating menu item from GTK model item: %@ (%@)", modelItem, [modelItem class]);
+    NSDebugLog(@"GTKMenuParser: Creating menu item from GTK model item: %@ (%@)", modelItem, [modelItem class]);
     
     if (![modelItem isKindOfClass:[NSArray class]]) {
-        NSLog(@"GTKMenuParser: ERROR: Expected array for GTK model item");
+        NSDebugLog(@"GTKMenuParser: ERROR: Expected array for GTK model item");
         return nil;
     }
     
     NSArray *itemArray = (NSArray *)modelItem;
     if ([itemArray count] == 0) {
-        NSLog(@"GTKMenuParser: Empty GTK model item array");
+        NSDebugLog(@"GTKMenuParser: Empty GTK model item array");
         return nil;
     }
     
@@ -407,11 +407,11 @@
     }
     
     if (!properties) {
-        NSLog(@"GTKMenuParser: No properties dictionary found in GTK item");
+        NSDebugLog(@"GTKMenuParser: No properties dictionary found in GTK item");
         return nil;
     }
     
-    NSLog(@"GTKMenuParser: GTK item properties: %@", properties);
+    NSDebugLog(@"GTKMenuParser: GTK item properties: %@", properties);
     
     // Extract label
     NSString *label = [properties objectForKey:@"label"];
@@ -431,7 +431,7 @@
     NSString *displayLabel = label;
     if ([label containsString:@"_"]) {
         displayLabel = [label stringByReplacingOccurrencesOfString:@"_" withString:@""];
-        NSLog(@"GTKMenuParser: Transformed GModel label '%@' -> '%@' (removed mnemonics)", label, displayLabel);
+        NSDebugLog(@"GTKMenuParser: Transformed GModel label '%@' -> '%@' (removed mnemonics)", label, displayLabel);
     }
     
     // Extract action
@@ -443,7 +443,7 @@
     // NSString *iconName = [properties objectForKey:@"icon"]; // TODO: Handle icons
     NSString *keyEquiv = [properties objectForKey:@"accel"];
     
-    NSLog(@"GTKMenuParser: Creating GTK menu item - label='%@', action='%@', enabled=%@, visible=%@", 
+    NSDebugLog(@"GTKMenuParser: Creating GTK menu item - label='%@', action='%@', enabled=%@, visible=%@", 
           displayLabel, action ?: @"none", enabled ?: @"default", visible ?: @"default");
     
     // Create the menu item
@@ -476,12 +476,12 @@
                                     serviceName:serviceName 
                                      actionPath:actionPath 
                                  dbusConnection:dbusConnection];
-        NSLog(@"GTKMenuParser: Set up GTK action for menu item '%@' (action=%@)", label, action);
+        NSDebugLog(@"GTKMenuParser: Set up GTK action for menu item '%@' (action=%@)", label, action);
     }
     
     // Handle submenus
     if (submenuItems && [submenuItems count] > 0) {
-        NSLog(@"GTKMenuParser: Creating GTK submenu for '%@' with %lu items", 
+        NSDebugLog(@"GTKMenuParser: Creating GTK submenu for '%@' with %lu items", 
               label, (unsigned long)[submenuItems count]);
         
         NSMenu *submenu = [self parseGMenuModelItem:submenuItems 
@@ -503,10 +503,10 @@
 
 + (NSDictionary *)parseActionGroupFromResult:(id)result
 {
-    NSLog(@"GTKMenuParser: Parsing GTK action group from result: %@ (%@)", result, [result class]);
+    NSDebugLog(@"GTKMenuParser: Parsing GTK action group from result: %@ (%@)", result, [result class]);
     
     if (![result isKindOfClass:[NSArray class]] && ![result isKindOfClass:[NSDictionary class]]) {
-        NSLog(@"GTKMenuParser: Unexpected action group result type");
+        NSDebugLog(@"GTKMenuParser: Unexpected action group result type");
         return nil;
     }
     
@@ -538,7 +538,7 @@
         [actionGroup addEntriesFromDictionary:(NSDictionary *)result];
     }
     
-    NSLog(@"GTKMenuParser: Parsed %lu GTK actions", (unsigned long)[actionGroup count]);
+    NSDebugLog(@"GTKMenuParser: Parsed %lu GTK actions", (unsigned long)[actionGroup count]);
     return [NSDictionary dictionaryWithDictionary:actionGroup];
 }
 
@@ -559,13 +559,13 @@
         }
     } else {
         // Handle GTK accelerator format: <Control>o, <Primary><Shift>n, <Alt>F4, etc.
-        // Remove modifier prefixes
-        key = [key stringByReplacingOccurrencesOfString:@"<Control>" withString:@""];
-        key = [key stringByReplacingOccurrencesOfString:@"<Primary>" withString:@""];
-        key = [key stringByReplacingOccurrencesOfString:@"<Shift>" withString:@""];
-        key = [key stringByReplacingOccurrencesOfString:@"<Alt>" withString:@""];
-        key = [key stringByReplacingOccurrencesOfString:@"<Meta>" withString:@""];
-        key = [key stringByReplacingOccurrencesOfString:@"<Super>" withString:@""];
+        // Remove modifier prefixes (case-insensitive)
+        key = [key stringByReplacingOccurrencesOfString:@"<Control>" withString:@"" options:NSCaseInsensitiveSearch range:NSMakeRange(0, [key length])];
+        key = [key stringByReplacingOccurrencesOfString:@"<Primary>" withString:@"" options:NSCaseInsensitiveSearch range:NSMakeRange(0, [key length])];
+        key = [key stringByReplacingOccurrencesOfString:@"<Shift>" withString:@"" options:NSCaseInsensitiveSearch range:NSMakeRange(0, [key length])];
+        key = [key stringByReplacingOccurrencesOfString:@"<Alt>" withString:@"" options:NSCaseInsensitiveSearch range:NSMakeRange(0, [key length])];
+        key = [key stringByReplacingOccurrencesOfString:@"<Meta>" withString:@"" options:NSCaseInsensitiveSearch range:NSMakeRange(0, [key length])];
+        key = [key stringByReplacingOccurrencesOfString:@"<Super>" withString:@"" options:NSCaseInsensitiveSearch range:NSMakeRange(0, [key length])];
     }
     
     // Convert special keys
@@ -597,19 +597,21 @@
     
     NSUInteger modifiers = 0;
     
-    // Handle both x-canonical-accel format ("Ctrl+O") and GTK format ("<Control>o")
-    if ([accel containsString:@"<Control>"] || [accel containsString:@"<Primary>"] || 
-        [accel containsString:@"Ctrl+"]) {
+    // Case-insensitive matching for modifier names from Canonical AppMenu / GTK
+    NSString *lower = [accel lowercaseString];
+    
+    if ([lower containsString:@"<control>"] || [lower containsString:@"<primary>"] || 
+        [lower containsString:@"ctrl+"]) {
         modifiers |= NSControlKeyMask;
     }
-    if ([accel containsString:@"<Shift>"] || [accel containsString:@"Shift+"]) {
+    if ([lower containsString:@"<shift>"] || [lower containsString:@"shift+"]) {
         modifiers |= NSEventModifierFlagShift;
     }
-    if ([accel containsString:@"<Alt>"] || [accel containsString:@"Alt+"]) {
+    if ([lower containsString:@"<alt>"] || [lower containsString:@"alt+"]) {
         modifiers |= NSEventModifierFlagOption;
     }
-    if ([accel containsString:@"<Meta>"] || [accel containsString:@"<Super>"] || 
-        [accel containsString:@"Meta+"] || [accel containsString:@"Super+"]) {
+    if ([lower containsString:@"<meta>"] || [lower containsString:@"<super>"] || 
+        [lower containsString:@"meta+"] || [lower containsString:@"super+"]) {
         modifiers |= NSEventModifierFlagCommand;
     }
     

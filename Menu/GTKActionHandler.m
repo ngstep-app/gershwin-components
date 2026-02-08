@@ -60,14 +60,14 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
     [gtkMenuItemToActionPathMap setObject:actionPath forKey:menuItemKey];
     [gtkMenuItemToConnectionMap setObject:dbusConnection forKey:menuItemKey];
     
-    NSLog(@"GTKActionHandler: Set up GTK action for menu item '%@' (action=%@, service=%@, path=%@)", 
+    NSDebugLog(@"GTKActionHandler: Set up GTK action for menu item '%@' (action=%@, service=%@, path=%@)", 
           [menuItem title], actionName, serviceName, actionPath);
     
     // Register shortcut with X11ShortcutManager if this menu item has a key equivalent
     NSString *keyEquivalent = [menuItem keyEquivalent];
     if (keyEquivalent && [keyEquivalent length] > 0) {
         NSUInteger modifierMask = [menuItem keyEquivalentModifierMask];
-        NSLog(@"GTKActionHandler: Registering shortcut for menu item '%@': key='%@' modifiers=%lu", 
+        NSDebugLog(@"GTKActionHandler: Registering shortcut for menu item '%@': key='%@' modifiers=%lu", 
               [menuItem title], keyEquivalent, (unsigned long)modifierMask);
         
         // Only register shortcuts that have meaningful modifier keys to prevent capturing
@@ -84,7 +84,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
             if (hasCtrl) {
                 // Replace Ctrl with Alt for global registration
                 globalModifierMask = (modifierMask & ~NSControlKeyMask) | NSAlternateKeyMask;
-                NSLog(@"GTKActionHandler: Transforming Ctrl+%@ to Alt+%@ for global access", 
+                NSDebugLog(@"GTKActionHandler: Transforming Ctrl+%@ to Alt+%@ for global access", 
                       keyEquivalent, keyEquivalent);
             }
             
@@ -102,7 +102,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
                                                              dbusConnection:dbusConnection];
         } else {
             NSString *reason = hasNoModifiers ? @"no modifiers" : @"Shift-only modifier";
-            NSLog(@"GTKActionHandler: Skipping registration of key '%@' for menu item '%@' - %@", 
+            NSDebugLog(@"GTKActionHandler: Skipping registration of key '%@' for menu item '%@' - %@", 
                   keyEquivalent, [menuItem title], reason);
         }
     }
@@ -124,7 +124,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
             NSNumber *enabled = [actionState objectForKey:@"enabled"];
             if (enabled) {
                 [menuItem setEnabled:[enabled boolValue]];
-                NSLog(@"GTKActionHandler: Set initial enabled state to %@", enabled);
+                NSDebugLog(@"GTKActionHandler: Set initial enabled state to %@", enabled);
             }
             
             // Handle toggle/checkbox state for stateful actions
@@ -132,7 +132,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
             if (state && [state isKindOfClass:[NSNumber class]]) {
                 NSNumber *stateNum = (NSNumber *)state;
                 [menuItem setState:[stateNum boolValue] ? NSOnState : NSOffState];
-                NSLog(@"GTKActionHandler: Set initial toggle state to %@", stateNum);
+                NSDebugLog(@"GTKActionHandler: Set initial toggle state to %@", stateNum);
             }
         }
     } else {

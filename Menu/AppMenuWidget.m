@@ -188,6 +188,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         self.cachedHasMenu = NO;
         self.needsRedraw = YES;
         
+        // Tight-loop prevention initialisation
+        self.isInsideDisplayMenuForWindow = NO;
+        self.isInsideDesktopFallback = NO;
+        self.lastUpdateForActiveWindowTime = 0;
+        self.lastUpdateForActiveWindowId = 0;
+        self.noMenuGracePeriodFireCount = 0;
+        
         // Register this widget for X11 error handling
         [AppMenuWidget setCurrentWidget:self];
         
@@ -261,7 +268,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     }
 
     // Get the active window using X11
-    Display *display = XOpenDisplay(NULL);
+    Display *display = [MenuUtils sharedDisplay];
     if (!display) {
         NSLog(@"AppMenuWidget: Cannot open X11 display");
         return;
@@ -292,8 +299,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         }
         NSLog(@"AppMenuWidget: Failed to get active window due to X11 error");
     });
-    
-    XCloseDisplay(display);
 
     [self updateForActiveWindowId:activeWindow];
 }
@@ -305,7 +310,16 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         return;
     }
 
-    NSLog(@"AppMenuWidget: updateForActiveWindowId called with 0x%lx", windowId);
+    // TIGHT-LOOP GUARD: Rate-limit calls to max once per 50ms for the same window
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    if (windowId == self.lastUpdateForActiveWindowId &&
+        (now - self.lastUpdateForActiveWindowTime) < 0.05) {
+        return; // Too frequent for the same window - silently skip
+    }
+    self.lastUpdateForActiveWindowTime = now;
+    self.lastUpdateForActiveWindowId = windowId;
+
+    NSDebugLog(@"AppMenuWidget: updateForActiveWindowId called with 0x%lx", windowId);
 
     unsigned long activeWindow = windowId;
 
@@ -402,6 +416,9 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
         self.currentWindowId = activeWindow;
         
+        // Reset grace period fire count for new window focus
+        self.noMenuGracePeriodFireCount = 0;
+        
         // Track PID and timestamp for the new anti-flicker mechanism
         pid_t newPid = [MenuUtils getWindowPID:activeWindow];
         self.lastWindowPID = newPid;
@@ -430,18 +447,31 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     self.noMenuGracePeriodTimer = nil;
     self.pendingClearWindowId = 0;
     
-    NSLog(@"AppMenuWidget: Grace period expired for window %lu - checking if menu now available", windowId);
+    // TIGHT-LOOP GUARD: Limit the number of consecutive grace-period fires for the same scenario
+    self.noMenuGracePeriodFireCount++;
+    if (self.noMenuGracePeriodFireCount > 3) {
+        NSLog(@"AppMenuWidget: Grace period fired %lu times without success - forcing clear to break potential loop",
+              (unsigned long)self.noMenuGracePeriodFireCount);
+        self.noMenuGracePeriodFireCount = 0;
+        [self clearMenuAndHideView];
+        return;
+    }
+    
+    NSLog(@"AppMenuWidget: Grace period expired for window %lu (attempt %lu) - checking if menu now available",
+          windowId, (unsigned long)self.noMenuGracePeriodFireCount);
     
     // CRITICAL: Only clear menu if we're still on the same window
     // If we've switched to a different window, this timer is stale
     if (self.currentWindowId != windowId) {
         NSLog(@"AppMenuWidget: Window changed from %lu to %lu - ignoring stale grace period timer", windowId, self.currentWindowId);
+        self.noMenuGracePeriodFireCount = 0;
         return;
     }
     
     // Check if this window now has a menu registered
     if ([self.protocolManager hasMenuForWindow:windowId]) {
         NSLog(@"AppMenuWidget: Window %lu now has menu - loading it", windowId);
+        self.noMenuGracePeriodFireCount = 0;
         // Trigger a refresh to load the newly available menu
         [self updateForActiveWindowId:windowId];
         return;
@@ -449,6 +479,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     
     // Still no menu after grace period AND still on same window - clear the old menu
     NSLog(@"AppMenuWidget: Window %lu still has no menu after grace period - clearing", windowId);
+    self.noMenuGracePeriodFireCount = 0;
     if ([self displayDesktopMenuIfAvailableWithReason:@"grace period expired, no menu"]) {
         return;
     }
@@ -462,6 +493,17 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (BOOL)displayDesktopMenuIfAvailableWithReason:(NSString *)reason
 {
+    // TIGHT-LOOP GUARD: Prevent re-entrance (desktopFallback -> displayMenuForWindow -> desktopFallback)
+    if (self.isInsideDesktopFallback) {
+        NSLog(@"AppMenuWidget: Re-entrant displayDesktopMenuIfAvailableWithReason blocked (%@)", reason);
+        return NO;
+    }
+    self.isInsideDesktopFallback = YES;
+
+    BOOL result = NO;
+
+    @try {
+
     if (!self.protocolManager) {
         NSLog(@"AppMenuWidget: Cannot display Desktop menu (%@) - no protocol manager", reason);
         return NO;
@@ -491,7 +533,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     NSLog(@"AppMenuWidget: Switching to Desktop menu 0x%lx (%@)", desktopWindowId, reason);
     self.currentWindowId = desktopWindowId;
     [self displayMenuForWindow:desktopWindowId isDifferentApp:isDifferentApp];
-    return YES;
+    result = YES;
+
+    } // @try
+    @finally {
+        self.isInsideDesktopFallback = NO;
+    }
+    return result;
 }
 
 - (void)clearMenuAndHideView
@@ -506,9 +554,15 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     [self clearMenu:YES];
     self.currentMenu = nil;
     self.currentWindowId = 0; // Ensure we stop showing menus for this window
+    self.lastLoadedMenuWindowId = 0; // Reset so next focus will load fresh
     self.needsRedraw = YES;
     if (self.menuView) {
         [self.menuView setHidden:YES];
+    }
+    // Ensure overlay views (RoundedCornersView) are redrawn after clearing
+    NSWindow *window = [self window];
+    if (window) {
+        [[window contentView] setNeedsDisplay:YES];
     }
 }
 
@@ -558,6 +612,25 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (void)displayMenuForWindow:(unsigned long)windowId isDifferentApp:(BOOL)isDifferentApp
 {
+    // TIGHT-LOOP GUARD: Prevent re-entrance (e.g. displayMenuForWindow -> desktopFallback -> displayMenuForWindow)
+    if (self.isInsideDisplayMenuForWindow) {
+        NSLog(@"AppMenuWidget: Re-entrant displayMenuForWindow blocked for window %lu", windowId);
+        return;
+    }
+    self.isInsideDisplayMenuForWindow = YES;
+
+    @try { // @finally guarantees isInsideDisplayMenuForWindow is cleared on ALL exit paths
+
+    // OPTIMIZATION: If we already have a valid menu for this exact window, skip the expensive re-import.
+    // GTK menus (e.g., GIMP with 600+ items) take seconds to parse via D-Bus, and brief window
+    // focus changes (windowA -> transientWindow -> windowA) would trigger unnecessary full re-imports.
+    // NOTE: We check lastLoadedMenuWindowId (not currentWindowId) because currentWindowId is set
+    // by the caller (updateForActiveWindowId) BEFORE calling us.
+    if (windowId != 0 && windowId == self.lastLoadedMenuWindowId && self.currentMenu != nil) {
+        NSDebugLog(@"AppMenuWidget: Already showing menu for window %lu - skipping re-import", windowId);
+        return;
+    }
+
     // Defensive check: ensure we're initialized
     if (!self.protocolManager) {
         NSLog(@"AppMenuWidget: Protocol manager not initialized, cannot display menu for window %lu", windowId);
@@ -784,6 +857,11 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     
     [self loadMenu:menu forWindow:windowId];
     NSLog(@"AppMenuWidget: Imported %lu menu items for window %lu", (unsigned long)[[menu itemArray] count], windowId);
+
+    } // @try
+    @finally {
+        self.isInsideDisplayMenuForWindow = NO;
+    }
 }
 
 - (void)setupMenuViewWithMenu:(NSMenu *)menu
@@ -874,7 +952,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         for (NSMenuItem *mi in sysItems) {
             [titles addObject:[mi title]];
         }
-        NSLog(@"AppMenuWidget: System submenu initially has %lu items: %@", (unsigned long)[sysItems count], titles);
+        NSDebugLog(@"AppMenuWidget: System submenu initially has %lu items", (unsigned long)[sysItems count]);
 
         
         [systemItem setSubmenu:systemMenu];
@@ -927,7 +1005,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // DON'T override target/action for items that already have proper actions set
         for (NSUInteger i = 0; i < [items count]; i++) {
             NSMenuItem *item = [items objectAtIndex:i];
-            NSLog(@"AppMenuWidget: Setting up item %lu: '%@' (submenu: %@, target: %@, action: %@)", 
+            NSDebugLog(@"AppMenuWidget: Setting up item %lu: '%@' (submenu: %@, target: %@, action: %@)", 
                   i, [item title], [item hasSubmenu] ? @"YES" : @"NO",
                   [item target], NSStringFromSelector([item action]));
             
@@ -962,6 +1040,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         if (window) {
             [window enableFlushWindow];
             [window flushWindow];
+            // Ensure overlay views (e.g., RoundedCornersView) are redrawn after
+            // a menu update.  RoundedCornersView is a sibling of MenuBarView in
+            // the window's contentView, so AppMenuWidget's setNeedsDisplay does
+            // not propagate to it.  Marking the contentView ensures all siblings
+            // (including the rounded-corners overlay) are included in the next
+            // display pass.
+            [[window contentView] setNeedsDisplay:YES];
         }
     }
 }
@@ -998,7 +1083,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     [self cancelScheduledFallbackForWindow:windowId];
 
     // Get the currently active window using X11
-    Display *display = XOpenDisplay(NULL);
+    Display *display = [MenuUtils sharedDisplay];
     if (!display) {
         NSLog(@"AppMenuWidget: Cannot open X11 display for checking active window");
         return;
@@ -1030,13 +1115,18 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         NSLog(@"AppMenuWidget: Failed to get active window for newly registered window check due to X11 error");
     });
     
-    XCloseDisplay(display);
-    
     // If the newly registered window is the currently active window, display its menu immediately
     if (activeWindow == windowId) {
-        NSLog(@"AppMenuWidget: Newly registered window %lu is currently active, updating menu immediately", windowId);
+        NSLog(@"AppMenuWidget: Newly registered window %lu is currently active, forcing menu load", windowId);
         @try {
-            [self updateForActiveWindowId:activeWindow];
+            // Reset the optimisation guard so the new menu is loaded even if we
+            // previously attempted (and failed/skipped) this window.
+            self.lastLoadedMenuWindowId = 0;
+            self.currentWindowId = windowId;
+            // Call displayMenuForWindow: directly instead of updateForActiveWindowId:
+            // to bypass the 50ms rate-limit guard — this is a one-shot event triggered
+            // by a real menu registration and must not be throttled.
+            [self displayMenuForWindow:windowId isDifferentApp:YES];
         }
         @catch (NSException *exception) {
             NSLog(@"AppMenuWidget: Exception updating menu for newly registered window %lu: %@", windowId, exception);
@@ -1052,21 +1142,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (void)menuWillOpen:(NSMenu *)menu
 {
-    // Keep legacy logging for the main menu
-    NSLog(@"AppMenuWidget: ===== MAIN MENU WILL OPEN =====");
-    NSLog(@"AppMenuWidget: menuWillOpen called for main menu: '%@'", [menu title] ?: @"(no title)");
-    NSLog(@"AppMenuWidget: Main menu object: %@", menu);
-    NSLog(@"AppMenuWidget: Main menu has %lu items", (unsigned long)[[menu itemArray] count]);
-    NSLog(@"AppMenuWidget: Current window ID: %lu", self.currentWindowId);
-    NSLog(@"AppMenuWidget: Current application: %@", self.currentApplicationName ?: @"(none)");
-    // Log coordinates of the submenu itself
-    if (self.menuView) {
-        NSRect menuViewFrame = [self.menuView frame];
-        NSRect menuViewFrameInWindow = [self.menuView convertRect:menuViewFrame toView:nil];
-        NSPoint menuViewOriginScreen = [self.window convertBaseToScreen:menuViewFrameInWindow.origin];
-        NSLog(@"AppMenuWidget: Submenu view frame: %@, screen origin: %@", NSStringFromRect(menuViewFrame), NSStringFromPoint(menuViewOriginScreen));
-    }
-    NSLog(@"AppMenuWidget: ===== MAIN MENU WILL OPEN COMPLETE =====");
+    NSDebugLog(@"AppMenuWidget: menuWillOpen: '%@' (window %lu)", [menu title] ?: @"(no title)", self.currentWindowId);
 }
 
 // menuNeedsUpdate is called to allow menus to be repopulated before they open
@@ -1092,7 +1168,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     self.lastSystemMenuUpdateTime = now;
 
     self.isUpdatingSystemMenu = YES;
-    NSLog(@"AppMenuWidget: System submenu needs update - populating System Applications list");
+    NSDebugLog(@"AppMenuWidget: System submenu needs update - populating System Applications list");
 
     @try {
 
@@ -1177,7 +1253,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         }
     }
 
-    NSLog(@"AppMenuWidget: Found %lu application bundles after dedupe", (unsigned long)[appsByKey count]);
+    NSDebugLog(@"AppMenuWidget: Found %lu application bundles after dedupe", (unsigned long)[appsByKey count]);
 
     // Sort by display name
     NSArray *sortedApps = [[appsByKey allValues] sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
@@ -1225,140 +1301,66 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (void)menuDidClose:(NSMenu *)menu
 {
-    NSLog(@"AppMenuWidget: Main menu did close: '%@'", [menu title] ?: @"(no title)");
+    NSDebugLog(@"AppMenuWidget: Main menu did close: '%@'", [menu title] ?: @"(no title)");
 }
 
 - (void)menu:(NSMenu *)menu willHighlightItem:(NSMenuItem *)item
 {
-    if (item) {
-        NSLog(@"AppMenuWidget: ===== MAIN MENU ITEM HIGHLIGHT =====");
-        NSLog(@"AppMenuWidget: Main menu will highlight item: '%@' (has submenu: %@)", 
-              [item title], [item hasSubmenu] ? @"YES" : @"NO");
-        
-        if ([item hasSubmenu]) {
-            NSMenu *submenu = [item submenu];
-            id<NSMenuDelegate> submenuDelegate = [submenu delegate];
-            NSLog(@"AppMenuWidget: Item has submenu with %lu items", 
-                  (unsigned long)[[submenu itemArray] count]);
-            NSLog(@"AppMenuWidget: Submenu delegate: %@ (%@)", 
-                  submenuDelegate, submenuDelegate ? NSStringFromClass([submenuDelegate class]) : @"nil");
-            NSLog(@"AppMenuWidget: THIS IS WHERE ABOUTTOSHOW SHOULD BE TRIGGERED!");
-            NSLog(@"AppMenuWidget: If you don't see AboutToShow logging after this, the delegate isn't working");
-        }
-        NSLog(@"AppMenuWidget: ===== END MAIN MENU ITEM HIGHLIGHT =====");
-    } else {
-        NSLog(@"AppMenuWidget: Main menu will unhighlight current item");
-    }
+    (void)menu;
+    (void)item;
+    // Hot path — avoid any logging or work here
 }
 
 - (BOOL)menu:(NSMenu *)menu updateItem:(NSMenuItem *)item atIndex:(NSInteger)index shouldCancel:(BOOL)shouldCancel
 {
-    NSLog(@"AppMenuWidget: Main menu update item at index %ld: '%@' (shouldCancel: %@)", 
-          (long)index, [item title], shouldCancel ? @"YES" : @"NO");
-
+    (void)menu;
+    (void)item;
+    (void)index;
+    (void)shouldCancel;
     // Don't re-trigger menu population from inside updateItem — this causes tight loops.
-    // The menu system will call menuNeedsUpdate: at appropriate times; we also protect with
-    // `isUpdatingSystemMenu` inside menuNeedsUpdate to avoid re-entrancy.
-
-    return YES; // Allow the update
+    return YES;
 }
 
 - (NSInteger)numberOfItemsInMenu:(NSMenu *)menu
 {
-    NSInteger count = [[menu itemArray] count];
-    NSLog(@"AppMenuWidget: Main menu numberOfItemsInMenu called, returning: %ld", (long)count);
-    return count;
+    return [[menu itemArray] count];
 }
 
 - (NSRect)confinementRectForMenu:(NSMenu *)menu onScreen:(NSScreen *)screen
 {
-    // Return the full screen bounds - no confinement
-    NSRect screenFrame = [screen frame];
-    NSLog(@"AppMenuWidget: confinementRectForMenu called, returning full screen bounds");
-    return screenFrame;
+    (void)menu;
+    return [screen frame];
 }
 
 // MARK: - Mouse Event Tracking
 
 - (void)mouseEntered:(NSEvent *)theEvent
 {
-    NSLog(@"AppMenuWidget: ===== MOUSE ENTERED MENU AREA =====");
-    NSLog(@"AppMenuWidget: Mouse entered at location: %@", NSStringFromPoint([theEvent locationInWindow]));
+    NSDebugLog(@"AppMenuWidget: Mouse entered at location: %@", NSStringFromPoint([theEvent locationInWindow]));
     [super mouseEntered:theEvent];
 }
 
 - (void)mouseExited:(NSEvent *)theEvent
 {
-    NSLog(@"AppMenuWidget: ===== MOUSE EXITED MENU AREA =====");
-    NSLog(@"AppMenuWidget: Mouse exited at location: %@", NSStringFromPoint([theEvent locationInWindow]));
+    NSDebugLog(@"AppMenuWidget: Mouse exited at location: %@", NSStringFromPoint([theEvent locationInWindow]));
     [super mouseExited:theEvent];
 }
 
 - (void)mouseMoved:(NSEvent *)theEvent
 {
-    NSPoint location = [theEvent locationInWindow];
-    NSPoint localPoint = [self convertPoint:location fromView:nil];
-    NSLog(@"AppMenuWidget: Mouse moved to: %@ (local: %@)", NSStringFromPoint(location), NSStringFromPoint(localPoint));
-    
-    // Check if we're over a specific menu item
-    if (self.menuView) {
-        NSPoint menuViewPoint = [self.menuView convertPoint:location fromView:nil];
-        NSLog(@"AppMenuWidget: Menu view point: %@", NSStringFromPoint(menuViewPoint));
-        
-        // Try to determine which menu item we're over
-        if ([self.menuView respondsToSelector:@selector(itemAtPoint:)]) {
-            NSMenuItem *item = [(id)self.menuView performSelector:@selector(itemAtPoint:) withObject:[NSValue valueWithPoint:menuViewPoint]];
-            if (item) {
-                NSLog(@"AppMenuWidget: Mouse over menu item: '%@'", [item title]);
-            }
-        }
-    }
-    
     [super mouseMoved:theEvent];
 }
 
 - (void)mouseDown:(NSEvent *)theEvent
 {
-    NSLog(@"AppMenuWidget: ===== MOUSE DOWN IN MENU =====");
-    NSPoint location = [theEvent locationInWindow];
-    NSPoint localPoint = [self convertPoint:location fromView:nil];
-    NSLog(@"AppMenuWidget: Mouse down at: %@ (local: %@)", NSStringFromPoint(location), NSStringFromPoint(localPoint));
-    
     if (self.menuView && self.currentMenu) {
+        NSPoint location = [theEvent locationInWindow];
+        NSPoint localPoint = [self convertPoint:location fromView:nil];
         NSPoint menuViewPoint = [self.menuView convertPoint:location fromView:nil];
-        NSLog(@"AppMenuWidget: Menu view click point: %@", NSStringFromPoint(menuViewPoint));
+        NSDebugLog(@"AppMenuWidget: Mouse down at: %@ (local: %@, menuView: %@)",
+              NSStringFromPoint(location), NSStringFromPoint(localPoint), NSStringFromPoint(menuViewPoint));
         
-        // Check if we clicked on a menu item
-        NSArray *items = [self.currentMenu itemArray];
-        for (NSUInteger i = 0; i < [items count]; i++) {
-            NSMenuItem *item = [items objectAtIndex:i];
-            // Try to get the menu item's frame (this is a bit of a hack)
-            NSRect itemFrame = NSMakeRect(i * 80, 0, 80, [self bounds].size.height); // Approximate
-            if (NSPointInRect(localPoint, itemFrame)) {
-                NSLog(@"AppMenuWidget: Clicked on menu item %lu: '%@'", i, [item title]);
-                
-                if ([item hasSubmenu]) {
-                    NSLog(@"AppMenuWidget: Item has submenu - this should trigger AboutToShow!");
-                    NSMenu *submenu = [item submenu];
-                    id<NSMenuDelegate> delegate = [submenu delegate];
-                    NSLog(@"AppMenuWidget: Submenu delegate: %@", delegate);
-                    // Log coordinates of the menu item that opens the submenu
-                    NSRect itemFrameInView = [self convertRect:itemFrame toView:nil];
-                    NSPoint itemOriginScreen = [self.window convertBaseToScreen:itemFrameInView.origin];
-                    NSLog(@"AppMenuWidget: Menu item frame: %@, screen origin: %@", NSStringFromRect(itemFrame), NSStringFromPoint(itemOriginScreen));
-                    // Manually trigger menuWillOpen to test AboutToShow
-                    if (delegate && [delegate respondsToSelector:@selector(menuWillOpen:)]) {
-                        NSLog(@"AppMenuWidget: MANUALLY TRIGGERING menuWillOpen for testing...");
-                        [delegate menuWillOpen:submenu];
-                    }
-                }
-                break;
-            }
-        }
-        
-        // Let the menu view handle the click
         [self.menuView mouseDown:theEvent];
-        NSLog(@"AppMenuWidget: Forwarded mouse down to menu view");
     }
     
     [super mouseDown:theEvent];
@@ -1366,34 +1368,23 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (void)mouseUp:(NSEvent *)theEvent
 {
-    NSLog(@"AppMenuWidget: ===== MOUSE UP IN MENU =====");
-    NSLog(@"AppMenuWidget: Mouse up at: %@", NSStringFromPoint([theEvent locationInWindow]));
-    
     if (self.menuView) {
         [self.menuView mouseUp:theEvent];
-        NSLog(@"AppMenuWidget: Forwarded mouse up to menu view");
     }
-    
 }
 
 // MARK: - Debug Methods
 
 - (void)menuItemClicked:(NSMenuItem *)sender
 {
-    NSLog(@"AppMenuWidget: ===== MENU ITEM CLICKED =====");
-    NSLog(@"AppMenuWidget: Clicked menu item: '%@'", [sender title]);
-    NSLog(@"AppMenuWidget: Item tag: %ld", (long)[sender tag]);
-    NSLog(@"AppMenuWidget: Item has submenu: %@", [sender hasSubmenu] ? @"YES" : @"NO");
+    NSDebugLog(@"AppMenuWidget: Clicked menu item: '%@' tag:%ld", [sender title], (long)[sender tag]);
     
     // If this item has representedObject data (from protocol handler), try to trigger the action
     if ([sender representedObject]) {
-        NSLog(@"AppMenuWidget: Item has representedObject: %@", [sender representedObject]);
-        
         // If the item's original target is set, call its action
         if ([sender target]) {
             SEL action = [sender action];
             if (action && [sender.target respondsToSelector:action]) {
-                NSLog(@"AppMenuWidget: Forwarding action %@ to target: %@", NSStringFromSelector(action), [sender target]);
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
                 [sender.target performSelector:action withObject:sender];
@@ -1403,8 +1394,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         }
     }
     
-    NSLog(@"AppMenuWidget: No action handler found for menu item: '%@'", [sender title]);
-    NSLog(@"AppMenuWidget: ===== END MENU ITEM CLICKED =====");
+    NSDebugLog(@"AppMenuWidget: No action handler found for menu item: '%@'", [sender title]);
 }
 
 - (void)debugLogCurrentMenuState
@@ -1556,7 +1546,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (void)sendAltF4ToWindow:(unsigned long)windowId
 {
-    Display *display = XOpenDisplay(NULL);
+    Display *display = [MenuUtils sharedDisplay];
     if (!display) {
         NSLog(@"AppMenuWidget: Failed to open X11 display for window close");
         return;
@@ -1601,7 +1591,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     NSLog(@"AppMenuWidget: Sent Alt+F4 key event to window %lu", windowId);
     
     XFlush(display);
-    XCloseDisplay(display);
 }
 
 // preWarmCacheForApplication removed
@@ -1621,6 +1610,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // Clear the waiting flag - we have a new menu
     self.isWaitingForMenu = NO;
     self.currentMenu = menu;
+    self.lastLoadedMenuWindowId = windowId;  // Track which window we loaded for (used by same-window guard)
     self.needsRedraw = YES;  // Mark that we need to redraw with new menu
     
     NSLog(@"AppMenuWidget: ===== MENU LOADED, SETTING UP VIEW =====");
@@ -1630,7 +1620,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     NSArray *items = [menu itemArray];
     for (NSUInteger i = 0; i < [items count]; i++) {
         NSMenuItem *item = [items objectAtIndex:i];
-        NSLog(@"AppMenuWidget: Top-level item %lu: '%@' (has submenu: %@, submenu items: %lu)", 
+        NSDebugLog(@"AppMenuWidget: Top-level item %lu: '%@' (has submenu: %@, submenu items: %lu)", 
               i, [item title], [item hasSubmenu] ? @"YES" : @"NO",
               [item hasSubmenu] ? (unsigned long)[[[item submenu] itemArray] count] : 0);
     }
@@ -1861,7 +1851,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 - (void)closeActiveWindow:(NSMenuItem *)sender
 {
     // Get the currently active window using X11
-    Display *display = XOpenDisplay(NULL);
+    Display *display = [MenuUtils sharedDisplay];
     if (!display) {
         NSLog(@"AppMenuWidget: Cannot open X11 display for active window detection");
         return;
@@ -1892,8 +1882,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         }
         NSLog(@"AppMenuWidget: Failed to get active window for close operation due to X11 error");
     });
-    
-    XCloseDisplay(display);
     
     if (activeWindow == 0) {
         NSLog(@"AppMenuWidget: Could not determine active window for Alt+W close");
@@ -1945,7 +1933,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         return NO;
     }
     
-    Display *display = XOpenDisplay(NULL);
+    Display *display = [MenuUtils sharedDisplay];
     if (!display) {
         NSLog(@"AppMenuWidget: Cannot open X11 display for window validation");
         return NO;
@@ -1969,7 +1957,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         isValid = NO;
     });
     
-    XCloseDisplay(display);
     return isValid;
 }
 

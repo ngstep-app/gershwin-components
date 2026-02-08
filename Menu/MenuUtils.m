@@ -9,6 +9,7 @@
 #import <X11/Xlib.h>
 #import <X11/Xutil.h>
 #import <X11/Xatom.h>
+#import <dispatch/dispatch.h>
 
 @interface MenuUtils (Private)
 + (NSString *)_getApplicationNameForWindow:(unsigned long)windowId display:(Display *)display;
@@ -18,12 +19,16 @@
 @implementation MenuUtils
 
 static Display *_sharedDisplay = NULL;
+static dispatch_once_t _sharedDisplayOnce;
 
 + (Display *)sharedDisplay
 {
-    if (!_sharedDisplay) {
+    dispatch_once(&_sharedDisplayOnce, ^{
         _sharedDisplay = XOpenDisplay(NULL);
-    }
+        if (!_sharedDisplay) {
+            NSLog(@"MenuUtils: Failed to open shared X11 display");
+        }
+    });
     return _sharedDisplay;
 }
 
@@ -236,7 +241,12 @@ static Display *_sharedDisplay = NULL;
             NSLog(@"MenuUtils: Window 0x%lx is unmapped (state %d)", windowId, attrs.map_state);
         }
     } else {
-        NSLog(@"MenuUtils: Failed to get attributes for window 0x%lx", windowId);
+        // XGetWindowAttributes failure does NOT mean the window is unmapped.
+        // It can fail due to X11 thread-safety issues with shared Display connections,
+        // or transient server states. Assume mapped (safe default) and let the caller
+        // use isWindowValid for definitive existence checks.
+        NSDebugLog(@"MenuUtils: XGetWindowAttributes failed for window 0x%lx (assuming mapped)", windowId);
+        mapped = YES;
     }
     
     [self closeDisplay:display];

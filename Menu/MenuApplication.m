@@ -408,6 +408,16 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
         }
     } else if (eventType == NSMouseMoved) {
         // Suppress frequent event logging
+    } else if (eventType == NSLeftMouseDragged ||
+               eventType == NSRightMouseDragged ||
+               eventType == NSMouseEntered ||
+               eventType == NSMouseExited ||
+               eventType == NSLeftMouseUp ||
+               eventType == NSRightMouseUp ||
+               eventType == NSScrollWheel ||
+               eventType == NSOtherMouseUp ||
+               eventType == NSOtherMouseDragged) {
+        // Suppress all high-frequency mouse tracking events to prevent log I/O tight loop
     } else {
         NSLog(@"MenuApplication: Processing event type %ld", (long)eventType);
     }

@@ -31,6 +31,7 @@
         self.windowMenuPaths = [[NSMutableDictionary alloc] init];
         self.menuCache = [[NSMutableDictionary alloc] init];
         self.loadRetries = [[NSMutableDictionary alloc] init];
+        self.failedWindows = [[NSMutableDictionary alloc] init];
         self.processingMessages = NO;
         
         // Don't set up the cleanup timer during init - do it later when the run loop is ready
@@ -127,6 +128,19 @@
 - (BOOL)hasMenuForWindow:(unsigned long)windowId
 {
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
+
+    // TIGHT-LOOP GUARD: Skip windows whose DBus objects have been confirmed missing.
+    // Entries expire after 30 seconds to allow eventual retry.
+    NSDate *failTime = [self.failedWindows objectForKey:windowKey];
+    if (failTime) {
+        NSTimeInterval age = -[failTime timeIntervalSinceNow];
+        if (age < 30.0) {
+            return NO; // Still within suppression window
+        }
+        // Expired — allow retry
+        [self.failedWindows removeObjectForKey:windowKey];
+    }
+
     if ([self.registeredWindows objectForKey:windowKey] != nil) {
         return YES;
     }
@@ -158,6 +172,16 @@
     }
     
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
+
+    // TIGHT-LOOP GUARD: Skip windows whose DBus objects have been confirmed missing.
+    NSDate *failTime = [self.failedWindows objectForKey:windowKey];
+    if (failTime) {
+        NSTimeInterval age = -[failTime timeIntervalSinceNow];
+        if (age < 30.0) {
+            return nil; // Still within suppression window
+        }
+        [self.failedWindows removeObjectForKey:windowKey];
+    }
     
     NSDebugLog(@"DBusMenuImporter: Looking for menu for window %lu", windowId);
     
@@ -220,6 +244,11 @@
         // Unregister this window since its DBus object is gone (likely the app closed the window)
         NSDebugLog(@"DBusMenuImporter: Unregistering window %lu due to failed menu load", windowId);
         [self unregisterWindow:windowId];
+        // TIGHT-LOOP GUARD: Cache this failure to prevent hasMenuForWindow from
+        // immediately re-discovering X11 properties and re-registering the window.
+        NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
+        [self.failedWindows setObject:[NSDate date] forKey:windowKey];
+        NSLog(@"DBusMenuImporter: Cached failure for window %lu (suppressed for 30s)", windowId);
         // For registered windows that fail to load, return nil instead of fallback
         // This indicates the application should handle its own menus
         return nil;
@@ -405,6 +434,9 @@
 {
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
     
+    // Clear any previous failure cache — the app has explicitly re-registered
+    [self.failedWindows removeObjectForKey:windowKey];
+
     // Protect dictionary access with lock to prevent races during concurrent access
     @synchronized(_windowRegistryLock) {
         [self.registeredWindows setObject:serviceName forKey:windowKey];
@@ -522,6 +554,19 @@
     // and remove entries for windows that have been closed
     NSDebugLog(@"DBusMenuImporter: Cleanup timer - %lu windows registered", 
           (unsigned long)[self.registeredWindows count]);
+
+    // Expire old failure cache entries (> 30s)
+    NSMutableArray *expiredKeys = [NSMutableArray array];
+    for (NSNumber *key in self.failedWindows) {
+        NSDate *failTime = [self.failedWindows objectForKey:key];
+        if (-[failTime timeIntervalSinceNow] > 30.0) {
+            [expiredKeys addObject:key];
+        }
+    }
+    if ([expiredKeys count] > 0) {
+        [self.failedWindows removeObjectsForKeys:expiredKeys];
+        NSDebugLog(@"DBusMenuImporter: Expired %lu failure cache entries", (unsigned long)[expiredKeys count]);
+    }
 }
 
 // DBus method handlers
@@ -771,6 +816,13 @@
 
     if (!svc || !path) {
         NSDebugLog(@"DBusMenuImporter: Retry for window %@ aborted - registration missing", windowKey);
+        [self.loadRetries removeObjectForKey:windowKey];
+        return;
+    }
+
+    // TIGHT-LOOP GUARD: Don't retry if this window is in the failure cache
+    if ([self.failedWindows objectForKey:windowKey]) {
+        NSDebugLog(@"DBusMenuImporter: Retry for window %@ aborted - in failure cache", windowKey);
         [self.loadRetries removeObjectForKey:windowKey];
         return;
     }

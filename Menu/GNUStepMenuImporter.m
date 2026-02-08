@@ -351,11 +351,9 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
     }
 
     if (found == 0) {
-        NSDebugLog(@"GNUStepMenuImporter: No GNUstep menu clients discovered during scan. Will retry later if needed.");
-        // Optionally, schedule another scan later to catch late-registering clients
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self scanForExistingMenuServices];
-        });
+        NSDebugLog(@"GNUStepMenuImporter: No GNUstep menu clients discovered during scan.");
+        // Do NOT reschedule automatically. Scans are triggered by window-change events
+        // and registration retries, so there is no need for an unbounded polling loop.
     } else {
         NSDebugLog(@"GNUStepMenuImporter: Requested menu updates from %d clients", found);
     }

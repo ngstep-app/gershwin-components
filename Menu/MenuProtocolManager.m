@@ -124,7 +124,12 @@
         MenuProtocolType protocolType = [protocolTypeNum integerValue];
         id<MenuProtocolHandler> handler = [self handlerForType:protocolType];
         if (handler) {
-            return [handler hasMenuForWindow:windowId];
+            BOOL has = [handler hasMenuForWindow:windowId];
+            if (!has) {
+                // Cached protocol no longer claims this window — clear stale mapping
+                [self.windowToProtocolMap removeObjectForKey:windowKey];
+            }
+            return has;
         }
     }
     
@@ -161,7 +166,15 @@
                 
                 NSLog(@"MenuProtocolManager: Window %lu handled by protocol: %@ (Type %lu) [Cached]", windowId, protoName, (unsigned long)protocolType);
 
-                return [handler getMenuForWindow:windowId];
+                NSMenu *menu = [handler getMenuForWindow:windowId];
+                if (menu) {
+                    return menu;
+                }
+                // Cached protocol returned nil — remove stale mapping so other protocols
+                // can be tried on the next call and we don't keep hitting a broken handler.
+                NSLog(@"MenuProtocolManager: Cached protocol %@ returned nil for window %lu — clearing stale mapping", protoName, windowId);
+                [self.windowToProtocolMap removeObjectForKey:windowKey];
+                return nil;
             }
         }
         

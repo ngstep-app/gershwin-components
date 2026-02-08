@@ -532,6 +532,42 @@ typedef struct DBusConnection DBusConnectionStruct;
             NSLog(@"DBusConnection: Invalid DBus type encountered");
             return nil;
             
+        case DBUS_TYPE_BYTE: {
+            unsigned char val;
+            dbus_message_iter_get_basic(iter, &val);
+            return [NSNumber numberWithUnsignedChar:val];
+        }
+        
+        case DBUS_TYPE_INT16: {
+            dbus_int16_t val;
+            dbus_message_iter_get_basic(iter, &val);
+            return [NSNumber numberWithShort:val];
+        }
+        
+        case DBUS_TYPE_UINT16: {
+            dbus_uint16_t val;
+            dbus_message_iter_get_basic(iter, &val);
+            return [NSNumber numberWithUnsignedShort:val];
+        }
+        
+        case DBUS_TYPE_INT64: {
+            dbus_int64_t val;
+            dbus_message_iter_get_basic(iter, &val);
+            return [NSNumber numberWithLongLong:val];
+        }
+        
+        case DBUS_TYPE_UINT64: {
+            dbus_uint64_t val;
+            dbus_message_iter_get_basic(iter, &val);
+            return [NSNumber numberWithUnsignedLongLong:val];
+        }
+        
+        case DBUS_TYPE_UNIX_FD: {
+            int fd;
+            dbus_message_iter_get_basic(iter, &fd);
+            return [NSNumber numberWithInt:fd];
+        }
+        
         case DBUS_TYPE_STRING: {
             char *str;
             dbus_message_iter_get_basic(iter, &str);
@@ -672,7 +708,7 @@ typedef struct DBusConnection DBusConnectionStruct;
         }
         
         default:
-            NSLog(@"DBusConnection: Unsupported DBus type: %c (%d)", (char)argType, argType);
+            NSDebugLog(@"DBusConnection: Unsupported DBus type: %c (%d)", (char)argType, argType);
             return nil;
     }
 }

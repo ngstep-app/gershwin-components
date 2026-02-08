@@ -35,6 +35,14 @@
 // Timestamp (CFAbsoluteTime) of the last system menu population — used to throttle frequent updates
 @property (nonatomic, assign) NSTimeInterval lastSystemMenuUpdateTime;
 
+// Tight-loop prevention guards
+@property (nonatomic, assign) BOOL isInsideDisplayMenuForWindow;   // re-entrance guard
+@property (nonatomic, assign) BOOL isInsideDesktopFallback;        // re-entrance guard for desktop fallback
+@property (nonatomic, assign) NSTimeInterval lastUpdateForActiveWindowTime; // rate limit updateForActiveWindowId
+@property (nonatomic, assign) unsigned long lastUpdateForActiveWindowId;    // dedup repeated calls
+@property (nonatomic, assign) NSUInteger noMenuGracePeriodFireCount;        // prevent infinite grace period retries
+@property (nonatomic, assign) unsigned long lastLoadedMenuWindowId;          // tracks which window we last loaded a menu for
+
 - (void)updateForActiveWindow;
 - (void)updateForActiveWindowId:(unsigned long)windowId;
 - (void)clearMenu;

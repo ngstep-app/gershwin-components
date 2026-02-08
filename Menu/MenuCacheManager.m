@@ -113,8 +113,8 @@
 {
     // Caching is disabled - always return nil so menus are loaded fresh on every change
     (void)expectedServiceName;
+    (void)windowId;
     self.cacheMisses++;
-    NSLog(@"MenuCacheManager: CACHING DISABLED - returning nil for window %lu", windowId);
     return nil;
 }
 
@@ -125,8 +125,7 @@
   applicationName:(NSString *)applicationName
 {
     // Caching disabled - do not store any menus
-    (void)menu; (void)serviceName; (void)objectPath; (void)applicationName;
-    NSLog(@"MenuCacheManager: CACHING DISABLED - not caching menu for window %lu", windowId);
+    (void)menu; (void)windowId; (void)serviceName; (void)objectPath; (void)applicationName;
     return;
 }
 

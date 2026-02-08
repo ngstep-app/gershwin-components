@@ -180,6 +180,8 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     if (menu) {
         NSDebugLog(@"GTKMenuImporter: Successfully loaded GTK menu with %lu items", 
               (unsigned long)[[menu itemArray] count]);
+        // Cache the successfully loaded menu to avoid expensive re-parsing on window re-focus
+        [_menuCache setObject:menu forKey:windowKey];
     } else {
         NSDebugLog(@"GTKMenuImporter: Failed to load GTK menu for window %lu", windowId);
     }
@@ -298,7 +300,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
 {
     NSDebugLog(@"GTKMenuImporter: Performing immediate scan for window %lu", windowId);
     
-    Display *display = XOpenDisplay(NULL);
+    Display *display = [MenuUtils sharedDisplay];
     if (!display) {
         NSDebugLog(@"GTKMenuImporter: Cannot open X11 display for immediate window scan");
         return;
@@ -321,7 +323,6 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
              lastLogWindow = windowId;
         }
         XSetErrorHandler(oldHandler);
-        XCloseDisplay(display);
         return;
     }
     
@@ -390,8 +391,6 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     
     // Restore error handler
     XSetErrorHandler(oldHandler);
-    
-    XCloseDisplay(display);
 }
 
 - (void)scanForExistingMenuServices
@@ -409,7 +408,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     // GTK applications set X11 properties when they export menus
     // Use a more comprehensive scanning approach
     NSDebugLog(@"GTKMenuImporter: About to open X11 display");
-    Display *display = XOpenDisplay(NULL);
+    Display *display = [MenuUtils sharedDisplay];
     if (!display) {
         if (gtkScans <= 2) {
             NSDebugLog(@"GTKMenuImporter: Cannot open X11 display for scanning");
@@ -630,13 +629,8 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
         }
     }
     
-    NSDebugLog(@"GTKMenuImporter: About to close X11 display");
-    
-    // Restore error handler before closing
+    // Restore error handler
     XSetErrorHandler(oldHandler);
-    
-    XCloseDisplay(display);
-    NSDebugLog(@"GTKMenuImporter: X11 display closed");
     
     // Only log when we find new windows or on initial scans
     if (gtkScans <= 3 || newWindows > 0) {

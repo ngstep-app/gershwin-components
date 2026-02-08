@@ -153,10 +153,16 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
 {
     if (!_display) return;
     
-    // Process all pending X11 events
-    while (XPending(_display) > 0) {
+    // TIGHT-LOOP GUARD: Cap the number of events processed per invocation
+    // to prevent unbounded spinning when events arrive faster than processing
+    static const int MAX_EVENTS_PER_BATCH = 50;
+    int eventsProcessed = 0;
+    
+    // Process pending X11 events (up to MAX_EVENTS_PER_BATCH)
+    while (XPending(_display) > 0 && eventsProcessed < MAX_EVENTS_PER_BATCH) {
         XEvent event;
         XNextEvent(_display, &event);
+        eventsProcessed++;
         
         if (event.type == PropertyNotify && 
             event.xproperty.window == _rootWindow &&
@@ -171,6 +177,11 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
                 [self checkActiveWindow];
             }
         }
+    }
+    
+    if (eventsProcessed >= MAX_EVENTS_PER_BATCH && XPending(_display) > 0) {
+        NSLog(@"WindowMonitor: Hit event batch limit (%d), %d events still pending - will process on next fd-ready",
+              MAX_EVENTS_PER_BATCH, XPending(_display));
     }
 }
 

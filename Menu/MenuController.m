@@ -53,6 +53,13 @@
 @implementation MenuController
 
 // DBus file descriptor monitoring using NSFileHandle
+// Minimum interval (seconds) between consecutive DBus fd notifications to prevent CPU spin
+static NSTimeInterval _lastDbusNotificationTime = 0;
+static NSUInteger _rapidDbusNotificationCount = 0;
+#define DBUS_MIN_NOTIFICATION_INTERVAL 0.005   // 5ms minimum gap
+#define DBUS_RAPID_FIRE_THRESHOLD 100          // number of rapid fires before back-off
+#define DBUS_BACKOFF_INTERVAL 0.1              // 100ms cooldown after rapid fire
+
 - (void)dbusFileDescriptorReady:(NSNotification *)notification {
     // Always handle DBus traffic on the main thread to avoid races with UI work
     if (![NSThread isMainThread]) {
@@ -62,7 +69,31 @@
         return;
     }
 
-    NSLog(@"MenuController: DBus file descriptor reported data available");
+    // TIGHT-LOOP GUARD: Throttle rapid fd-ready notifications
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    NSTimeInterval elapsed = now - _lastDbusNotificationTime;
+    if (elapsed < DBUS_MIN_NOTIFICATION_INTERVAL) {
+        _rapidDbusNotificationCount++;
+        if (_rapidDbusNotificationCount > DBUS_RAPID_FIRE_THRESHOLD) {
+            // Too many rapid fires - back off with a delayed re-arm instead of immediate
+            NSLog(@"MenuController: DBus fd rapid-fire detected (%lu in %.3fs) - backing off %.0fms",
+                  (unsigned long)_rapidDbusNotificationCount, elapsed, DBUS_BACKOFF_INTERVAL * 1000);
+            _rapidDbusNotificationCount = 0;
+            if (self.dbusFileHandle) {
+                [NSTimer scheduledTimerWithTimeInterval:DBUS_BACKOFF_INTERVAL
+                                                target:self
+                                              selector:@selector(rearmDbusFileHandle:)
+                                              userInfo:nil
+                                               repeats:NO];
+            }
+            return;
+        }
+    } else {
+        _rapidDbusNotificationCount = 0;
+    }
+    _lastDbusNotificationTime = now;
+
+    NSDebugLog(@"MenuController: DBus file descriptor reported data available");
     
     // Lock the menu window from redrawing during DBus processing to prevent flashing
     [self.menuBar disableFlushWindow];
@@ -87,6 +118,28 @@
         }
         @catch (NSException *exception) {
             NSLog(@"MenuController: Exception re-arming DBus file handle: %@", exception);
+            self.dbusFileHandle = nil;
+        }
+    }
+}
+
+- (void)rearmDbusFileHandle:(NSTimer *)timer
+{
+    (void)timer;
+    if (self.dbusFileHandle) {
+        // Process any accumulated messages first
+        @try {
+            [[MenuProtocolManager sharedManager] processDBusMessages];
+        }
+        @catch (NSException *exception) {
+            NSLog(@"MenuController: Exception processing DBus messages during re-arm: %@", exception);
+        }
+        // Now re-arm
+        @try {
+            [self.dbusFileHandle waitForDataInBackgroundAndNotify];
+        }
+        @catch (NSException *exception) {
+            NSLog(@"MenuController: Exception re-arming DBus file handle after backoff: %@", exception);
             self.dbusFileHandle = nil;
         }
     }
@@ -518,14 +571,17 @@
             NSLog(@"MenuController: Failed to get DBus file descriptor");
         }
         
-        // Set up timer-based D-Bus polling as a reliable fallback
-        // This ensures D-Bus messages are processed even if file descriptor monitoring fails
-        self.dbusPollingTimer = [NSTimer scheduledTimerWithTimeInterval:0.05 // Poll every 50ms
-                                                                  target:self
-                                                                selector:@selector(pollDBusMessages:)
-                                                                userInfo:nil
-                                                                 repeats:YES];
-        NSLog(@"MenuController: D-Bus polling timer set up (50ms interval)");
+        // Set up timer-based D-Bus polling ONLY as fallback when fd monitoring is unavailable
+        if (!self.dbusFileHandle) {
+            self.dbusPollingTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 // 500ms fallback
+                                                                      target:self
+                                                                    selector:@selector(pollDBusMessages:)
+                                                                    userInfo:nil
+                                                                     repeats:YES];
+            NSLog(@"MenuController: D-Bus polling timer set up as fallback (500ms interval)");
+        } else {
+            NSLog(@"MenuController: Using fd-based monitoring, no polling timer needed");
+        }
     }
     
     // Set the app menu widget reference
@@ -588,8 +644,8 @@
     self.lastClearedTime = 0;
 
     // Start watchdog timer to validate active window and clear menus for closed windows
-    // Use a less aggressive interval to reduce spurious exception noise when underlying queries misbehave
-self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
+    // Use a conservative interval since event-driven WindowMonitor handles real-time changes
+    self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
                                                                   target:self
                                                                 selector:@selector(windowValidationTick:)
                                                                 userInfo:nil
@@ -600,6 +656,17 @@ self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
 
 - (void)activeWindowChangedNotification:(NSNotification *)notification
 {
+    // TIGHT-LOOP GUARD: Throttle rapid window-change notifications to max once per 30ms
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    if ((now - self.lastProcessedTime) < 0.03) {
+        NSNumber *windowIdNum = notification.userInfo[@"windowId"];
+        unsigned long windowId = windowIdNum ? [windowIdNum unsignedLongValue] : 0;
+        // Allow through only if the window ID actually changed
+        if (windowId == self.lastProcessedWindowId) {
+            return; // Duplicate notification within 30ms - skip
+        }
+    }
+
     NSNumber *lostIdNum = notification.userInfo[@"lostWindowId"];
     if (lostIdNum) {
         unsigned long lostId = [lostIdNum unsignedLongValue];
@@ -609,14 +676,13 @@ self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
         }
     }
 
-    // Check if we are currently showing a menu for a window that is no longer mapped.
-    // This handles the case where a window closes but the active window property hasn't updated yet.
-    if (self.appMenuWidget && self.appMenuWidget.currentWindowId != 0) {
-        if (![MenuUtils isWindowMapped:self.appMenuWidget.currentWindowId]) {
-            NSLog(@"MenuController: Currently shown window 0x%lx is no longer mapped - clearing menu", self.appMenuWidget.currentWindowId);
-            [self.appMenuWidget clearMenuAndHideView];
-        }
-    }
+    // NOTE: We no longer check isWindowMapped here for the currently shown window.
+    // The windowValidationTick watchdog (every 2s) handles stale-window cleanup with
+    // better logic (preserves menu if window IS the active window).
+    // Doing it here caused a tight loop: XGetWindowAttributes failure on a shared
+    // X11 Display (thread-safety issue) was misinterpreted as "unmapped", which cleared
+    // the menu, which triggered a full re-import on the next notification.
+    // See windowValidationTick: for the proper stale-window check.
 
     NSNumber *windowIdNum = notification.userInfo[@"windowId"];
     unsigned long windowId = windowIdNum ? [windowIdNum unsignedLongValue] : 0;
@@ -701,7 +767,7 @@ self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
         // 1. Window is shown but we have no menu for it, OR
         // 2. Active window is 0 (no window focused)
         if (![MenuUtils isWindowValid:shownWindow] || ![MenuUtils isWindowMapped:shownWindow]) {
-            NSLog(@"MenuController: Watchdog detected invalid/closed window 0x%lx - clearing menu", shownWindow);
+            NSDebugLog(@"MenuController: Watchdog detected invalid/closed window 0x%lx - clearing menu", shownWindow);
             [self.appMenuWidget clearMenuAndHideView];
             self.lastClearedWindowId = shownWindow;
             self.lastClearedTime = now;
@@ -730,7 +796,7 @@ self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
     
     // Set X11 root window properties to announce that we support global menus
     // This is essential for applications to know they should export their menus
-    Display *display = XOpenDisplay(NULL);
+    Display *display = [MenuUtils sharedDisplay];
     if (!display) {
         NSLog(@"MenuController: Cannot open X11 display to announce global menu support");
         return;
@@ -788,7 +854,6 @@ self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
     NSLog(@"MenuController: Set _UNITY_SUPPORTED property");
     
     XSync(display, False);
-    XCloseDisplay(display);
     
     NSLog(@"MenuController: Global menu support announcement complete");
 }
@@ -809,7 +874,7 @@ self.windowValidationTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
 
 - (void)activeWindowChanged:(unsigned long)windowId
 {
-    NSLog(@"MenuController: Active window changed to 0x%lx", windowId);
+    NSDebugLog(@"MenuController: Active window changed to 0x%lx", windowId);
     
     // Update app menu widget on main thread
     if (self.appMenuWidget) {
