@@ -575,15 +575,11 @@
         // Insert localized steps at the beginning
         NSMutableArray *allSteps = [[NSMutableArray alloc] initWithArray:localizedSteps];
         [allSteps addObjectsFromArray:_steps];
-        [localizedSteps release];
         
-        // Replace the original steps array
-        [_steps release];
         _steps = allSteps;
         
         NSLog(@"[GSAssistantBuilder] Total steps after adding localized content: %lu", (unsigned long)_steps.count);
     } else {
-        [localizedSteps release];
         NSLog(@"[GSAssistantBuilder] No localized content found, proceeding with existing steps");
     }
     
