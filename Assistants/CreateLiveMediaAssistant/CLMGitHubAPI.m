@@ -16,30 +16,11 @@
 
 @synthesize tagName, name, body, htmlURL, updatedAt, prerelease, assets;
 
-- (void)dealloc
-{
-    [tagName release];
-    [name release];
-    [body release];
-    [htmlURL release];
-    [updatedAt release];
-    [assets release];
-    [super dealloc];
-}
-
 @end
 
 @implementation CLMAsset
 
 @synthesize name, browserDownloadURL, size, updatedAt;
-
-- (void)dealloc
-{
-    [name release];
-    [browserDownloadURL release];
-    [updatedAt release];
-    [super dealloc];
-}
 
 @end
 
@@ -113,7 +94,6 @@
             [formatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss'Z'"];
             [formatter setTimeZone:[NSTimeZone timeZoneWithName:@"UTC"]];
             release.updatedAt = [formatter dateFromString:dateString];
-            [formatter release];
         }
         
         // Parse assets
@@ -136,11 +116,9 @@
                     [formatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss'Z'"];
                     [formatter setTimeZone:[NSTimeZone timeZoneWithName:@"UTC"]];
                     asset.updatedAt = [formatter dateFromString:assetDateString];
-                    [formatter release];
                 }
                 
                 [assetObjects addObject:asset];
-                [asset release];
             }
             
             release.assets = assetObjects;
@@ -150,8 +128,6 @@
         if (!release.prerelease || includePrereleases) {
             [releases addObject:release];
         }
-        
-        [release release];
     }
     
     NSLog(@"CLMGitHubAPI: Fetched %lu releases", (unsigned long)[releases count]);
