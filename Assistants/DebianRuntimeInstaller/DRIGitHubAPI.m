@@ -36,11 +36,14 @@
     return self;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-missing-super-calls"
 - (void)dealloc
 {
     NSLog(@"DRIGitHubAPI: dealloc");
     [self cancelCurrentRequest];
 }
+#pragma clang diagnostic pop
 
 - (void)fetchReleasesIncludingPrereleases:(BOOL)includePrereleases
 {

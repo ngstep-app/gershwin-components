@@ -29,7 +29,7 @@ BhyveAssistant_GUI_LIBS += -lgnustep-gui -lgnustep-base -lvncclient
 # Compiler and linker flags - embed framework in bundle with proper FreeBSD rpath
 BhyveAssistant_CPPFLAGS += -Wall -Wextra -fobjc-arc -Werror -O2 -I$(shell pwd)/../AssistantFramework/GSAssistantFramework.framework/Versions/1/Headers -I/usr/local/include
 BhyveAssistant_LDFLAGS += -L$(shell pwd)/../AssistantFramework/GSAssistantFramework.framework/Versions/1 -lGSAssistantFramework -Wl,-rpath,'$$ORIGIN/Frameworks/GSAssistantFramework.framework/Versions/1' -L/usr/local/lib
-
+BhyveAssistant_LDFLAGS += -ldispatch
 include $(GNUSTEP_MAKEFILES)/application.make
 
 # Copy framework into app bundle after building

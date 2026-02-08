@@ -37,6 +37,7 @@ DebianRuntimeInstaller_GUI_LIBS += -lgnustep-gui -lgnustep-base
 # Compiler and linker flags - embed framework in bundle
 DebianRuntimeInstaller_CPPFLAGS += -Wall -Wextra -I$(shell pwd)/../AssistantFramework/GSAssistantFramework.framework/Versions/1/Headers
 DebianRuntimeInstaller_LDFLAGS += -L$(shell pwd)/../AssistantFramework/GSAssistantFramework.framework/Versions/1 -lGSAssistantFramework -Wl,-rpath,'$$ORIGIN/Frameworks/GSAssistantFramework.framework/Versions/1'
+DebianRuntimeInstaller_LDFLAGS += -ldispatch
 
 include $(GNUSTEP_MAKEFILES)/application.make
 

@@ -89,7 +89,7 @@
 // Callback for password authentication
 static char *VNCGetPassword(rfbClient *client)
 {
-    VNCClient *vncClient = (VNCClient *)rfbClientGetClientData(client, NULL);
+    VNCClient *vncClient = (__bridge VNCClient *)rfbClientGetClientData(client, NULL);
     if (vncClient && vncClient->_password) {
         const char *password = [vncClient->_password UTF8String];
         return strdup(password);
@@ -100,7 +100,7 @@ static char *VNCGetPassword(rfbClient *client)
 // Callback for framebuffer size changes
 static rfbBool VNCMallocFrameBuffer(rfbClient *client)
 {
-    VNCClient *vncClient = (VNCClient *)rfbClientGetClientData(client, NULL);
+    VNCClient *vncClient = (__bridge VNCClient *)rfbClientGetClientData(client, NULL);
     if (!vncClient) {
         return FALSE;
     }
@@ -155,7 +155,7 @@ static rfbBool VNCMallocFrameBuffer(rfbClient *client)
 // Callback for framebuffer updates
 static void VNCGotFrameBufferUpdate(rfbClient *client, int x, int y, int w, int h)
 {
-    VNCClient *vncClient = (VNCClient *)rfbClientGetClientData(client, NULL);
+    VNCClient *vncClient = (__bridge VNCClient *)rfbClientGetClientData(client, NULL);
     if (!vncClient) {
         return;
     }
@@ -299,7 +299,7 @@ static void VNCErr(const char *format, ...)
     rfbClient *client = (rfbClient *)_rfbClient;
     
     // Set up client data and callbacks
-    rfbClientSetClientData(client, NULL, self);
+    rfbClientSetClientData(client, NULL, (__bridge void *)self);
     client->GetPassword = VNCGetPassword;
     client->MallocFrameBuffer = VNCMallocFrameBuffer;
     client->GotFrameBufferUpdate = VNCGotFrameBufferUpdate;

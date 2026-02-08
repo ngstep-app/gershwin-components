@@ -36,6 +36,7 @@ GSAssistantFramework_FRAMEWORKS_DEPEND_UPON = AppKit Foundation
 
 # Compiler and linker flags
 GSAssistantFramework_CPPFLAGS += -Wall -Wextra -fobjc-arc -Werror -O2
+GSAssistantFramework_LDFLAGS += -ldispatch
 
 # Installation directory
 FRAMEWORK_INSTALL_DIR = $(GNUSTEP_SYSTEM_LIBRARY)/Frameworks

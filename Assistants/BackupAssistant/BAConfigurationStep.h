@@ -18,7 +18,7 @@
 
 @interface BAConfigurationStep : GSAssistantStep
 {
-    BAController *_controller;
+    __weak BAController *_controller;
     NSTextField *_operationLabel;
     NSTextField *_spaceInfoLabel;
     NSButton *_confirmCheckbox;

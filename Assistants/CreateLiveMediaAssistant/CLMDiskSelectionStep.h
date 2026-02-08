@@ -19,7 +19,7 @@
 @interface CLMDiskSelectionStep : NSObject <GSAssistantStepProtocol>
 {
     NSView *_stepView;
-    CLMController *_controller;
+    __weak CLMController *_controller;
     NSTableView *_diskTableView;
     NSArrayController *_diskArrayController;
     NSTextField *_infoLabel;

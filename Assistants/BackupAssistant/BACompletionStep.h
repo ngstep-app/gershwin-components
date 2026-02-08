@@ -18,7 +18,7 @@
 
 @interface BACompletionStep : GSCompletionStep
 {
-    BAController *_controller;
+    __weak BAController *_controller;
 }
 
 @property (nonatomic, weak) BAController *controller;

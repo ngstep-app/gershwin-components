@@ -48,3 +48,4 @@ Processes/tools/safe_proc_scan
 *.d
 *.so
 *.so.*
+*.pid

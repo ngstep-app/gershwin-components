@@ -68,8 +68,6 @@
     GSAssistantBuilder *builder = [GSAssistantBuilder builder];
     NSLog(@"[SystemSetupAssistant] Created builder: %@", builder);
     
-    NSLog(@"[SystemSetupAssistant] Setting layout style to installer...");
-    [builder withLayoutStyle:GSAssistantLayoutStyleInstaller];
     
     NSLog(@"[SystemSetupAssistant] Setting title...");
     [builder withTitle:NSLocalizedString(@"System Setup Assistant", @"")];
@@ -113,6 +111,7 @@
 
 // Main application entry point
 int main(int argc, const char * argv[]) {
+    (void)argc; (void)argv;
     @autoreleasepool {
         [NSApplication sharedApplication];
         

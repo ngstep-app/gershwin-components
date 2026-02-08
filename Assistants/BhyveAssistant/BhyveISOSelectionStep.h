@@ -22,7 +22,7 @@
     NSTextField *_selectedFileLabel;
     NSTextField *_fileSizeLabel;
     NSButton *_browseButton;
-    BhyveController *_controller;
+    __weak BhyveController *_controller;
 }
 
 @property (nonatomic, weak) BhyveController *controller;

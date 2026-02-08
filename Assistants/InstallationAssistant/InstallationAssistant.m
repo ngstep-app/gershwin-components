@@ -67,8 +67,6 @@
     GSAssistantBuilder *builder = [GSAssistantBuilder builder];
     NSLog(@"[InstallationAssistant] Created builder: %@", builder);
     
-    NSLog(@"[InstallationAssistant] Setting layout style to installer...");
-    [builder withLayoutStyle:GSAssistantLayoutStyleInstaller];
     
     NSLog(@"[InstallationAssistant] Setting title...");
     [builder withTitle:NSLocalizedString(@"Software Installation", @"")];

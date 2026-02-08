@@ -44,7 +44,7 @@
     BOOL _shouldStop;
     
     // Delegate
-    id<VNCClientDelegate> _delegate;
+    __weak id<VNCClientDelegate> _delegate;
 }
 
 @property (nonatomic, retain) NSString *hostname;

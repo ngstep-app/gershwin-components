@@ -24,6 +24,8 @@
     return self;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-missing-super-calls"
 - (void)dealloc
 {
     NSLog(@"DRIImageSelectionStep: dealloc");
@@ -32,6 +34,7 @@
     if (_prereleaseCheckbox) { _prereleaseCheckbox = nil; }
     if (_refreshButton) { _refreshButton = nil; }
 }
+#pragma clang diagnostic pop
 
 - (void)stepWillAppear
 {

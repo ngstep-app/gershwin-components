@@ -68,8 +68,6 @@
     GSAssistantBuilder *builder = [GSAssistantBuilder builder];
     NSLog(@"[NetworkSetupAssistant] Created builder: %@", builder);
     
-    NSLog(@"[NetworkSetupAssistant] Setting layout style to installer...");
-    [builder withLayoutStyle:GSAssistantLayoutStyleInstaller];
     
     NSLog(@"[NetworkSetupAssistant] Setting title...");
     [builder withTitle:NSLocalizedString(@"Network Setup Assistant", @"")];
@@ -261,6 +259,7 @@
 
 // Main application entry point
 int main(int argc, const char * argv[]) {
+    (void)argc; (void)argv;
     @autoreleasepool {
         [NSApplication sharedApplication];
         

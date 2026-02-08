@@ -29,6 +29,8 @@
     return self;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-missing-super-calls"
 - (void)dealloc
 {
     if (_contentView) { _contentView = nil; }
@@ -37,6 +39,7 @@
     if (_nextStepsView) { _nextStepsView = nil; }
     if (_completionMessage) { _completionMessage = nil; }
 }
+#pragma clang diagnostic pop
 
 - (NSString *)stepTitle
 {

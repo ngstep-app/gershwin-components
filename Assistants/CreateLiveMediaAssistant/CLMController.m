@@ -76,7 +76,6 @@
     
     // Build the assistant using the builder
     GSAssistantBuilder *builder = [GSAssistantBuilder builder];
-    [builder withLayoutStyle:GSAssistantLayoutStyleInstaller];
     [builder withTitle:NSLocalizedString(@"Create Live Media", @"Application title")];
     [builder withIcon:[NSImage imageNamed:@"Create_Live_Media"]];
     

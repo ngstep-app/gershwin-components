@@ -30,6 +30,7 @@ BackupAssistant_GUI_LIBS += -lgnustep-gui -lgnustep-base
 # Compiler and linker flags - embed framework in bundle
 BackupAssistant_CPPFLAGS += -Wall -Wextra -fobjc-arc -Werror -O2 -I$(shell pwd)/../AssistantFramework/GSAssistantFramework.framework/Versions/1/Headers
 BackupAssistant_LDFLAGS += -L$(shell pwd)/../AssistantFramework/GSAssistantFramework.framework/Versions/1 -lGSAssistantFramework -Wl,-rpath,'$$ORIGIN/Frameworks/GSAssistantFramework.framework/Versions/1'
+BackupAssistant_LDFLAGS += -ldispatch
 
 include $(GNUSTEP_MAKEFILES)/application.make
 

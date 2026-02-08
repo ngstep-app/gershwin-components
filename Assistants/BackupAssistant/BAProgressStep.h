@@ -18,7 +18,7 @@
 
 @interface BAProgressStep : GSAssistantStep
 {
-    BAController *_controller;
+    __weak BAController *_controller;
     NSTextField *_operationLabel;
     NSTextField *_currentTaskLabel;
     NSProgressIndicator *_progressBar;

@@ -31,7 +31,7 @@
     NSPopUpButton *_vncSizePopup;
     NSPopUpButton *_networkPopup;
     NSPopUpButton *_bootModePopup;
-    BhyveController *_controller;
+    __weak BhyveController *_controller;
 }
 
 @property (nonatomic, weak) BhyveController *controller;

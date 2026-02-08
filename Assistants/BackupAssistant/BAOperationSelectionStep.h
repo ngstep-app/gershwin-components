@@ -18,7 +18,7 @@
 
 @interface BAOperationSelectionStep : GSAssistantStep
 {
-    BAController *_controller;
+    __weak BAController *_controller;
     NSView *_containerView;
     NSMatrix *_operationMatrix;
     NSTextField *_diskInfoLabel;

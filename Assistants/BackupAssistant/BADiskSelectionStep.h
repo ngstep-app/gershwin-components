@@ -18,7 +18,7 @@
 
 @interface BADiskSelectionStep : GSAssistantStep
 {
-    BAController *_controller;
+    __weak BAController *_controller;
     NSTableView *_diskTableView;
     NSArrayController *_diskArrayController;
     NSMutableArray *_availableDisks;

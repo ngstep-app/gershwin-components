@@ -20,7 +20,7 @@
 @interface CLMInstallationStep : NSObject <GSAssistantStepProtocol, GSDownloaderDelegate>
 {
     NSView *_stepView;
-    CLMController *_controller;
+    __weak CLMController *_controller;
     NSProgressIndicator *_progressBar;
     NSTextField *_statusLabel;
     NSTextField *_progressLabel;

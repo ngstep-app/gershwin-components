@@ -2118,7 +2118,7 @@
                 // NOTE: ZFS send --parsable only provides initial metadata (size, type) and final completion
                 // It does NOT provide intermediate progress updates during the actual data transfer
                 NSArray *lines = [output componentsSeparatedByString:@"\n"];
-                for (NSString *line in lines) {
+                for (__strong NSString *line in lines) {
                     line = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
                     if ([line length] == 0) continue;
                     
@@ -2816,7 +2816,7 @@
     NSLog(@"BAZFSUtility: Parsing total size from parsable output: %@", output);
     
     NSArray *lines = [output componentsSeparatedByString:@"\n"];
-    for (NSString *line in lines) {
+    for (__strong NSString *line in lines) {
         line = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if ([line length] == 0) continue;
         

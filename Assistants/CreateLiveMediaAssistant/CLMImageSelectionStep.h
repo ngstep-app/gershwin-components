@@ -19,7 +19,7 @@
 @interface CLMImageSelectionStep : NSObject <GSAssistantStepProtocol>
 {
     NSView *_stepView;
-    CLMController *_controller;
+    __weak CLMController *_controller;
     NSPopUpButton *_repositoryPopUp;
     NSTableView *_releaseTableView;
     NSArrayController *_releaseArrayController;

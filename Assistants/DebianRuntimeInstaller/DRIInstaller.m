@@ -32,6 +32,8 @@
     return self;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-missing-super-calls"
 - (void)dealloc
 {
     NSLog(@"DRIInstaller: dealloc");
@@ -40,6 +42,7 @@
         _currentCompletion = nil;
     }
 }
+#pragma clang diagnostic pop
 
 - (void)installRuntimeFromImagePath:(NSString *)imagePath
 {

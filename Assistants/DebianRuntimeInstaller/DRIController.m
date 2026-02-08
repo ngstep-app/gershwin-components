@@ -59,7 +59,6 @@
     
     // Build the assistant using the builder
     GSAssistantBuilder *builder = [GSAssistantBuilder builder];
-    [builder withLayoutStyle:GSAssistantLayoutStyleInstaller];
     [builder withTitle:NSLocalizedString(@"Debian Runtime Installer", @"")];
     [builder withIcon:[NSImage imageNamed:@"NSApplicationIcon"]];
     

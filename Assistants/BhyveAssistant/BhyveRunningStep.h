@@ -22,7 +22,7 @@
     NSTextField *_statusLabel;
     NSTextField *_vmInfoLabel;
     NSButton *_logButton;
-    BhyveController *_controller;
+    __weak BhyveController *_controller;
 }
 
 @property (nonatomic, weak) BhyveController *controller;
