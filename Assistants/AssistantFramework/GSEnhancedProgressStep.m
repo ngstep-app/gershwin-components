@@ -29,16 +29,16 @@
 {
     if (self = [super init]) {
         NSLog(@"GSEnhancedProgressStep: init");
-        _stepTitle = [title retain];
-        _stepDescription = [description retain];
+        _stepTitle = title;
+        _stepDescription = description;
         _phases = [[NSMutableArray alloc] init];
         _progress = 0.0;
         _currentPhase = GSProgressPhaseInitialization;
         _allowsCancellation = YES;
         _isCompleted = NO;
         _wasSuccessful = NO;
-        _statusMessage = [@"Initializing..." retain];
-        _progressMessage = [@"" retain];
+        _statusMessage = @"Initializing...";
+        _progressMessage = @"";
         
         // Add default phases
         [self addPhase:GSProgressPhaseInitialization withTitle:@"Initializing"];
@@ -50,18 +50,6 @@
         [self setupView];
     }
     return self;
-}
-
-- (void)dealloc
-{
-    NSLog(@"GSEnhancedProgressStep: dealloc");
-    [_stepView release];
-    [_stepTitle release];
-    [_stepDescription release];
-    [_statusMessage release];
-    [_progressMessage release];
-    [_phases release];
-    [super dealloc];
 }
 
 - (void)setupView
@@ -77,13 +65,11 @@
     [watermark setImageAlignment:NSImageAlignCenter];
     [watermark setAlphaValue:0.06];
     [_stepView addSubview:watermark positioned:NSWindowBelow relativeTo:nil];
-    [watermark release];
     
     // Icon view
     _iconView = [[NSImageView alloc] initWithFrame:NSMakeRect(190, 250, 100, 80)];
     [_iconView setImageScaling:NSImageScaleProportionallyUpOrDown];
     [_stepView addSubview:_iconView];
-    [_iconView release];
     
     // Phase label
     _phaseLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 210, 440, 25)];
@@ -95,7 +81,6 @@
     [_phaseLabel setEditable:NO];
     [_phaseLabel setSelectable:NO];
     [_stepView addSubview:_phaseLabel];
-    [_phaseLabel release];
     
     // Status label
     _statusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 180, 440, 25)];
@@ -107,7 +92,6 @@
     [_statusLabel setEditable:NO];
     [_statusLabel setSelectable:NO];
     [_stepView addSubview:_statusLabel];
-    [_statusLabel release];
     
     // Progress bar
     _progressBar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(60, 140, 360, 20)];
@@ -116,7 +100,6 @@
     [_progressBar setMaxValue:100.0];
     [_progressBar setDoubleValue:_progress * 100.0];
     [_stepView addSubview:_progressBar];
-    [_progressBar release];
     
     // Progress message label
     _progressLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 110, 440, 20)];
@@ -128,7 +111,6 @@
     [_progressLabel setSelectable:NO];
     [_progressLabel setFont:[NSFont systemFontOfSize:11]];
     [_stepView addSubview:_progressLabel];
-    [_progressLabel release];
     
     // Cancel button
     _cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(190, 50, 100, 32)];
@@ -137,7 +119,6 @@
     [_cancelButton setAction:@selector(cancelPressed:)];
     [_cancelButton setHidden:!_allowsCancellation];
     [_stepView addSubview:_cancelButton];
-    [_cancelButton release];
 }
 
 - (void)addPhase:(GSProgressPhase)phase withTitle:(NSString *)title
@@ -175,11 +156,11 @@
     
     _currentPhase = phase;
     
-    [_statusMessage release];
-    _statusMessage = [message retain];
+    _statusMessage = message;
     
-    // Update UI on main thread
-    [self performSelectorOnMainThread:@selector(updateUI) withObject:nil waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self updateUI];
+    });
 }
 
 - (void)updateProgress:(float)progress withMessage:(NSString *)message
@@ -189,12 +170,12 @@
     _progress = progress;
     
     if (message) {
-        [_progressMessage release];
-        _progressMessage = [message retain];
+        _progressMessage = message;
     }
     
-    // Update UI on main thread
-    [self performSelectorOnMainThread:@selector(updateUI) withObject:nil waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self updateUI];
+    });
 }
 
 - (void)completeWithSuccess:(BOOL)success error:(NSString *)error
@@ -214,15 +195,12 @@
             NSImage *icon = [[NSImage alloc] initWithContentsOfFile:iconPath];
             if (icon) {
                 [_iconView setImage:icon];
-                [icon release];
             }
         }
     } else {
-        [_statusMessage release];
-        _statusMessage = [@"Failed" retain];
+        _statusMessage = @"Failed";
         
-        [_progressMessage release];
-        _progressMessage = [error ? error : @"Unknown error occurred" retain];
+        _progressMessage = error ? error : @"Unknown error occurred";
         
         // Update icon to error
         NSString *iconPath = [[NSBundle mainBundle] pathForResource:@"cross" ofType:@"png"];
@@ -230,7 +208,6 @@
             NSImage *icon = [[NSImage alloc] initWithContentsOfFile:iconPath];
             if (icon) {
                 [_iconView setImage:icon];
-                [icon release];
             }
         }
     }
