@@ -70,10 +70,6 @@ static id g_timerOwner = nil;
         g_activeDiskTimer = nil;
         g_timerOwner = nil;
     }
-    
-    [_availableDisks release];
-    [_diskSpaceCache release];
-    [super dealloc];
 }
 
 - (NSView *)createDiskSelectionView
@@ -91,7 +87,6 @@ static id g_timerOwner = nil;
     [instructionLabel setAlignment:NSTextAlignmentLeft];
     [[instructionLabel cell] setWraps:YES];
     [view addSubview:instructionLabel];
-    [instructionLabel release];
     
     // Disk list table
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 60, 390, 130)];
@@ -111,22 +106,18 @@ static id g_timerOwner = nil;
     [[deviceColumn headerCell] setStringValue:NSLocalizedString(@"Device", @"Device column header")];
     [deviceColumn setWidth:80];
     [_diskTableView addTableColumn:deviceColumn];
-    [deviceColumn release];
     
     NSTableColumn *descColumn = [[NSTableColumn alloc] initWithIdentifier:@"description"];
     [[descColumn headerCell] setStringValue:NSLocalizedString(@"Description", @"Description column header")];
     [descColumn setWidth:200];
     [_diskTableView addTableColumn:descColumn];
-    [descColumn release];
     
     NSTableColumn *sizeColumn = [[NSTableColumn alloc] initWithIdentifier:@"size"];
     [[sizeColumn headerCell] setStringValue:NSLocalizedString(@"Available", @"Available space column header")];
     [sizeColumn setWidth:100];
     [_diskTableView addTableColumn:sizeColumn];
-    [sizeColumn release];
     
     [scrollView setDocumentView:_diskTableView];
-    [scrollView release];
     
     // Status label
     _statusLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 35, 390, 20)];
@@ -150,7 +141,7 @@ static id g_timerOwner = nil;
     [_selectedDiskInfo setTextColor:[NSColor blueColor]];
     [view addSubview:_selectedDiskInfo];
     
-    return [view autorelease];
+    return view;
 }
 
 - (void)stepWillAppear
@@ -297,27 +288,26 @@ static id g_timerOwner = nil;
     
     [_selectedDiskInfo setStringValue:NSLocalizedString(@"Analyzing disk...", @"Analyzing disk message")];
     
-    // Analyze the disk in a background thread using NSThread
-    [NSThread detachNewThreadSelector:@selector(performDiskAnalysis:) 
-                             toTarget:self 
-                           withObject:diskDevice];
+    // Analyze the disk in a background thread using GCD
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self performDiskAnalysis:diskDevice];
+    });
 }
 
 - (void)performDiskAnalysis:(NSString *)diskDevice
 {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
-    BADiskAnalysisResult result = [_controller analyzeDisk:diskDevice];
-    
-    // Update UI on main thread
-    [self performSelectorOnMainThread:@selector(updateAnalysisResult:) 
-                           withObject:@{
-                               @"result": @(result),
-                               @"diskDevice": diskDevice
-                           } 
-                        waitUntilDone:NO];
-    
-    [pool release];
+    @autoreleasepool {
+        BADiskAnalysisResult result = [_controller analyzeDisk:diskDevice];
+        
+        // Update UI on main thread
+        NSDictionary *resultInfo = @{
+            @"result": @(result),
+            @"diskDevice": diskDevice
+        };
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self updateAnalysisResult:resultInfo];
+        });
+    }
 }
 
 - (void)updateAnalysisResult:(NSDictionary *)resultInfo
@@ -390,9 +380,10 @@ static id g_timerOwner = nil;
         [_diskSpaceCache setObject:fallbackSize forKey:disk.deviceName];
         
         // Calculate available space asynchronously to avoid blocking the UI
-        [NSThread detachNewThreadSelector:@selector(calculateDiskSpaceAsync:) 
-                                 toTarget:self 
-                               withObject:disk.deviceName];
+        NSString *deviceName = disk.deviceName;
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            [self calculateDiskSpaceAsync:deviceName];
+        });
         
         return fallbackSize;
     }
@@ -459,52 +450,50 @@ static id g_timerOwner = nil;
 
 - (void)calculateDiskSpaceAsync:(NSString *)diskDevice
 {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
-    // Check if the disk is still in our current list (avoid calculating for old disks)
-    BOOL diskStillExists = NO;
-    for (GSDisk *disk in _availableDisks) {
-        if ([disk.deviceName isEqualToString:diskDevice]) {
-            diskStillExists = YES;
-            break;
-        }
-    }
-    
-    if (!diskStillExists) {
-        NSLog(@"BADiskSelectionStep: Disk %@ no longer in list, skipping space calculation", diskDevice);
-        [pool release];
-        return;
-    }
-    
-    // Calculate available space using ZFS utilities
-    long long availableSpace = [BAZFSUtility getAvailableSpace:diskDevice];
-    NSString *formattedSize;
-    
-    if (availableSpace > 0) {
-        formattedSize = [GSDiskUtilities formatSize:availableSpace];
-    } else {
-        // Find the disk to get its raw size
-        GSDisk *targetDisk = nil;
+    @autoreleasepool {
+        // Check if the disk is still in our current list (avoid calculating for old disks)
+        BOOL diskStillExists = NO;
         for (GSDisk *disk in _availableDisks) {
             if ([disk.deviceName isEqualToString:diskDevice]) {
-                targetDisk = disk;
+                diskStillExists = YES;
                 break;
             }
         }
         
-        if (targetDisk) {
-            formattedSize = [GSDiskUtilities formatSize:targetDisk.size];
-        } else {
-            formattedSize = NSLocalizedString(@"Unknown", @"Unknown disk size");
+        if (!diskStillExists) {
+            NSLog(@"BADiskSelectionStep: Disk %@ no longer in list, skipping space calculation", diskDevice);
+            return;
         }
+        
+        // Calculate available space using ZFS utilities
+        long long availableSpace = [BAZFSUtility getAvailableSpace:diskDevice];
+        NSString *formattedSize;
+        
+        if (availableSpace > 0) {
+            formattedSize = [GSDiskUtilities formatSize:availableSpace];
+        } else {
+            // Find the disk to get its raw size
+            GSDisk *targetDisk = nil;
+            for (GSDisk *disk in _availableDisks) {
+                if ([disk.deviceName isEqualToString:diskDevice]) {
+                    targetDisk = disk;
+                    break;
+                }
+            }
+            
+            if (targetDisk) {
+                formattedSize = [GSDiskUtilities formatSize:targetDisk.size];
+            } else {
+                formattedSize = NSLocalizedString(@"Unknown", @"Unknown disk size");
+            }
+        }
+        
+        // Update cache and UI on main thread
+        NSDictionary *info = @{@"diskDevice": diskDevice, @"size": formattedSize};
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self updateDiskSpaceCache:info];
+        });
     }
-    
-    // Update cache and UI on main thread
-    [self performSelectorOnMainThread:@selector(updateDiskSpaceCache:) 
-                           withObject:@{@"diskDevice": diskDevice, @"size": formattedSize} 
-                        waitUntilDone:NO];
-    
-    [pool release];
 }
 
 - (void)updateDiskSpaceCache:(NSDictionary *)info
