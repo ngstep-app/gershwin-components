@@ -620,10 +620,8 @@
 {
     if (_installer) {
         [_installer cancelInstallation];
-        [_installer release];
         _installer = nil;
     }
-    [super dealloc];
 }
 
 - (NSString *)stepTitle
@@ -739,7 +737,9 @@
     // In real implementation, this would come from the previous step
     NSString *imagePath = @"/tmp/debian-runtime.img";
     
-    [self performSelector:@selector(startRealInstallation:) withObject:imagePath afterDelay:1.0];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self startRealInstallation:imagePath];
+    });
 }
 
 - (void)startRealInstallation:(NSString *)imagePath
@@ -881,7 +881,7 @@
     NSRange range = NSMakeRange([[_logView string] length], 0);
     [_logView scrollRangeToVisible:range];
     
-    [formatter release];
+
 }
 
 @end
@@ -980,9 +980,6 @@
 - (void)dealloc
 {
     NSLog(@"DebianRuntimeInstallerController: dealloc");
-    [_selectedImageURL release];
-    [_assistantWindow release];
-    [super dealloc];
 }
 
 - (void)showAssistant
@@ -1068,8 +1065,7 @@ int main(int argc, const char *argv[])
         
         [NSApp run];
         
-        [controller release];
-        [appDelegate release];
+
     }
     
     return 0;
