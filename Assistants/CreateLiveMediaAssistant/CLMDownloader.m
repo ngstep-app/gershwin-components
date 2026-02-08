@@ -36,9 +36,6 @@
     NSLog(@"CLMDownloader: dealloc");
     [self cancelDownload];
     [self stopStallDetectionTimer];
-    [_sourceURL release];
-    [_destinationPath release];
-    [super dealloc];
 }
 
 - (void)downloadFromURL:(NSString *)url toPath:(NSString *)path
@@ -50,11 +47,9 @@
         [self cancelDownload];
     }
     
-    [_sourceURL release];
-    _sourceURL = [url retain];
+    _sourceURL = url;
     
-    [_destinationPath release];
-    _destinationPath = [path retain];
+    _destinationPath = path;
     
     _isDownloading = YES;
     _totalBytes = 0;
@@ -92,7 +87,9 @@
     _totalBytes = [[attributes objectForKey:NSFileSize] longLongValue];
     
     // Start copying
-    [self performSelectorInBackground:@selector(performFileCopy:) withObject:sourcePath];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self performFileCopy:sourcePath];
+    });
 }
 
 - (void)performFileCopy:(NSString *)sourcePath
@@ -144,9 +141,9 @@
             (_totalBytes > 0 && _receivedBytes >= _totalBytes)) {
             
             float progress = (_totalBytes > 0) ? (float)_receivedBytes / (float)_totalBytes : 0.0;
-            [self performSelectorOnMainThread:@selector(updateProgress:)
-                                   withObject:[NSNumber numberWithFloat:progress]
-                                waitUntilDone:NO];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self updateProgress:[NSNumber numberWithFloat:progress]];
+            });
             lastUpdateBytes = _receivedBytes;
         }
     }
@@ -156,9 +153,9 @@
     
     // Ensure we report 100% progress on completion
     if (_isDownloading && _totalBytes > 0) {
-        [self performSelectorOnMainThread:@selector(updateProgress:)
-                               withObject:[NSNumber numberWithFloat:1.0]
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self updateProgress:[NSNumber numberWithFloat:1.0]];
+        });
     }
     
     if (_isDownloading) {
@@ -203,7 +200,7 @@
                 return;
             }
             
-            _outputFile = [[NSFileHandle fileHandleForWritingAtPath:_destinationPath] retain];
+            _outputFile = [NSFileHandle fileHandleForWritingAtPath:_destinationPath];
         } else {
             // For regular files, create new file
             if (![fileManager createFileAtPath:_destinationPath contents:nil attributes:nil]) {
@@ -213,7 +210,7 @@
                 return;
             }
             
-            _outputFile = [[NSFileHandle fileHandleForWritingAtPath:_destinationPath] retain];
+            _outputFile = [NSFileHandle fileHandleForWritingAtPath:_destinationPath];
         }
         
         if (!_outputFile) {
@@ -228,10 +225,8 @@
         if (!_connection) {
             NSLog(@"CLMDownloader: Could not create NSURLConnection");
             [_outputFile closeFile];
-            [_outputFile release];
             _outputFile = nil;
             [_delegate downloadCompleted:NO error:@"Could not create network connection"];
-            _isDownloading = NO;
             return;
         }
         
@@ -356,9 +351,9 @@
         }
         
         // Complete download immediately
-        [self performSelectorOnMainThread:@selector(completeDownloadImmediately) 
-                               withObject:nil 
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self completeDownloadImmediately];
+        });
         return;
     }
     
@@ -394,14 +389,12 @@
     if (_outputFile) {
         [_outputFile synchronizeFile];  // Force final sync
         [_outputFile closeFile];
-        [_outputFile release];
         _outputFile = nil;
     }
     
     // Cleanup connection
     if (_connection) {
         [_connection cancel];  // Make sure it's cancelled
-        [_connection release];
         _connection = nil;
     }
     
@@ -459,7 +452,6 @@
                   missingBytes, percentComplete, _retryCount, _maxRetries);
             
             // Clean up current connection
-            [_connection release];
             _connection = nil;
             
             // Wait a bit before retrying (exponential backoff)
@@ -504,13 +496,11 @@
         NSLog(@"CLMDownloader: Network error, attempting retry %d of %d", _retryCount, _maxRetries);
         
         // Clean up current connection
-        [_connection release];
         _connection = nil;
         
         // Clean up output file - we'll restart fresh for network errors
         if (_outputFile) {
             [_outputFile closeFile];
-            [_outputFile release];
             _outputFile = nil;
         }
         
@@ -527,12 +517,10 @@
     // Max retries exceeded or non-retryable error
     if (_outputFile) {
         [_outputFile closeFile];
-        [_outputFile release];
         _outputFile = nil;
     }
     
     if (_connection) {
-        [_connection release];
         _connection = nil;
     }
     
@@ -567,13 +555,11 @@
     
     if (_connection) {
         [_connection cancel];
-        [_connection release];
         _connection = nil;
     }
     
     if (_outputFile) {
         [_outputFile closeFile];
-        [_outputFile release];
         _outputFile = nil;
     }
 }
@@ -592,7 +578,6 @@
                                                  selector:@selector(checkForStall:)
                                                  userInfo:nil
                                                   repeats:YES];
-    [_stallTimer retain];
 }
 
 - (void)stopStallDetectionTimer
@@ -600,7 +585,6 @@
     NSLog(@"CLMDownloader: Stopping stall detection timer");
     if (_stallTimer) {
         [_stallTimer invalidate];
-        [_stallTimer release];
         _stallTimer = nil;
     }
 }
@@ -739,13 +723,11 @@
     // Clean up current connection
     if (_connection) {
         [_connection cancel];
-        [_connection release];
         _connection = nil;
     }
     
     if (_outputFile) {
         [_outputFile closeFile];
-        [_outputFile release];
         _outputFile = nil;
     }
     
@@ -798,7 +780,7 @@
             }
             
             // Open the block device for writing (append mode won't work, but we'll position manually)
-            _outputFile = [[NSFileHandle fileHandleForWritingAtPath:_destinationPath] retain];
+            _outputFile = [NSFileHandle fileHandleForWritingAtPath:_destinationPath];
             if (!_outputFile) {
                 NSLog(@"CLMDownloader: Could not open block device for writing on retry - permission denied or device busy");
                 NSString *errorMsg = [NSString stringWithFormat:@"Could not open block device %@ for writing.\n\nThis may happen if:\n• The device is busy or locked by another process\n• Permissions changed during download\n• The device was unmounted\n\nTry restarting the application or check if the device is in use.", _destinationPath];
@@ -820,7 +802,7 @@
         } else {
             // For regular files, try to resume if we have already received some data
             if (_receivedBytes > 0) {
-                _outputFile = [[NSFileHandle fileHandleForWritingAtPath:_destinationPath] retain];
+                _outputFile = [NSFileHandle fileHandleForWritingAtPath:_destinationPath];
                 if (_outputFile) {
                     [_outputFile seekToEndOfFile];
                     NSLog(@"CLMDownloader: Resuming regular file download, seeking to byte %lld", _receivedBytes);
@@ -840,7 +822,7 @@
                     return;
                 }
                 
-                _outputFile = [[NSFileHandle fileHandleForWritingAtPath:_destinationPath] retain];
+                _outputFile = [NSFileHandle fileHandleForWritingAtPath:_destinationPath];
                 if (!_outputFile) {
                     NSLog(@"CLMDownloader: Could not open destination file for writing on retry");
                     [_delegate downloadCompleted:NO error:@"Could not open destination file for writing on retry"];
@@ -868,7 +850,6 @@
         if (!_connection) {
             NSLog(@"CLMDownloader: Could not create NSURLConnection for retry");
             [_outputFile closeFile];
-            [_outputFile release];
             _outputFile = nil;
             [_delegate downloadCompleted:NO error:@"Could not create network connection for retry"];
             _isDownloading = NO;
@@ -884,13 +865,11 @@
         // Clean up on exception
         if (_outputFile) {
             [_outputFile closeFile];
-            [_outputFile release];
             _outputFile = nil;
         }
         
         if (_connection) {
             [_connection cancel];
-            [_connection release];
             _connection = nil;
         }
         
