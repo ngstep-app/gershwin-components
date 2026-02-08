@@ -37,13 +37,6 @@
     return self;
 }
 
-- (void)dealloc
-{
-    [_availableSnapshots release];
-    [_selectableItems release];
-    [super dealloc];
-}
-
 - (NSView *)createConfigurationView
 {
     NSView *view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 390, 240)];
@@ -89,13 +82,11 @@
     [[snapshotColumn headerCell] setStringValue:NSLocalizedString(@"Available Snapshots", @"Snapshot column header")];
     [snapshotColumn setWidth:280];
     [_snapshotTableView addTableColumn:snapshotColumn];
-    [snapshotColumn release];
     
     NSTableColumn *dateColumn = [[NSTableColumn alloc] initWithIdentifier:@"date"];
     [[dateColumn headerCell] setStringValue:NSLocalizedString(@"Date", @"Date column header")];
     [dateColumn setWidth:100];
     [_snapshotTableView addTableColumn:dateColumn];
-    [dateColumn release];
     
     [_snapshotScrollView setDocumentView:_snapshotTableView];
     
@@ -117,13 +108,11 @@
     [[enabledColumn headerCell] setStringValue:@""];
     [enabledColumn setWidth:20];
     [_itemsTableView addTableColumn:enabledColumn];
-    [enabledColumn release];
     
     NSTableColumn *itemColumn = [[NSTableColumn alloc] initWithIdentifier:@"item"];
     [[itemColumn headerCell] setStringValue:NSLocalizedString(@"Items to Restore", @"Items column header")];
     [itemColumn setWidth:360];
     [_itemsTableView addTableColumn:itemColumn];
-    [itemColumn release];
     
     [_itemsScrollView setDocumentView:_itemsTableView];
     
@@ -135,7 +124,7 @@
     [_confirmCheckbox setFont:[NSFont systemFontOfSize:12]];
     [view addSubview:_confirmCheckbox];
     
-    return [view autorelease];
+    return view;
 }
 
 - (void)stepWillAppear
@@ -213,14 +202,14 @@
     NSLog(@"BAConfigurationStep: Calculating space requirements");
     _spaceCalculationInProgress = YES;
     
-    [NSThread detachNewThreadSelector:@selector(performSpaceCalculation) 
-                             toTarget:self 
-                           withObject:nil];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self performSpaceCalculation];
+    });
 }
 
 - (void)performSpaceCalculation
 {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    @autoreleasepool {
     
     NSLog(@"BAConfigurationStep: === Starting space calculation ===");
     NSLog(@"BAConfigurationStep: Selected disk device: '%@'", _controller.selectedDiskDevice);
@@ -247,11 +236,11 @@
         @"availableSpace": @(availableSpace)
     };
     
-    [self performSelectorOnMainThread:@selector(updateSpaceInfo:) 
-                           withObject:spaceInfo 
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self updateSpaceInfo:spaceInfo];
+    });
     
-    [pool release];
+    }
 }
 
 - (void)updateSpaceInfo:(NSDictionary *)spaceInfo
@@ -304,22 +293,22 @@
 {
     NSLog(@"BAConfigurationStep: Loading available snapshots");
     
-    [NSThread detachNewThreadSelector:@selector(performSnapshotLoad) 
-                             toTarget:self 
-                           withObject:nil];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self performSnapshotLoad];
+    });
 }
 
 - (void)performSnapshotLoad
 {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    @autoreleasepool {
     
     NSArray *snapshots = [_controller getZFSSnapshots];
     
-    [self performSelectorOnMainThread:@selector(updateSnapshots:) 
-                           withObject:snapshots 
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self updateSnapshots:snapshots];
+    });
     
-    [pool release];
+    }
 }
 
 - (void)updateSnapshots:(NSArray *)snapshots
@@ -491,7 +480,7 @@
         NSButtonCell *checkboxCell = [[NSButtonCell alloc] init];
         [checkboxCell setButtonType:NSSwitchButton];
         [checkboxCell setTitle:@""];
-        return [checkboxCell autorelease];
+        return checkboxCell;
     }
     
     return nil;
