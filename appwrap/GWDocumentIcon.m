@@ -130,6 +130,51 @@
       [appIcon release];
     }
 
+  // 4.5. Draw file extension text below the app icon
+  // Extract file extension from MIME type
+  NSArray *extensions = [GWUtils extensionsForMIMEType:mimeType];
+  NSString *extensionText = nil;
+  
+  if (extensions && [extensions count] > 0)
+    {
+      // Get the first extension and make it uppercase with a dot
+      NSString *ext = [extensions objectAtIndex:0];
+      if (ext && [ext length] > 0)
+        {
+          // Remove leading dot if present and add uppercase dot and extension
+          if ([ext hasPrefix:@"."])
+            {
+              extensionText = [[ext substringFromIndex:1] uppercaseString];
+            }
+          else
+            {
+              extensionText = [ext uppercaseString];
+            }
+          extensionText = [NSString stringWithFormat:@"%@", extensionText];
+        }
+    }
+  
+  // Draw the extension text below the app icon
+  if (extensionText && [extensionText length] > 0)
+    {
+      // Calculate text position - slightly above previous baseline (half a line up)
+      CGFloat overlaySize = size * 0.45;
+      CGFloat overlayY = (size - overlaySize) / 2.0;
+      CGFloat textBottom = overlayY - size * 0.08;  // Small gap below icon
+      
+      // Create text attributes (dark grey color, bold)
+      NSFont *font = [NSFont boldSystemFontOfSize:size * 0.12];
+      NSColor *textColor = [NSColor colorWithCalibratedWhite:0.25 alpha:1.0];
+      NSDictionary *attrs = [NSDictionary dictionaryWithObjectsAndKeys:font, NSFontAttributeName, textColor, NSForegroundColorAttributeName, nil];
+      
+      // Measure text
+      NSSize textSize = [extensionText sizeWithAttributes:attrs];
+      
+      // Draw text centered below the icon and moved up by half a line
+      NSPoint textPoint = NSMakePoint((size - textSize.width) / 2.0, textBottom - (textSize.height * 0.5));
+      [extensionText drawAtPoint:textPoint withAttributes:attrs];
+    }
+
   // 5. Capture as PNG
   NSData *pngData = nil;
   NSData *tiffData = [canvas TIFFRepresentation];
