@@ -45,7 +45,7 @@
 @property (nonatomic, assign) NSInteger port;
 @property (nonatomic, retain) NSString *password;
 @property (nonatomic, assign) BOOL connected;
-@property (nonatomic, assign) id<VNCWindowDelegate> vncDelegate;
+@property (nonatomic, weak) id<VNCWindowDelegate> vncDelegate;
 
 // Initialization
 - (id)initWithContentRect:(NSRect)contentRect hostname:(NSString *)hostname port:(NSInteger)port;
