@@ -489,6 +489,14 @@ static int cmdUserDelete(NSString *username) {
         return 1;
     }
 
+    // Prevent deleting the built-in admin user (UID 5000)
+    NSDictionary *user = users[username];
+    uid_t uid = getUIDValue(user[@"uid"]);
+    if (uid == 5000 || [username isEqualToString:@"admin"]) {
+        fprintf(stderr, "Cannot delete the built-in admin user.\n");
+        return 1;
+    }
+
     [users removeObjectForKey:username];
 
     if (!savePlist(users, getUsersPlistPath())) {
@@ -556,6 +564,8 @@ static int cmdUserPasswd(NSString *username, BOOL noPrompt) {
     }
 
     user[@"passwordHash"] = hash;
+    // Remove noPassword flag since user now has a password
+    [user removeObjectForKey:@"noPassword"];
     users[username] = user;
 
     if (!savePlist(users, getUsersPlistPath())) {
@@ -808,6 +818,13 @@ static int cmdVerify(NSString *username) {
         return 1;
     }
 
+    // Check if user has noPassword flag set (passwordless login allowed)
+    id noPasswordValue = user[@"noPassword"];
+    if (noPasswordValue && [noPasswordValue boolValue]) {
+        printf("Authentication successful (no password required).\n");
+        return 0;
+    }
+
     NSString *storedHash = user[@"passwordHash"];
     if (!storedHash) {
         fprintf(stderr, "User has no password set.\n");
@@ -1051,16 +1068,44 @@ static int cmdInit(void) {
 
     // Create empty plists if they don't exist
     if (![fm fileExistsAtPath:DS_LOCAL_USERS_PLIST]) {
-        savePlist(@{}, DS_LOCAL_USERS_PLIST);
-        printf("Created: %s\n", [DS_LOCAL_USERS_PLIST UTF8String]);
+        // Create with default admin user (UID 5000, no password required)
+        NSDictionary *users = @{
+            @"admin": @{
+                @"username": @"admin",
+                @"uid": @5000,
+                @"gid": @5000,
+                @"realName": @"System Administrator",
+                @"shell": @"/bin/sh",
+                @"noPassword": @YES
+            }
+        };
+        savePlist(users, DS_LOCAL_USERS_PLIST);
+        printf("Created: %s (with default admin user)\n", [DS_LOCAL_USERS_PLIST UTF8String]);
+
+        // Create admin home directory
+        NSString *adminHome = @"/Local/Users/admin";
+        if (![fm fileExistsAtPath:adminHome]) {
+            [fm createDirectoryAtPath:adminHome
+          withIntermediateDirectories:YES
+                           attributes:@{
+                               NSFilePosixPermissions: @0755,
+                               NSFileOwnerAccountID: @5000,
+                               NSFileGroupOwnerAccountID: @5000
+                           }
+                                error:&error];
+            if (!error) {
+                printf("Created: %s\n", [adminHome UTF8String]);
+            }
+        }
     }
 
     if (![fm fileExistsAtPath:DS_LOCAL_GROUPS_PLIST]) {
-        // Create with admin group
+        // Create with admin group (GID 5000) including admin user as member
         NSDictionary *groups = @{
             @"admin": @{
                 @"groupname": @"admin",
-                @"gid": @5000
+                @"gid": @5000,
+                @"members": @[@"admin"]
             }
         };
         savePlist(groups, DS_LOCAL_GROUPS_PLIST);

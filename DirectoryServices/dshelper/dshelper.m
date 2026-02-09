@@ -232,6 +232,13 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
     NSDictionary *user = [self userWithName:username];
     if (!user) return NO;
 
+    // Check if user has noPassword flag set (passwordless login allowed)
+    id noPasswordValue = user[@"noPassword"];
+    if (noPasswordValue && [noPasswordValue boolValue]) {
+        // User can authenticate without a password
+        return YES;
+    }
+
     NSString *storedHash = user[@"passwordHash"];
     if (!storedHash || [storedHash isEqual:[NSNull null]]) return NO;
 
@@ -577,12 +584,19 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
     // If includeHash is NO, return "*" (like /etc/passwd vs /etc/master.passwd)
     NSString *passwordField = @"*";
     if (includeHash) {
-        NSString *hash = user[@"passwordHash"];
-        if (hash && ![hash isEqual:[NSNull null]] && [hash length] > 0) {
-            passwordField = hash;
+        // Check if user has noPassword flag (passwordless login)
+        id noPasswordValue = user[@"noPassword"];
+        if (noPasswordValue && [noPasswordValue boolValue]) {
+            // Empty password field - with pam_unix nullok, allows login without prompting
+            passwordField = @"";
         } else {
-            // No password set - account is locked
-            passwordField = @"*";
+            NSString *hash = user[@"passwordHash"];
+            if (hash && ![hash isEqual:[NSNull null]] && [hash length] > 0) {
+                passwordField = hash;
+            } else {
+                // No password set - account is locked
+                passwordField = @"*";
+            }
         }
     }
 

@@ -85,11 +85,12 @@ query_dshelper(const char *request, char *response, size_t response_len)
 
 /*
  * Parse passwd line: name:x:uid:gid:gecos:home:shell
+ * Uses strsep instead of strtok_r to handle empty fields (e.g., empty password)
  */
 static int
 parse_passwd(const char *line, struct passwd *pwd, char *buffer, size_t buflen)
 {
-    char *p, *saveptr;
+    char *p, *lineptr;
     char *buf = buffer;
     size_t remaining = buflen;
 
@@ -98,9 +99,10 @@ parse_passwd(const char *line, struct passwd *pwd, char *buffer, size_t buflen)
     if (!linecopy) {
         return -1;
     }
+    lineptr = linecopy;
 
     /* name */
-    p = strtok_r(linecopy, ":", &saveptr);
+    p = strsep(&lineptr, ":");
     if (!p) goto fail;
     size_t len = strlen(p) + 1;
     if (len > remaining) goto fail;
@@ -109,8 +111,8 @@ parse_passwd(const char *line, struct passwd *pwd, char *buffer, size_t buflen)
     buf += len;
     remaining -= len;
 
-    /* password (x) */
-    p = strtok_r(NULL, ":", &saveptr);
+    /* password (may be empty for noPassword users) */
+    p = strsep(&lineptr, ":");
     if (!p) goto fail;
     len = strlen(p) + 1;
     if (len > remaining) goto fail;
@@ -120,17 +122,17 @@ parse_passwd(const char *line, struct passwd *pwd, char *buffer, size_t buflen)
     remaining -= len;
 
     /* uid */
-    p = strtok_r(NULL, ":", &saveptr);
+    p = strsep(&lineptr, ":");
     if (!p) goto fail;
     pwd->pw_uid = (uid_t)strtoul(p, NULL, 10);
 
     /* gid */
-    p = strtok_r(NULL, ":", &saveptr);
+    p = strsep(&lineptr, ":");
     if (!p) goto fail;
     pwd->pw_gid = (gid_t)strtoul(p, NULL, 10);
 
     /* gecos */
-    p = strtok_r(NULL, ":", &saveptr);
+    p = strsep(&lineptr, ":");
     if (!p) goto fail;
     len = strlen(p) + 1;
     if (len > remaining) goto fail;
@@ -140,7 +142,7 @@ parse_passwd(const char *line, struct passwd *pwd, char *buffer, size_t buflen)
     remaining -= len;
 
     /* home */
-    p = strtok_r(NULL, ":", &saveptr);
+    p = strsep(&lineptr, ":");
     if (!p) goto fail;
     len = strlen(p) + 1;
     if (len > remaining) goto fail;
@@ -150,7 +152,7 @@ parse_passwd(const char *line, struct passwd *pwd, char *buffer, size_t buflen)
     remaining -= len;
 
     /* shell */
-    p = strtok_r(NULL, ":", &saveptr);
+    p = strsep(&lineptr, ":");
     if (!p) goto fail;
     len = strlen(p) + 1;
     if (len > remaining) goto fail;
