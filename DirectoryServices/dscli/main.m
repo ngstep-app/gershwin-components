@@ -1074,7 +1074,7 @@ static int cmdInit(void) {
                 @"username": @"admin",
                 @"uid": @5000,
                 @"gid": @5000,
-                @"realName": @"System Administrator",
+                @"realName": @"Administrator",
                 @"shell": @"/bin/sh",
                 @"noPassword": @YES
             }
