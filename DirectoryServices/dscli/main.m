@@ -1030,7 +1030,8 @@ static int cmdInit(void) {
     // Create directories
     NSArray *dirs = @[
         @"/Local/Library/DirectoryServices",
-        @"/Local/Users"
+        @"/Local/Users",
+        @"/Local/Applications"
     ];
 
     for (NSString *dir in dirs) {
