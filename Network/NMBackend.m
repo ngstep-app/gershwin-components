@@ -86,6 +86,7 @@ enum {
         
         nmcliPath = [[self findNmcliPath] retain];
         helperPath = [[self findHelperPath] retain];
+        sudoPath = [[self findSudoPath] retain];
         
         if (nmcliPath) {
             nmAvailable = YES;
@@ -96,6 +97,9 @@ enum {
         
         if (helperPath) {
             NSLog(@"[Network] Network helper found at: %@", helperPath);
+        }
+        if (sudoPath) {
+            NSLog(@"[Network] sudo found at: %@", sudoPath);
         }
     }
     return self;
@@ -109,6 +113,7 @@ enum {
     [cachedWLANs release];
     [nmcliPath release];
     [helperPath release];
+    [sudoPath release];
     [super dealloc];
 }
 
@@ -182,6 +187,54 @@ enum {
     return nil;
 }
 
+- (NSString *)findSudoPath
+{
+    NSArray *paths = @[
+        @"/usr/bin/sudo",
+        @"/bin/sudo",
+        @"/usr/local/bin/sudo",
+        @"/sbin/sudo",
+        @"/usr/sbin/sudo"
+    ];
+    
+    NSFileManager *fm = [NSFileManager defaultManager];
+    for (NSString *path in paths) {
+        if ([fm isExecutableFileAtPath:path]) {
+            return path;
+        }
+    }
+    
+    // Try PATH
+    NSTask *task = [[NSTask alloc] init];
+    [task setLaunchPath:@"/usr/bin/which"];
+    [task setArguments:@[@"sudo"]];
+    
+    NSPipe *pipe = [NSPipe pipe];
+    [task setStandardOutput:pipe];
+    [task setStandardError:[NSPipe pipe]];
+    
+    @try {
+        [task launch];
+        [task waitUntilExit];
+        
+        if ([task terminationStatus] == 0) {
+            NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
+            NSString *path = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            path = [path stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            [task release];
+            
+            if ([fm isExecutableFileAtPath:path]) {
+                return path;
+            }
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[Network] Exception finding sudo: %@", e);
+    }
+    
+    [task release];
+    return nil;
+}
+
 - (BOOL)runPrivilegedHelper:(NSArray *)arguments error:(NSError **)error
 {
     NSLog(@"[Network] runPrivilegedHelper: called");
@@ -218,6 +271,16 @@ enum {
         }
         return NO;
     }
+
+    if (!sudoPath) {
+        NSLog(@"[Network] runPrivilegedHelper: sudoPath is nil");
+        if (error) {
+            *error = [NSError errorWithDomain:@"NetworkBackendError"
+                                        code:1
+                                    userInfo:@{NSLocalizedDescriptionKey: @"sudo not found"}];
+        }
+        return NO;
+    }
     
     NSLog(@"[Network] runPrivilegedHelper: using helper at '%@'", helperPath);
     
@@ -234,7 +297,7 @@ enum {
     }
     [sudoArgs addObjectsFromArray:arguments];
     
-    NSLog(@"[Network] runPrivilegedHelper: sudo command = /usr/bin/sudo -A -E %@ %@", helperPath, [logArgs componentsJoinedByString:@" "]);
+    NSLog(@"[Network] runPrivilegedHelper: sudo command = %@ -A -E %@ %@", sudoPath, helperPath, [logArgs componentsJoinedByString:@" "]);
     
     NSTask *task = [[NSTask alloc] init];
     if (!task) {
@@ -247,7 +310,7 @@ enum {
         return NO;
     }
     
-    [task setLaunchPath:@"/usr/bin/sudo"];
+    [task setLaunchPath:sudoPath];
     [task setArguments:sudoArgs];
     
     NSPipe *errPipe = [NSPipe pipe];

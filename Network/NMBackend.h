@@ -113,6 +113,9 @@
     
     // network-helper path for privileged operations
     NSString *helperPath;
+
+    // sudo path for privileged operations
+    NSString *sudoPath;
 }
 
 @property (assign) id<NetworkBackendDelegate> delegate;

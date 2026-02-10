@@ -8,6 +8,11 @@
 
 #import "NetworkController.h"
 #import "NMBackend.h"
+#import "BSDBackend.h"
+#include <sys/utsname.h>
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+#include <sys/sysctl.h>
+#endif
 
 // Layout constants following Eau Theme HIG (AppearanceMetrics.h)
 static const CGFloat kWindowWidth = 668;
@@ -43,8 +48,48 @@ static const CGFloat kStatusAreaHeight = 60;
         selectedWLANNetwork = nil;
         isEditing = NO;
         
-        // Initialize the backend
-        backend = [[NMBackend alloc] init];
+        // Initialize the backend based on OS
+        // NOTE: uname() is unreliable on FreeBSD with linux_enable="YES"
+        // because the Linux ABI compatibility layer makes it return "Linux".
+        // Use sysctlbyname or file-based detection instead.
+        BOOL isFreeBSD = NO;
+
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+        {
+            char ostype[64] = {0};
+            size_t len = sizeof(ostype) - 1;
+            if (sysctlbyname("kern.ostype", ostype, &len, NULL, 0) == 0) {
+                if (strcmp(ostype, "FreeBSD") == 0 ||
+                    strcmp(ostype, "DragonFly") == 0) {
+                    isFreeBSD = YES;
+                }
+            }
+        }
+#endif
+
+        if (!isFreeBSD) {
+            /* File-based fallback: sysrc(8) is FreeBSD-specific */
+            NSFileManager *fm = [NSFileManager defaultManager];
+            if ([fm isExecutableFileAtPath:@"/usr/sbin/sysrc"]) {
+                isFreeBSD = YES;
+            }
+        }
+
+        if (!isFreeBSD) {
+            /* Last resort: uname (unreliable with Linux ABI compat) */
+            struct utsname uts;
+            if (uname(&uts) == 0 && strcmp(uts.sysname, "FreeBSD") == 0) {
+                isFreeBSD = YES;
+            }
+        }
+
+        if (isFreeBSD) {
+            NSLog(@"[Network] Detected FreeBSD, using BSD backend");
+            backend = [[BSDBackend alloc] init];
+        } else {
+            NSLog(@"[Network] Detected Linux/other, using NetworkManager backend");
+            backend = [[NMBackend alloc] init];
+        }
         [backend setDelegate:self];
         
         if (![backend isAvailable]) {

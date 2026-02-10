@@ -6,7 +6,8 @@ Network_OBJC_FILES = \
 	NetworkPane.m \
 	NetworkController.m \
 	NetworkModels.m \
-	NMBackend.m
+	NMBackend.m \
+	BSDBackend.m
 
 Network_RESOURCE_FILES = Network.png NetworkInfo.plist
 Network_BUNDLE_LIBS = -lPreferencePanes
@@ -28,7 +29,7 @@ HELPER_BIN = obj/network-helper
 
 $(HELPER_BIN): $(HELPER_SRC)
 	@mkdir -p obj
-	$(CC) -O2 -Wall -o $@ $<
+	$(CC) -O2 -Wall -Wextra -Werror -o $@ $<
 
 all:: $(HELPER_BIN)
 

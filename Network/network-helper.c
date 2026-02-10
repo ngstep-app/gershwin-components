@@ -36,7 +36,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/utsname.h>
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+#include <sys/sysctl.h>
+#endif
+#include <fcntl.h>
 #include <errno.h>
 
 #define MAX_ARGS 32
@@ -45,10 +51,19 @@
 static char nmcli_path[256] = {0};
 static char wpa_cli_path[256] = {0};
 static char dhcpcd_path[256] = {0};
+static char ifconfig_path[256] = {0};
+static char sysrc_path[256] = {0};
+static char dhclient_path[256] = {0};
+static char wpa_supplicant_path[256] = {0};
+static char sysctl_path[256] = {0};
+static int is_freebsd = 0;
 
 /* Forward declarations */
 static int run_command(char *const args[], char *error_buf, size_t error_buf_size);
+static int run_command_with_output(char *const args[], char *output_buf, size_t output_buf_size,
+                                    char *error_buf, size_t error_buf_size);
 static int dhcp_renew(const char *interface);
+static int dhcp_release(const char *interface);
 
 /* Find executable in common paths */
 static int find_executable(const char *name, char *buffer, size_t buffer_size) {
@@ -88,6 +103,68 @@ static int find_wpa_cli(void) {
 /* Find dhcpcd executable */
 static int find_dhcpcd(void) {
     return find_executable("dhcpcd", dhcpcd_path, sizeof(dhcpcd_path));
+}
+
+/* Find BSD-specific tools */
+static int find_ifconfig(void) {
+    return find_executable("ifconfig", ifconfig_path, sizeof(ifconfig_path));
+}
+
+static int find_dhclient(void) {
+    return find_executable("dhclient", dhclient_path, sizeof(dhclient_path));
+}
+
+static int find_sysrc(void) {
+    return find_executable("sysrc", sysrc_path, sizeof(sysrc_path));
+}
+
+static int find_wpa_supplicant(void) {
+    return find_executable("wpa_supplicant", wpa_supplicant_path, sizeof(wpa_supplicant_path));
+}
+
+static int find_sysctl(void) {
+    return find_executable("sysctl", sysctl_path, sizeof(sysctl_path));
+}
+
+/* Detect whether we are running on FreeBSD */
+static void detect_os(void) {
+    is_freebsd = 0;
+
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+    /*
+     * Use sysctlbyname which is NOT affected by FreeBSD's Linux ABI
+     * compatibility layer. When linux_enable="YES" in rc.conf,
+     * uname() returns "Linux" instead of "FreeBSD".
+     */
+    {
+        char ostype[64] = {0};
+        size_t len = sizeof(ostype) - 1;
+        if (sysctlbyname("kern.ostype", ostype, &len, NULL, 0) == 0) {
+            if (strcmp(ostype, "FreeBSD") == 0 ||
+                strcmp(ostype, "DragonFly") == 0) {
+                is_freebsd = 1;
+                fprintf(stderr,
+                        "network-helper: detected FreeBSD via sysctl\n");
+                return;
+            }
+        }
+    }
+#endif
+
+    /* File-based fallback: sysrc(8) is FreeBSD-specific */
+    if (access("/usr/sbin/sysrc", X_OK) == 0) {
+        is_freebsd = 1;
+        fprintf(stderr,
+                "network-helper: detected FreeBSD via sysrc presence\n");
+        return;
+    }
+
+    /* Last resort: uname (unreliable with Linux ABI compat) */
+    struct utsname uts;
+    if (uname(&uts) == 0 && strcmp(uts.sysname, "FreeBSD") == 0) {
+        is_freebsd = 1;
+        fprintf(stderr, "network-helper: detected FreeBSD via uname\n");
+    }
 }
 
 /* Run nmcli command with given arguments
@@ -826,6 +903,830 @@ static int wlan_direct_connect(const char *interface, const char *ssid, const ch
     return result;
 }
 
+/* ===== FreeBSD-specific implementations ===== */
+
+/* Find the primary wlan device name (wlan0, wlan1, etc.) */
+static int bsd_find_wlan_device(char *wlan_dev, size_t wlan_dev_size) {
+    /* Check if wlan0 exists */
+    if (!find_ifconfig()) return 0;
+
+    char output[MAX_OUTPUT] = {0};
+    char error[MAX_OUTPUT] = {0};
+    char *args[] = {ifconfig_path, "-l", NULL};
+    int ret = run_command_with_output(args, output, sizeof(output), error, sizeof(error));
+    if (ret != 0) return 0;
+
+    /* Look for wlanN in the interface list */
+    char *tok = strtok(output, " \t\n");
+    while (tok) {
+        if (strncmp(tok, "wlan", 4) == 0) {
+            strncpy(wlan_dev, tok, wlan_dev_size - 1);
+            wlan_dev[wlan_dev_size - 1] = '\0';
+            return 1;
+        }
+        tok = strtok(NULL, " \t\n");
+    }
+    return 0;
+}
+
+/* Find the physical wireless device (e.g., iwm0, iwn0) via sysctl */
+static int bsd_find_phys_wlan(char *phys_dev, size_t phys_dev_size) {
+    if (!find_sysctl()) return 0;
+
+    char output[MAX_OUTPUT] = {0};
+    char error[MAX_OUTPUT] = {0};
+    char *args[] = {sysctl_path, "net.wlan.devices", NULL};
+    int ret = run_command_with_output(args, output, sizeof(output), error, sizeof(error));
+    if (ret != 0) return 0;
+
+    /* Output: "net.wlan.devices: iwm0" */
+    char *colon = strchr(output, ':');
+    if (!colon) return 0;
+
+    char *dev = colon + 1;
+    while (*dev == ' ') dev++;
+
+    /* Trim trailing whitespace */
+    char *end = dev + strlen(dev) - 1;
+    while (end > dev && (*end == '\n' || *end == '\r' || *end == ' ')) {
+        *end = '\0';
+        end--;
+    }
+
+    if (strlen(dev) == 0) return 0;
+
+    /* Take the first device */
+    char *space = strchr(dev, ' ');
+    if (space) *space = '\0';
+
+    strncpy(phys_dev, dev, phys_dev_size - 1);
+    phys_dev[phys_dev_size - 1] = '\0';
+    return 1;
+}
+
+/* Create a wlan device from a physical wireless device */
+static int bsd_wlan_create(const char *phys_dev) {
+    if (!find_ifconfig()) {
+        fprintf(stderr, "ifconfig not found\n");
+        return 1;
+    }
+
+    char error[MAX_OUTPUT] = {0};
+    char *args[] = {ifconfig_path, "wlan0", "create", "wlandev", (char *)phys_dev, NULL};
+    int ret = run_command(args, error, sizeof(error));
+    if (ret != 0) {
+        fprintf(stderr, "Failed to create wlan0 from %s: %s\n", phys_dev, error);
+    }
+    return ret;
+}
+
+/* Enable WLAN on FreeBSD: bring wlan interface up */
+static int bsd_wlan_enable(void) {
+    if (!find_ifconfig()) {
+        fprintf(stderr, "ifconfig not found\n");
+        return 1;
+    }
+
+    char wlan_dev[32] = {0};
+    if (!bsd_find_wlan_device(wlan_dev, sizeof(wlan_dev))) {
+        /* Try to create one */
+        char phys_dev[32] = {0};
+        if (bsd_find_phys_wlan(phys_dev, sizeof(phys_dev))) {
+            if (bsd_wlan_create(phys_dev) != 0) {
+                fprintf(stderr, "No wireless device found\n");
+                return 1;
+            }
+            strcpy(wlan_dev, "wlan0");
+        } else {
+            fprintf(stderr, "No wireless hardware found\n");
+            return 1;
+        }
+    }
+
+    char error[MAX_OUTPUT] = {0};
+    char *args[] = {ifconfig_path, wlan_dev, "up", NULL};
+    int ret = run_command(args, error, sizeof(error));
+    if (ret != 0) {
+        fprintf(stderr, "Failed to enable %s: %s\n", wlan_dev, error);
+    }
+    return ret;
+}
+
+/* Disable WLAN on FreeBSD: bring wlan interface down */
+static int bsd_wlan_disable(void) {
+    if (!find_ifconfig()) {
+        fprintf(stderr, "ifconfig not found\n");
+        return 1;
+    }
+
+    char wlan_dev[32] = {0};
+    if (!bsd_find_wlan_device(wlan_dev, sizeof(wlan_dev))) {
+        fprintf(stderr, "No wireless device found\n");
+        return 1;
+    }
+
+    char error[MAX_OUTPUT] = {0};
+    char *args[] = {ifconfig_path, wlan_dev, "down", NULL};
+    int ret = run_command(args, error, sizeof(error));
+    if (ret != 0) {
+        fprintf(stderr, "Failed to disable %s: %s\n", wlan_dev, error);
+    }
+    return ret;
+}
+
+/* Connect to a WLAN on FreeBSD using wpa_cli + dhclient */
+static int bsd_wlan_connect(const char *ssid, const char *password) {
+    char wlan_dev[32] = {0};
+    if (!bsd_find_wlan_device(wlan_dev, sizeof(wlan_dev))) {
+        fprintf(stderr, "No wireless device found\n");
+        return 1;
+    }
+
+    if (!find_wpa_cli()) {
+        fprintf(stderr, "wpa_cli not found\n");
+        return 1;
+    }
+
+    /* Bring interface up */
+    if (find_ifconfig()) {
+        char error[MAX_OUTPUT] = {0};
+        char *up_args[] = {ifconfig_path, wlan_dev, "up", NULL};
+        run_command(up_args, error, sizeof(error));
+    }
+
+    /* Ensure wpa_supplicant is running for this device */
+    {
+        char cmd[512];
+        struct stat st;
+        char socket_path[256];
+        
+        /* Check if wpa_supplicant socket exists for this device */
+        snprintf(socket_path, sizeof(socket_path), "/var/run/wpa_supplicant/%s", wlan_dev);
+        
+        if (stat(socket_path, &st) != 0) {
+            /* Socket doesn't exist, create config if needed and start wpa_supplicant */
+            fprintf(stderr, "network-helper: Starting wpa_supplicant for %s\n", wlan_dev);
+            
+            /* Create basic wpa_supplicant.conf if it doesn't exist */
+            if (access("/etc/wpa_supplicant.conf", F_OK) != 0) {
+                FILE *conf = fopen("/etc/wpa_supplicant.conf", "w");
+                if (conf) {
+                    fprintf(conf, "ctrl_interface=/var/run/wpa_supplicant\n");
+                    fprintf(conf, "ctrl_interface_group=wheel\n");
+                    fprintf(conf, "update_config=1\n");
+                    fclose(conf);
+                    chmod("/etc/wpa_supplicant.conf", 0600);
+                    fprintf(stderr, "network-helper: Created /etc/wpa_supplicant.conf\n");
+                } else {
+                    fprintf(stderr, "network-helper: Could not create /etc/wpa_supplicant.conf\n");
+                }
+            }
+            
+            /* Start wpa_supplicant */
+            snprintf(cmd, sizeof(cmd), "/usr/sbin/wpa_supplicant -B -i %s -c /etc/wpa_supplicant.conf", wlan_dev);
+            fprintf(stderr, "network-helper: Running: %s\n", cmd);
+            int ret = system(cmd);
+            fprintf(stderr, "network-helper: wpa_supplicant started with return code %d\n", ret);
+            /* Give it a moment to start */
+            sleep(2);
+        }
+    }
+
+    /* Add network via wpa_cli */
+    char cmd[512];
+    FILE *fp;
+    int network_id = -1;
+
+    snprintf(cmd, sizeof(cmd), "%s -i %s add_network 2>/dev/null", wpa_cli_path, wlan_dev);
+    fp = popen(cmd, "r");
+    if (fp) {
+        char buf[64];
+        if (fgets(buf, sizeof(buf), fp)) {
+            network_id = atoi(buf);
+        }
+        pclose(fp);
+    }
+
+    if (network_id < 0) {
+        fprintf(stderr, "Failed to add network in wpa_supplicant (network_id=%d)\n", network_id);
+        return 1;
+    }
+
+    /* Set SSID */
+    snprintf(cmd, sizeof(cmd), "%s -i %s set_network %d ssid '\"%s\"' >/dev/null 2>&1",
+             wpa_cli_path, wlan_dev, network_id, ssid);
+    if (system(cmd) != 0) {
+        fprintf(stderr, "Error: Failed to configure SSID in wpa_supplicant\n");
+        return 1;
+    }
+
+    /* Set password or open network */
+    if (password && password[0] != '\0') {
+        snprintf(cmd, sizeof(cmd), "%s -i %s set_network %d psk '\"%s\"' >/dev/null 2>&1",
+                 wpa_cli_path, wlan_dev, network_id, password);
+        if (system(cmd) != 0) {
+            fprintf(stderr, "Error: Failed to set WiFi password\n");
+            return 1;
+        }
+    } else {
+        snprintf(cmd, sizeof(cmd), "%s -i %s set_network %d key_mgmt NONE >/dev/null 2>&1",
+                 wpa_cli_path, wlan_dev, network_id);
+        if (system(cmd) != 0) {
+            fprintf(stderr, "Error: Failed to configure open network\n");
+            return 1;
+        }
+    }
+
+    /* Enable network (silent) */
+    snprintf(cmd, sizeof(cmd), "%s -i %s enable_network %d >/dev/null 2>&1",
+             wpa_cli_path, wlan_dev, network_id);
+    system(cmd);
+
+    /* Select network (silent) */
+    snprintf(cmd, sizeof(cmd), "%s -i %s select_network %d >/dev/null 2>&1",
+             wpa_cli_path, wlan_dev, network_id);
+    system(cmd);
+
+    /* Save config (silent) */
+    snprintf(cmd, sizeof(cmd), "%s -i %s save_config >/dev/null 2>&1",
+             wpa_cli_path, wlan_dev);
+    system(cmd);
+
+    /* Wait for association */
+    fprintf(stdout, "Connecting to '%s'...\n", ssid);
+    int connected = 0;
+    int wait_count = 0;
+    for (int i = 0; i < 15; i++) {
+        sleep(1);
+        wait_count++;
+        if (wait_count % 3 == 0) {
+            fprintf(stdout, "  (waiting for authentication)\n");
+        }
+        
+        snprintf(cmd, sizeof(cmd), "%s -i %s status 2>/dev/null", wpa_cli_path, wlan_dev);
+        fp = popen(cmd, "r");
+        if (fp) {
+            char line[256];
+            while (fgets(line, sizeof(line), fp)) {
+                if (strstr(line, "wpa_state=COMPLETED")) {
+                    connected = 1;
+                    break;
+                }
+            }
+            pclose(fp);
+        }
+        if (connected) break;
+    }
+
+    if (!connected) {
+        fprintf(stderr, "Error: Failed to authenticate with '%s'\n", ssid);
+        fprintf(stderr, "  Please check your password and network signal\n");
+        return 1;
+    }
+
+    fprintf(stdout, "Authentication successful!\n");
+    fprintf(stdout, "Requesting IP address via DHCP...\n");
+
+    /* Request DHCP */
+    if (find_dhclient()) {
+        /* Kill existing dhclient on this interface */
+        char kill_cmd[256];
+        snprintf(kill_cmd, sizeof(kill_cmd), "pkill -f 'dhclient.*%s' 2>/dev/null", wlan_dev);
+        system(kill_cmd);
+        usleep(500000);
+
+        char error[MAX_OUTPUT] = {0};
+        char *dhcp_args[] = {dhclient_path, wlan_dev, NULL};
+        int ret = run_command(dhcp_args, error, sizeof(error));
+        if (ret != 0) {
+            if (strstr(error, "Cannot open or create pidfile") != NULL) {
+                fprintf(stderr, "Error: DHCP client cannot access /var/run (permission issue)\n");
+                fprintf(stderr, "  Ensure you are running this command with appropriate privileges\n");
+            } else if (strstr(error, "No DHCPOFFERS") != NULL) {
+                fprintf(stderr, "Error: No DHCP offers received from network\n");
+                fprintf(stderr, "  The network may not have a DHCP server available\n");
+            } else if (error[0] != '\0') {
+                fprintf(stderr, "Error: DHCP request failed on %s\n", wlan_dev);
+                fprintf(stderr, "  Details: %s\n", error);
+            } else {
+                fprintf(stderr, "Error: DHCP request failed on %s\n", wlan_dev);
+            }
+            return ret;
+        }
+    } else if (find_dhcpcd()) {
+        char error[MAX_OUTPUT] = {0};
+        char *dhcp_args[] = {dhcpcd_path, "-4", "-t", "30", wlan_dev, NULL};
+        int ret = run_command(dhcp_args, error, sizeof(error));
+        if (ret != 0) {
+            if (strstr(error, "Cannot open or create pidfile") != NULL) {
+                fprintf(stderr, "Error: DHCP client cannot access /var/run (permission issue)\n");
+                fprintf(stderr, "  Ensure you are running this command with appropriate privileges\n");
+            } else if (strstr(error, "timed out") != NULL) {
+                fprintf(stderr, "Error: DHCP request timed out\n");
+                fprintf(stderr, "  The network may be unreachable or has no DHCP server\n");
+            } else if (error[0] != '\0') {
+                fprintf(stderr, "Error: DHCP request failed on %s\n", wlan_dev);
+                fprintf(stderr, "  Details: %s\n", error);
+            } else {
+                fprintf(stderr, "Error: DHCP request failed on %s\n", wlan_dev);
+            }
+            return ret;
+        }
+    } else {
+        fprintf(stderr, "Error: No DHCP client found (dhclient or dhcpcd)\n");
+        fprintf(stderr, "  WiFi connection established but cannot configure IP address\n");
+        return 1;
+    }
+
+    fprintf(stdout, "Successfully connected to '%s'\n", ssid);
+    fprintf(stdout, "Use 'ip addr show' to check your IP address\n");
+    return 0;
+}
+
+/* Disconnect from WLAN on FreeBSD */
+static int bsd_wlan_disconnect(void) {
+    char wlan_dev[32] = {0};
+    if (!bsd_find_wlan_device(wlan_dev, sizeof(wlan_dev))) {
+        fprintf(stderr, "No wireless device found\n");
+        return 1;
+    }
+
+    /* Use wpa_cli disconnect if available */
+    if (find_wpa_cli()) {
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "%s -i %s disconnect 2>/dev/null",
+                 wpa_cli_path, wlan_dev);
+        system(cmd);
+    }
+
+    /* Release DHCP */
+    char kill_cmd[256];
+    snprintf(kill_cmd, sizeof(kill_cmd), "pkill -f 'dhclient.*%s' 2>/dev/null", wlan_dev);
+    system(kill_cmd);
+
+    return 0;
+}
+
+/* Enable an interface on FreeBSD */
+static int bsd_interface_enable(const char *device) {
+    if (!find_ifconfig()) {
+        fprintf(stderr, "ifconfig not found\n");
+        return 1;
+    }
+
+    char error[MAX_OUTPUT] = {0};
+    char *args[] = {ifconfig_path, (char *)device, "up", NULL};
+    int ret = run_command(args, error, sizeof(error));
+    if (ret != 0) {
+        fprintf(stderr, "Failed to enable %s: %s\n", device, error);
+        return ret;
+    }
+
+    /* If DHCP, request a lease */
+    if (find_dhclient()) {
+        char *dhcp_args[] = {dhclient_path, (char *)device, NULL};
+        run_command(dhcp_args, error, sizeof(error));
+    } else if (find_dhcpcd()) {
+        char *dhcp_args[] = {dhcpcd_path, "-4", "-t", "30", (char *)device, NULL};
+        run_command(dhcp_args, error, sizeof(error));
+    }
+
+    return 0;
+}
+
+/* Disable an interface on FreeBSD */
+static int bsd_interface_disable(const char *device) {
+    if (!find_ifconfig()) {
+        fprintf(stderr, "ifconfig not found\n");
+        return 1;
+    }
+
+    /* Kill dhclient for this interface */
+    char kill_cmd[256];
+    snprintf(kill_cmd, sizeof(kill_cmd), "pkill -f 'dhclient.*%s' 2>/dev/null", device);
+    system(kill_cmd);
+
+    char error[MAX_OUTPUT] = {0};
+    char *args[] = {ifconfig_path, (char *)device, "down", NULL};
+    int ret = run_command(args, error, sizeof(error));
+    if (ret != 0) {
+        fprintf(stderr, "Failed to disable %s: %s\n", device, error);
+    }
+    return ret;
+}
+
+/* DHCP renew on FreeBSD using dhclient */
+static int bsd_dhcp_renew(const char *interface) {
+    if (find_dhclient()) {
+        /* Kill existing dhclient */
+        char kill_cmd[256];
+        snprintf(kill_cmd, sizeof(kill_cmd), "pkill -f 'dhclient.*%s' 2>/dev/null", interface);
+        system(kill_cmd);
+        usleep(500000);
+
+        char error[MAX_OUTPUT] = {0};
+        char *args[] = {dhclient_path, (char *)interface, NULL};
+        int ret = run_command(args, error, sizeof(error));
+        if (ret != 0) {
+            fprintf(stderr, "dhclient failed on %s: %s\n", interface, error);
+        }
+        return ret;
+    }
+    /* Fall back to dhcpcd */
+    return dhcp_renew(interface);
+}
+
+/* DHCP release on FreeBSD */
+static int bsd_dhcp_release(const char *interface) {
+    if (find_dhclient()) {
+        char kill_cmd[256];
+        snprintf(kill_cmd, sizeof(kill_cmd), "pkill -f 'dhclient.*%s' 2>/dev/null", interface);
+        system(kill_cmd);
+        return 0;
+    }
+    return dhcp_release(interface);
+}
+
+/* Delete a saved wpa_supplicant network by SSID */
+static int bsd_connection_delete(const char *ssid) {
+    char wlan_dev[32] = {0};
+    if (!bsd_find_wlan_device(wlan_dev, sizeof(wlan_dev))) {
+        fprintf(stderr, "No wireless device found\n");
+        return 1;
+    }
+
+    if (!find_wpa_cli()) {
+        fprintf(stderr, "wpa_cli not found\n");
+        return 1;
+    }
+
+    /* List networks and find matching SSID */
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "%s -i %s list_networks 2>/dev/null", wpa_cli_path, wlan_dev);
+    FILE *fp = popen(cmd, "r");
+    if (!fp) {
+        fprintf(stderr, "Failed to list networks\n");
+        return 1;
+    }
+
+    char line[256];
+    int found_id = -1;
+    while (fgets(line, sizeof(line), fp)) {
+        /* Format: "0\tMyNetwork\tany\t[CURRENT]" */
+        int net_id;
+        char net_ssid[128];
+        if (sscanf(line, "%d\t%127[^\t]", &net_id, net_ssid) >= 2) {
+            if (strcmp(net_ssid, ssid) == 0) {
+                found_id = net_id;
+                break;
+            }
+        }
+    }
+    pclose(fp);
+
+    if (found_id < 0) {
+        fprintf(stderr, "Network '%s' not found in wpa_supplicant\n", ssid);
+        return 1;
+    }
+
+    snprintf(cmd, sizeof(cmd), "%s -i %s remove_network %d 2>/dev/null",
+             wpa_cli_path, wlan_dev, found_id);
+    system(cmd);
+
+    snprintf(cmd, sizeof(cmd), "%s -i %s save_config 2>/dev/null",
+             wpa_cli_path, wlan_dev);
+    system(cmd);
+
+    fprintf(stdout, "Removed network '%s'\n", ssid);
+    return 0;
+}
+
+/* Run a command with stdout capture (needed for BSD find_wlan_device) */
+static int run_command_with_output(char *const args[], char *output_buf, size_t output_buf_size,
+                                    char *error_buf, size_t error_buf_size) {
+    if (!args || !args[0]) return 1;
+
+    int stdout_pipe[2];
+    int stderr_pipe[2];
+
+    if (pipe(stdout_pipe) < 0 || pipe(stderr_pipe) < 0) {
+        if (error_buf) snprintf(error_buf, error_buf_size, "pipe failed");
+        return 1;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(stdout_pipe[0]); close(stdout_pipe[1]);
+        close(stderr_pipe[0]); close(stderr_pipe[1]);
+        return 1;
+    }
+
+    if (pid == 0) {
+        close(stdout_pipe[0]);
+        close(stderr_pipe[0]);
+        dup2(stdout_pipe[1], STDOUT_FILENO);
+        dup2(stderr_pipe[1], STDERR_FILENO);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[1]);
+        execv(args[0], args);
+        _exit(127);
+    }
+
+    close(stdout_pipe[1]);
+    close(stderr_pipe[1]);
+
+    if (output_buf && output_buf_size > 0) {
+        ssize_t n = read(stdout_pipe[0], output_buf, output_buf_size - 1);
+        output_buf[n > 0 ? n : 0] = '\0';
+    }
+    close(stdout_pipe[0]);
+
+    if (error_buf && error_buf_size > 0) {
+        ssize_t n = read(stderr_pipe[0], error_buf, error_buf_size - 1);
+        if (n > 0) {
+            error_buf[n] = '\0';
+        } else {
+            error_buf[0] = '\0';
+        }
+    }
+    close(stderr_pipe[0]);
+
+    int status;
+    waitpid(pid, &status, 0);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+}
+
+/*
+ * Setup a NIC on FreeBSD, similar to GhostBSD's setup-nic.py.
+ *
+ * For WiFi NICs: creates /etc/wpa_supplicant.conf if missing,
+ * writes wlans_<nic>="wlan<N>" and ifconfig_wlan<N>="WPA DHCP"
+ * to rc.conf via sysrc, runs /etc/pccard_ether <nic> startchildren.
+ *
+ * For Ethernet NICs: writes ifconfig_<nic>=DHCP to rc.conf,
+ * runs /etc/pccard_ether <nic> start.
+ */
+
+/* Regex-style check: is this a known WiFi driver name? */
+static int is_wifi_driver(const char *nic) {
+    /* Taken from devd.conf wifi-driver-regex, same as GhostBSD setup-nic.py */
+    static const char *wifi_prefixes[] = {
+        "ath", "bwi", "bwn", "ipw", "iwlwifi", "iwi", "iwm", "iwn",
+        "malo", "mwl", "mt79", "otus", "ral", "rsu", "rtw", "rtwn",
+        "rum", "run", "uath", "upgt", "ural", "urtw", "wpi", "wtap",
+        "zyd", NULL
+    };
+    for (int i = 0; wifi_prefixes[i]; i++) {
+        size_t plen = strlen(wifi_prefixes[i]);
+        if (strncmp(nic, wifi_prefixes[i], plen) == 0) {
+            /* Rest must be digits (e.g., iwm0, ath10k0) */
+            const char *rest = nic + plen;
+            if (*rest == '\0') return 1; /* bare name, unusual but accept */
+            while (*rest) {
+                if (*rest < '0' || *rest > '9') return 0;
+                rest++;
+            }
+            return 1;
+        }
+    }
+    /* Also handle ath followed by digits+k patterns like ath10k */
+    if (strncmp(nic, "ath", 3) == 0) {
+        const char *rest = nic + 3;
+        while (*rest >= '0' && *rest <= '9') rest++;
+        if (*rest == 'k') {
+            rest++;
+            while (*rest >= '0' && *rest <= '9') rest++;
+            if (*rest == '\0') return 1;
+        }
+    }
+    return 0;
+}
+
+/* Check if a NIC should be skipped (pseudo-interface) */
+static int is_pseudo_nic(const char *nic) {
+    static const char *pseudo_prefixes[] = {
+        "enc", "lo", "fwe", "fwip", "tap", "plip", "pfsync", "pflog",
+        "ipfw", "tun", "sl", "faith", "ppp", "bridge", "wg", "wlan",
+        NULL
+    };
+    for (int i = 0; pseudo_prefixes[i]; i++) {
+        size_t plen = strlen(pseudo_prefixes[i]);
+        if (strncmp(nic, pseudo_prefixes[i], plen) == 0) {
+            const char *rest = nic + plen;
+            while (*rest) {
+                if (*rest < '0' || *rest > '9') return 0;
+                rest++;
+            }
+            return 1;
+        }
+    }
+    /* vm-* interfaces */
+    if (strncmp(nic, "vm-", 3) == 0) return 1;
+    return 0;
+}
+
+/* Read the contents of /etc/rc.conf (and /etc/rc.conf.local if it exists) */
+static int read_rc_conf(char *buf, size_t buf_size) {
+    buf[0] = '\0';
+    FILE *f = fopen("/etc/rc.conf", "r");
+    if (!f) return 0;
+    size_t total = 0;
+    size_t nread;
+    char tmp[4096];
+    while ((nread = fread(tmp, 1, sizeof(tmp), f)) > 0 && total + nread < buf_size - 1) {
+        memcpy(buf + total, tmp, nread);
+        total += nread;
+    }
+    fclose(f);
+    buf[total] = '\0';
+
+    /* Also append /etc/rc.conf.local if it exists */
+    f = fopen("/etc/rc.conf.local", "r");
+    if (f) {
+        while ((nread = fread(tmp, 1, sizeof(tmp), f)) > 0 && total + nread < buf_size - 1) {
+            memcpy(buf + total, tmp, nread);
+            total += nread;
+        }
+        fclose(f);
+        buf[total] = '\0';
+    }
+    return 1;
+}
+
+static int bsd_setup_nic(const char *nic) {
+    if (!nic || !*nic) {
+        fprintf(stderr, "setup-nic: no NIC specified\n");
+        return 1;
+    }
+
+    /* Skip pseudo-interfaces */
+    if (is_pseudo_nic(nic)) {
+        fprintf(stdout, "setup-nic: skipping pseudo-interface %s\n", nic);
+        return 0;
+    }
+
+    /* Read current rc.conf content */
+    char rc_content[32768];
+    if (!read_rc_conf(rc_content, sizeof(rc_content))) {
+        fprintf(stderr, "setup-nic: cannot read /etc/rc.conf\n");
+        return 1;
+    }
+
+    if (is_wifi_driver(nic)) {
+        fprintf(stdout, "setup-nic: %s is a WiFi driver\n", nic);
+
+        /* Ensure /etc/wpa_supplicant.conf exists */
+        struct stat st;
+        if (stat("/etc/wpa_supplicant.conf", &st) != 0) {
+            fprintf(stdout, "setup-nic: creating /etc/wpa_supplicant.conf\n");
+            int fd = open("/etc/wpa_supplicant.conf", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+            if (fd >= 0) {
+                /* Write a minimal config */
+                const char *initial =
+                    "# wpa_supplicant configuration\n"
+                    "ctrl_interface=/var/run/wpa_supplicant\n"
+                    "ctrl_interface_group=wheel\n"
+                    "update_config=1\n";
+                ssize_t dummy = write(fd, initial, strlen(initial));
+                (void)dummy;
+                close(fd);
+                /* Ensure ownership: root:wheel, mode 0600 */
+                chmod("/etc/wpa_supplicant.conf", 0600);
+            } else {
+                fprintf(stderr, "setup-nic: cannot create /etc/wpa_supplicant.conf: %s\n",
+                        strerror(errno));
+            }
+        }
+
+        /* Check if wlans_<nic>= already set in rc.conf */
+        char wlans_key[128];
+        snprintf(wlans_key, sizeof(wlans_key), "wlans_%s=", nic);
+        if (!strstr(rc_content, wlans_key)) {
+            /* Find a free wlanN */
+            int wlan_num = -1;
+            for (int n = 0; n < 9; n++) {
+                char wlan_name[16];
+                snprintf(wlan_name, sizeof(wlan_name), "wlan%d", n);
+                if (!strstr(rc_content, wlan_name)) {
+                    wlan_num = n;
+                    break;
+                }
+            }
+            if (wlan_num < 0) {
+                fprintf(stderr, "setup-nic: no free wlan device number found\n");
+                return 1;
+            }
+
+            fprintf(stdout, "setup-nic: configuring %s -> wlan%d\n", nic, wlan_num);
+
+            if (find_sysrc()) {
+                char sysrc_arg1[256];
+                char sysrc_arg2[256];
+                char error[MAX_OUTPUT] = {0};
+
+                /* sysrc wlans_<nic>="wlan<N>" */
+                snprintf(sysrc_arg1, sizeof(sysrc_arg1),
+                         "wlans_%s=wlan%d", nic, wlan_num);
+                char *args1[] = {sysrc_path, sysrc_arg1, NULL};
+                int ret = run_command(args1, error, sizeof(error));
+                if (ret != 0) {
+                    fprintf(stderr, "setup-nic: sysrc failed: %s\n", error);
+                    return 1;
+                }
+
+                /* sysrc ifconfig_wlan<N>="WPA DHCP" */
+                snprintf(sysrc_arg2, sizeof(sysrc_arg2),
+                         "ifconfig_wlan%d=WPA DHCP", wlan_num);
+                char *args2[] = {sysrc_path, sysrc_arg2, NULL};
+                ret = run_command(args2, error, sizeof(error));
+                if (ret != 0) {
+                    fprintf(stderr, "setup-nic: sysrc failed: %s\n", error);
+                    return 1;
+                }
+            } else {
+                fprintf(stderr, "setup-nic: sysrc not found, cannot configure rc.conf\n");
+                return 1;
+            }
+        } else {
+            fprintf(stdout, "setup-nic: %s already has wlans_ entry in rc.conf\n", nic);
+        }
+
+        /* Run /etc/pccard_ether <nic> startchildren if it exists */
+        struct stat pccard_st;
+        if (stat("/etc/pccard_ether", &pccard_st) == 0) {
+            char error[MAX_OUTPUT] = {0};
+            char *args[] = {"/etc/pccard_ether", (char *)nic, "startchildren", NULL};
+            fprintf(stdout, "setup-nic: running /etc/pccard_ether %s startchildren\n", nic);
+            int ret = run_command(args, error, sizeof(error));
+            if (ret != 0) {
+                fprintf(stderr, "setup-nic: pccard_ether failed: %s\n", error);
+                /* Non-fatal: pccard_ether may not be needed */
+            }
+        }
+
+        /* Also ensure wpa_supplicant is running for this wlan device */
+        if (find_wpa_supplicant()) {
+            /* Check if wpa_supplicant is already running for the wlan interface */
+            char check_cmd[256];
+            snprintf(check_cmd, sizeof(check_cmd),
+                     "pgrep -f 'wpa_supplicant.*wlan' >/dev/null 2>&1");
+            if (system(check_cmd) != 0) {
+                /* Not running; the rc system should start it, but give a hint */
+                fprintf(stdout,
+                    "setup-nic: wpa_supplicant not running; it will be started by rc\n");
+            }
+        }
+
+        fprintf(stdout, "setup-nic: WiFi NIC %s configured\n", nic);
+
+    } else {
+        /* Ethernet NIC */
+        fprintf(stdout, "setup-nic: %s is an Ethernet NIC\n", nic);
+
+        /* Check if ifconfig_<nic>= already set in rc.conf */
+        char ifconfig_key[128];
+        snprintf(ifconfig_key, sizeof(ifconfig_key), "ifconfig_%s=", nic);
+        if (!strstr(rc_content, ifconfig_key)) {
+            fprintf(stdout, "setup-nic: configuring %s for DHCP\n", nic);
+
+            if (find_sysrc()) {
+                char sysrc_arg[256];
+                char error[MAX_OUTPUT] = {0};
+
+                /* sysrc ifconfig_<nic>=DHCP */
+                snprintf(sysrc_arg, sizeof(sysrc_arg), "ifconfig_%s=DHCP", nic);
+                char *args[] = {sysrc_path, sysrc_arg, NULL};
+                int ret = run_command(args, error, sizeof(error));
+                if (ret != 0) {
+                    fprintf(stderr, "setup-nic: sysrc failed: %s\n", error);
+                    return 1;
+                }
+            } else {
+                fprintf(stderr, "setup-nic: sysrc not found, cannot configure rc.conf\n");
+                return 1;
+            }
+        } else {
+            fprintf(stdout, "setup-nic: %s already has ifconfig_ entry in rc.conf\n", nic);
+        }
+
+        /* Run /etc/pccard_ether <nic> start if it exists */
+        struct stat pccard_st;
+        if (stat("/etc/pccard_ether", &pccard_st) == 0) {
+            char error[MAX_OUTPUT] = {0};
+            char *args[] = {"/etc/pccard_ether", (char *)nic, "start", NULL};
+            fprintf(stdout, "setup-nic: running /etc/pccard_ether %s start\n", nic);
+            int ret = run_command(args, error, sizeof(error));
+            if (ret != 0) {
+                fprintf(stderr, "setup-nic: pccard_ether failed: %s\n", error);
+            }
+        }
+
+        fprintf(stdout, "setup-nic: Ethernet NIC %s configured\n", nic);
+    }
+
+    return 0;
+}
+
 /* Print usage */
 static void usage(const char *prog) {
     fprintf(stderr, "Network Helper - Privileged network operations\n\n");
@@ -833,12 +1734,14 @@ static void usage(const char *prog) {
     fprintf(stderr, "Commands:\n");
     fprintf(stderr, "  wlan-enable                              Enable WLAN radio\n");
     fprintf(stderr, "  wlan-disable                             Disable WLAN radio\n");
-    fprintf(stderr, "  wlan-connect <ssid> [password]           Connect to WLAN network (via NetworkManager)\n");
+    fprintf(stderr, "  wlan-connect <ssid> [password]           Connect to WLAN network\n");
     fprintf(stderr, "  wlan-disconnect                          Disconnect from WLAN\n");
     fprintf(stderr, "  wlan-direct-connect <iface> <ssid> [pw]  Direct wpa_supplicant + DHCP connection\n");
+    fprintf(stderr, "  wlan-create <phys_dev>                   Create wlan device (FreeBSD only)\n");
+    fprintf(stderr, "  setup-nic <device>                       Setup NIC in rc.conf (FreeBSD only)\n");
     fprintf(stderr, "  dhcp-renew <interface>                   Renew DHCP lease on interface\n");
     fprintf(stderr, "  dhcp-release <interface>                 Release DHCP lease on interface\n");
-    fprintf(stderr, "  connection-add <type> <name> [device]    Add connection\n");
+    fprintf(stderr, "  connection-add <type> <name> [device]    Add connection (Linux only)\n");
     fprintf(stderr, "  connection-delete <name>                 Delete connection\n");
     fprintf(stderr, "  connection-up <name>                     Activate connection\n");
     fprintf(stderr, "  connection-down <name>                   Deactivate connection\n");
@@ -851,19 +1754,28 @@ int main(int argc, char *argv[]) {
         usage(argv[0]);
         return 1;
     }
-    
-    if (!find_nmcli()) {
-        fprintf(stderr, "Error: nmcli not found. Is NetworkManager installed?\n");
-        return 1;
+
+    detect_os();
+
+    if (!is_freebsd) {
+        if (!find_nmcli()) {
+            fprintf(stderr, "Error: nmcli not found. Is NetworkManager installed?\n");
+            return 1;
+        }
+    } else {
+        if (!find_ifconfig()) {
+            fprintf(stderr, "Error: ifconfig not found on FreeBSD.\n");
+            return 1;
+        }
     }
     
     const char *command = argv[1];
     int result = 0;
     
     if (strcmp(command, "wlan-enable") == 0) {
-        result = wlan_enable();
+        result = is_freebsd ? bsd_wlan_enable() : wlan_enable();
     } else if (strcmp(command, "wlan-disable") == 0) {
-        result = wlan_disable();
+        result = is_freebsd ? bsd_wlan_disable() : wlan_disable();
     } else if (strcmp(command, "wlan-connect") == 0) {
         if (argc < 3) {
             fprintf(stderr, "Error: wlan-connect requires SSID argument\n");
@@ -871,10 +1783,10 @@ int main(int argc, char *argv[]) {
         } else {
             const char *ssid = argv[2];
             const char *password = (argc >= 4) ? argv[3] : NULL;
-            result = wlan_connect(ssid, password);
+            result = is_freebsd ? bsd_wlan_connect(ssid, password) : wlan_connect(ssid, password);
         }
     } else if (strcmp(command, "wlan-disconnect") == 0) {
-        result = wlan_disconnect();
+        result = is_freebsd ? bsd_wlan_disconnect() : wlan_disconnect();
     } else if (strcmp(command, "wlan-direct-connect") == 0) {
         if (argc < 4) {
             fprintf(stderr, "Error: wlan-direct-connect requires interface and SSID arguments\n");
@@ -883,7 +1795,13 @@ int main(int argc, char *argv[]) {
             const char *interface = argv[2];
             const char *ssid = argv[3];
             const char *password = (argc >= 5) ? argv[4] : NULL;
-            result = wlan_direct_connect(interface, ssid, password);
+            if (is_freebsd) {
+                /* On FreeBSD, wlan-connect already does the direct method */
+                (void)interface;
+                result = bsd_wlan_connect(ssid, password);
+            } else {
+                result = wlan_direct_connect(interface, ssid, password);
+            }
         }
     } else if (strcmp(command, "dhcp-renew") == 0) {
         if (argc < 3) {
@@ -891,7 +1809,7 @@ int main(int argc, char *argv[]) {
             result = 1;
         } else {
             const char *interface = argv[2];
-            result = dhcp_renew(interface);
+            result = is_freebsd ? bsd_dhcp_renew(interface) : dhcp_renew(interface);
         }
     } else if (strcmp(command, "dhcp-release") == 0) {
         if (argc < 3) {
@@ -899,10 +1817,13 @@ int main(int argc, char *argv[]) {
             result = 1;
         } else {
             const char *interface = argv[2];
-            result = dhcp_release(interface);
+            result = is_freebsd ? bsd_dhcp_release(interface) : dhcp_release(interface);
         }
     } else if (strcmp(command, "connection-add") == 0) {
-        if (argc < 4) {
+        if (is_freebsd) {
+            fprintf(stderr, "connection-add not supported on FreeBSD (use wlan-connect)\n");
+            result = 1;
+        } else if (argc < 4) {
             fprintf(stderr, "Error: connection-add requires type and name arguments\n");
             result = 1;
         } else {
@@ -917,7 +1838,7 @@ int main(int argc, char *argv[]) {
             result = 1;
         } else {
             const char *name = argv[2];
-            result = connection_delete(name);
+            result = is_freebsd ? bsd_connection_delete(name) : connection_delete(name);
         }
     } else if (strcmp(command, "connection-up") == 0) {
         if (argc < 3) {
@@ -925,7 +1846,12 @@ int main(int argc, char *argv[]) {
             result = 1;
         } else {
             const char *name = argv[2];
-            result = connection_up(name);
+            if (is_freebsd) {
+                /* On FreeBSD, connection-up enables the interface */
+                result = bsd_interface_enable(name);
+            } else {
+                result = connection_up(name);
+            }
         }
     } else if (strcmp(command, "connection-down") == 0) {
         if (argc < 3) {
@@ -933,7 +1859,11 @@ int main(int argc, char *argv[]) {
             result = 1;
         } else {
             const char *name = argv[2];
-            result = connection_down(name);
+            if (is_freebsd) {
+                result = bsd_interface_disable(name);
+            } else {
+                result = connection_down(name);
+            }
         }
     } else if (strcmp(command, "interface-enable") == 0) {
         if (argc < 3) {
@@ -941,7 +1871,7 @@ int main(int argc, char *argv[]) {
             result = 1;
         } else {
             const char *device = argv[2];
-            result = interface_enable(device);
+            result = is_freebsd ? bsd_interface_enable(device) : interface_enable(device);
         }
     } else if (strcmp(command, "interface-disable") == 0) {
         if (argc < 3) {
@@ -949,7 +1879,29 @@ int main(int argc, char *argv[]) {
             result = 1;
         } else {
             const char *device = argv[2];
-            result = interface_disable(device);
+            result = is_freebsd ? bsd_interface_disable(device) : interface_disable(device);
+        }
+    } else if (strcmp(command, "wlan-create") == 0) {
+        if (!is_freebsd) {
+            fprintf(stderr, "wlan-create is only supported on FreeBSD\n");
+            result = 1;
+        } else if (argc < 3) {
+            fprintf(stderr, "Error: wlan-create requires physical device argument\n");
+            result = 1;
+        } else {
+            const char *phys_dev = argv[2];
+            result = bsd_wlan_create(phys_dev);
+        }
+    } else if (strcmp(command, "setup-nic") == 0) {
+        if (!is_freebsd) {
+            fprintf(stderr, "setup-nic is only supported on FreeBSD\n");
+            result = 1;
+        } else if (argc < 3) {
+            fprintf(stderr, "Error: setup-nic requires device argument\n");
+            result = 1;
+        } else {
+            const char *device = argv[2];
+            result = bsd_setup_nic(device);
         }
     } else {
         fprintf(stderr, "Error: Unknown command '%s'\n\n", command);
