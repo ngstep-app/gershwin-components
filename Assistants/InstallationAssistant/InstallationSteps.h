@@ -131,7 +131,6 @@ NSString *IACheckImageSourceAvailable(void);
     NSMutableArray *_disks;
     NSTextField *_statusLabel;
     NSProgressIndicator *_spinner;
-    NSButton *_detailsButton;
     NSMutableString *_diagnostics;
     BOOL _isLoading;
 }
@@ -140,7 +139,6 @@ NSString *IACheckImageSourceAvailable(void);
 @property (assign, nonatomic) id<IADiskSelectionDelegate> delegate;
 - (IADiskInfo *)selectedDisk;
 - (void)refreshDiskList;
-- (void)showDiagnostics:(id)sender;
 @end
 
 // ============================================================================
@@ -184,18 +182,17 @@ NSString *IACheckImageSourceAvailable(void);
 {
     NSView *_stepView;
     NSProgressIndicator *_progressBar;
-    NSTextField *_phaseLabel;
     NSTextField *_detailLabel;
-    NSTextField *_percentLabel;
-    NSTextField *_elapsedLabel;
+    NSTextField *_etaLabel;
     NSTask *_installerTask;
     NSPipe *_outputPipe;
     NSMutableString *_lineBuffer;
-    NSTimer *_elapsedTimer;
+    NSTimer *_etaTimer;
     BOOL _isRunning;
     BOOL _isFinished;
     BOOL _wasSuccessful;
     NSDate *_startTime;
+    double _currentPercent;
 }
 @property (copy, nonatomic) NSString *stepTitle;
 @property (copy, nonatomic) NSString *stepDescription;

@@ -3,64 +3,99 @@
 /* Application title */
 "Install Operating System" = "Install Operating System";
 
+/* App menu */
+"Installer" = "Installer";
+"About Installer" = "About Installer";
+"Hide Installer" = "Hide Installer";
+"Hide Others" = "Hide Others";
+"Show All" = "Show All";
+"Quit Installer" = "Quit Installer";
+
+/* Edit menu */
+"Edit" = "Edit";
+"Cut" = "Cut";
+"Copy" = "Copy";
+"Paste" = "Paste";
+"Select All" = "Select All";
+
+/* Window menu */
+"Window" = "Window";
+"Minimize" = "Minimize";
+"Zoom" = "Zoom";
+"Installer Log" = "Installer Log";
+"Bring All to Front" = "Bring All to Front";
+
 /* Welcome Step */
 "Welcome" = "Welcome";
 "Welcome to the system installer" = "Welcome to the system installer";
 "Welcome to the Installer" = "Welcome to the Installer";
+"This assistant will guide you through installing the operating system." = "This assistant will guide you through installing the operating system.";
 
 /* License Step */
 "License" = "License";
 "Please read and accept the software license" = "Please read and accept the software license";
 "I agree to the terms of this license" = "I agree to the terms of this license";
 
+/* Installation Type Step */
+"Installation Type" = "Installation Type";
+"Choose how to install the system" = "Choose how to install the system";
+"Choose the installation method:" = "Choose the installation method:";
+"Clone running system to disk" = "Clone running system to disk";
+"Image based installation (from external media)" = "Image based installation (from external media)";
+"Image source detected: %@" = "Image source detected: %@";
+"No installation media detected" = "No installation media detected";
+
 /* Disk Selection Step */
-"Select Destination" = "Select Destination";
-"Choose the disk to install to" = "Choose the disk to install to";
-"Select a disk to install to:" = "Select a disk to install to:";
-"Disk" = "Disk";
+"Select Destination Disk" = "Select Destination Disk";
+"Choose a physical disk to install to" = "Choose a physical disk to install to";
+"Scanning for disks..." = "Scanning for disks...";
+"Device" = "Device";
+"Name" = "Name";
 "Size" = "Size";
-"Description" = "Description";
-"Scanning for available disks..." = "Scanning for available disks...";
-"No suitable disks found." = "No suitable disks found.";
+"Found %lu disk(s)" = "Found %lu disk(s)";
+"Error enumerating disks - see Details" = "Error enumerating disks - see Details";
+"No disks found - see Details" = "No disks found - see Details";
+"Failed to start disk enumeration script" = "Failed to start disk enumeration script";
+"Disk Enumeration Diagnostics" = "Disk Enumeration Diagnostics";
 "Refresh" = "Refresh";
 "Unknown Disk" = "Unknown Disk";
 
 /* Confirm Step */
 "Confirmation" = "Confirmation";
-"Review and confirm" = "Review and confirm";
-"No disk selected." = "No disk selected.";
-"I understand that all data on this disk will be erased" = "I understand that all data on this disk will be erased";
-"Install" = "Install";
+"Finalize and start installation" = "Finalize and start installation";
+"Warning: This will erase all data on the selected disk." = "Warning: This will erase all data on the selected disk.";
+"I understand that all data will be erased" = "I understand that all data will be erased";
 
 /* Progress Step */
 "Installing" = "Installing";
-"Installation in progress" = "Installation in progress";
+"Installing the system to the selected disk" = "Installing the system to the selected disk";
 "Preparing installation..." = "Preparing installation...";
-"Starting installation..." = "Starting installation...";
-"Installation complete." = "Installation complete.";
-"Installation failed." = "Installation failed.";
 "Installation failed. See log for details." = "Installation failed. See log for details.";
-"Error: Installer script not found" = "Error: Installer script not found";
-"Error: Could not start installer" = "Error: Could not start installer";
+"Error" = "Error";
+"Failed to launch installer script" = "Failed to launch installer script";
+
+/* ETA strings */
+"About %d hours and %d minutes remaining" = "About %d hours and %d minutes remaining";
+"About %d hours remaining" = "About %d hours remaining";
+"About %d minutes remaining" = "About %d minutes remaining";
+"About a minute remaining" = "About a minute remaining";
+"Less than a minute remaining" = "Less than a minute remaining";
 
 /* Completion Step */
 "Finished" = "Finished";
 "Installation complete" = "Installation complete";
-"Installation Successful" = "Installation Successful";
-"Installation Failed" = "Installation Failed";
+"The operating system has been installed successfully.\nPlease restart your computer to boot from the new disk." = "The operating system has been installed successfully.\nPlease restart your computer to boot from the new disk.";
 "Restart" = "Restart";
-"Close" = "Close";
-
-/* Log Window */
-"Installation Log" = "Installation Log";
-"Show Log" = "Show Log";
-"Window" = "Window";
 
 /* Cancel dialog */
 "Cancel Installation?" = "Cancel Installation?";
-"Are you sure you want to cancel the installation?" = "Are you sure you want to cancel the installation?";
-"Cancel Installation" = "Cancel Installation";
-"Continue Installation" = "Continue Installation";
+"Are you sure you want to cancel?" = "Are you sure you want to cancel?";
+"Cancel" = "Cancel";
+"Continue" = "Continue";
 
-/* Menu */
-"Quit" = "Quit";
+/* ETA estimation */
+"Estimating time remaining..." = "Estimating time remaining...";
+
+/* Updated disk messages */
+"Error enumerating disks" = "Error enumerating disks";
+"No disks found" = "No disks found";

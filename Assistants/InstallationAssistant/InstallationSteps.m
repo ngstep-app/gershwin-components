@@ -595,7 +595,6 @@ NSString *IACheckImageSourceAvailable(void)
     [_disks release];
     [_statusLabel release];
     [_spinner release];
-    [_detailsButton release];
     [_diagnostics release];
     [super dealloc];
 }
@@ -627,13 +626,7 @@ NSString *IACheckImageSourceAvailable(void)
     [_stepView addSubview:scrollView];
     [scrollView release];
 
-    _detailsButton = [[NSButton alloc] initWithFrame:NSMakeRect(20, 20, 80, 24)];
-    [_detailsButton setTitle:NSLocalizedString(@"Details", @"")];
-    [_detailsButton setTarget:self];
-    [_detailsButton setAction:@selector(showDiagnostics:)];
-    [_stepView addSubview:_detailsButton];
-
-    _spinner = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(110, 20, 16, 16)];
+    _spinner = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20, 20, 16, 16)];
     [_spinner setStyle:NSProgressIndicatorSpinningStyle];
     [_spinner startAnimation:nil];
     [_stepView addSubview:_spinner];
@@ -733,12 +726,12 @@ NSString *IACheckImageSourceAvailable(void)
             [_diagnostics appendString:@"Unexpected JSON output from script\n"];
             if (jsonError) [_diagnostics appendFormat:@"JSON error: %@\n", [jsonError localizedDescription]];
             if (errStr && [errStr length] > 0) [_diagnostics appendFormat:@"Script stderr:\n%@\n", errStr];
-            [_statusLabel setStringValue:NSLocalizedString(@"Error enumerating disks - see Details", @"")];
+            [_statusLabel setStringValue:NSLocalizedString(@"Error enumerating disks", @"")];
         }
     } else {
         [_diagnostics appendString:@"No output from disk enumeration script\n"];
         if (errStr && [errStr length] > 0) [_diagnostics appendFormat:@"Script stderr:\n%@\n", errStr];
-        [_statusLabel setStringValue:NSLocalizedString(@"No disks found - see Details", @"")];
+        [_statusLabel setStringValue:NSLocalizedString(@"No disks found", @"")];
     }
 
     if (term != 0) {
@@ -911,14 +904,20 @@ NSString *IACheckImageSourceAvailable(void)
 
 - (instancetype)init
 {
+    NSRect screenFrame = [[NSScreen mainScreen] frame];
+    CGFloat logHeight = screenFrame.size.height / 4.0;
+    NSRect logFrame = NSMakeRect(screenFrame.origin.x,
+                                  screenFrame.origin.y,
+                                  screenFrame.size.width,
+                                  logHeight);
     NSWindow *logWindow = [[NSWindow alloc]
-        initWithContentRect:NSMakeRect(200, 200, 600, 400)
+        initWithContentRect:logFrame
                   styleMask:(NSTitledWindowMask | NSClosableWindowMask |
                              NSResizableWindowMask | NSMiniaturizableWindowMask)
                     backing:NSBackingStoreBuffered
                       defer:YES];
-    [logWindow setTitle:NSLocalizedString(@"Installation Log", @"")];
-    [logWindow setMinSize:NSMakeSize(400, 200)];
+    [logWindow setTitle:NSLocalizedString(@"Installer Log", @"")];
+    [logWindow setMinSize:NSMakeSize(400, 100)];
 
     if (self = [super initWithWindow:logWindow]) {
         NSView *contentView = [logWindow contentView];
@@ -1003,15 +1002,13 @@ NSString *IACheckImageSourceAvailable(void)
 - (void)dealloc
 {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    [_elapsedTimer invalidate];
-    [_elapsedTimer release];
+    [_etaTimer invalidate];
+    [_etaTimer release];
     [_startTime release];
     [_stepView release];
     [_progressBar release];
-    [_phaseLabel release];
     [_detailLabel release];
-    [_percentLabel release];
-    [_elapsedLabel release];
+    [_etaLabel release];
     [_lineBuffer release];
     [_outputPipe release];
     [_installerTask release];
@@ -1021,47 +1018,33 @@ NSString *IACheckImageSourceAvailable(void)
 
 - (void)setupView
 {
-    _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 140)];
+    _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 250)];
 
-    /* Phase label at top */
-    _phaseLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 110, 360, 20)];
-    [_phaseLabel setBezeled:NO]; [_phaseLabel setDrawsBackground:NO];
-    [_phaseLabel setEditable:NO]; [_phaseLabel setSelectable:NO];
-    [_phaseLabel setFont:[NSFont boldSystemFontOfSize:12]];
-    [_phaseLabel setStringValue:NSLocalizedString(@"Waiting to start...", @"")];
-    [_stepView addSubview:_phaseLabel];
-
-    /* Detail label */
-    _detailLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 86, 360, 18)];
+    /* Status detail label - above progress bar, shows current operation */
+    _detailLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(40, 141, 320, 18)];
     [_detailLabel setBezeled:NO]; [_detailLabel setDrawsBackground:NO];
     [_detailLabel setEditable:NO]; [_detailLabel setSelectable:NO];
     [_detailLabel setFont:[NSFont systemFontOfSize:11]];
     [_detailLabel setTextColor:[NSColor darkGrayColor]];
+    [_detailLabel setAlignment:NSCenterTextAlignment];
+    [_detailLabel setStringValue:NSLocalizedString(@"Preparing installation...", @"")];
     [_stepView addSubview:_detailLabel];
 
-    /* Progress bar */
-    _progressBar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20, 58, 310, 16)];
+    /* Progress bar - vertically centered */
+    _progressBar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(40, 117, 320, 16)];
     [_progressBar setIndeterminate:NO];
     [_progressBar setMinValue:0.0];
     [_progressBar setMaxValue:100.0];
     [_stepView addSubview:_progressBar];
 
-    /* Percent label right of progress bar */
-    _percentLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(336, 58, 44, 16)];
-    [_percentLabel setBezeled:NO]; [_percentLabel setDrawsBackground:NO];
-    [_percentLabel setEditable:NO]; [_percentLabel setSelectable:NO];
-    [_percentLabel setAlignment:NSRightTextAlignment];
-    [_percentLabel setFont:[NSFont systemFontOfSize:11]];
-    [_percentLabel setStringValue:@"0%"];
-    [_stepView addSubview:_percentLabel];
-
-    /* Elapsed time label */
-    _elapsedLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 34, 360, 16)];
-    [_elapsedLabel setBezeled:NO]; [_elapsedLabel setDrawsBackground:NO];
-    [_elapsedLabel setEditable:NO]; [_elapsedLabel setSelectable:NO];
-    [_elapsedLabel setFont:[NSFont systemFontOfSize:10]];
-    [_elapsedLabel setTextColor:[NSColor grayColor]];
-    [_stepView addSubview:_elapsedLabel];
+    /* ETA label below progress bar */
+    _etaLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(40, 91, 320, 18)];
+    [_etaLabel setBezeled:NO]; [_etaLabel setDrawsBackground:NO];
+    [_etaLabel setEditable:NO]; [_etaLabel setSelectable:NO];
+    [_etaLabel setFont:[NSFont systemFontOfSize:11]];
+    [_etaLabel setTextColor:[NSColor grayColor]];
+    [_etaLabel setAlignment:NSCenterTextAlignment];
+    [_stepView addSubview:_etaLabel];
 
     _lineBuffer = [[NSMutableString alloc] init];
 }
@@ -1088,23 +1071,22 @@ NSString *IACheckImageSourceAvailable(void)
     [_startTime release];
     _startTime = [[NSDate date] retain];
     [_lineBuffer setString:@""];
-    [_phaseLabel setStringValue:NSLocalizedString(@"Phase: starting", @"")];
-    [_detailLabel setStringValue:@""];
-    [_percentLabel setStringValue:@"0%"];
+    _currentPercent = 0.0;
+    [_detailLabel setStringValue:NSLocalizedString(@"Preparing installation...", @"")];
     [_progressBar setDoubleValue:0.0];
-    [_elapsedLabel setStringValue:@""];
+    [_etaLabel setStringValue:@""];
     if ([self logWindowController]) {
         [[self logWindowController] clearLog];
     }
 
-    /* Start elapsed time timer */
-    [_elapsedTimer invalidate];
-    [_elapsedTimer release];
-    _elapsedTimer = [[NSTimer scheduledTimerWithTimeInterval:1.0
-                                                     target:self
-                                                   selector:@selector(_updateElapsed:)
-                                                   userInfo:nil
-                                                    repeats:YES] retain];
+    /* Start ETA update timer */
+    [_etaTimer invalidate];
+    [_etaTimer release];
+    _etaTimer = [[NSTimer scheduledTimerWithTimeInterval:1.0
+                                                 target:self
+                                               selector:@selector(_updateETA:)
+                                               userInfo:nil
+                                                repeats:YES] retain];
 
     NSString *scriptPath = IAInstallerScriptPath();
     NSLog(@"IAInstallProgressStep: launching installer %@", scriptPath);
@@ -1223,23 +1205,40 @@ NSString *IACheckImageSourceAvailable(void)
     /* Append to log view */
     [self _appendLog:[line stringByAppendingString:@"\n"]];
 
-    /* Parse PROGRESS: lines */
+    /* Parse PROGRESS: lines - format: PROGRESS:phase:percent:message */
     if ([line hasPrefix:@"PROGRESS:"]) {
         NSArray *parts = [line componentsSeparatedByString:@":"];
         if ([parts count] >= 4) {
-            NSString *phase = parts[1];
             NSString *percentStr = parts[2];
             NSString *message = [[parts subarrayWithRange:
                 NSMakeRange(3, [parts count] - 3)]
                 componentsJoinedByString:@":"];
             double pct = [percentStr doubleValue];
 
-            [_phaseLabel setStringValue:
-                [NSString stringWithFormat:NSLocalizedString(@"Phase: %@", @""), phase]];
-            [_detailLabel setStringValue:message ? message : @""];
-            [_percentLabel setStringValue:
-                [NSString stringWithFormat:@"%.0f%%", pct]];
+            /* Strip trailing percentage from display message
+               e.g., "Copying files... 45%" -> "Copying files..." */
+            NSString *displayMsg = message ?: @"";
+            NSRange pctSuffix = [displayMsg rangeOfString:@"%"
+                                                 options:NSBackwardsSearch];
+            if (pctSuffix.location != NSNotFound &&
+                pctSuffix.location == [displayMsg length] - 1) {
+                NSCharacterSet *digits = [NSCharacterSet decimalDigitCharacterSet];
+                NSUInteger idx = pctSuffix.location;
+                while (idx > 0 &&
+                       [digits characterIsMember:[displayMsg characterAtIndex:idx - 1]]) {
+                    idx--;
+                }
+                if (idx < pctSuffix.location) {
+                    displayMsg = [[displayMsg substringToIndex:idx]
+                        stringByTrimmingCharactersInSet:
+                            [NSCharacterSet whitespaceCharacterSet]];
+                }
+            }
+
+            [_detailLabel setStringValue:displayMsg];
             [_progressBar setDoubleValue:pct];
+            _currentPercent = pct;
+            [self _updateETA:nil];
         }
     }
 }
@@ -1261,9 +1260,9 @@ NSString *IACheckImageSourceAvailable(void)
     int status = [task terminationStatus];
     NSLog(@"IAInstallProgressStep: task terminated with status %d", status);
 
-    [_elapsedTimer invalidate];
-    [_elapsedTimer release];
-    _elapsedTimer = nil;
+    [_etaTimer invalidate];
+    [_etaTimer release];
+    _etaTimer = nil;
 
     [[NSNotificationCenter defaultCenter] removeObserver:self
                                                     name:NSFileHandleReadCompletionNotification
@@ -1285,8 +1284,8 @@ NSString *IACheckImageSourceAvailable(void)
             NSLocalizedString(@"Installation failed. See log for details.", @"")];
     }
 
-    /* Update elapsed time one final time */
-    [self _updateElapsed:nil];
+    /* Clear ETA on completion */
+    [_etaLabel setStringValue:@""];
 
     /* Notify delegate */
     if (delegate && [delegate respondsToSelector:@selector(installProgressDidFinish:)]) {
@@ -1301,11 +1300,11 @@ NSString *IACheckImageSourceAvailable(void)
     _isRunning = NO;
     _isFinished = YES;
     _wasSuccessful = NO;
-    [_elapsedTimer invalidate];
-    [_elapsedTimer release];
-    _elapsedTimer = nil;
-    [_phaseLabel setStringValue:NSLocalizedString(@"Error", @"")];
+    [_etaTimer invalidate];
+    [_etaTimer release];
+    _etaTimer = nil;
     [_detailLabel setStringValue:NSLocalizedString(@"Failed to launch installer script", @"")];
+    [_etaLabel setStringValue:@""];
     [self _appendLog:[NSString stringWithFormat:@"LAUNCH ERROR: %@\n",
                       [info objectForKey:@"error"]]];
     if (delegate && [delegate respondsToSelector:@selector(installProgressDidFinish:)]) {
@@ -1313,16 +1312,50 @@ NSString *IACheckImageSourceAvailable(void)
     }
 }
 
-/* ---- Elapsed time timer ---- */
-- (void)_updateElapsed:(NSTimer *)timer
+/* ---- ETA update timer ---- */
+- (void)_updateETA:(NSTimer *)timer
 {
     (void)timer;
     if (!_startTime) return;
     NSTimeInterval elapsed = [[NSDate date] timeIntervalSinceDate:_startTime];
-    int mins = (int)(elapsed / 60.0);
-    int secs = (int)elapsed % 60;
-    [_elapsedLabel setStringValue:
-        [NSString stringWithFormat:NSLocalizedString(@"Elapsed: %d:%02d", @""), mins, secs]];
+
+    if (_currentPercent >= 100.0) {
+        [_etaLabel setStringValue:@""];
+        return;
+    }
+
+    if (_currentPercent < 2.0 || elapsed < 10.0) {
+        [_etaLabel setStringValue:
+            NSLocalizedString(@"Estimating time remaining...", @"")];
+        return;
+    }
+
+    double rate = _currentPercent / elapsed;
+    if (rate < 0.001) {
+        [_etaLabel setStringValue:
+            NSLocalizedString(@"Estimating time remaining...", @"")];
+        return;
+    }
+    double remaining = (100.0 - _currentPercent) / rate;
+    int secs = (int)remaining;
+
+    if (secs > 7200) {
+        int hours = secs / 3600;
+        int mins = (secs % 3600) / 60;
+        [_etaLabel setStringValue:[NSString stringWithFormat:
+            NSLocalizedString(@"About %d hours and %d minutes remaining", @""),
+            hours, mins]];
+    } else if (secs > 120) {
+        int mins = (secs + 30) / 60;
+        [_etaLabel setStringValue:[NSString stringWithFormat:
+            NSLocalizedString(@"About %d minutes remaining", @""), mins]];
+    } else if (secs > 60) {
+        [_etaLabel setStringValue:
+            NSLocalizedString(@"About a minute remaining", @"")];
+    } else {
+        [_etaLabel setStringValue:
+            NSLocalizedString(@"Less than a minute remaining", @"")];
+    }
 }
 
 - (NSView *)stepView { return _stepView; }

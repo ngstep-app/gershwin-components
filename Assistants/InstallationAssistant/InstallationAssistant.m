@@ -142,23 +142,91 @@ int main(int argc, const char *argv[]) {
         [NSApp setDelegate:appDelegate];
         
         NSMenu *mainMenu = [[NSMenu alloc] init];
-        NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
-        [mainMenu addItem:appMenuItem];
-        [NSApp setMainMenu:mainMenu];
         
-        NSMenu *appMenu = [[NSMenu alloc] init];
-        NSMenuItem *quitMenuItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Quit", @"")
-                                                              action:@selector(terminate:)
-                                                       keyEquivalent:@"q"];
-        [appMenu addItem:quitMenuItem];
+        /* === Application (Apple) Menu - populate the existing app-name menu === */
+        NSString *appName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"];
+        if (!appName) appName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleName"];
+        if (!appName) appName = [[NSProcessInfo processInfo] processName];
+        NSMenuItem *appMenuItem = [[NSMenuItem alloc] initWithTitle:appName
+                                                             action:nil
+                                                      keyEquivalent:@""];
+        [mainMenu addItem:appMenuItem];
+        NSMenu *appMenu = [[NSMenu alloc] initWithTitle:appName];
+        [appMenu addItemWithTitle:NSLocalizedString(@"About Installer", @"")
+                           action:@selector(orderFrontStandardAboutPanel:)
+                    keyEquivalent:@""];
+        [appMenu addItem:[NSMenuItem separatorItem]];
+        [appMenu addItemWithTitle:NSLocalizedString(@"Hide Installer", @"")
+                           action:@selector(hide:)
+                    keyEquivalent:@"h"];
+        NSMenuItem *hideOthersItem = (NSMenuItem *)[appMenu addItemWithTitle:NSLocalizedString(@"Hide Others", @"")
+                                                       action:@selector(hideOtherApplications:)
+                                                keyEquivalent:@"h"];
+        [hideOthersItem setKeyEquivalentModifierMask:(NSCommandKeyMask | NSAlternateKeyMask)];
+        [appMenu addItemWithTitle:NSLocalizedString(@"Show All", @"")
+                           action:@selector(unhideAllApplications:)
+                    keyEquivalent:@""];
+        [appMenu addItem:[NSMenuItem separatorItem]];
+        [appMenu addItemWithTitle:NSLocalizedString(@"Quit Installer", @"")
+                           action:@selector(terminate:)
+                    keyEquivalent:@"q"];
         [appMenuItem setSubmenu:appMenu];
         
-        /* Window menu with Show Log item */
-        NSMenuItem *windowMenuItem = [[NSMenuItem alloc] init];
+        /* === Edit Menu === */
+        NSMenuItem *editMenuItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Edit", @"")
+                                                              action:nil
+                                                       keyEquivalent:@""];
+        [mainMenu addItem:editMenuItem];
+        NSMenu *editMenu = [[NSMenu alloc] initWithTitle:NSLocalizedString(@"Edit", @"")];
+        [editMenu addItemWithTitle:NSLocalizedString(@"Cut", @"")
+                            action:@selector(cut:) keyEquivalent:@"x"];
+        [editMenu addItemWithTitle:NSLocalizedString(@"Copy", @"")
+                            action:@selector(copy:) keyEquivalent:@"c"];
+        [editMenu addItemWithTitle:NSLocalizedString(@"Paste", @"")
+                            action:@selector(paste:) keyEquivalent:@"v"];
+        [editMenu addItemWithTitle:NSLocalizedString(@"Select All", @"")
+                            action:@selector(selectAll:) keyEquivalent:@"a"];
+        [editMenuItem setSubmenu:editMenu];
+        
+        /* === Window Menu === */
+        NSMenuItem *windowMenuItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Window", @"")
+                                                                action:nil
+                                                         keyEquivalent:@""];
         [mainMenu addItem:windowMenuItem];
         NSMenu *windowMenu = [[NSMenu alloc] initWithTitle:NSLocalizedString(@"Window", @"")];
+        [windowMenu addItemWithTitle:NSLocalizedString(@"Minimize", @"")
+                              action:@selector(performMiniaturize:)
+                       keyEquivalent:@"m"];
+        [windowMenu addItemWithTitle:NSLocalizedString(@"Zoom", @"")
+                              action:@selector(performZoom:)
+                       keyEquivalent:@""];
+        [windowMenu addItem:[NSMenuItem separatorItem]];
+        NSMenuItem *logMenuItem = (NSMenuItem *)[windowMenu addItemWithTitle:NSLocalizedString(@"Installer Log", @"")
+                                                       action:@selector(showLog:)
+                                                keyEquivalent:@"L"];
+        [windowMenu addItem:[NSMenuItem separatorItem]];
+        [windowMenu addItemWithTitle:NSLocalizedString(@"Bring All to Front", @"")
+                              action:@selector(arrangeInFront:)
+                       keyEquivalent:@""];
         [windowMenuItem setSubmenu:windowMenu];
+        [NSApp setWindowsMenu:windowMenu];
         
+        [NSApp setMainMenu:mainMenu];
+        /* GNUstep may insert an empty application-name placeholder at index 0.
+           If present, populate that placeholder with our application menu and
+           remove the duplicate item we previously added. */
+        if ([mainMenu numberOfItems] > 0) {
+            NSMenuItem *firstItem = [mainMenu itemAtIndex:0];
+            NSMenuItem *secondItem = ([mainMenu numberOfItems] > 1) ? [mainMenu itemAtIndex:1] : nil;
+            if (firstItem && (([firstItem submenu] == nil) || ([[firstItem submenu] numberOfItems] == 0))) {
+                [firstItem setTitle:appName];
+                [firstItem setSubmenu:appMenu];
+                if (secondItem && [secondItem submenu] == appMenu) {
+                    [mainMenu removeItemAtIndex:1];
+                }
+            }
+        }
+
         InstallationDelegate *delegate = [[InstallationDelegate alloc] init];
         
         /* Check for image-based installation source before building UI */
@@ -200,13 +268,8 @@ int main(int argc, const char *argv[]) {
         delegate->_confirmStep = confirmStep;
         delegate->_logWindowController = logWC;
 
-        /* Add Show Log menu item - wired to delegate */
-        NSMenuItem *showLogItem = [[NSMenuItem alloc]
-            initWithTitle:NSLocalizedString(@"Show Log", @"")
-                   action:@selector(showLog:)
-            keyEquivalent:@"l"];
-        [showLogItem setTarget:delegate];
-        [windowMenu addItem:showLogItem];
+        /* Wire Installer Log menu item to delegate */
+        [logMenuItem setTarget:delegate];
         
         GSAssistantBuilder *builder = [GSAssistantBuilder builder];
         [builder withTitle:NSLocalizedString(@"Install Operating System", @"")];

@@ -3,64 +3,99 @@
 /* Application title */
 "Install Operating System" = "Betriebssystem installieren";
 
+/* App menu */
+"Installer" = "Installationsprogramm";
+"About Installer" = "Über das Installationsprogramm";
+"Hide Installer" = "Installationsprogramm ausblenden";
+"Hide Others" = "Andere ausblenden";
+"Show All" = "Alle einblenden";
+"Quit Installer" = "Installationsprogramm beenden";
+
+/* Edit menu */
+"Edit" = "Bearbeiten";
+"Cut" = "Ausschneiden";
+"Copy" = "Kopieren";
+"Paste" = "Einsetzen";
+"Select All" = "Alles auswählen";
+
+/* Window menu */
+"Window" = "Fenster";
+"Minimize" = "Im Dock ablegen";
+"Zoom" = "Zoomen";
+"Installer Log" = "Installationsprotokoll";
+"Bring All to Front" = "Alle nach vorne bringen";
+
 /* Welcome Step */
 "Welcome" = "Willkommen";
 "Welcome to the system installer" = "Willkommen beim Installationsprogramm";
 "Welcome to the Installer" = "Willkommen beim Installationsprogramm";
+"This assistant will guide you through installing the operating system." = "Dieser Assistent führt Sie durch die Installation des Betriebssystems.";
 
 /* License Step */
 "License" = "Lizenz";
 "Please read and accept the software license" = "Bitte lesen und akzeptieren Sie die Softwarelizenz";
 "I agree to the terms of this license" = "Ich stimme den Lizenzbedingungen zu";
 
+/* Installation Type Step */
+"Installation Type" = "Installationsart";
+"Choose how to install the system" = "Wählen Sie die Installationsmethode";
+"Choose the installation method:" = "Wählen Sie die Installationsmethode:";
+"Clone running system to disk" = "Laufendes System auf Laufwerk klonen";
+"Image based installation (from external media)" = "Image-basierte Installation (von externem Medium)";
+"Image source detected: %@" = "Image-Quelle erkannt: %@";
+"No installation media detected" = "Kein Installationsmedium erkannt";
+
 /* Disk Selection Step */
-"Select Destination" = "Ziel auswählen";
-"Choose the disk to install to" = "Wählen Sie das Installationslaufwerk";
-"Select a disk to install to:" = "Wählen Sie ein Laufwerk für die Installation:";
-"Disk" = "Laufwerk";
+"Select Destination Disk" = "Ziellaufwerk auswählen";
+"Choose a physical disk to install to" = "Wählen Sie ein Laufwerk für die Installation";
+"Scanning for disks..." = "Suche nach Laufwerken...";
+"Device" = "Gerät";
+"Name" = "Name";
 "Size" = "Größe";
-"Description" = "Beschreibung";
-"Scanning for available disks..." = "Suche nach verfügbaren Laufwerken...";
-"No suitable disks found." = "Keine geeigneten Laufwerke gefunden.";
+"Found %lu disk(s)" = "%lu Laufwerk(e) gefunden";
+"Error enumerating disks - see Details" = "Fehler beim Auflisten der Laufwerke";
+"No disks found - see Details" = "Keine Laufwerke gefunden";
+"Failed to start disk enumeration script" = "Laufwerk-Erkennungsskript konnte nicht gestartet werden";
+"Disk Enumeration Diagnostics" = "Laufwerk-Diagnose";
 "Refresh" = "Aktualisieren";
 "Unknown Disk" = "Unbekanntes Laufwerk";
 
 /* Confirm Step */
 "Confirmation" = "Bestätigung";
-"Review and confirm" = "Überprüfen und bestätigen";
-"No disk selected." = "Kein Laufwerk ausgewählt.";
-"I understand that all data on this disk will be erased" = "Ich verstehe, dass alle Daten auf diesem Laufwerk gelöscht werden";
-"Install" = "Installieren";
+"Finalize and start installation" = "Installation bestätigen und starten";
+"Warning: This will erase all data on the selected disk." = "Warnung: Alle Daten auf dem ausgewählten Laufwerk werden gelöscht.";
+"I understand that all data will be erased" = "Ich verstehe, dass alle Daten gelöscht werden";
 
 /* Progress Step */
 "Installing" = "Installation";
-"Installation in progress" = "Installation wird durchgeführt";
+"Installing the system to the selected disk" = "Das System wird auf das ausgewählte Laufwerk installiert";
 "Preparing installation..." = "Installation wird vorbereitet...";
-"Starting installation..." = "Installation wird gestartet...";
-"Installation complete." = "Installation abgeschlossen.";
-"Installation failed." = "Installation fehlgeschlagen.";
 "Installation failed. See log for details." = "Installation fehlgeschlagen. Details im Protokoll.";
-"Error: Installer script not found" = "Fehler: Installationsskript nicht gefunden";
-"Error: Could not start installer" = "Fehler: Installationsprogramm konnte nicht gestartet werden";
+"Error" = "Fehler";
+"Failed to launch installer script" = "Installationsskript konnte nicht gestartet werden";
+
+/* ETA strings */
+"About %d hours and %d minutes remaining" = "Noch etwa %d Stunden und %d Minuten";
+"About %d hours remaining" = "Noch etwa %d Stunden";
+"About %d minutes remaining" = "Noch etwa %d Minuten";
+"About a minute remaining" = "Noch etwa eine Minute";
+"Less than a minute remaining" = "Weniger als eine Minute verbleibend";
 
 /* Completion Step */
 "Finished" = "Fertig";
 "Installation complete" = "Installation abgeschlossen";
-"Installation Successful" = "Installation erfolgreich";
-"Installation Failed" = "Installation fehlgeschlagen";
+"The operating system has been installed successfully.\nPlease restart your computer to boot from the new disk." = "Das Betriebssystem wurde erfolgreich installiert.\nBitte starten Sie Ihren Computer neu, um vom neuen Laufwerk zu starten.";
 "Restart" = "Neu starten";
-"Close" = "Schließen";
-
-/* Log Window */
-"Installation Log" = "Installationsprotokoll";
-"Show Log" = "Protokoll anzeigen";
-"Window" = "Fenster";
 
 /* Cancel dialog */
 "Cancel Installation?" = "Installation abbrechen?";
-"Are you sure you want to cancel the installation?" = "Sind Sie sicher, dass Sie die Installation abbrechen möchten?";
-"Cancel Installation" = "Installation abbrechen";
-"Continue Installation" = "Installation fortsetzen";
+"Are you sure you want to cancel?" = "Sind Sie sicher, dass Sie abbrechen möchten?";
+"Cancel" = "Abbrechen";
+"Continue" = "Fortfahren";
 
-/* Menu */
-"Quit" = "Beenden";
+/* ETA estimation */
+"Estimating time remaining..." = "Verbleibende Zeit wird geschätzt...";
+
+/* Updated disk messages */
+"Error enumerating disks" = "Fehler beim Auflisten der Laufwerke";
+"No disks found" = "Keine Laufwerke gefunden";

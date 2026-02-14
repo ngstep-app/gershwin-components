@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Copies the running Debian/Devuan/Arch/Artix system to a new disk and make it bootable (UEFI or BIOS)
 # WARNING: This will ERASE all data on the target disk!
@@ -78,7 +78,7 @@ ROOT_DISK=""
 if [ -n "$ROOT_DEV" ]; then
     ROOT_DISK=$(lsblk -no PKNAME "$ROOT_DEV" 2>/dev/null | head -n1)
     [ -z "$ROOT_DISK" ] && ROOT_DISK=$(echo "$ROOT_DEV" | sed -E 's/p?[0-9]+$//')
-    [[ "$ROOT_DISK" == /* ]] || ROOT_DISK="/dev/$ROOT_DISK"
+    case "$ROOT_DISK" in /*) ;; *) ROOT_DISK="/dev/$ROOT_DISK" ;; esac
 fi
 
 enumerate_disks() {
@@ -103,9 +103,9 @@ enumerate_disks() {
         # Fallback: parse /proc/partitions and /sys/block for model info
         awk 'NR>2 {print $4, $3}' /proc/partitions 2>/dev/null | while IFS= read -r name blocks; do
             # Skip partition entries (names ending in digit) and loop/zram
-            if [[ "$name" =~ [0-9]$ ]] || [[ "$name" == loop* ]] || [[ "$name" == zram* ]]; then
-                continue
-            fi
+            case "$name" in
+                *[0-9]|loop*|zram*) continue ;;
+            esac
             dev="/dev/$name"
             # blocks is in 1K units; convert to bytes
             dsize=$((blocks * 1024))
@@ -178,6 +178,36 @@ umount_recursive() {
     done
 }
 
+# Function: unmount all partitions of a disk
+umount_disk_partitions() {
+    disk_to_unmount="$1"
+    [ -z "$disk_to_unmount" ] && return
+
+    # Use lsblk to find mounted partitions of the target disk
+    if command -v lsblk >/dev/null 2>&1; then
+        lsblk -lno NAME,MOUNTPOINT "$disk_to_unmount" 2>/dev/null | while read -r name mp; do
+            if [ -n "$mp" ] && [ "$mp" != "/" ]; then
+                echo "Unmounting $mp (/dev/$name)..."
+                umount -l "/dev/$name" 2>/dev/null || true
+            fi
+        done
+    else
+        # Fallback: parse mount output
+        mount | while IFS= read -r line; do
+            dev=$(echo "$line" | awk '{print $1}')
+            mp=$(echo "$line" | awk '{print $3}')
+            case "$dev" in
+                "${disk_to_unmount}"*)
+                    if [ -n "$mp" ] && [ "$mp" != "/" ]; then
+                        echo "Unmounting $mp ($dev)..."
+                        umount -l "$mp" 2>/dev/null || true
+                    fi
+                    ;;
+            esac
+        done
+    fi
+}
+
 # Temporary mount for live squashfs images (if using ISO as source)
 TMP_LIVE=""
 cleanup_tmp_live() {
@@ -192,7 +222,7 @@ trap cleanup_tmp_live EXIT
 # Disk Selection
 if [ -n "$ARG_DISK" ]; then
     DISK="$ARG_DISK"
-    [[ "$DISK" == /* ]] || DISK="/dev/$DISK"
+    case "$DISK" in /*) ;; *) DISK="/dev/$DISK" ;; esac
     if [ ! -b "$DISK" ]; then
         echo "ERROR: $DISK is not a block device"
         exit 1
@@ -213,15 +243,18 @@ else
     fi
 
     echo "Available disks for installation:"
+    disk_count=$(echo "$DISKS_LIST" | wc -l)
+    echo "$DISKS_LIST" | {
     i=1
     while IFS='|' read -r dev model size; do
         [ -z "$model" ] && model="Unknown Model"
         size_gb=$(awk -v b="$size" 'BEGIN { printf "%.1f", b / 1073741824 }')
         echo "$i) $dev - $model (${size_gb}G)"
         i=$((i+1))
-    done <<< "$DISKS_LIST"
+    done
+    }
 
-    printf "Select a disk (1-%d): " "$((i-1))"
+    printf "Select a disk (1-%d): " "$disk_count"
     read -r choice
     DISK=$(echo "$DISKS_LIST" | sed -n "${choice}p" | cut -d'|' -f1)
 
@@ -253,14 +286,18 @@ if [ "$NONINTERACTIVE" = "1" ]; then
 else
     printf "WARNING: This will ERASE all data on %s! Continue? [y/N]: " "$DISK"
     read -r ans
-    [[ "$ans" =~ ^[Yy] ]] || { echo "Aborting."; exit 1; }
+    case "$ans" in
+        [Yy]*) ;;
+        *) echo "Aborting."; exit 1 ;;
+    esac
 fi
 
 report_progress "Preparing" 5 "Unmounting existing partitions..."
 
-set -x
+if [ "$DEBUG" = "1" ]; then set -x; fi
 
 # Cleanup
+umount_disk_partitions "$DISK"
 umount_recursive
 mkdir -p "$MNT"
 
@@ -301,13 +338,16 @@ udevadm settle
 sleep 2
 
 # Handle partition naming (nvme0n1p1 vs sda1)
-if [[ "$DISK" == *nvme* ]] || [[ "$DISK" == *mmcblk* ]]; then
-    EFI_PART="${DISK}p1"
-    ROOT_PART="${DISK}p2"
-else
-    EFI_PART="${DISK}1"
-    ROOT_PART="${DISK}2"
-fi
+case "$DISK" in
+    *nvme*|*mmcblk*)
+        EFI_PART="${DISK}p1"
+        ROOT_PART="${DISK}p2"
+        ;;
+    *)
+        EFI_PART="${DISK}1"
+        ROOT_PART="${DISK}2"
+        ;;
+esac
 
 # Verification
 [ -b "$ROOT_PART" ] || { echo "ERROR: Root partition $ROOT_PART not found"; exit 1; }
@@ -371,15 +411,13 @@ if mount | grep -q "type iso9660" && [ -n "$SRC" ] && [ -d "$SRC" ]; then
 fi
 
 # Excludes (relative to SRC)
-EXCLUDES=(
-    "dev/*" "proc/*" "sys/*" "tmp/*" "run/*" "mnt/*" "media/*" "lost+found"
-    "var/lib/dhcp/*" "var/lib/dhcpcd/*" "var/run/*" "var/tmp/*" "var/cache/*"
-    "boot/efi/*"
-)
-[ "$BOOT_METHOD" = "BROADCOM" ] && EXCLUDES+=("${RPI_BOOT_DIR#/}/*")
+EXCLUDES="dev proc sys tmp run mnt media lost+found var/lib/dhcp var/lib/dhcpcd var/run var/tmp var/cache boot/efi"
+if [ "$BOOT_METHOD" = "BROADCOM" ]; then
+    EXCLUDES="$EXCLUDES ${RPI_BOOT_DIR#/}"
+fi
 
 EXCLUDE_ARGS=""
-for e in "${EXCLUDES[@]}"; do
+for e in $EXCLUDES; do
     EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude=$e"
 done
 
