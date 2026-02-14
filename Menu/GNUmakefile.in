@@ -41,6 +41,7 @@ Menu_OBJC_FILES = \
 	ActionSearch.m \
 	StatusItemManager.m \
 	StatusItemsView.m \
+	StatusItemView.m \
 	WindowMonitor.m \
 	AppMenuImporter.m \
 	StatusItems/TimeDisplay/TimeDisplayProvider.m \
@@ -74,6 +75,7 @@ Menu_HEADER_FILES = \
 	StatusItemProvider.h \
 	StatusItemManager.h \
 	StatusItemsView.h \
+	StatusItemView.h \
 	WindowMonitor.h \
 	AppMenuImporter.h
 
