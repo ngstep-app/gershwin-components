@@ -36,7 +36,6 @@
 
 /**
  * Previous CPU tick counts for calculating usage.
- * Platform-specific storage.
  */
 @property (nonatomic, assign) unsigned long long lastTotalTicks;
 @property (nonatomic, assign) unsigned long long lastIdleTicks;
@@ -47,14 +46,17 @@
 @property (nonatomic, strong) NSMenu *detailMenu;
 
 /**
+ * Cached fixed width computed at load time from the widest possible content string.
+ */
+@property (nonatomic, assign) CGFloat cachedFixedWidth;
+
+/**
  * Read current CPU usage from system.
- * Platform-specific implementation.
  */
 - (void)updateCPUUsage;
 
 /**
  * Read current RAM usage from system.
- * Platform-specific implementation.
  */
 - (void)updateRAMUsage;
 

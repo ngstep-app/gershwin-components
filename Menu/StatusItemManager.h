@@ -8,93 +8,77 @@
 #import <AppKit/AppKit.h>
 #import "StatusItemProvider.h"
 
+@class StatusItemView;
+@class StatusItemsView;
+
 /**
  * Manages all status items displayed in the menu bar.
- * Responsible for loading bundles, managing the status menu, and coordinating updates.
+ *
+ * Responsible for:
+ *   - Loading provider bundles from standard search paths
+ *   - Sorting providers by displayPriority (highest = rightmost)
+ *   - Creating fixed-width StatusItemView instances for each provider
+ *   - Scheduling update timers grouped by interval
+ *   - Forwarding title changes to views without altering layout
+ *
+ * The resulting StatusItemsView is a transparent container that can be
+ * placed at the right edge of the menu bar.
  */
 @interface StatusItemManager : NSObject
 
 /**
- * Array of loaded status item providers.
+ * Array of loaded status item providers, sorted by ascending displayPriority.
  */
 @property (nonatomic, strong) NSMutableArray<id<StatusItemProvider>> *statusItems;
 
 /**
- * Dictionary mapping update intervals to timers.
- * Key: NSNumber with updateInterval, Value: NSTimer
+ * Dictionary mapping update intervals (NSNumber) to NSTimer instances.
  */
 @property (nonatomic, strong) NSMutableDictionary *updateTimers;
 
 /**
- * Dictionary mapping status item identifiers to their NSMenuItems.
- * Key: identifier string, Value: NSMenuItem
+ * Dictionary mapping provider identifiers to their StatusItemView.
  */
-@property (nonatomic, strong) NSMutableDictionary *menuItems;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, StatusItemView *> *itemViews;
 
 /**
- * The menu containing status item menu items.
+ * The status items container view (created by -createStatusItemsView).
  */
-@property (nonatomic, strong) NSMenu *statusMenu;
+@property (nonatomic, weak) StatusItemsView *statusItemsView;
 
 /**
- * Current cached widths for providers.
- * Key: identifier string -> NSNumber width
- */
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *currentWidths;
-
-/**
- * The parent view that contains status items display.
- */
-@property (nonatomic, weak) NSView *containerView;
-
-/**
- * Total width of screen available.
+ * Screen width (used for sizing calculations).
  */
 @property (nonatomic, assign) CGFloat screenWidth;
 
 /**
- * Height of the menu bar.
+ * Menu bar height.
  */
 @property (nonatomic, assign) CGFloat menuBarHeight;
 
 /**
- * Initialize with the container view and dimensions.
+ * Initialize the manager.
  *
- * @param container The view that will contain status items
- * @param width Screen width
- * @param height Menu bar height
+ * @param width  Screen width in pixels
+ * @param height Menu bar height in pixels
  */
-- (instancetype)initWithContainerView:(NSView *)container
-                          screenWidth:(CGFloat)width
-                        menuBarHeight:(CGFloat)height;
+- (instancetype)initWithScreenWidth:(CGFloat)width
+                      menuBarHeight:(CGFloat)height;
 
 /**
- * Load all status item bundles from standard locations.
- * Searches in:
- * - /System/Library/Menu/StatusItems/
- * - ~/Library/Menu/StatusItems/
- * - Menu.app/Contents/Resources/StatusItems/
+ * Load all status item bundles from standard locations and sort by priority.
  */
 - (void)loadStatusItems;
 
 /**
- * Load a specific status item bundle.
- *
- * @param bundle The NSBundle to load
- * @param loadedIdentifiers Set of already loaded identifiers to prevent duplicates
- * @return YES if loaded successfully, NO otherwise
+ * Create and return a StatusItemsView populated with fixed-width
+ * StatusItemView instances for every loaded provider.
+ * Call this after -loadStatusItems.
  */
-- (BOOL)loadStatusItemFromBundle:(NSBundle *)bundle loadedIdentifiers:(NSMutableSet *)loadedIdentifiers;
+- (StatusItemsView *)createStatusItemsView;
 
 /**
- * Populate the status menu with menu items from loaded providers.
- * Items are added based on their display priority.
- */
-- (void)layoutStatusItems;
-
-/**
- * Start update timers for all status items.
- * Coalesces items with the same update interval to use one timer.
+ * Start coalesced update timers for all providers.
  */
 - (void)startUpdateTimers;
 
@@ -104,23 +88,8 @@
 - (void)stopUpdateTimers;
 
 /**
- * Unload all status items and clean up resources.
+ * Unload all status items, stop timers, and release resources.
  */
 - (void)unloadAllStatusItems;
-
-/**
- * Handle click on a status item menu item.
- * Called when a menu item in the status menu is clicked.
- *
- * @param sender The NSMenuItem that was clicked (has representedObject with identifier)
- */
-- (void)statusItemClicked:(id)sender;
-
-/**
- * Request a relayout when a provider's width changes.
- *
- * @param provider The status item provider requesting relayout
- */
-- (void)requestRelayoutForProvider:(id<StatusItemProvider>)provider;
 
 @end

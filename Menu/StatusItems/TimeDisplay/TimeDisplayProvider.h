@@ -29,6 +29,11 @@
 @property (nonatomic, strong) NSString *currentTitle;
 
 /**
+ * Cached fixed width computed at load time from the widest possible time string.
+ */
+@property (nonatomic, assign) CGFloat cachedFixedWidth;
+
+/**
  * Update the displayed time.
  */
 - (void)updateTime;

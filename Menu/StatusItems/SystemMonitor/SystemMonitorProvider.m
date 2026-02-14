@@ -31,6 +31,7 @@
         self.perCoreCPU = [NSMutableArray array];
         self.lastTotalTicks = 0;
         self.lastIdleTicks = 0;
+        self.cachedFixedWidth = 0.0;
     }
     return self;
 }
@@ -48,8 +49,11 @@
 
 - (CGFloat)width
 {
-    // Fixed width for "CPU 100% RAM 100%"
-    return 140.0;
+    /*
+     * Return a fixed width large enough for the widest possible title.
+     * Computed once at load time and cached so the cell never resizes.
+     */
+    return self.cachedFixedWidth;
 }
 
 - (NSInteger)displayPriority
@@ -67,20 +71,33 @@
 {
     NSLog(@"SystemMonitorProvider: Loading system monitor");
     self.manager = manager;
-    
-    // Create detail menu
+
+    /* Create detail menu */
     self.detailMenu = [[NSMenu alloc] initWithTitle:@"System Monitor"];
     [self.detailMenu setAutoenablesItems:NO];
-    
-    NSMenuItem *cpuHeader = [[NSMenuItem alloc] initWithTitle:@"CPU Usage" action:nil keyEquivalent:@""];
+
+    NSMenuItem *cpuHeader = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"CPU Usage", @"CPU section header")
+                                                       action:nil keyEquivalent:@""];
     [cpuHeader setEnabled:NO];
     [self.detailMenu addItem:cpuHeader];
-    
-    NSMenuItem *ramHeader = [[NSMenuItem alloc] initWithTitle:@"Memory Usage" action:nil keyEquivalent:@""];
+
+    NSMenuItem *ramHeader = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Memory Usage", @"RAM section header")
+                                                       action:nil keyEquivalent:@""];
     [ramHeader setEnabled:NO];
     [self.detailMenu addItem:ramHeader];
-    
-    // Initial update
+
+    /*
+     * Compute fixed width from the widest possible title string.
+     * "CPU 100% RAM 100%" is the maximum; add 8 px padding on each side.
+     */
+    NSFont *font = [NSFont menuBarFontOfSize:0];
+    NSDictionary *attrs = @{ NSFontAttributeName: font };
+    NSSize size = [@"CPU 100% RAM 100%" sizeWithAttributes:attrs];
+    self.cachedFixedWidth = ceil(size.width) + 16.0;
+
+    NSLog(@"SystemMonitorProvider: Computed fixed width: %.0f", self.cachedFixedWidth);
+
+    /* Initial update */
     [self update];
 }
 

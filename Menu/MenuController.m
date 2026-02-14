@@ -18,6 +18,7 @@
 #import "MenuUtils.h"
 #import "StatusItemManager.h"
 #import "StatusItemsView.h"
+#import "StatusItemView.h"
 #import "WindowMonitor.h"
 #import "AppMenuImporter.h"
 #import "GNUstepGUI/GSTheme.h"
@@ -409,8 +410,24 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     NSLog(@"MenuController: Created MenuBarView: %@", self.menuBarView);
     
     // Create app menu widget for displaying menus - leave space for status items on right
-    // Status items are at the far right: time (60px) + systemmonitor (140px) + spacing (10px) = 210px
-    CGFloat statusItemsWidth = 210; // actual width of status items
+    // Status item width is computed dynamically from loaded providers below.
+    // First, create and load the StatusItemManager to know the total width.
+    NSLog(@"MenuController: Creating StatusItemManager");
+    self.statusItemManager = [[StatusItemManager alloc] initWithScreenWidth:self.screenSize.width
+                                                             menuBarHeight:menuBarHeight];
+    [self.statusItemManager loadStatusItems];
+    NSLog(@"MenuController: StatusItemManager items loaded");
+
+    // Create the status items view (fixed-width cells, laid out right-to-left)
+    StatusItemsView *statusItemsView = [self.statusItemManager createStatusItemsView];
+    CGFloat statusItemsWidth = [statusItemsView totalRequiredWidth];
+    NSLog(@"MenuController: StatusItemsView total width: %.0f", statusItemsWidth);
+
+    // Position status items at the right edge of the menu bar
+    [statusItemsView setFrame:NSMakeRect(self.screenSize.width - statusItemsWidth, 0,
+                                          statusItemsWidth, menuBarHeight)];
+
+    // Give the app menu widget the remaining space
     CGFloat menuWidgetWidth = self.screenSize.width - statusItemsWidth;
     self.appMenuWidget = [[AppMenuWidget alloc] initWithFrame:NSMakeRect(0, 0, menuWidgetWidth, menuBarHeight)];
     NSLog(@"MenuController: AppMenuWidget created successfully");
@@ -434,17 +451,6 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // NSLog(@"MenuController: Created AppMenuWidget with width %.0f at address %p", menuWidgetWidth, self.appMenuWidget);
     NSLog(@"MenuController: Skipping potentially problematic NSLog");
     
-    // Create status item manager (but don't load yet)
-    NSLog(@"MenuController: Creating StatusItemManager");
-    self.statusItemManager = [[StatusItemManager alloc] initWithContainerView:[self.menuBar contentView]
-                                                                   screenWidth:self.screenSize.width
-                                                                 menuBarHeight:menuBarHeight];
-    
-    // Create status items view at right edge with proper spacing
-    StatusItemsView *statusItemsView = [[StatusItemsView alloc] 
-        initWithFrame:NSMakeRect(self.screenSize.width - statusItemsWidth, 0, statusItemsWidth, menuBarHeight)
-            statusMenu:self.statusItemManager.statusMenu];
-    
     // Remove the Action Search icon from the menu bar (search remains accessible via Command menu)
     
     // probono: Create rounded corners view for black top corners like in old/src/mainwindow.cpp
@@ -458,10 +464,9 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // Add AppMenuWidget and StatusItemsView as children of MenuBarView (on top of the background)
     [self.menuBarView addSubview:self.appMenuWidget];
     
-    // Load status items and add the display view as a child of MenuBarView
-    [self.statusItemManager loadStatusItems];
-    NSLog(@"MenuController: StatusItemManager items loaded");
+    // Add the status items view and start update timers
     [self.menuBarView addSubview:statusItemsView];
+    [self.statusItemManager startUpdateTimers];
     NSLog(@"MenuController: Added StatusItemsView as child of MenuBarView");
     
     // Finally add rounded corners on top of everything

@@ -5,51 +5,78 @@
  */
 
 #import "StatusItemsView.h"
-
-/**
- * Custom NSMenuView subclass for status items.
- * Renders transparently over MenuBarView background.
- */
-@interface TransparentMenuView : NSMenuView
-@end
-
-@implementation TransparentMenuView
-
-- (void)drawRect:(NSRect)dirtyRect
-{
-    // Clear background only on full redraws for transparency
-    if (NSEqualRects(dirtyRect, [self bounds])) {
-        [[NSColor clearColor] set];
-        NSRectFill(dirtyRect);
-    }
-    [super drawRect:dirtyRect];
-}
-
-- (BOOL)isOpaque
-{
-    return NO;
-}
-
-@end
+#import "StatusItemView.h"
 
 @implementation StatusItemsView
 
-- (instancetype)initWithFrame:(NSRect)frame statusMenu:(NSMenu *)menu
+- (instancetype)initWithFrame:(NSRect)frame
 {
     self = [super initWithFrame:frame];
     if (self) {
-        self.statusMenu = menu;
-        
-        // Create menu view filling the entire frame
-        self.menuView = [[TransparentMenuView alloc] initWithFrame:[self bounds]];
-        [self.menuView setMenu:menu];
-        [self.menuView setHorizontal:YES];
-        [self.menuView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-        [self addSubview:self.menuView];
-        
+        _itemViews = [NSMutableArray array];
+        _interItemSpacing = 0.0;
+        _rightInset = 10.0;
         [self setAutoresizingMask:NSViewMinXMargin | NSViewHeightSizable];
     }
     return self;
+}
+
+- (void)addItemView:(StatusItemView *)itemView
+{
+    if (!itemView) {
+        return;
+    }
+    [_itemViews addObject:itemView];
+    [self addSubview:itemView];
+}
+
+- (void)layoutItemViews
+{
+    NSRect bounds = [self bounds];
+    CGFloat x = bounds.size.width - _rightInset;
+
+    /*
+     * Layout right-to-left: the LAST item in the array has the highest
+     * displayPriority and is placed at the rightmost position.
+     */
+    for (NSInteger i = (NSInteger)[_itemViews count] - 1; i >= 0; i--) {
+        StatusItemView *view = [_itemViews objectAtIndex:(NSUInteger)i];
+        CGFloat w = view.fixedWidth;
+        x -= w;
+
+        NSRect frame = NSMakeRect(x, 0, w, bounds.size.height);
+        [view setFrame:frame];
+
+        if (i > 0) {
+            x -= _interItemSpacing;
+        }
+    }
+
+    [self setNeedsDisplay:YES];
+}
+
+- (CGFloat)totalRequiredWidth
+{
+    CGFloat total = _rightInset;
+    NSUInteger count = [_itemViews count];
+
+    for (NSUInteger i = 0; i < count; i++) {
+        StatusItemView *view = [_itemViews objectAtIndex:i];
+        total += view.fixedWidth;
+        if (i < count - 1) {
+            total += _interItemSpacing;
+        }
+    }
+
+    return total;
+}
+
+- (void)drawRect:(NSRect)dirtyRect
+{
+    /* Transparent — the MenuBarView background shows through */
+    (void)dirtyRect;
+    [[NSColor clearColor] set];
+    NSRectFill([self bounds]);
 }
 
 - (BOOL)isOpaque

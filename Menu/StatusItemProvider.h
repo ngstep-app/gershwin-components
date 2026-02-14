@@ -31,7 +31,10 @@
 - (NSString *)title;
 
 /**
- * Width in pixels needed for this status item in the menu bar.
+ * Fixed display width in pixels for this status item's cell in the menu bar.
+ * The cell will always be exactly this width; content is centered within it.
+ * Return a value large enough for the widest possible content string so that
+ * the layout never shifts when text changes.
  */
 - (CGFloat)width;
 
