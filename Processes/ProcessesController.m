@@ -809,7 +809,7 @@ static ProcessesController *sharedController = nil;
     NSTableColumn *cpuColumn = [[NSTableColumn alloc] initWithIdentifier:@"cpu"];
     [[cpuColumn headerCell] setStringValue:@"CPU %"];
     [cpuColumn setWidth:60];
-    [cpuColumn setSortDescriptorPrototype:[[NSSortDescriptor alloc] initWithKey:@"cpu" ascending:YES]];
+    [cpuColumn setSortDescriptorPrototype:[[NSSortDescriptor alloc] initWithKey:@"cpu" ascending:NO]];
     [_processesTableView addTableColumn:cpuColumn];
     
     NSTableColumn *memColumn = [[NSTableColumn alloc] initWithIdentifier:@"memory"];
@@ -829,6 +829,11 @@ static ProcessesController *sharedController = nil;
     [commandColumn setWidth:300];
     [commandColumn setSortDescriptorPrototype:[[NSSortDescriptor alloc] initWithKey:@"command" ascending:YES]];
     [_processesTableView addTableColumn:commandColumn];
+    
+    // Default sort: CPU descending (highest first) ✅
+    NSSortDescriptor *cpuDesc = [[NSSortDescriptor alloc] initWithKey:@"cpu" ascending:NO];
+    _sortDescriptors = @[cpuDesc];
+    [_processesTableView setSortDescriptors:_sortDescriptors];
     
     [scrollView setDocumentView:_processesTableView];
     [[_mainWindow contentView] addSubview:scrollView];
