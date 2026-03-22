@@ -1050,13 +1050,15 @@ static const CGFloat kTableRowHeight = 18.0;
         NSLog(@"SoundController:   sound name = %@, path = %@", sound.name, sound.path);
         [selectedAlertSound release];
         selectedAlertSound = [sound retain];
-        BOOL success = [backend setCurrentAlertSound:sound];
-        NSLog(@"SoundController:   setCurrentAlertSound: %@", success ? @"SUCCESS" : @"FAILED");
-        
-        // Play preview
+
+        // Play preview first for immediate feedback
         NSLog(@"SoundController:   calling playAlertSound:");
-        success = [backend playAlertSound:sound];
+        BOOL success = [backend playAlertSound:sound];
         NSLog(@"SoundController:   playAlertSound: %@", success ? @"SUCCESS" : @"FAILED");
+
+        // Then update the backend selection (saves asynchronously)
+        BOOL saved = [backend setCurrentAlertSound:sound];
+        NSLog(@"SoundController:   setCurrentAlertSound: %@", saved ? @"SUCCESS" : @"FAILED");
         if (!success) {
             NSRunAlertPanel(@"Sound Error", 
                           @"Could not play the selected alert sound. Please check your audio hardware and settings.",

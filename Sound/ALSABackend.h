@@ -49,6 +49,9 @@
     // ALSA configuration file paths
     NSString *asoundrcPath;
     NSString *defaultsFilePath;
+
+    // Volume feedback task tracking
+    NSTask *currentFeedbackTask;
 }
 
 @property (assign) id<SoundBackendDelegate> delegate;

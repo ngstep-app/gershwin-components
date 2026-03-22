@@ -472,6 +472,50 @@ group_exists_in_etc_linux(const char *groupname)
     return 0;
 }
 
+/*
+ * Look up a group's GID from /etc/group by name.
+ * Returns the GID, or (gid_t)-1 if not found.
+ * Format: name:x:gid:members
+ */
+static gid_t
+group_gid_from_etc_linux(const char *groupname)
+{
+    FILE *f = fopen("/etc/group", "r");
+    if (!f) return (gid_t)-1;
+
+    char line[512];
+    size_t namelen = strlen(groupname);
+
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, groupname, namelen) == 0 && line[namelen] == ':') {
+            /* Skip past name: and password: fields to get GID */
+            char *p = line + namelen + 1;
+            p = strchr(p, ':');
+            if (p) {
+                gid_t gid = (gid_t)strtoul(p + 1, NULL, 10);
+                fclose(f);
+                return gid;
+            }
+        }
+    }
+
+    fclose(f);
+    return (gid_t)-1;
+}
+
+/*
+ * Hardware access groups that all DS users should belong to, if they
+ * exist on the system.  GIDs vary across distros so we look them up
+ * by name from /etc/group at login time.
+ */
+static const char *hw_access_groups[] = {
+    "audio",    /* sound devices */
+    "video",    /* GPU, framebuffer, webcam */
+    "render",   /* DRM render nodes */
+    "input",    /* input devices (gamepads, tablets) */
+    NULL
+};
+
 #define ADMIN_GID_LINUX 5000
 #define WHEEL_GID_LINUX 0
 #define SUDO_GID_LINUX 27
@@ -541,6 +585,34 @@ _nss_gershwin_initgroups_dyn(const char *user, gid_t group __attribute__((unused
         }
 
         gidstr = strtok_r(NULL, ",", &saveptr);
+    }
+
+    /* Add hardware access groups for all DS users */
+    for (int g = 0; hw_access_groups[g] != NULL; g++) {
+        gid_t hw_gid = group_gid_from_etc_linux(hw_access_groups[g]);
+        if (hw_gid == (gid_t)-1) continue;
+
+        int has_it = 0;
+        for (long int i = 0; i < count; i++) {
+            if (groups[i] == hw_gid) { has_it = 1; break; }
+        }
+        if (!has_it) {
+            if (count >= *size) {
+                long int newsize = *size * 2;
+                if (limit > 0 && newsize > limit) newsize = limit;
+                if (newsize > *size) {
+                    gid_t *newgroups = realloc(groups, newsize * sizeof(gid_t));
+                    if (newgroups) {
+                        groups = newgroups;
+                        *groupsp = groups;
+                        *size = newsize;
+                    }
+                }
+            }
+            if (count < *size) {
+                groups[count++] = hw_gid;
+            }
+        }
     }
 
     /* If user is in admin group, add wheel and sudo */
@@ -712,6 +784,40 @@ group_exists_in_etc(const char *groupname)
 }
 
 /*
+ * Look up a group's GID from /etc/group by name.
+ * Returns the GID, or (gid_t)-1 if not found.
+ */
+static gid_t
+group_gid_from_etc(const char *groupname)
+{
+    FILE *f = fopen("/etc/group", "r");
+    if (!f) return (gid_t)-1;
+
+    char line[512];
+    size_t namelen = strlen(groupname);
+
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, groupname, namelen) == 0 && line[namelen] == ':') {
+            char *p = line + namelen + 1;
+            p = strchr(p, ':');
+            if (p) {
+                gid_t gid = (gid_t)strtoul(p + 1, NULL, 10);
+                fclose(f);
+                return gid;
+            }
+        }
+    }
+
+    fclose(f);
+    return (gid_t)-1;
+}
+
+/* Hardware access groups - shared with Linux via same names */
+static const char *hw_access_groups_bsd[] = {
+    "audio", "video", "render", "input", NULL
+};
+
+/*
  * getgroupmembership - return all groups for a user
  * This is where we add wheel (0) for admin users
  * sudo (27) is only added on Linux where it exists
@@ -770,6 +876,20 @@ nss_getgroupmembership(void *retval __unused, void *mdata __unused, va_list ap)
     /* If user not found in gsdh, let next NSS module handle it */
     if (!user_found) {
         return NS_NOTFOUND;
+    }
+
+    /* Add hardware access groups for all DS users */
+    for (int g = 0; hw_access_groups_bsd[g] != NULL; g++) {
+        gid_t hw_gid = group_gid_from_etc(hw_access_groups_bsd[g]);
+        if (hw_gid == (gid_t)-1) continue;
+
+        int has_it = 0;
+        for (int i = 0; i < count; i++) {
+            if (groups[i] == hw_gid) { has_it = 1; break; }
+        }
+        if (!has_it && count < maxgrp) {
+            groups[count++] = hw_gid;
+        }
     }
 
     /* If user is in admin group, add wheel (and sudo on Linux) */

@@ -41,6 +41,7 @@ static NSString *const kMicControl = @"Mic";
         inputLevelTimer = nil;
         currentOutputCard = 0;
         currentInputCard = 0;
+        currentFeedbackTask = nil;
         
         // Set up file paths
         NSString *home = NSHomeDirectory();
@@ -58,6 +59,12 @@ static NSString *const kMicControl = @"Mic";
 
 - (void)dealloc
 {
+    // Cancel any pending deferred save and flush immediately
+    [NSObject cancelPreviousPerformRequestsWithTarget:self
+                                             selector:@selector(savePreferences)
+                                               object:nil];
+    [self savePreferences];
+
     [self stopInputLevelMonitoring];
     [cachedOutputDevices release];
     [cachedInputDevices release];
@@ -72,6 +79,10 @@ static NSString *const kMicControl = @"Mic";
     [alsactlPath release];
     [asoundrcPath release];
     [defaultsFilePath release];
+    if (currentFeedbackTask && [currentFeedbackTask isRunning]) {
+        [currentFeedbackTask terminate];
+    }
+    [currentFeedbackTask release];
     [super dealloc];
 }
 
@@ -1025,19 +1036,43 @@ static NSString *const kMicControl = @"Mic";
 - (void)loadAlertSounds
 {
     [cachedAlertSounds removeAllObjects];
-    
-    // Alert sounds are not yet implemented
-    // TODO: Implement sound file discovery and playback
-    
-    // Create placeholder entry
-    AlertSound *placeholder = [[AlertSound alloc] init];
-    placeholder.name = @"To be implemented";
-    placeholder.displayName = @"To be implemented";
-    placeholder.path = nil;
-    placeholder.isSystemSound = YES;
-    [cachedAlertSounds addObject:placeholder];
-    [placeholder release];
-    
+
+    // Look for sounds in standard locations
+    NSArray *searchDirs = @[
+        [self alertSoundDirectory],
+        [self userAlertSoundDirectory],
+        [[NSBundle bundleForClass:[self class]] resourcePath]
+    ];
+
+    NSArray *extensions = @[@"aiff", @"aif", @"wav", @"au", @"snd"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+
+    for (NSString *dir in searchDirs) {
+        if (![fm fileExistsAtPath:dir]) continue;
+
+        NSError *error = nil;
+        NSArray *files = [fm contentsOfDirectoryAtPath:dir error:&error];
+
+        for (NSString *file in files) {
+            NSString *ext = [[file pathExtension] lowercaseString];
+            if ([extensions containsObject:ext]) {
+                AlertSound *sound = [[AlertSound alloc] init];
+                sound.name = [file stringByDeletingPathExtension];
+                sound.displayName = sound.name;
+                sound.path = [dir stringByAppendingPathComponent:file];
+                sound.isSystemSound = ![dir isEqualToString:[self userAlertSoundDirectory]];
+
+                [cachedAlertSounds addObject:sound];
+                [sound release];
+            }
+        }
+    }
+
+    // Sort by name
+    [cachedAlertSounds sortUsingComparator:^NSComparisonResult(AlertSound *a, AlertSound *b) {
+        return [a.displayName compare:b.displayName];
+    }];
+
     // Set first sound as current if none selected
     if (currentAlert == nil && [cachedAlertSounds count] > 0) {
         currentAlert = [[cachedAlertSounds objectAtIndex:0] retain];
@@ -1080,13 +1115,13 @@ static NSString *const kMicControl = @"Mic";
 - (BOOL)setCurrentAlertSound:(AlertSound *)sound
 {
     if (!sound) return NO;
-    
+
     [currentAlert release];
     currentAlert = [sound retain];
-    
-    // Save preference
-    [self savePreferences];
-    
+
+    // Coalesce and defer save so it doesn't block the UI
+    [self deferSavePreferences];
+
     return YES;
 }
 
@@ -1099,10 +1134,10 @@ static NSString *const kMicControl = @"Mic";
 {
     if (volume < 0.0) volume = 0.0;
     if (volume > 1.0) volume = 1.0;
-    
+
     cachedAlertVolume = volume;
-    [self savePreferences];
-    
+    [self deferSavePreferences];
+
     return YES;
 }
 
@@ -1121,8 +1156,9 @@ static NSString *const kMicControl = @"Mic";
     
     if (sound.path && [[NSFileManager defaultManager] fileExistsAtPath:sound.path]) {
         // Use aplay to play the sound
-        NSString *device = defaultOutput ? 
-                          [NSString stringWithFormat:@"hw:%d", currentOutputCard] : 
+        // Use plughw: instead of hw: to allow concurrent access via dmix
+        NSString *device = defaultOutput ?
+                          [NSString stringWithFormat:@"plughw:%d", currentOutputCard] :
                           @"default";
         
         NSLog(@"ALSABackend:   playing file: %@", sound.path);
@@ -1132,7 +1168,7 @@ static NSString *const kMicControl = @"Mic";
         NSTask *task = [[NSTask alloc] init];
         [task setLaunchPath:aplayPath];
         [task setArguments:@[@"-D", device, @"-q", sound.path]];
-        
+
         @try {
             [task launch];
             NSLog(@"ALSABackend:   aplay launched successfully");
@@ -1142,8 +1178,10 @@ static NSString *const kMicControl = @"Mic";
             NSBeep();
             return NO;
         }
-        
-        [task release];
+
+        // Track the task so it can be terminated if needed
+        [currentFeedbackTask release];
+        currentFeedbackTask = task;
         return YES;
     }
     
@@ -1162,7 +1200,7 @@ static NSString *const kMicControl = @"Mic";
 {
     [alertDevice release];
     alertDevice = [device retain];
-    [self savePreferences];
+    [self deferSavePreferences];
     return YES;
 }
 
@@ -1176,7 +1214,7 @@ static NSString *const kMicControl = @"Mic";
 - (BOOL)setPlayUserInterfaceSoundEffects:(BOOL)play
 {
     playUIEffects = play;
-    [self savePreferences];
+    [self deferSavePreferences];
     return YES;
 }
 
@@ -1188,12 +1226,19 @@ static NSString *const kMicControl = @"Mic";
 - (BOOL)setPlayFeedbackWhenVolumeIsChanged:(BOOL)play
 {
     playVolumeChangeFeedback = play;
-    [self savePreferences];
+    [self deferSavePreferences];
     return YES;
 }
 
 - (void)playVolumeFeedback
 {
+    // Terminate any previous feedback sound to prevent process pile-up
+    if (currentFeedbackTask && [currentFeedbackTask isRunning]) {
+        [currentFeedbackTask terminate];
+    }
+    [currentFeedbackTask release];
+    currentFeedbackTask = nil;
+
     // Play a short blip sound to indicate volume change
     if (currentAlert && currentAlert.path) {
         [self playAlertSound:currentAlert];
@@ -1373,6 +1418,17 @@ static NSString *const kMicControl = @"Mic";
     
     NSLog(@"ALSABackend: forceImmediateInputDeviceSwitch: SUCCESS");
     return YES;
+}
+
+- (void)deferSavePreferences
+{
+    // Cancel any previously scheduled save, then schedule a new one.
+    // This coalesces rapid changes (e.g. clicking through sounds quickly)
+    // into a single disk write after activity settles.
+    [NSObject cancelPreviousPerformRequestsWithTarget:self
+                                             selector:@selector(savePreferences)
+                                               object:nil];
+    [self performSelector:@selector(savePreferences) withObject:nil afterDelay:0.5];
 }
 
 - (BOOL)savePreferences
