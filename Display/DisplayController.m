@@ -7,6 +7,7 @@
 
 #import "DisplayController.h"
 #import "DisplayView.h"
+#import <dispatch/dispatch.h>
 
 @implementation DisplayInfo
 
@@ -48,12 +49,13 @@ static NSMutableDictionary *activeDialogsByID = nil;
     if (self) {
         displays = [[NSMutableArray alloc] init];
         selectedDisplay = nil;
+        isRefreshing = NO;
         xrandrPath = [[self findXrandrPath] retain];
         
-        NSLog(@"DisplayController: Initializing with xrandr path: %@", xrandrPath);
+        NSDebugLog(@"DisplayController: Initializing with xrandr path: %@", xrandrPath);
         
         if (!xrandrPath) {
-            NSLog(@"DisplayController: ERROR - xrandr not found in PATH");
+            NSDebugLog(@"DisplayController: ERROR - xrandr not found in PATH");
         }
     }
     return self;
@@ -67,6 +69,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
     [resolutionPopup release];
     [mirrorDisplaysCheckbox release];
     [xrandrPath release];
+    [lastXrandrOutput release];
     [super dealloc];
 }
 
@@ -78,7 +81,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
     
     // Check if xrandr is available before creating the view
     if (![self isXrandrAvailable]) {
-        NSLog(@"DisplayController: Cannot create main view - xrandr not available");
+        NSDebugLog(@"DisplayController: Cannot create main view - xrandr not available");
         
         // Create a simple error view
         mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 320)];
@@ -97,7 +100,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
         return mainView;
     }
     
-    NSLog(@"DisplayController: Creating main view with xrandr available");
+    NSDebugLog(@"DisplayController: Creating main view with xrandr available");
     
     // Get available width from SystemPreferences window if possible
     float availableWidth = 500; // Default fallback
@@ -113,7 +116,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
             // Use most of the content area, leaving margins
             availableWidth = contentRect.size.width - 40; // 20px margin on each side
             availableHeight = contentRect.size.height - 80; // Space for title and controls
-            NSLog(@"DisplayController: Found SystemPreferences window, using size: %.0fx%.0f", availableWidth, availableHeight);
+            NSDebugLog(@"DisplayController: Found SystemPreferences window, using size: %.0fx%.0f", availableWidth, availableHeight);
             break;
         }
     }
@@ -164,85 +167,103 @@ static NSMutableDictionary *activeDialogsByID = nil;
     [resolutionPopup setAction:@selector(resolutionChanged:)];
     [mainView addSubview:resolutionPopup];
     
-    // Load initial display data only if we haven't already
-    if ([displays count] == 0) {
-        NSLog(@"DisplayController: Loading initial display data");
-        [self refreshDisplays:nil];
-    } else {
-        NSLog(@"DisplayController: Displays already loaded, skipping initial refresh");
-    }
-    
+    // Do not call refreshDisplays: here — the DisplayPane's didSelect
+    // will trigger it once the view is in the window hierarchy.
+    // Calling it here races with didSelect and causes double async loads.
+
     return mainView;
 }
 
 - (void)refreshDisplays:(NSTimer *)timer
 {
     if (![self isXrandrAvailable]) {
-        NSLog(@"DisplayController: Cannot refresh displays - xrandr not available");
+        NSDebugLog(@"DisplayController: Cannot refresh displays - xrandr not available");
         return;
     }
-    
-    NSLog(@"DisplayController: Refreshing displays using xrandr at: %@", xrandrPath);
-    
+
+    // Prevent concurrent refreshes — if one is already in flight, skip.
+    // The in-flight refresh will deliver up-to-date results when it finishes.
+    if (isRefreshing) {
+        NSDebugLog(@"DisplayController: Refresh already in progress, skipping");
+        return;
+    }
+    isRefreshing = YES;
+
+    NSDebugLog(@"DisplayController: Refreshing displays using xrandr at: %@", xrandrPath);
+
     // Store the currently selected display to preserve selection
-    DisplayInfo *previouslySelected = selectedDisplay;
     NSString *previouslySelectedOutput = nil;
-    if (previouslySelected) {
-        previouslySelectedOutput = [[previouslySelected output] retain];
-        NSLog(@"DisplayController: Preserving selection for display: %@", previouslySelectedOutput);
+    if (selectedDisplay) {
+        previouslySelectedOutput = [[selectedDisplay output] retain];
+        NSDebugLog(@"DisplayController: Preserving selection for display: %@", previouslySelectedOutput);
     }
-    
-    NSTask *task = [[NSTask alloc] init];
-    [task setLaunchPath:xrandrPath];
-    [task setArguments:@[@"--query"]];
-    
-    NSPipe *pipe = [NSPipe pipe];
-    [task setStandardOutput:pipe];
-    
-    NSFileHandle *file = [pipe fileHandleForReading];
-    
-    [task launch];
-    [task waitUntilExit];
-    
-    NSData *data = [file readDataToEndOfFile];
-    NSString *output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    
-    [self parseXrandrOutput:output];
-    
-    [output release];
-    [task release];
-    
-    // Restore the previously selected display if it still exists
-    if (previouslySelectedOutput) {
-        selectedDisplay = nil; // Reset first
-        for (DisplayInfo *display in displays) {
-            if ([[display output] isEqualToString:previouslySelectedOutput]) {
-                selectedDisplay = display;
-                NSLog(@"DisplayController: Restored selection for display: %@", [display name]);
-                break;
+
+    // Run xrandr off the main thread so the UI stays responsive
+    NSString *path = [xrandrPath retain];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSTask *task = [[NSTask alloc] init];
+        [task setLaunchPath:path];
+        [task setArguments:@[@"--query"]];
+
+        NSPipe *pipe = [NSPipe pipe];
+        [task setStandardOutput:pipe];
+
+        NSFileHandle *file = [pipe fileHandleForReading];
+
+        [task launch];
+        // Read pipe data BEFORE waitUntilExit to avoid pipe-buffer deadlock.
+        NSData *data = [file readDataToEndOfFile];
+        [task waitUntilExit];
+        NSString *output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        [task release];
+        [path release];
+
+        // Switch back to the main thread for all UI and model updates
+        dispatch_async(dispatch_get_main_queue(), ^{
+            isRefreshing = NO;
+
+            [self parseXrandrOutput:output];
+            [output release];
+
+            // Restore the previously selected display if it still exists
+            if (previouslySelectedOutput) {
+                selectedDisplay = nil;
+                for (DisplayInfo *display in displays) {
+                    if ([[display output] isEqualToString:previouslySelectedOutput]) {
+                        selectedDisplay = display;
+                        NSDebugLog(@"DisplayController: Restored selection for display: %@", [display name]);
+                        break;
+                    }
+                }
+                [previouslySelectedOutput release];
             }
-        }
-        [previouslySelectedOutput release];
-    }
-    
-    // Update the display view
-    if (displayView) {
-        [displayView setNeedsDisplay:YES];
-    }
-    
-    // Update resolution popup
-    [self updateResolutionPopup];
+
+            // Update the display view with new data
+            if (displayView) {
+                [displayView updateDisplayRects];
+                [displayView setNeedsDisplay:YES];
+            }
+
+            // Update resolution popup
+            [self updateResolutionPopup];
+        });
+    });
 }
 
 - (void)parseXrandrOutput:(NSString *)output
 {
     [displays removeAllObjects];
-    
+
+    // Cache the raw output so getAvailableResolutionsForDisplay: can
+    // parse it without spawning another xrandr process.
+    [lastXrandrOutput release];
+    lastXrandrOutput = [output copy];
+
     NSArray *lines = [output componentsSeparatedByString:@"\n"];
     DisplayInfo *currentDisplay = nil;
     BOOL parsingModes = NO;
     
-    NSLog(@"DisplayController: Parsing xrandr output...");
+    NSDebugLog(@"DisplayController: Parsing xrandr output...");
     
     for (NSString *line in lines) {
         NSString *trimmedLine = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
@@ -255,7 +276,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
             if (currentDisplay) {
                 if ([currentDisplay isConnected]) {
                     [displays addObject:currentDisplay];
-                    NSLog(@"Added display %@ to list", [currentDisplay name]);
+                    NSDebugLog(@"Added display %@ to list", [currentDisplay name]);
                 }
                 [currentDisplay release];
                 currentDisplay = nil;
@@ -273,7 +294,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
                     parsingModes = YES;
                 }
                 
-                NSLog(@"Found display: %@ (connected: %d)", [currentDisplay name], [currentDisplay isConnected]);
+                NSDebugLog(@"Found display: %@ (connected: %d)", [currentDisplay name], [currentDisplay isConnected]);
                 
                 // Parse geometry if present
                 if ([currentDisplay isConnected] && [parts count] >= 3) {
@@ -295,7 +316,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
                                 float y = [[geomParts objectAtIndex:2] floatValue];
                                 [currentDisplay setFrame:NSMakeRect(x, y, width, height)];
                                 
-                                NSLog(@"Display %@ resolution: %.0fx%.0f at %.0f,%.0f", 
+                                NSDebugLog(@"Display %@ resolution: %.0fx%.0f at %.0f,%.0f", 
                                      [currentDisplay name], width, height, x, y);
                             }
                         }
@@ -303,18 +324,18 @@ static NSMutableDictionary *activeDialogsByID = nil;
                         // Check if this is the primary display
                         [currentDisplay setIsPrimary:[trimmedLine rangeOfString:@" primary"].location != NSNotFound];
                         if ([currentDisplay isPrimary]) {
-                            NSLog(@"Display %@ is primary", [currentDisplay name]);
+                            NSDebugLog(@"Display %@ is primary", [currentDisplay name]);
                         }
                     } else {
                         // Display is connected but not configured - give it default values
-                        NSLog(@"Display %@ is connected but not configured, using defaults", [currentDisplay name]);
+                        NSDebugLog(@"Display %@ is connected but not configured, using defaults", [currentDisplay name]);
                         [currentDisplay setResolution:NSMakeSize(1920, 1080)]; // Default resolution
                         [currentDisplay setFrame:NSMakeRect(0, 0, 1920, 1080)]; // Default position
                         [currentDisplay setIsPrimary:YES]; // Make it primary if it's the only one
                     }
                 } else if ([currentDisplay isConnected]) {
                     // Display is connected but no geometry info at all - use defaults
-                    NSLog(@"Display %@ is connected but has no geometry info, using defaults", [currentDisplay name]);
+                    NSDebugLog(@"Display %@ is connected but has no geometry info, using defaults", [currentDisplay name]);
                     [currentDisplay setResolution:NSMakeSize(1920, 1080)]; // Default resolution
                     [currentDisplay setFrame:NSMakeRect(0, 0, 1920, 1080)]; // Default position
                     [currentDisplay setIsPrimary:YES]; // Make it primary if it's the only one
@@ -336,7 +357,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
                 if ([filteredParts count] > 0) {
                     NSString *resPart = [filteredParts objectAtIndex:0];
                     [currentDisplay setCurrentResolutionString:resPart];
-                    NSLog(@"Display %@ current resolution string: %@", [currentDisplay name], resPart);
+                    NSDebugLog(@"Display %@ current resolution string: %@", [currentDisplay name], resPart);
                 }
             }
         }
@@ -346,13 +367,13 @@ static NSMutableDictionary *activeDialogsByID = nil;
     if (currentDisplay) {
         if ([currentDisplay isConnected]) {
             [displays addObject:currentDisplay];
-            NSLog(@"Added display %@ to list", [currentDisplay name]);
+            NSDebugLog(@"Added display %@ to list", [currentDisplay name]);
         }
         [currentDisplay release];
         currentDisplay = nil;
     }
     
-    NSLog(@"DisplayController: Found %lu connected displays", (unsigned long)[displays count]);
+    NSDebugLog(@"DisplayController: Found %lu connected displays", (unsigned long)[displays count]);
     
     // If we have displays but none seem to be properly configured, try to auto-configure them
     BOOL hasConfiguredDisplay = NO;
@@ -364,7 +385,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
     }
     
     if ([displays count] > 0 && !hasConfiguredDisplay) {
-        NSLog(@"DisplayController: No displays are properly configured, attempting auto-configuration");
+        NSDebugLog(@"DisplayController: No displays are properly configured, attempting auto-configuration");
         [self autoConfigureDisplays];
     }
 }
@@ -382,7 +403,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
             if ([display isPrimary]) {
                 targetDisplay = display;
                 selectedDisplay = display; // Set as selected
-                NSLog(@"DisplayController: Auto-selecting primary display: %@", [display name]);
+                NSDebugLog(@"DisplayController: Auto-selecting primary display: %@", [display name]);
                 break;
             }
         }
@@ -393,11 +414,11 @@ static NSMutableDictionary *activeDialogsByID = nil;
         targetDisplay = [displays objectAtIndex:0];
         selectedDisplay = targetDisplay;
         [targetDisplay setIsPrimary:YES]; // Make first display primary if none is set
-        NSLog(@"DisplayController: Auto-selecting first display as primary: %@", [targetDisplay name]);
+        NSDebugLog(@"DisplayController: Auto-selecting first display as primary: %@", [targetDisplay name]);
     }
     
     if (targetDisplay) {
-        NSLog(@"DisplayController: Updating resolution popup for display: %@", [targetDisplay name]);
+        NSDebugLog(@"DisplayController: Updating resolution popup for display: %@", [targetDisplay name]);
         NSMutableArray *availableResolutions = [[self getAvailableResolutionsForDisplay:targetDisplay] mutableCopy];
         
         // Ensure current resolution is in the list
@@ -410,7 +431,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
         }
         if (![availableResolutions containsObject:currentRes]) {
             [availableResolutions addObject:currentRes];
-            NSLog(@"DisplayController: Added current resolution to popup: %@", currentRes);
+            NSDebugLog(@"DisplayController: Added current resolution to popup: %@", currentRes);
         }
         
         for (NSString *res in availableResolutions) {
@@ -419,84 +440,53 @@ static NSMutableDictionary *activeDialogsByID = nil;
         
         // Select current resolution
         [resolutionPopup selectItemWithTitle:currentRes];
-        NSLog(@"DisplayController: Set resolution popup to current resolution: %@", currentRes);
+        NSDebugLog(@"DisplayController: Set resolution popup to current resolution: %@", currentRes);
     }
 }
 
 - (NSArray *)getAvailableResolutionsForDisplay:(DisplayInfo *)display
 {
     if (!display || ![self isXrandrAvailable]) {
-        NSLog(@"DisplayController: Cannot get resolutions - display:%@ xrandr available:%d", display, [self isXrandrAvailable]);
         return @[];
     }
-    
-    NSLog(@"DisplayController: Getting available resolutions for display: %@", [display name]);
-    
-    NSTask *task = [[NSTask alloc] init];
-    [task setLaunchPath:xrandrPath];
-    [task setArguments:@[@"--query"]];
-    
-    NSPipe *pipe = [NSPipe pipe];
-    [task setStandardOutput:pipe];
-    
-    NSFileHandle *file = [pipe fileHandleForReading];
-    
-    [task launch];
-    [task waitUntilExit];
-    
-    NSData *data = [file readDataToEndOfFile];
-    NSString *output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    
+
+    // Use the already-parsed xrandr output stored in lastXrandrOutput
+    // instead of spawning another blocking xrandr process on the main thread.
+    if (!lastXrandrOutput) {
+        return @[];
+    }
+
     NSMutableArray *resolutions = [NSMutableArray array];
-    NSArray *lines = [output componentsSeparatedByString:@"\n"];
+    NSArray *lines = [lastXrandrOutput componentsSeparatedByString:@"\n"];
     BOOL foundDisplay = NO;
-    
+
     for (NSString *line in lines) {
         NSString *trimmedLine = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        
-        // Check if this is our display
+
         if ([trimmedLine hasPrefix:[display output]]) {
             foundDisplay = YES;
-            NSLog(@"DisplayController: Found display section for %@", [display output]);
             continue;
         }
-        
-        // If we found our display, parse resolution lines until we hit another display
+
         if (foundDisplay) {
-            // Stop if we hit another display line
             if ([trimmedLine rangeOfString:@" connected"].location != NSNotFound ||
                 [trimmedLine rangeOfString:@" disconnected"].location != NSNotFound) {
-                NSLog(@"DisplayController: End of display section reached");
                 break;
             }
-            
-            // Parse resolution line (e.g., "   1920x1080     60.00*+  50.00    59.94")
+
             if ([trimmedLine rangeOfString:@"x"].location != NSNotFound) {
                 NSArray *parts = [trimmedLine componentsSeparatedByString:@" "];
-                // Filter out empty strings
-                NSMutableArray *filteredParts = [NSMutableArray array];
                 for (NSString *part in parts) {
                     NSString *trimmedPart = [part stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-                    if ([trimmedPart length] > 0) {
-                        [filteredParts addObject:trimmedPart];
-                    }
-                }
-                
-                if ([filteredParts count] > 0) {
-                    NSString *resPart = [filteredParts objectAtIndex:0];
-                    if ([resPart rangeOfString:@"x"].location != NSNotFound) {
-                        [resolutions addObject:resPart];
-                        NSLog(@"DisplayController: Found resolution: %@", resPart);
+                    if ([trimmedPart length] > 0 && [trimmedPart rangeOfString:@"x"].location != NSNotFound) {
+                        [resolutions addObject:trimmedPart];
+                        break; // first token is the resolution
                     }
                 }
             }
         }
     }
-    
-    [output release];
-    [task release];
-    
-    NSLog(@"DisplayController: Found %lu resolutions for display %@", (unsigned long)[resolutions count], [display name]);
+
     return resolutions;
 }
 
@@ -505,7 +495,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
     // Implementation for mirror displays
     BOOL mirror = [mirrorDisplaysCheckbox state] == NSOnState;
     
-    NSLog(@"DisplayController: Mirror displays changed to: %@", mirror ? @"ON" : @"OFF");
+    NSDebugLog(@"DisplayController: Mirror displays changed to: %@", mirror ? @"ON" : @"OFF");
     
     if (mirror && [displays count] > 1) {
         // Enable mirroring
@@ -525,7 +515,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
         }
         
         if (primary) {
-            NSLog(@"DisplayController: Enabling mirroring with primary display: %@", [primary name]);
+            NSDebugLog(@"DisplayController: Enabling mirroring with primary display: %@", [primary name]);
             
             [args addObject:@"--output"];
             [args addObject:[primary output]];
@@ -538,7 +528,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
                     [args addObject:[display output]];
                     [args addObject:@"--same-as"];
                     [args addObject:[primary output]];
-                    NSLog(@"DisplayController: Mirroring %@ to %@", [display name], [primary name]);
+                    NSDebugLog(@"DisplayController: Mirroring %@ to %@", [display name], [primary name]);
                 }
             }
             
@@ -546,7 +536,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
         }
     } else {
         // Disable mirroring - arrange displays side by side
-        NSLog(@"DisplayController: Disabling mirroring, arranging displays side by side");
+        NSDebugLog(@"DisplayController: Disabling mirroring, arranging displays side by side");
         [self applyDisplayConfiguration];
     }
 }
@@ -558,7 +548,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
     // Apply resolution to selected display
     DisplayInfo *targetDisplay = selectedDisplay;
     if (!targetDisplay) {
-        NSLog(@"DisplayController: No display selected for resolution change");
+        NSDebugLog(@"DisplayController: No display selected for resolution change");
         return;
     }
     
@@ -567,11 +557,11 @@ static NSMutableDictionary *activeDialogsByID = nil;
         NSString *currentRes = [targetDisplay currentResolutionString];
         
         if ([selectedResolution isEqualToString:currentRes]) {
-            NSLog(@"DisplayController: Selected resolution same as current, no change needed");
+            NSDebugLog(@"DisplayController: Selected resolution same as current, no change needed");
             return; // No change needed
         }
         
-        NSLog(@"DisplayController: Changing resolution for %@ from %@ to %@", [targetDisplay name], currentRes, selectedResolution);
+        NSDebugLog(@"DisplayController: Changing resolution for %@ from %@ to %@", [targetDisplay name], currentRes, selectedResolution);
         
         // Apply the new resolution
         NSArray *args = @[@"--output", [targetDisplay output], @"--mode", selectedResolution];
@@ -588,7 +578,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
                                            newResolution:(NSString *)newRes 
                                                  display:(DisplayInfo *)display
 {
-    NSLog(@"DisplayController: Showing resolution confirmation dialog - old:%@ new:%@", oldRes, newRes);
+    NSDebugLog(@"DisplayController: Showing resolution confirmation dialog - old:%@ new:%@", oldRes, newRes);
     
     // Create a floating window for confirmation (non-modal to allow timer to work)
     NSWindow *confirmWindow = [[NSWindow alloc] 
@@ -686,7 +676,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
     NSString *oldRes = [userInfo objectForKey:@"oldResolution"];
     DisplayInfo *display = [userInfo objectForKey:@"display"];
     
-    NSLog(@"Auto-reverting resolution to %@", oldRes);
+    NSDebugLog(@"Auto-reverting resolution to %@", oldRes);
     [self revertToResolution:oldRes forDisplay:display];
     
     // Show a brief notification
@@ -729,7 +719,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
         [dialogData removeObjectForKey:@"timer"]; // release timer retained by dialogData
         [activeDialogsByID removeObjectForKey:dialogIDNum];
         
-        NSLog(@"DisplayController: Countdown reached 0, auto-reverting resolution");
+        NSDebugLog(@"DisplayController: Countdown reached 0, auto-reverting resolution");
         [self revertToResolution:oldRes forDisplay:display];
         [window close];
     }
@@ -753,7 +743,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
     
     [timer invalidate];
     [dialogData removeObjectForKey:@"timer"]; // release timer retained by dialogData
-    NSLog(@"DisplayController: User clicked Revert button");
+    NSDebugLog(@"DisplayController: User clicked Revert button");
     [self revertToResolution:oldRes forDisplay:display];
     [window close];
     [activeDialogsByID removeObjectForKey:@(dialogID)];
@@ -775,7 +765,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
     
     [timer invalidate];
     [dialogData removeObjectForKey:@"timer"]; // release timer retained by dialogData
-    NSLog(@"DisplayController: User clicked Keep button - keeping new resolution");
+    NSDebugLog(@"DisplayController: User clicked Keep button - keeping new resolution");
     [window close];
     [activeDialogsByID removeObjectForKey:@(dialogID)];
 }
@@ -793,26 +783,36 @@ static NSMutableDictionary *activeDialogsByID = nil;
 - (void)runXrandrWithArgs:(NSArray *)args
 {
     if (![self isXrandrAvailable]) {
-        NSLog(@"DisplayController: Cannot run xrandr - not available");
+        NSDebugLog(@"DisplayController: Cannot run xrandr - not available");
         return;
     }
-    
-    NSLog(@"DisplayController: Running xrandr with args: %@", args);
-    
-    NSTask *task = [[NSTask alloc] init];
-    [task setLaunchPath:xrandrPath];
-    [task setArguments:args];
-    
-    [task launch];
-    [task waitUntilExit];
-    
-    int exitStatus = [task terminationStatus];
-    NSLog(@"DisplayController: xrandr command completed with exit status: %d", exitStatus);
-    
-    [task release];
-    
-    // Refresh displays after change
-    [self performSelector:@selector(refreshDisplays:) withObject:nil afterDelay:0.5];
+
+    NSDebugLog(@"DisplayController: Running xrandr with args: %@", args);
+
+    NSString *path = [xrandrPath retain];
+    NSArray *argsCopy = [args retain];
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSTask *task = [[NSTask alloc] init];
+        [task setLaunchPath:path];
+        [task setArguments:argsCopy];
+
+        [task launch];
+        [task waitUntilExit];
+
+        int exitStatus = [task terminationStatus];
+        NSDebugLog(@"DisplayController: xrandr command completed with exit status: %d", exitStatus);
+
+        [task release];
+        [path release];
+        [argsCopy release];
+
+        // Refresh displays after change (back on main thread with delay)
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [self refreshDisplays:nil];
+        });
+    });
 }
 
 - (void)applyDisplayConfiguration
@@ -852,7 +852,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
 
 - (void)setPrimaryDisplay:(DisplayInfo *)display
 {
-    NSLog(@"DisplayController: Setting primary display to: %@", [display name]);
+    NSDebugLog(@"DisplayController: Setting primary display to: %@", [display name]);
     
     // Update the isPrimary flag
     for (DisplayInfo *d in displays) {
@@ -866,7 +866,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
 
 - (NSString *)findXrandrPath
 {
-    NSLog(@"DisplayController: Looking for xrandr in PATH");
+    NSDebugLog(@"DisplayController: Looking for xrandr in PATH");
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"/usr/bin/which"];
@@ -889,11 +889,11 @@ static NSMutableDictionary *activeDialogsByID = nil;
     
     if (exitStatus == 0 && output && [output length] > 0) {
         NSString *path = [output stringByTrimmingCharactersInSet:[NSCharacterSet newlineCharacterSet]];
-        NSLog(@"DisplayController: Found xrandr at: %@", path);
+        NSDebugLog(@"DisplayController: Found xrandr at: %@", path);
         [output release];
         return path;
     } else {
-        NSLog(@"DisplayController: xrandr not found in PATH (exit status: %d)", exitStatus);
+        NSDebugLog(@"DisplayController: xrandr not found in PATH (exit status: %d)", exitStatus);
         [output release];
         return nil;
     }
@@ -911,7 +911,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
 
 - (void)selectDisplay:(DisplayInfo *)display
 {
-    NSLog(@"DisplayController: Selecting display: %@", [display name]);
+    NSDebugLog(@"DisplayController: Selecting display: %@", [display name]);
     selectedDisplay = display;
     
     // Update resolution popup for selected display
@@ -935,10 +935,10 @@ static NSMutableDictionary *activeDialogsByID = nil;
 
 - (void)autoConfigureDisplays
 {
-    NSLog(@"DisplayController: Auto-configuring displays...");
+    NSDebugLog(@"DisplayController: Auto-configuring displays...");
     
     if ([displays count] == 0) {
-        NSLog(@"DisplayController: No displays to configure");
+        NSDebugLog(@"DisplayController: No displays to configure");
         return;
     }
     
@@ -947,7 +947,7 @@ static NSMutableDictionary *activeDialogsByID = nil;
     
     for (DisplayInfo *display in displays) {
         if ([display isConnected]) {
-            NSLog(@"DisplayController: Auto-configuring display: %@", [display name]);
+            NSDebugLog(@"DisplayController: Auto-configuring display: %@", [display name]);
             [args addObject:@"--output"];
             [args addObject:[display output]];
             [args addObject:@"--auto"];
@@ -956,19 +956,19 @@ static NSMutableDictionary *activeDialogsByID = nil;
             if (display == [displays objectAtIndex:0]) {
                 [args addObject:@"--primary"];
                 [display setIsPrimary:YES];
-                NSLog(@"DisplayController: Setting %@ as primary display", [display name]);
+                NSDebugLog(@"DisplayController: Setting %@ as primary display", [display name]);
             }
         }
     }
     
     if ([args count] > 0) {
-        NSLog(@"DisplayController: Running auto-configuration with args: %@", args);
+        NSDebugLog(@"DisplayController: Running auto-configuration with args: %@", args);
         [self runXrandrWithArgs:args];
         
         // Note: runXrandrWithArgs already calls refreshDisplays with a delay
         // so we don't need to call it again here
     } else {
-        NSLog(@"DisplayController: No auto-configuration needed");
+        NSDebugLog(@"DisplayController: No auto-configuration needed");
     }
 }
 

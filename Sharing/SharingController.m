@@ -8,6 +8,7 @@
 
 #import "SharingController.h"
 #import "GSServiceDiscoveryManager.h"
+#import <dispatch/dispatch.h>
 #import <sys/utsname.h>
 #import <arpa/inet.h>
 #import <netinet/in.h>
@@ -35,7 +36,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
 {
     self = [super init];
     if (self) {
-        NSLog(@"SharingController: init starting");
+        NSDebugLog(@"SharingController: init starting");
         
         sshEnabled = NO;
         vncEnabled = NO;
@@ -48,18 +49,18 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         NSString *systemLibrary = @"/System/Library";
         helperPath = [[systemLibrary stringByAppendingPathComponent:@"Tools/sharing-helper"] retain];
         
-        NSLog(@"SharingController: Helper path set to: %@", helperPath);
+        NSDebugLog(@"SharingController: Helper path set to: %@", helperPath);
         
         // Check if helper exists
         NSFileManager *fm = [NSFileManager defaultManager];
         if (![fm fileExistsAtPath:helperPath]) {
-            NSLog(@"SharingController: WARNING - Helper not found at %@", helperPath);
+            NSDebugLog(@"SharingController: WARNING - Helper not found at %@", helperPath);
         }
         
         // Don't initialize serviceDiscoveryManager here - do it lazily when needed
         serviceDiscoveryManager = nil;
         
-        NSLog(@"SharingController: init complete (lightweight init, manager will be created on demand)");
+        NSDebugLog(@"SharingController: init complete (lightweight init, manager will be created on demand)");
     }
     return self;
 }
@@ -67,17 +68,17 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
 - (GSServiceDiscoveryManager *)ensureServiceDiscoveryManager
 {
     if (serviceDiscoveryManager == nil) {
-        NSLog(@"SharingController: Creating GSServiceDiscoveryManager on demand");
+        NSDebugLog(@"SharingController: Creating GSServiceDiscoveryManager on demand");
         @try {
             serviceDiscoveryManager = [[GSServiceDiscoveryManager sharedManager] retain];
-            NSLog(@"SharingController: Successfully initialized GSServiceDiscoveryManager");
+            NSDebugLog(@"SharingController: Successfully initialized GSServiceDiscoveryManager");
             if (serviceDiscoveryManager) {
-                NSLog(@"SharingController: mDNS backend: %@, available: %@", 
+                NSDebugLog(@"SharingController: mDNS backend: %@, available: %@", 
                       [serviceDiscoveryManager backendName],
                       [serviceDiscoveryManager isAvailable] ? @"YES" : @"NO");
             }
         } @catch (NSException *exception) {
-            NSLog(@"SharingController: EXCEPTION initializing GSServiceDiscoveryManager: %@", exception);
+            NSDebugLog(@"SharingController: EXCEPTION initializing GSServiceDiscoveryManager: %@", exception);
             serviceDiscoveryManager = nil;
         }
     }
@@ -118,12 +119,12 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     NSFileManager *fm = [NSFileManager defaultManager];
     
     if (![fm fileExistsAtPath:helperPath]) {
-        NSLog(@"SharingController: Helper not found at %@", helperPath);
+        NSDebugLog(@"SharingController: Helper not found at %@", helperPath);
         return nil;
     }
     
     if (![fm isExecutableFileAtPath:helperPath]) {
-        NSLog(@"SharingController: Helper at %@ is not executable", helperPath);
+        NSDebugLog(@"SharingController: Helper at %@ is not executable", helperPath);
         return nil;
     }
     
@@ -140,19 +141,20 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     NSFileHandle *errorFile = [errorPipe fileHandleForReading];
     
     @try {
-        NSLog(@"SharingController: Launching helper with command: %@", command);
+        NSDebugLog(@"SharingController: Launching helper with command: %@", command);
         [task launch];
-        [task waitUntilExit];
-        
+        // Read pipe data BEFORE waitUntilExit to avoid deadlock when
+        // the child fills the pipe buffer.
         NSData *data = [file readDataToEndOfFile];
         NSData *errorData = [errorFile readDataToEndOfFile];
+        [task waitUntilExit];
         NSString *output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
         NSString *errorOutput = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
         int status = [task terminationStatus];
         
         if (status != 0) {
-            NSLog(@"SharingController: Helper command '%@' failed with status %d: %@", 
+            NSDebugLog(@"SharingController: Helper command '%@' failed with status %d: %@", 
                   command, status, errorOutput);
         }
         
@@ -161,7 +163,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         
         return [output autorelease];
     } @catch (NSException *exception) {
-        NSLog(@"SharingController: Exception running helper: %@", exception);
+        NSDebugLog(@"SharingController: Exception running helper: %@", exception);
         [task release];
         return nil;
     }
@@ -186,23 +188,24 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     
     @try {
         [task launch];
+        // Drain pipes before waitUntilExit to avoid deadlock
+        NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
         [task waitUntilExit];
-        
+
         int status = [task terminationStatus];
-        
+
         if (status != 0) {
-            NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
             NSString *errorOutput = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
-            NSLog(@"SharingController: Command failed with status %d: %@\nError: %@", status, command, errorOutput);
+            NSDebugLog(@"SharingController: Command failed with status %d: %@\nError: %@", status, command, errorOutput);
             [errorOutput release];
         } else {
-            NSLog(@"SharingController: Successfully executed: %@", command);
+            NSDebugLog(@"SharingController: Successfully executed: %@", command);
         }
         
         [task release];
         return (status == 0);
     } @catch (NSException *exception) {
-        NSLog(@"SharingController: Exception running sudo command: %@", exception);
+        NSDebugLog(@"SharingController: Exception running sudo command: %@", exception);
         [task release];
         return NO;
     }
@@ -298,7 +301,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
                         }
                         [addresses appendString:[NSString stringWithUTF8String:addressBuffer]];
                     } else {
-                        NSLog(@"SharingController: inet_ntop failed for interface %s", temp_addr->ifa_name);
+                        NSDebugLog(@"SharingController: inet_ntop failed for interface %s", temp_addr->ifa_name);
                     }
                 }
             }
@@ -340,7 +343,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         return;
     }
     
-    NSLog(@"SharingController: Setting hostname to: %@", newHostname);
+    NSDebugLog(@"SharingController: Setting hostname to: %@", newHostname);
     
     NSString *command = [NSString stringWithFormat:@"set-hostname %@", newHostname];
     BOOL success = [self runHelperWithSudo:command];
@@ -352,10 +355,10 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
         if (mgr && [mgr isAvailable]) {
             [mgr setComputerName:newHostname];
-            NSLog(@"SharingController: Updated mDNS computer name to %@", newHostname);
+            NSDebugLog(@"SharingController: Updated mDNS computer name to %@", newHostname);
         }
         
-        NSLog(@"SharingController: Hostname changed to %@", newHostname);
+        NSDebugLog(@"SharingController: Hostname changed to %@", newHostname);
         
     } else {
         NSRunAlertPanel(@"Hostname Error", 
@@ -374,7 +377,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     BOOL shouldEnable = [sshCheckbox state] == NSOnState;
     NSString *command = shouldEnable ? @"ssh-start" : @"ssh-stop";
     
-    NSLog(@"SharingController: %@ SSH", shouldEnable ? @"Starting" : @"Stopping");
+    NSDebugLog(@"SharingController: %@ SSH", shouldEnable ? @"Starting" : @"Stopping");
     
     BOOL success = [self runHelperWithSudo:command];
     
@@ -390,21 +393,21 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
                                                                      port:22 
                                                                 txtRecord:nil];
                 if (announced) {
-                    NSLog(@"SharingController: SSH service announced via mDNS");
+                    NSDebugLog(@"SharingController: SSH service announced via mDNS");
                 } else {
-                    NSLog(@"SharingController: Failed to announce SSH service via mDNS");
+                    NSDebugLog(@"SharingController: Failed to announce SSH service via mDNS");
                 }
             }
         } else {
             GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
             if (mgr && [mgr isAvailable]) {
                 [mgr unannounceService:GSServiceTypeSSH];
-                NSLog(@"SharingController: SSH service unannounced from mDNS");
+                NSDebugLog(@"SharingController: SSH service unannounced from mDNS");
             }
         }
         
         [self refreshStatus:nil];
-        NSLog(@"SharingController: SSH %@", shouldEnable ? @"started" : @"stopped");
+        NSDebugLog(@"SharingController: SSH %@", shouldEnable ? @"started" : @"stopped");
     } else {
         // Revert checkbox state
         [sshCheckbox setState:sshEnabled ? NSOnState : NSOffState];
@@ -419,7 +422,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     BOOL shouldEnable = [vncCheckbox state] == NSOnState;
     NSString *command = shouldEnable ? @"vnc-start" : @"vnc-stop";
     
-    NSLog(@"SharingController: %@ VNC", shouldEnable ? @"Starting" : @"Stopping");
+    NSDebugLog(@"SharingController: %@ VNC", shouldEnable ? @"Starting" : @"Stopping");
     
     BOOL success = [self runHelperWithSudo:command];
     
@@ -435,21 +438,21 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
                                                                      port:5900 
                                                                 txtRecord:nil];
                 if (announced) {
-                    NSLog(@"SharingController: VNC service announced via mDNS");
+                    NSDebugLog(@"SharingController: VNC service announced via mDNS");
                 } else {
-                    NSLog(@"SharingController: Failed to announce VNC service via mDNS");
+                    NSDebugLog(@"SharingController: Failed to announce VNC service via mDNS");
                 }
             }
         } else {
             GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
             if (mgr && [mgr isAvailable]) {
                 [mgr unannounceService:GSServiceTypeVNC];
-                NSLog(@"SharingController: VNC service unannounced from mDNS");
+                NSDebugLog(@"SharingController: VNC service unannounced from mDNS");
             }
         }
         
         [self refreshStatus:nil];
-        NSLog(@"SharingController: VNC %@", shouldEnable ? @"started" : @"stopped");
+        NSDebugLog(@"SharingController: VNC %@", shouldEnable ? @"started" : @"stopped");
     } else {
         // Revert checkbox state
         [vncCheckbox setState:vncEnabled ? NSOnState : NSOffState];
@@ -464,7 +467,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     BOOL shouldEnable = [sftpCheckbox state] == NSOnState;
     NSString *command = shouldEnable ? @"sftp-start" : @"sftp-stop";
     
-    NSLog(@"SharingController: %@ SFTP", shouldEnable ? @"Starting" : @"Stopping");
+    NSDebugLog(@"SharingController: %@ SFTP", shouldEnable ? @"Starting" : @"Stopping");
     
     BOOL success = [self runHelperWithSudo:command];
     
@@ -480,9 +483,9 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
                                                                      port:22 
                                                                 txtRecord:nil];
                 if (announced) {
-                    NSLog(@"SharingController: SFTP service announced via mDNS");
+                    NSDebugLog(@"SharingController: SFTP service announced via mDNS");
                 } else {
-                    NSLog(@"SharingController: Failed to announce SFTP service via mDNS");
+                    NSDebugLog(@"SharingController: Failed to announce SFTP service via mDNS");
                     NSRunAlertPanel(@"SFTP Warning", 
                                    @"SFTP service started but could not be announced on the network.", 
                                    @"OK", nil, nil);
@@ -492,12 +495,12 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
             GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
             if (mgr && [mgr isAvailable]) {
                 [mgr unannounceService:GSServiceTypeSFTP];
-                NSLog(@"SharingController: SFTP service unannounced from mDNS");
+                NSDebugLog(@"SharingController: SFTP service unannounced from mDNS");
             }
         }
         
         [self refreshStatus:nil];
-        NSLog(@"SharingController: SFTP %@", shouldEnable ? @"started" : @"stopped");
+        NSDebugLog(@"SharingController: SFTP %@", shouldEnable ? @"started" : @"stopped");
     } else {
         // Revert checkbox state
         [sftpCheckbox setState:sftpEnabled ? NSOnState : NSOffState];
@@ -514,7 +517,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     BOOL shouldEnable = [afpCheckbox state] == NSOnState;
     NSString *command = shouldEnable ? @"afp-start" : @"afp-stop";
     
-    NSLog(@"SharingController: %@ AFP", shouldEnable ? @"Starting" : @"Stopping");
+    NSDebugLog(@"SharingController: %@ AFP", shouldEnable ? @"Starting" : @"Stopping");
     
     BOOL success = [self runHelperWithSudo:command];
     
@@ -530,9 +533,9 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
                                                                      port:548 
                                                                 txtRecord:nil];
                 if (announced) {
-                    NSLog(@"SharingController: AFP service announced via mDNS");
+                    NSDebugLog(@"SharingController: AFP service announced via mDNS");
                 } else {
-                    NSLog(@"SharingController: Failed to announce AFP service via mDNS");
+                    NSDebugLog(@"SharingController: Failed to announce AFP service via mDNS");
                     NSRunAlertPanel(@"AFP Warning", 
                                    @"AFP service started but could not be announced on the network.", 
                                    @"OK", nil, nil);
@@ -542,12 +545,12 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
             GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
             if (mgr && [mgr isAvailable]) {
                 [mgr unannounceService:GSServiceTypeAFP];
-                NSLog(@"SharingController: AFP service unannounced from mDNS");
+                NSDebugLog(@"SharingController: AFP service unannounced from mDNS");
             }
         }
         
         [self refreshStatus:nil];
-        NSLog(@"SharingController: AFP %@", shouldEnable ? @"started" : @"stopped");
+        NSDebugLog(@"SharingController: AFP %@", shouldEnable ? @"started" : @"stopped");
     } else {
         // Revert checkbox state
         [afpCheckbox setState:afpEnabled ? NSOnState : NSOffState];
@@ -568,7 +571,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     BOOL shouldEnable = [smbCheckbox state] == NSOnState;
     NSString *command = shouldEnable ? @"smb-start" : @"smb-stop";
     
-    NSLog(@"SharingController: %@ SMB", shouldEnable ? @"Starting" : @"Stopping");
+    NSDebugLog(@"SharingController: %@ SMB", shouldEnable ? @"Starting" : @"Stopping");
     
     BOOL success = [self runHelperWithSudo:command];
     
@@ -584,9 +587,9 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
                                                                      port:445 
                                                                 txtRecord:nil];
                 if (announced) {
-                    NSLog(@"SharingController: SMB service announced via mDNS");
+                    NSDebugLog(@"SharingController: SMB service announced via mDNS");
                 } else {
-                    NSLog(@"SharingController: Failed to announce SMB service via mDNS");
+                    NSDebugLog(@"SharingController: Failed to announce SMB service via mDNS");
                     NSRunAlertPanel(@"SMB Warning", 
                                    @"SMB service started but could not be announced on the network.", 
                                    @"OK", nil, nil);
@@ -596,12 +599,12 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
             GSServiceDiscoveryManager *mgr = [self ensureServiceDiscoveryManager];
             if (mgr && [mgr isAvailable]) {
                 [mgr unannounceService:GSServiceTypeSMB];
-                NSLog(@"SharingController: SMB service unannounced from mDNS");
+                NSDebugLog(@"SharingController: SMB service unannounced from mDNS");
             }
         }
         
         [self refreshStatus:nil];
-        NSLog(@"SharingController: SMB %@", shouldEnable ? @"started" : @"stopped");
+        NSDebugLog(@"SharingController: SMB %@", shouldEnable ? @"started" : @"stopped");
     } else {
         // Revert checkbox state
         [smbCheckbox setState:smbEnabled ? NSOnState : NSOffState];
@@ -620,21 +623,53 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
 
 - (void)refreshStatus:(id)sender
 {
-    NSLog(@"SharingController: Refreshing service status");
-    
+    NSDebugLog(@"SharingController: Refreshing service status");
+
     // Safety check: ensure UI elements exist before trying to update them
     if (!hostnameField || !sshCheckbox) {
-        NSLog(@"SharingController: UI not yet initialized, skipping refresh");
+        NSDebugLog(@"SharingController: UI not yet initialized, skipping refresh");
         return;
     }
-    
+
+    if (isRefreshingStatus) {
+        NSDebugLog(@"SharingController: Refresh already in progress, skipping");
+        return;
+    }
+    isRefreshingStatus = YES;
+
+    // Run all blocking helper queries on a background thread, then
+    // update the UI back on the main thread.
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSString *hostname = [self getHostname];
+        BOOL ssh  = [self getSSHStatus];
+        BOOL vnc  = [self getVNCStatus];
+        BOOL sftp = [self getSFTPStatus];
+        BOOL afp  = [self getAFPStatus];
+        BOOL smb  = [self getSMBStatus];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            isRefreshingStatus = NO;
+            [self updateUIWithHostname:hostname
+                                   ssh:ssh vnc:vnc sftp:sftp afp:afp smb:smb];
+        });
+    });
+}
+
+- (void)updateUIWithHostname:(NSString *)hostname
+                         ssh:(BOOL)ssh vnc:(BOOL)vnc sftp:(BOOL)sftp
+                         afp:(BOOL)afp smb:(BOOL)smb
+{
+    // Safety check in case the pane was unselected while we were querying
+    if (!hostnameField || !sshCheckbox) {
+        return;
+    }
+
     // Update hostname
-    NSString *hostname = [self getHostname];
     [hostnameField setStringValue:hostname];
     ASSIGN(currentHostname, hostname);
-    
+
     // Update SSH status
-    sshEnabled = [self getSSHStatus];
+    sshEnabled = ssh;
     [sshCheckbox setState:sshEnabled ? NSOnState : NSOffState];
     
     if (sshEnabled) {
@@ -651,7 +686,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         if (mgr && [mgr isAvailable] && 
             ![mgr isServiceAnnounced:GSServiceTypeSSH]) {
             [mgr announceService:GSServiceTypeSSH port:22 txtRecord:nil];
-            NSLog(@"SharingController: Re-announced SSH service via mDNS");
+            NSDebugLog(@"SharingController: Re-announced SSH service via mDNS");
         }
     } else {
         [sshStatusLabel setStringValue:@"Off"];
@@ -663,12 +698,12 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         if (mgr && [mgr isAvailable] && 
             [mgr isServiceAnnounced:GSServiceTypeSSH]) {
             [mgr unannounceService:GSServiceTypeSSH];
-            NSLog(@"SharingController: Unannounced SSH service from mDNS");
+            NSDebugLog(@"SharingController: Unannounced SSH service from mDNS");
         }
     }
     
     // Update VNC status
-    vncEnabled = [self getVNCStatus];
+    vncEnabled = vnc;
     [vncCheckbox setState:vncEnabled ? NSOnState : NSOffState];
     
     if (vncEnabled) {
@@ -685,7 +720,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         if (mgr && [mgr isAvailable] && 
             ![mgr isServiceAnnounced:GSServiceTypeVNC]) {
             [mgr announceService:GSServiceTypeVNC port:5900 txtRecord:nil];
-            NSLog(@"SharingController: Re-announced VNC service via mDNS");
+            NSDebugLog(@"SharingController: Re-announced VNC service via mDNS");
         }
     } else {
         [vncStatusLabel setStringValue:@"Off"];
@@ -697,12 +732,12 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         if (mgr && [mgr isAvailable] && 
             [mgr isServiceAnnounced:GSServiceTypeVNC]) {
             [mgr unannounceService:GSServiceTypeVNC];
-            NSLog(@"SharingController: Unannounced VNC service from mDNS");
+            NSDebugLog(@"SharingController: Unannounced VNC service from mDNS");
         }
     }
     
     // Update SFTP status
-    sftpEnabled = [self getSFTPStatus];
+    sftpEnabled = sftp;
     [sftpCheckbox setState:sftpEnabled ? NSOnState : NSOffState];
     
     if (sftpEnabled) {
@@ -719,7 +754,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         if (mgr && [mgr isAvailable] && 
             ![mgr isServiceAnnounced:GSServiceTypeSFTP]) {
             [mgr announceService:GSServiceTypeSFTP port:22 txtRecord:nil];
-            NSLog(@"SharingController: Re-announced SFTP service via mDNS");
+            NSDebugLog(@"SharingController: Re-announced SFTP service via mDNS");
         }
     } else {
         [sftpStatusLabel setStringValue:@"Off"];
@@ -731,12 +766,12 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         if (mgr && [mgr isAvailable] && 
             [mgr isServiceAnnounced:GSServiceTypeSFTP]) {
             [mgr unannounceService:GSServiceTypeSFTP];
-            NSLog(@"SharingController: Unannounced SFTP service from mDNS");
+            NSDebugLog(@"SharingController: Unannounced SFTP service from mDNS");
         }
     }
     
     // Update AFP status
-    afpEnabled = [self getAFPStatus];
+    afpEnabled = afp;
     [afpCheckbox setState:afpEnabled ? NSOnState : NSOffState];
     
     if (afpEnabled) {
@@ -753,7 +788,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         if (mgr && [mgr isAvailable] && 
             ![mgr isServiceAnnounced:GSServiceTypeAFP]) {
             [mgr announceService:GSServiceTypeAFP port:548 txtRecord:nil];
-            NSLog(@"SharingController: Re-announced AFP service via mDNS");
+            NSDebugLog(@"SharingController: Re-announced AFP service via mDNS");
         }
     } else {
         [afpStatusLabel setStringValue:@"Off"];
@@ -765,12 +800,12 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         if (mgr && [mgr isAvailable] && 
             [mgr isServiceAnnounced:GSServiceTypeAFP]) {
             [mgr unannounceService:GSServiceTypeAFP];
-            NSLog(@"SharingController: Unannounced AFP service from mDNS");
+            NSDebugLog(@"SharingController: Unannounced AFP service from mDNS");
         }
     }
     
     // Update SMB status
-    smbEnabled = [self getSMBStatus];
+    smbEnabled = smb;
     [smbCheckbox setState:smbEnabled ? NSOnState : NSOffState];
     
     if (smbEnabled) {
@@ -787,7 +822,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         if (mgr && [mgr isAvailable] && 
             ![mgr isServiceAnnounced:GSServiceTypeSMB]) {
             [mgr announceService:GSServiceTypeSMB port:445 txtRecord:nil];
-            NSLog(@"SharingController: Re-announced SMB service via mDNS");
+            NSDebugLog(@"SharingController: Re-announced SMB service via mDNS");
         }
     } else {
         [smbStatusLabel setStringValue:@"Off"];
@@ -799,7 +834,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
         if (mgr && [mgr isAvailable] && 
             [mgr isServiceAnnounced:GSServiceTypeSMB]) {
             [mgr unannounceService:GSServiceTypeSMB];
-            NSLog(@"SharingController: Unannounced SMB service from mDNS");
+            NSDebugLog(@"SharingController: Unannounced SMB service from mDNS");
         }
     }
 }

@@ -55,6 +55,9 @@
     
     // Service discovery manager
     GSServiceDiscoveryManager *serviceDiscoveryManager;
+
+    // Guards against concurrent refreshStatus: calls
+    BOOL isRefreshingStatus;
 }
 
 - (NSView *)createMainView;

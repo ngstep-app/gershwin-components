@@ -40,6 +40,8 @@
     NSButton *mirrorDisplaysCheckbox;
     NSString *xrandrPath;
     DisplayInfo *selectedDisplay; // Currently selected display for resolution changes
+    BOOL isRefreshing; // Guards against concurrent refreshDisplays: calls
+    NSString *lastXrandrOutput; // Cached xrandr output to avoid redundant process spawns
 }
 
 - (NSView *)createMainView;

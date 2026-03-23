@@ -36,27 +36,27 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
 {
     self = [super init];
     if (self) {
-        NSLog(@"GSServiceDiscoveryManager: init starting");
+        NSDebugLog(@"GSServiceDiscoveryManager: init starting");
         
         lock = [[NSRecursiveLock alloc] init];
         registeredServices = [[NSMutableDictionary alloc] init];
         computerName = nil;
         
-        NSLog(@"GSServiceDiscoveryManager: Checking for NSNetService");
+        NSDebugLog(@"GSServiceDiscoveryManager: Checking for NSNetService");
         
         // Check if NSNetService is available (it handles dns-sd/Avahi internally)
         Class netServiceClass = NSClassFromString(@"NSNetService");
         if (netServiceClass != nil) {
             backend = GSServiceBackendNSNetService;
             isAvailable = YES;
-            NSLog(@"GSServiceDiscoveryManager: NSNetService available");
+            NSDebugLog(@"GSServiceDiscoveryManager: NSNetService available");
         } else {
             backend = GSServiceBackendNone;
             isAvailable = NO;
-            NSLog(@"GSServiceDiscoveryManager: NSNetService NOT available");
+            NSDebugLog(@"GSServiceDiscoveryManager: NSNetService NOT available");
         }
         
-        NSLog(@"GSServiceDiscoveryManager: init complete (state restoration deferred)");
+        NSDebugLog(@"GSServiceDiscoveryManager: init complete (state restoration deferred)");
         // NOTE: State restoration is now called explicitly when needed, not automatically
     }
     return self;
@@ -200,7 +200,7 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
               txtRecord:(NSDictionary *)txtRecord
 {
     if (!isAvailable) {
-        NSLog(@"GSServiceDiscoveryManager: Cannot announce service - NSNetService not available");
+        NSDebugLog(@"GSServiceDiscoveryManager: Cannot announce service - NSNetService not available");
         return NO;
     }
     
@@ -210,19 +210,19 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
     
     // Check if already announced
     if ([registeredServices objectForKey:serviceKey] != nil) {
-        NSLog(@"GSServiceDiscoveryManager: Service type %d already announced, re-announcing", serviceType);
+        NSDebugLog(@"GSServiceDiscoveryManager: Service type %d already announced, re-announcing", serviceType);
         [self unannounceService:serviceType];
     }
     
     NSString *serviceTypeStr = [self serviceTypeString:serviceType];
     if (!serviceTypeStr) {
-        NSLog(@"GSServiceDiscoveryManager: Invalid service type: %d", serviceType);
+        NSDebugLog(@"GSServiceDiscoveryManager: Invalid service type: %d", serviceType);
         [lock unlock];
         return NO;
     }
     
     NSString *hostname = [self getHostname];
-    NSLog(@"GSServiceDiscoveryManager: Announcing %@ on port %ld as %@", 
+    NSDebugLog(@"GSServiceDiscoveryManager: Announcing %@ on port %ld as %@", 
           serviceTypeStr, (long)port, hostname);
     
     BOOL success = NO;
@@ -249,7 +249,7 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
             [service release];
             success = YES;
             
-            NSLog(@"GSServiceDiscoveryManager: Successfully announced service via NSNetService");
+            NSDebugLog(@"GSServiceDiscoveryManager: Successfully announced service via NSNetService");
         }
     }
     
@@ -270,12 +270,12 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
     id service = [registeredServices objectForKey:serviceKey];
     
     if (!service) {
-        NSLog(@"GSServiceDiscoveryManager: Service type %d is not announced", serviceType);
+        NSDebugLog(@"GSServiceDiscoveryManager: Service type %d is not announced", serviceType);
         [lock unlock];
         return;
     }
     
-    NSLog(@"GSServiceDiscoveryManager: Unannouncing service type %d", serviceType);
+    NSDebugLog(@"GSServiceDiscoveryManager: Unannouncing service type %d", serviceType);
     
     if ([service isKindOfClass:[NSNetService class]]) {
         // Stop NSNetService (it handles cleanup internally)
@@ -325,7 +325,7 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
            withIntermediateDirectories:YES 
                             attributes:nil 
                                  error:&error]) {
-            NSLog(@"GSServiceDiscoveryManager: Failed to create state directory: %@", error);
+            NSDebugLog(@"GSServiceDiscoveryManager: Failed to create state directory: %@", error);
             [lock unlock];
             return;
         }
@@ -352,9 +352,9 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
     // Write to disk
     BOOL success = [state writeToFile:STATE_FILE_PATH atomically:YES];
     if (success) {
-        NSLog(@"GSServiceDiscoveryManager: Saved state to %@", STATE_FILE_PATH);
+        NSDebugLog(@"GSServiceDiscoveryManager: Saved state to %@", STATE_FILE_PATH);
     } else {
-        NSLog(@"GSServiceDiscoveryManager: Failed to save state to %@", STATE_FILE_PATH);
+        NSDebugLog(@"GSServiceDiscoveryManager: Failed to save state to %@", STATE_FILE_PATH);
     }
     
     [lock unlock];
@@ -363,7 +363,7 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
 - (void)restoreState
 {
     if (!isAvailable) {
-        NSLog(@"GSServiceDiscoveryManager: Skipping state restoration - NSNetService not available");
+        NSDebugLog(@"GSServiceDiscoveryManager: Skipping state restoration - NSNetService not available");
         return;
     }
     
@@ -371,19 +371,19 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
     
     NSFileManager *fm = [NSFileManager defaultManager];
     if (![fm fileExistsAtPath:STATE_FILE_PATH]) {
-        NSLog(@"GSServiceDiscoveryManager: No saved state found");
+        NSDebugLog(@"GSServiceDiscoveryManager: No saved state found");
         [lock unlock];
         return;
     }
     
     NSDictionary *state = [NSDictionary dictionaryWithContentsOfFile:STATE_FILE_PATH];
     if (!state || [state count] == 0) {
-        NSLog(@"GSServiceDiscoveryManager: No services to restore");
+        NSDebugLog(@"GSServiceDiscoveryManager: No services to restore");
         [lock unlock];
         return;
     }
     
-    NSLog(@"GSServiceDiscoveryManager: Restoring %lu services from state file", (unsigned long)[state count]);
+    NSDebugLog(@"GSServiceDiscoveryManager: Restoring %lu services from state file", (unsigned long)[state count]);
     
     NSEnumerator *keyEnum = [state keyEnumerator];
     NSString *serviceKeyStr;
@@ -395,7 +395,7 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
         
         if (portNum) {
             NSInteger port = [portNum intValue];
-            NSLog(@"GSServiceDiscoveryManager: Restoring service type %d on port %ld", 
+            NSDebugLog(@"GSServiceDiscoveryManager: Restoring service type %d on port %ld", 
                   serviceType, (long)port);
             
             // Re-announce the service
@@ -403,7 +403,7 @@ static GSServiceDiscoveryManager *sharedInstance = nil;
         }
     }
     
-    NSLog(@"GSServiceDiscoveryManager: State restoration complete");
+    NSDebugLog(@"GSServiceDiscoveryManager: State restoration complete");
     [lock unlock];
 }
 

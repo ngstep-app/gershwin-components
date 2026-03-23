@@ -6,6 +6,7 @@
 
 
 #import "KeyboardController.h"
+#import <dispatch/dispatch.h>
 
 static NSString *const kKeyboardDomain = @"KeyboardPreferences";
 static NSString *const kDefaultKeyboardFile = @"/etc/default/keyboard";
@@ -27,7 +28,7 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 - (NSString *)findExecutableFromCandidates:(NSArray *)candidates;
 - (NSDictionary *)savedPreferences;
 - (NSDictionary *)systemKeyboardDefaults;
-- (NSDictionary *)currentXkbmapSettings;
+- (NSDictionary *)currentXkbmapSettingsSync;
 - (void)populateLayoutTable;
 - (void)populateVariantsForLayout:(NSString *)layout;
 - (void)selectLayout:(NSString *)layout variant:(NSString *)variant;
@@ -49,7 +50,7 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     self = [super init];
     if (self) {
         isRefreshing = YES;  // Start in refresh mode to prevent unwanted writes during initialization
-        NSLog(@"[Keyboard] Controller init, isRefreshing set to YES");
+        NSDebugLog(@"[Keyboard] Controller init, isRefreshing set to YES");
     }
     return self;
 }
@@ -335,9 +336,8 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     NSPipe *pipe = [NSPipe pipe];
     [task setStandardOutput:pipe];
     [task launch];
-    [task waitUntilExit];
-
     NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
+    [task waitUntilExit];
     NSString *output = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
     [task release];
 
@@ -384,7 +384,9 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     return result;
 }
 
-- (NSDictionary *)currentXkbmapSettings
+// Synchronous helper — runs setxkbmap and parses its output.
+// Only call from a background thread or during init.
+- (NSDictionary *)currentXkbmapSettingsSync
 {
     if (!setxkbmapPath) {
         return [NSDictionary dictionary];
@@ -398,9 +400,8 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     [task setStandardOutput:pipe];
     [task setStandardError:[NSPipe pipe]];
     [task launch];
-    [task waitUntilExit];
-
     NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
+    [task waitUntilExit];
     NSString *output = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
     [task release];
 
@@ -467,9 +468,9 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 // NSTableView delegate methods
 - (void)tableViewSelectionDidChange:(NSNotification *)notification
 {
-    NSLog(@"[Keyboard] tableViewSelectionDidChange: isRefreshing=%d", isRefreshing);
+    NSDebugLog(@"[Keyboard] tableViewSelectionDidChange: isRefreshing=%d", isRefreshing);
     if (isRefreshing) {
-        NSLog(@"[Keyboard] Ignoring table selection change during refresh");
+        NSDebugLog(@"[Keyboard] Ignoring table selection change during refresh");
         return;
     }
     NSTableView *tableView = [notification object];
@@ -477,41 +478,41 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
         NSInteger selectedRow = [layoutTable selectedRow];
         if (selectedRow >= 0 && selectedRow < (NSInteger)[sortedLayouts count]) {
             NSString *layout = [sortedLayouts objectAtIndex:selectedRow];
-            NSLog(@"[Keyboard] Layout table selection changed to row %ld: '%@'", (long)selectedRow, layout);
+            NSDebugLog(@"[Keyboard] Layout table selection changed to row %ld: '%@'", (long)selectedRow, layout);
             [self populateVariantsForLayout:layout];
             [variantTable deselectAll:nil];
             [self applySelection:nil];
         }
     } else if (tableView == variantTable) {
         NSInteger selectedRow = [variantTable selectedRow];
-        NSLog(@"[Keyboard] Variant table selection changed to row %ld", (long)selectedRow);
+        NSDebugLog(@"[Keyboard] Variant table selection changed to row %ld", (long)selectedRow);
         [self applySelection:nil];
     }
 }
 
 - (void)selectLayout:(NSString *)layout variant:(NSString *)variant
 {
-    NSLog(@"[Keyboard] selectLayout: layout='%@' variant='%@' isRefreshing=%d", layout, variant, isRefreshing);
+    NSDebugLog(@"[Keyboard] selectLayout: layout='%@' variant='%@' isRefreshing=%d", layout, variant, isRefreshing);
     if (![layout length]) {
         layout = @"us";
     }
 
     // ensure layout exists, otherwise fall back
     if (![layouts objectForKey:layout]) {
-        NSLog(@"[Keyboard] Layout '%@' not found in layouts dictionary", layout);
+        NSDebugLog(@"[Keyboard] Layout '%@' not found in layouts dictionary", layout);
         NSArray *allKeys = [layouts allKeys];
         if ([allKeys containsObject:@"us"]) {
-            NSLog(@"[Keyboard] Falling back to 'us'");
+            NSDebugLog(@"[Keyboard] Falling back to 'us'");
             layout = @"us";
         } else if ([allKeys count] > 0) {
-            NSLog(@"[Keyboard] Falling back to first available layout");
+            NSDebugLog(@"[Keyboard] Falling back to first available layout");
             layout = [allKeys objectAtIndex:0];
         }
     }
 
     // Select layout in table
     NSInteger layoutIndex = [sortedLayouts indexOfObject:layout];
-    NSLog(@"[Keyboard] Looking for layout '%@' in sortedLayouts, index=%ld", layout, (long)layoutIndex);
+    NSDebugLog(@"[Keyboard] Looking for layout '%@' in sortedLayouts, index=%ld", layout, (long)layoutIndex);
     if (layoutIndex != NSNotFound) {
         [layoutTable selectRowIndexes:[NSIndexSet indexSetWithIndex:layoutIndex] byExtendingSelection:NO];
         [layoutTable scrollRowToVisible:layoutIndex];
@@ -530,7 +531,7 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
             }
         }
     }
-    NSLog(@"[Keyboard] Looking for variant '%@', index=%ld", variant, (long)variantIndex);
+    NSDebugLog(@"[Keyboard] Looking for variant '%@', index=%ld", variant, (long)variantIndex);
     if (variantIndex != NSNotFound) {
         [variantTable selectRowIndexes:[NSIndexSet indexSetWithIndex:variantIndex] byExtendingSelection:NO];
         [variantTable scrollRowToVisible:variantIndex];
@@ -547,10 +548,10 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 - (BOOL)applyLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options error:(NSString **)error
 {
     if (isRefreshing) {
-        NSLog(@"[Keyboard] applyLayout blocked during refresh");
+        NSDebugLog(@"[Keyboard] applyLayout blocked during refresh");
         return YES;  // Pretend success during refresh
     }
-    NSLog(@"[Keyboard] applyLayout: layout='%@' variant='%@' options='%@'", layout, variant, options);
+    NSDebugLog(@"[Keyboard] applyLayout: layout='%@' variant='%@' options='%@'", layout, variant, options);
     if (!setxkbmapPath) {
         if (error) {
             *error = @"setxkbmap not found";
@@ -593,14 +594,15 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     [task setStandardError:stderrPipe];
 
     [task launch];
+    // Drain stderr before waitUntilExit to avoid pipe-buffer deadlock
+    NSData *stderrData = [[stderrPipe fileHandleForReading] readDataToEndOfFile];
     [task waitUntilExit];
 
     int status = [task terminationStatus];
     [task release];
 
     if (status != 0) {
-        NSData *data = [[stderrPipe fileHandleForReading] readDataToEndOfFile];
-        NSString *stderrString = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+        NSString *stderrString = [[[NSString alloc] initWithData:stderrData encoding:NSUTF8StringEncoding] autorelease];
         if (error) {
             *error = (stderrString.length ? stderrString : @"Failed to run setxkbmap");
         }
@@ -619,10 +621,10 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 - (void)persistUserDefaultsLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options keyboardType:(NSString *)keyboardType isApple:(BOOL)isApple
 {
     if (isRefreshing) {
-        NSLog(@"[Keyboard] persistUserDefaultsLayout blocked during refresh");
+        NSDebugLog(@"[Keyboard] persistUserDefaultsLayout blocked during refresh");
         return;
     }
-    NSLog(@"[Keyboard] persistUserDefaultsLayout: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
+    NSDebugLog(@"[Keyboard] persistUserDefaultsLayout: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
     NSMutableDictionary *domain = [NSMutableDictionary dictionary];
     if (layout) {
         [domain setObject:layout forKey:@"layout"];
@@ -646,10 +648,10 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 - (void)writeUserAutostartWithLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options keyboardType:(NSString *)keyboardType isApple:(BOOL)isApple
 {
     if (isRefreshing) {
-        NSLog(@"[Keyboard] writeUserAutostartWithLayout blocked during refresh");
+        NSDebugLog(@"[Keyboard] writeUserAutostartWithLayout blocked during refresh");
         return;
     }
-    NSLog(@"[Keyboard] writeUserAutostartWithLayout: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
+    NSDebugLog(@"[Keyboard] writeUserAutostartWithLayout: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
     NSString *home = NSHomeDirectory();
     NSString *binDir = [home stringByAppendingPathComponent:@".local/bin"];
     NSString *scriptPath = [binDir stringByAppendingPathComponent:@"gershwin-apply-keyboard.sh"];
@@ -716,13 +718,13 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 - (BOOL)updateSystemKeyboardFileWithLayout:(NSString *)layout variant:(NSString *)variant options:(NSString *)options keyboardType:(NSString *)keyboardType isApple:(BOOL)isApple error:(NSString **)error
 {
     if (isRefreshing) {
-        NSLog(@"[Keyboard] updateSystemKeyboardFileWithLayout blocked during refresh");
+        NSDebugLog(@"[Keyboard] updateSystemKeyboardFileWithLayout blocked during refresh");
         if (error) {
             *error = @"Skipped during refresh";
         }
         return NO;
     }
-    NSLog(@"[Keyboard] updateSystemKeyboardFileWithLayout: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
+    NSDebugLog(@"[Keyboard] updateSystemKeyboardFileWithLayout: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
     NSFileManager *fm = [NSFileManager defaultManager];
     NSString *tmpPath = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSProcessInfo processInfo] globallyUniqueString]];
 
@@ -858,11 +860,11 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
 
 - (IBAction)applySelection:(id)sender
 {
-    NSLog(@"[Keyboard] applySelection called, isRefreshing=%d", isRefreshing);
+    NSDebugLog(@"[Keyboard] applySelection called, isRefreshing=%d", isRefreshing);
     (void)sender;
     // Don't apply changes during initial refresh
     if (isRefreshing) {
-        NSLog(@"[Keyboard] Blocking applySelection during refresh");
+        NSDebugLog(@"[Keyboard] Blocking applySelection during refresh");
         return;
     }
     [self ensureMetadataLoaded];
@@ -885,167 +887,189 @@ static NSComparisonResult LayoutComparator(id a, id b, void *context)
     NSString *keyboardType = [[keyboardTypePopup titleOfSelectedItem] copy];
     BOOL isApple = ([isAppleKeyboardCheckbox state] == NSOnState);
 
-    NSLog(@"[Keyboard] Applying layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
+    NSDebugLog(@"[Keyboard] Applying layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%d", layout, variant, options, keyboardType, isApple);
 
-    NSString *error = nil;
-    if (![self applyLayout:layout variant:variant options:options error:&error]) {
-        [self showAlertWithTitle:@"Could not set layout" text:error];
-        [self updateStatus:[NSString stringWithFormat:@"Failed to apply layout (%@)", error ? error : @"unknown error"]];
-        [keyboardType release];
-        return;
-    }
+    [self updateStatus:@"Applying layout..."];
 
-    // Apple ISO keyboards have TLDE and LSGT physically swapped compared to PC ISO keyboards
-    // We need to swap keycodes 49 (TLDE) and 94 (LSGT) to fix this
-    if (isApple && [keyboardType isEqualToString:@"ISO"]) {
-        NSLog(@"[Keyboard] Applying TLDE/LSGT swap for Apple ISO keyboard");
-        NSTask *xmodmapTask = [[NSTask alloc] init];
-        [xmodmapTask setLaunchPath:@"/usr/bin/xmodmap"];
-        [xmodmapTask setArguments:[NSArray arrayWithObjects:
-            @"-e", @"keycode 49 = less greater less greater bar dagger bar",
-            @"-e", @"keycode 94 = asciicircum degree asciicircum degree notsign notsign notsign",
-            nil]];
-        [xmodmapTask launch];
-        [xmodmapTask waitUntilExit];
-        [xmodmapTask release];
-    }
+    // Capture values for the block
+    NSString *layoutCopy  = [layout copy];
+    NSString *variantCopy = [variant copy];
+    NSString *optionsCopy = [options copy];
 
-    [self persistUserDefaultsLayout:layout variant:variant options:options keyboardType:keyboardType isApple:isApple];
-    [self writeUserAutostartWithLayout:layout variant:variant options:options keyboardType:keyboardType isApple:isApple];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSString *applyError = nil;
+        BOOL success = [self applyLayout:layoutCopy variant:variantCopy options:optionsCopy error:&applyError];
+        NSString *errorCopy = [applyError copy];
 
-    NSString *systemError = nil;
-    BOOL systemUpdated = [self updateSystemKeyboardFileWithLayout:layout variant:variant options:options keyboardType:keyboardType isApple:isApple error:&systemError];
-
-    NSMutableString *status = [NSMutableString stringWithFormat:@"Active layout: %@", layout];
-    if ([variant length]) {
-        [status appendFormat:@" / %@", variant];
-    }
-    if ([keyboardType length]) {
-        [status appendFormat:@" (%@)", keyboardType];
-    }
-
-    if (systemUpdated) {
-        [status appendString:@" — saved to /etc/default/keyboard."];
-    } else {
-        [status appendString:@" — saved for this user. System file not updated."];
-        if ([systemError length]) {
-            [status appendFormat:@" (%@)", systemError];
+        // Apple ISO TLDE/LSGT swap
+        if (success && isApple && [keyboardType isEqualToString:@"ISO"]) {
+            NSDebugLog(@"[Keyboard] Applying TLDE/LSGT swap for Apple ISO keyboard");
+            NSTask *xmodmapTask = [[NSTask alloc] init];
+            [xmodmapTask setLaunchPath:@"/usr/bin/xmodmap"];
+            [xmodmapTask setArguments:[NSArray arrayWithObjects:
+                @"-e", @"keycode 49 = less greater less greater bar dagger bar",
+                @"-e", @"keycode 94 = asciicircum degree asciicircum degree notsign notsign notsign",
+                nil]];
+            [xmodmapTask launch];
+            [xmodmapTask waitUntilExit];
+            [xmodmapTask release];
         }
-    }
 
-    [self updateStatus:status];
-    [keyboardType release];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!success) {
+                [self showAlertWithTitle:@"Could not set layout" text:errorCopy];
+                [self updateStatus:[NSString stringWithFormat:@"Failed to apply layout (%@)", errorCopy ? errorCopy : @"unknown error"]];
+                [errorCopy release];
+                [layoutCopy release];
+                [variantCopy release];
+                [optionsCopy release];
+                [keyboardType release];
+                return;
+            }
+            [errorCopy release];
+
+            [self persistUserDefaultsLayout:layoutCopy variant:variantCopy options:optionsCopy keyboardType:keyboardType isApple:isApple];
+            [self writeUserAutostartWithLayout:layoutCopy variant:variantCopy options:optionsCopy keyboardType:keyboardType isApple:isApple];
+
+            NSString *systemError = nil;
+            BOOL systemUpdated = [self updateSystemKeyboardFileWithLayout:layoutCopy variant:variantCopy options:optionsCopy keyboardType:keyboardType isApple:isApple error:&systemError];
+
+            NSMutableString *status = [NSMutableString stringWithFormat:@"Active layout: %@", layoutCopy];
+            if ([variantCopy length]) {
+                [status appendFormat:@" / %@", variantCopy];
+            }
+            if ([keyboardType length]) {
+                [status appendFormat:@" (%@)", keyboardType];
+            }
+
+            if (systemUpdated) {
+                [status appendString:@" — saved to /etc/default/keyboard."];
+            } else {
+                [status appendString:@" — saved for this user. System file not updated."];
+                if ([systemError length]) {
+                    [status appendFormat:@" (%@)", systemError];
+                }
+            }
+
+            [self updateStatus:status];
+            [layoutCopy release];
+            [variantCopy release];
+            [optionsCopy release];
+            [keyboardType release];
+        });
+    });
 }
 
 - (void)refreshFromSystem
 {
-    NSLog(@"[Keyboard] refreshFromSystem: START");
+    NSDebugLog(@"[Keyboard] refreshFromSystem: START");
     [self ensureMetadataLoaded];
     isRefreshing = YES;
-    NSLog(@"[Keyboard] isRefreshing set to YES");
+    NSDebugLog(@"[Keyboard] isRefreshing set to YES");
 
-    // First, try system keyboard config file
+    // Gather data that can be read synchronously (file reads, user defaults)
     NSDictionary *system = [self systemKeyboardDefaults];
-    NSString *layout = [system objectForKey:@"XKBLAYOUT"];
-    NSString *variant = [system objectForKey:@"XKBVARIANT"];
-    NSString *options = [system objectForKey:@"XKBOPTIONS"];
-    NSString *keyboardType = nil;
-    NSLog(@"[Keyboard] System config file: layout='%@' variant='%@' options='%@'", layout, variant, options);
+    NSDictionary *saved  = [self savedPreferences];
 
-    // If system config is empty, try current XKB settings
-    if (![layout length]) {
-        NSLog(@"[Keyboard] System config empty, trying current XKB settings");
-        NSDictionary *current = [self currentXkbmapSettings];
-        layout = [current objectForKey:@"layout"];
-        variant = [current objectForKey:@"variant"];
-        options = [current objectForKey:@"options"];
-        NSLog(@"[Keyboard] Current XKB: layout='%@' variant='%@' options='%@'", layout, variant, options);
-        // Handle multiple layouts/variants by taking the first one
-        if ([layout rangeOfString:@","].location != NSNotFound) {
-            layout = [[layout componentsSeparatedByString:@","] objectAtIndex:0];
-            NSLog(@"[Keyboard] Multiple layouts detected, using first: '%@'", layout);
-        }
-        if ([variant rangeOfString:@","].location != NSNotFound) {
-            variant = [[variant componentsSeparatedByString:@","] objectAtIndex:0];
-            NSLog(@"[Keyboard] Multiple variants detected, using first: '%@'", variant);
-        }
-    }
+    // Move the potentially blocking setxkbmap query off the main thread
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSDictionary *xkbCurrent = [self currentXkbmapSettingsSync];
 
-    // If still empty, try saved preferences
-    NSNumber *savedIsApple = nil;
-    // If still empty, try saved preferences
-    if (![layout length]) {
-        NSLog(@"[Keyboard] Still empty, trying saved preferences");
-        NSDictionary *saved = [self savedPreferences];
-        layout = [saved objectForKey:@"layout"];
-        variant = [saved objectForKey:@"variant"];
-        options = [saved objectForKey:@"options"];
-        keyboardType = [saved objectForKey:@"keyboardType"];
-        savedIsApple = [saved objectForKey:@"isApple"];
-        if (savedIsApple) {
-            [isAppleKeyboardCheckbox setState:([savedIsApple boolValue] ? NSOnState : NSOffState)];
-        }
-        NSLog(@"[Keyboard] Saved prefs: layout='%@' variant='%@' options='%@' keyboardType='%@' isApple=%@", layout, variant, options, keyboardType, savedIsApple);
-    }
+        // Come back to the main thread for all UI updates
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *layout = [system objectForKey:@"XKBLAYOUT"];
+            NSString *variant = [system objectForKey:@"XKBVARIANT"];
+            NSString *options = [system objectForKey:@"XKBOPTIONS"];
+            NSString *keyboardType = nil;
+            NSNumber *savedIsApple = nil;
+            NSDebugLog(@"[Keyboard] System config file: layout='%@' variant='%@' options='%@'", layout, variant, options);
 
-    // If keyboardType not found in saved prefs, try to infer from system model
-    if (!keyboardType) {
-        NSString *model = [system objectForKey:@"XKBMODEL"];
-        if ([model isEqualToString:@"pc104"] || [model isEqualToString:@"applealu_ansi"]) {
-            keyboardType = @"ANSI";
-        } else if ([model isEqualToString:@"pc105"] || [model isEqualToString:@"applealu_iso"]) {
-            keyboardType = @"ISO";
-        } else if ([model isEqualToString:@"pc106"] || [model isEqualToString:@"applealu_jis"]) {
-            keyboardType = @"JIS";
-        } else {
-            keyboardType = @"ANSI";  // Default to ANSI
-        }
-    }
+            // If system config is empty, try current XKB settings
+            if (![layout length]) {
+                NSDebugLog(@"[Keyboard] System config empty, trying current XKB settings");
+                layout = [xkbCurrent objectForKey:@"layout"];
+                variant = [xkbCurrent objectForKey:@"variant"];
+                options = [xkbCurrent objectForKey:@"options"];
+                NSDebugLog(@"[Keyboard] Current XKB: layout='%@' variant='%@' options='%@'", layout, variant, options);
+                if ([layout rangeOfString:@","].location != NSNotFound) {
+                    layout = [[layout componentsSeparatedByString:@","] objectAtIndex:0];
+                }
+                if ([variant rangeOfString:@","].location != NSNotFound) {
+                    variant = [[variant componentsSeparatedByString:@","] objectAtIndex:0];
+                }
+            }
 
-    NSLog(@"[Keyboard] Final values to select: layout='%@' variant='%@' options='%@' keyboardType='%@'", layout, variant, options, keyboardType);
-    [self selectLayout:layout variant:variant];
+            // If still empty, try saved preferences
+            if (![layout length]) {
+                NSDebugLog(@"[Keyboard] Still empty, trying saved preferences");
+                layout = [saved objectForKey:@"layout"];
+                variant = [saved objectForKey:@"variant"];
+                options = [saved objectForKey:@"options"];
+                keyboardType = [saved objectForKey:@"keyboardType"];
+                savedIsApple = [saved objectForKey:@"isApple"];
+                if (savedIsApple) {
+                    [isAppleKeyboardCheckbox setState:([savedIsApple boolValue] ? NSOnState : NSOffState)];
+                }
+            }
 
-    // Determine Apple state: prefer saved, otherwise infer from system model or options
-    BOOL modelIndicatesApple = NO;
-    NSString *modelVal = [system objectForKey:@"XKBMODEL"];
-    if (modelVal && [modelVal hasPrefix:@"apple"]) {
-        modelIndicatesApple = YES;
-    }
-    BOOL isApple = NO;
-    if (savedIsApple) {
-        isApple = [savedIsApple boolValue];
-    } else if (modelIndicatesApple) {
-        isApple = YES;
-    } else if ([options isEqualToString:@"altwin:swap_alt_win"]) {
-        isApple = YES;
-    }
+            // If keyboardType not found in saved prefs, try to infer from system model
+            if (!keyboardType) {
+                NSString *model = [system objectForKey:@"XKBMODEL"];
+                if ([model isEqualToString:@"pc104"] || [model isEqualToString:@"applealu_ansi"]) {
+                    keyboardType = @"ANSI";
+                } else if ([model isEqualToString:@"pc105"] || [model isEqualToString:@"applealu_iso"]) {
+                    keyboardType = @"ISO";
+                } else if ([model isEqualToString:@"pc106"] || [model isEqualToString:@"applealu_jis"]) {
+                    keyboardType = @"JIS";
+                } else {
+                    keyboardType = @"ANSI";
+                }
+            }
 
-    [isAppleKeyboardCheckbox setState:(isApple ? NSOnState : NSOffState)];
+            NSDebugLog(@"[Keyboard] Final values to select: layout='%@' variant='%@' options='%@' keyboardType='%@'", layout, variant, options, keyboardType);
+            [self selectLayout:layout variant:variant];
 
-    // Set keyboard type popup
-    if ([keyboardType length]) {
-        [keyboardTypePopup selectItemWithTitle:keyboardType];
-    } else {
-        [keyboardTypePopup selectItemAtIndex:0];  // Default to ANSI
-    }
+            // Determine Apple state
+            BOOL modelIndicatesApple = NO;
+            NSString *modelVal = [system objectForKey:@"XKBMODEL"];
+            if (modelVal && [modelVal hasPrefix:@"apple"]) {
+                modelIndicatesApple = YES;
+            }
+            BOOL isApple = NO;
+            if (savedIsApple) {
+                isApple = [savedIsApple boolValue];
+            } else if (modelIndicatesApple) {
+                isApple = YES;
+            } else if ([options isEqualToString:@"altwin:swap_alt_win"]) {
+                isApple = YES;
+            }
 
-    NSMutableString *status = [NSMutableString stringWithFormat:@"Current layout: %@", layout ? layout : @"(unknown)"];
-    if ([variant length]) {
-        [status appendFormat:@" / %@", variant];
-    }
-    if ([keyboardType length]) {
-        [status appendFormat:@" (%@)", keyboardType];
-    }
-    if ([options length]) {
-        [status appendFormat:@" (%@)", options];
-    }
+            [isAppleKeyboardCheckbox setState:(isApple ? NSOnState : NSOffState)];
 
-    [status appendString:@". Changes apply instantly."];
-    [self updateStatus:status];
-    
-    isRefreshing = NO;
-    NSLog(@"[Keyboard] isRefreshing set to NO");
-    NSLog(@"[Keyboard] refreshFromSystem: END");
+            if ([keyboardType length]) {
+                [keyboardTypePopup selectItemWithTitle:keyboardType];
+            } else {
+                [keyboardTypePopup selectItemAtIndex:0];
+            }
+
+            NSMutableString *status = [NSMutableString stringWithFormat:@"Current layout: %@", layout ? layout : @"(unknown)"];
+            if ([variant length]) {
+                [status appendFormat:@" / %@", variant];
+            }
+            if ([keyboardType length]) {
+                [status appendFormat:@" (%@)", keyboardType];
+            }
+            if ([options length]) {
+                [status appendFormat:@" (%@)", options];
+            }
+
+            [status appendString:@". Changes apply instantly."];
+            [self updateStatus:status];
+
+            isRefreshing = NO;
+            NSDebugLog(@"[Keyboard] refreshFromSystem: END");
+        });
+    });
 }
 
 @end

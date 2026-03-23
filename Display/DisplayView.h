@@ -21,7 +21,7 @@
     NSPoint dragOffset;
 }
 
-@property (assign) DisplayInfo *displayInfo;
+@property (retain) DisplayInfo *displayInfo;
 @property BOOL showsMenuBar;
 @property BOOL isSelected;
 

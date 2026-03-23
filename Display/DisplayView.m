@@ -22,6 +22,12 @@
     return self;
 }
 
+- (void)dealloc
+{
+    [displayInfo release];
+    [super dealloc];
+}
+
 - (void)drawRect:(NSRect)dirtyRect
 {
     // Draw the display rectangle
@@ -216,7 +222,7 @@
     
     if (!targetDisplay) return;
     
-    NSLog(@"DisplayRectView: Making display %@ primary via context menu", [targetDisplay name]);
+    NSDebugLog(@"DisplayRectView: Making display %@ primary via context menu", [targetDisplay name]);
     
     // Find the parent view and controller
     NSView *parentView = [self superview];
@@ -282,7 +288,7 @@
     [displayRects removeAllObjects];
     
     if (!controller) {
-        NSLog(@"DisplayView: No controller available for updateDisplayRects");
+        NSDebugLog(@"DisplayView: No controller available for updateDisplayRects");
         return;
     }
     
@@ -292,11 +298,11 @@
     }
     
     if (!displays || [displays count] == 0) {
-        NSLog(@"DisplayView: No displays available");
+        NSDebugLog(@"DisplayView: No displays available");
         return;
     }
     
-    NSLog(@"DisplayView: Updating display rects for %lu displays", (unsigned long)[displays count]);
+    NSDebugLog(@"DisplayView: Updating display rects for %lu displays", (unsigned long)[displays count]);
     
     // Ensure at least one display is primary
     BOOL hasPrimary = NO;
@@ -311,18 +317,18 @@
     if (!hasPrimary && [displays count] > 0) {
         DisplayInfo *firstDisplay = [displays objectAtIndex:0];
         [firstDisplay setIsPrimary:YES];
-        NSLog(@"DisplayView: Auto-setting first display as primary: %@", [firstDisplay name]);
+        NSDebugLog(@"DisplayView: Auto-setting first display as primary: %@", [firstDisplay name]);
     }
     
     // Calculate scaling factor to fit displays in view
     NSRect bounds = [self bounds];
     NSRect totalBounds = NSZeroRect;
     
-    NSLog(@"DisplayView: View bounds: %@", NSStringFromRect(bounds));
+    NSDebugLog(@"DisplayView: View bounds: %@", NSStringFromRect(bounds));
     
     for (DisplayInfo *display in displays) {
         NSRect displayFrame = [display frame];
-        NSLog(@"DisplayView: Display %@ frame: %@", [display name], NSStringFromRect(displayFrame));
+        NSDebugLog(@"DisplayView: Display %@ frame: %@", [display name], NSStringFromRect(displayFrame));
         
         if (NSIsEmptyRect(totalBounds)) {
             totalBounds = displayFrame;
@@ -331,10 +337,10 @@
         }
     }
     
-    NSLog(@"DisplayView: Total bounds: %@", NSStringFromRect(totalBounds));
+    NSDebugLog(@"DisplayView: Total bounds: %@", NSStringFromRect(totalBounds));
     
     if (NSIsEmptyRect(totalBounds) || totalBounds.size.width <= 0 || totalBounds.size.height <= 0) {
-        NSLog(@"DisplayView: Invalid total bounds, using default single display layout");
+        NSDebugLog(@"DisplayView: Invalid total bounds, using default single display layout");
         // Handle single display or invalid bounds case
         if ([displays count] == 1) {
             DisplayInfo *display = [displays objectAtIndex:0];
@@ -342,11 +348,11 @@
             if ([display frame].size.width <= 0 || [display frame].size.height <= 0) {
                 [display setFrame:NSMakeRect(0, 0, 1920, 1080)];
                 [display setResolution:NSMakeSize(1920, 1080)];
-                NSLog(@"DisplayView: Set default frame for display %@", [display name]);
+                NSDebugLog(@"DisplayView: Set default frame for display %@", [display name]);
             }
             totalBounds = [display frame];
         } else {
-            NSLog(@"DisplayView: Cannot display - no valid bounds");
+            NSDebugLog(@"DisplayView: Cannot display - no valid bounds");
             return;
         }
     }
@@ -369,13 +375,13 @@
     scale = MIN(scale, 0.25); // Smaller maximum scale for compact view
     scale = MAX(scale, 0.05); // Ensure they're still visible
     
-    NSLog(@"DisplayView: Scaling displays by factor: %f (bounds: %@, totalBounds: %@)", 
+    NSDebugLog(@"DisplayView: Scaling displays by factor: %f (bounds: %@, totalBounds: %@)", 
           scale, NSStringFromRect(bounds), NSStringFromRect(totalBounds));
     
     DisplayInfo *selectedDisplayInfo = nil;
     if ([controller respondsToSelector:@selector(selectedDisplay)]) {
         selectedDisplayInfo = [controller selectedDisplay];
-        NSLog(@"DisplayView: Current selected display: %@", selectedDisplayInfo ? [selectedDisplayInfo name] : @"none");
+        NSDebugLog(@"DisplayView: Current selected display: %@", selectedDisplayInfo ? [selectedDisplayInfo name] : @"none");
     }
     
     // Calculate the scaled total bounds for centering
@@ -386,7 +392,7 @@
     float offsetX = (bounds.size.width - scaledTotalWidth) / 2.0;
     float offsetY = (bounds.size.height - scaledTotalHeight) / 2.0;
     
-    NSLog(@"DisplayView: Centering displays with offset: (%f, %f)", offsetX, offsetY);
+    NSDebugLog(@"DisplayView: Centering displays with offset: (%f, %f)", offsetX, offsetY);
     
     // Create display rect views
     for (DisplayInfo *display in displays) {
@@ -417,14 +423,14 @@
             scaledFrame.origin.y = centerY - 17.5;
         }
         
-        NSLog(@"DisplayView: Creating display rect for %@ at %@ (original: %@)", 
+        NSDebugLog(@"DisplayView: Creating display rect for %@ at %@ (original: %@)", 
               [display name], NSStringFromRect(scaledFrame), NSStringFromRect(displayFrame));
         
         // Verify the rectangle is within the bounds
         if (!NSContainsRect(bounds, scaledFrame)) {
-            NSLog(@"DisplayView: WARNING - Display rectangle extends outside bounds!");
-            NSLog(@"  Bounds: %@", NSStringFromRect(bounds));
-            NSLog(@"  Display rect: %@", NSStringFromRect(scaledFrame));
+            NSDebugLog(@"DisplayView: WARNING - Display rectangle extends outside bounds!");
+            NSDebugLog(@"  Bounds: %@", NSStringFromRect(bounds));
+            NSDebugLog(@"  Display rect: %@", NSStringFromRect(scaledFrame));
         }
         
         DisplayRectView *rectView = [[DisplayRectView alloc] initWithFrame:scaledFrame];
@@ -436,13 +442,13 @@
         if (selectedDisplayInfo && selectedDisplayInfo == display) {
             // Keep the previously selected display selected
             shouldBeSelected = YES;
-            NSLog(@"DisplayView: Preserving selection for display: %@", [display name]);
+            NSDebugLog(@"DisplayView: Preserving selection for display: %@", [display name]);
         } else if (!selectedDisplayInfo && [display isPrimary]) {
             // Default to selecting the primary display only if no selection exists
             shouldBeSelected = YES;
             if (controller && [controller respondsToSelector:@selector(selectDisplay:)]) {
                 [controller selectDisplay:display];
-                NSLog(@"DisplayView: Auto-selecting primary display: %@", [display name]);
+                NSDebugLog(@"DisplayView: Auto-selecting primary display: %@", [display name]);
             }
         }
         
@@ -467,9 +473,11 @@
 - (void)setNeedsDisplay:(BOOL)flag
 {
     [super setNeedsDisplay:flag];
-    if (flag) {
-        [self updateDisplayRects];
-    }
+    // Do NOT call updateDisplayRects here — setNeedsDisplay: is called
+    // frequently by the view system (adding to window, resizing, etc.)
+    // and updateDisplayRects removes/adds subviews which can re-enter
+    // this method and crash.  Call updateDisplayRects explicitly when
+    // the display data actually changes.
 }
 
 - (NSArray *)displayRects
