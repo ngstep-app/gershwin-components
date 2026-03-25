@@ -24,13 +24,14 @@ ifeq ($(findstring freebsd,$(GNUSTEP_HOST_OS)),freebsd)
 	$(INSTALL) -m 555 dshelper.rc /usr/local/etc/rc.d/dshelper
 endif
 ifeq ($(findstring linux,$(GNUSTEP_HOST_OS)),linux)
-	@if [ -d /etc/init.d ] && [ ! -d /run/systemd/system ]; then \
-		$(INSTALL) -m 755 dshelper.init /etc/init.d/dshelper; \
-		echo "Installed sysvinit script"; \
-	elif [ -d /run/systemd/system ]; then \
+	@if [ -d /etc/systemd/system ]; then \
 		$(MKINSTALLDIRS) /etc/systemd/system; \
 		$(INSTALL) -m 644 dshelper.service /etc/systemd/system/dshelper.service; \
-		echo "Installed systemd service"; \
+		$(INSTALL) -m 644 gdomap.service /etc/systemd/system/gdomap.service; \
+		echo "Installed systemd services (dshelper + gdomap)"; \
+	elif [ -d /etc/init.d ]; then \
+		$(INSTALL) -m 755 dshelper.init /etc/init.d/dshelper; \
+		echo "Installed sysvinit script"; \
 	else \
 		echo "No supported init system detected"; \
 	fi

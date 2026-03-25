@@ -45,7 +45,7 @@ install:: all
 	elif [ -d "/usr/local/etc/rc.d" ]; then \
 		echo "Installing to /usr/local/etc/rc.d/loginwindow (FreeBSD rc.d)"; \
 		install -m 555 loginwindow /usr/local/etc/rc.d/loginwindow; \
-	elif [ -d /run/systemd/system ]; then \
+	elif [ -d /etc/systemd/system ]; then \
 		echo "Installing loginwindow.service (systemd)"; \
 		install -m 644 loginwindow.service /etc/systemd/system/loginwindow.service; \
 	elif [ -d /etc/init.d ]; then \
