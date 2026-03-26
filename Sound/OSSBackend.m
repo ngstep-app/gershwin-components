@@ -1268,24 +1268,12 @@
 {
     [cachedAlertSounds removeAllObjects];
 
-    // Build list of directories to search - FreeBSD/OSS standard locations
+    // Only search Library/Sounds directories (system, local, network, and user)
     NSMutableArray *searchDirs = [NSMutableArray array];
-
-    // Primary location for gershwin system sounds
     [searchDirs addObject:@"/System/Library/Sounds"];
-
-    // FreeBSD system sound directories
-    [searchDirs addObject:@"/usr/local/share/sounds"];
-    [searchDirs addObject:@"/usr/share/sounds"];
-
-    // User sounds directory
+    [searchDirs addObject:@"/Local/Library/Sounds"];
+    [searchDirs addObject:@"/Network/Library/Sounds"];
     [searchDirs addObject:[self userAlertSoundDirectory]];
-
-    // Bundle resources (nil-safe)
-    NSString *bundleResPath = [[NSBundle bundleForClass:[self class]] resourcePath];
-    if (bundleResPath) {
-        [searchDirs addObject:bundleResPath];
-    }
 
     NSArray *extensions = @[@"aiff", @"aif", @"wav", @"au", @"snd"];
     NSFileManager *fm = [NSFileManager defaultManager];
@@ -1330,18 +1318,6 @@
 
 - (NSString *)alertSoundDirectory
 {
-    NSArray *paths = @[
-        @"/System/Library/Sounds",
-        @"/usr/local/share/sounds",
-        @"/usr/share/sounds"
-    ];
-
-    for (NSString *path in paths) {
-        if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
-            return path;
-        }
-    }
-
     return @"/System/Library/Sounds";
 }
 
