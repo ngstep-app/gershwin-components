@@ -762,7 +762,7 @@ static const CGFloat kTableRowHeight = 18.0;
             // Update device lists
             [self updateOutputDeviceList];
             [self updateInputDeviceList];
-            [self updateAlertSoundsList];
+            // Alert sounds are now updated inside updateOutputDeviceList
 
             // Update controls with pre-fetched values (no blocking backend calls)
             [self updateOutputControlsWithVolume:outVol muted:outMuted balance:outBalance];
@@ -824,6 +824,28 @@ static const CGFloat kTableRowHeight = 18.0;
         }
     }
     
+    // Update alert sounds list (done here because GNUstep/FreeBSD crashes
+    // if this runs as a separate call in the dispatch block)
+    [alertSounds removeAllObjects];
+    [alertSounds addObjectsFromArray:[backend availableAlertSounds]];
+    
+    AlertSound *currentAlertSnd = [backend currentAlertSound];
+    [selectedAlertSound release];
+    selectedAlertSound = [currentAlertSnd retain];
+    
+    [alertSoundsTable reloadData];
+    
+    if (selectedAlertSound) {
+        for (NSUInteger i = 0; i < [alertSounds count]; i++) {
+            AlertSound *sound = [alertSounds objectAtIndex:i];
+            if ([sound.name isEqualToString:selectedAlertSound.name]) {
+                [alertSoundsTable selectRowIndexes:[NSIndexSet indexSetWithIndex:i]
+                              byExtendingSelection:NO];
+                break;
+            }
+        }
+    }
+
     // Update alert device popup
     [alertDevicePopup removeAllItems];
     for (AudioDevice *device in outputDevices) {
