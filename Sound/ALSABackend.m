@@ -703,18 +703,18 @@ static NSString *const kMicControl = @"Mic";
 {
     if (!defaultOutput) return 0.0;
     
-    // Get current volume from mixer
-    NSString *output = [self runCommand:amixerPath 
-                          withArguments:@[@"-c", 
+    // Get current volume from mixer — try Master first (primary ALSA control),
+    // fall back to PCM
+    NSString *output = [self runCommand:amixerPath
+                          withArguments:@[@"-c",
                             [NSString stringWithFormat:@"%d", currentOutputCard],
-                            @"sget", kPCMControl]];
-    
-    // Fall back to Master if PCM not found
+                            @"sget", kMasterControl]];
+
     if (!output || ![output containsString:@"Playback"]) {
-        output = [self runCommand:amixerPath 
-                    withArguments:@[@"-c", 
+        output = [self runCommand:amixerPath
+                    withArguments:@[@"-c",
                       [NSString stringWithFormat:@"%d", currentOutputCard],
-                      @"sget", kMasterControl]];
+                      @"sget", kPCMControl]];
     }
     
     if (output) {
@@ -734,15 +734,15 @@ static NSString *const kMicControl = @"Mic";
     NSString *value = [NSString stringWithFormat:@"%d%%", percent];
     NSLog(@"ALSABackend:   setting to %@, card %d", value, currentOutputCard);
     
-    // Try PCM first, then Master
-    BOOL success = [self setMixerControl:kPCMControl 
-                                   value:value 
+    // Try Master first (primary ALSA control), fall back to PCM
+    BOOL success = [self setMixerControl:kMasterControl
+                                   value:value
                                     card:currentOutputCard];
-    
+
     if (!success) {
-        NSLog(@"ALSABackend:   PCM control failed, trying Master");
-        success = [self setMixerControl:kMasterControl 
-                                  value:value 
+        NSLog(@"ALSABackend:   Master control failed, trying PCM");
+        success = [self setMixerControl:kPCMControl
+                                  value:value
                                    card:currentOutputCard];
     }
     
@@ -763,17 +763,17 @@ static NSString *const kMicControl = @"Mic";
 - (BOOL)isOutputMuted
 {
     if (!defaultOutput) return NO;
-    
-    NSString *output = [self runCommand:amixerPath 
-                          withArguments:@[@"-c", 
+
+    NSString *output = [self runCommand:amixerPath
+                          withArguments:@[@"-c",
                             [NSString stringWithFormat:@"%d", currentOutputCard],
-                            @"sget", kPCMControl]];
-    
+                            @"sget", kMasterControl]];
+
     if (!output) {
-        output = [self runCommand:amixerPath 
-                    withArguments:@[@"-c", 
+        output = [self runCommand:amixerPath
+                    withArguments:@[@"-c",
                       [NSString stringWithFormat:@"%d", currentOutputCard],
-                      @"sget", kMasterControl]];
+                      @"sget", kPCMControl]];
     }
     
     if (output) {
@@ -789,17 +789,17 @@ static NSString *const kMicControl = @"Mic";
     NSString *value = muted ? @"mute" : @"unmute";
     NSLog(@"ALSABackend:   setting to %@, card %d", value, currentOutputCard);
     
-    BOOL success = [self setMixerControl:kPCMControl 
-                                   value:value 
+    BOOL success = [self setMixerControl:kMasterControl
+                                   value:value
                                     card:currentOutputCard];
-    
+
     if (!success) {
-        NSLog(@"ALSABackend:   PCM control failed, trying Master");
-        success = [self setMixerControl:kMasterControl 
-                                  value:value 
+        NSLog(@"ALSABackend:   Master control failed, trying PCM");
+        success = [self setMixerControl:kPCMControl
+                                  value:value
                                    card:currentOutputCard];
     }
-    
+
     if (success && defaultOutput.volumeControl) {
         defaultOutput.volumeControl.isMuted = muted;
     }
@@ -981,13 +981,13 @@ static NSString *const kMicControl = @"Mic";
     
     int percent = (int)(volume * 100);
     NSString *value = [NSString stringWithFormat:@"%d%%", percent];
-    NSString *controlName = device.volumeControl ? 
-                            device.volumeControl.identifier : kPCMControl;
-    
-    BOOL success = [self setMixerControl:controlName 
-                                   value:value 
+    NSString *controlName = device.volumeControl ?
+                            device.volumeControl.identifier : kMasterControl;
+
+    BOOL success = [self setMixerControl:controlName
+                                   value:value
                                     card:device.cardIndex];
-    
+
     if (success && device.volumeControl) {
         device.volumeControl.value = volume;
     }
@@ -1006,13 +1006,13 @@ static NSString *const kMicControl = @"Mic";
     if (!device) return NO;
     
     NSString *value = muted ? @"mute" : @"unmute";
-    NSString *controlName = device.volumeControl ? 
-                            device.volumeControl.identifier : kPCMControl;
-    
-    BOOL success = [self setMixerControl:controlName 
-                                   value:value 
+    NSString *controlName = device.volumeControl ?
+                            device.volumeControl.identifier : kMasterControl;
+
+    BOOL success = [self setMixerControl:controlName
+                                   value:value
                                     card:device.cardIndex];
-    
+
     if (success && device.volumeControl) {
         device.volumeControl.isMuted = muted;
     }
@@ -1551,6 +1551,12 @@ static NSString *const kMicControl = @"Mic";
 
         NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
         [task waitUntilExit];
+
+        if ([task terminationStatus] != 0) {
+            NSLog(@"Command %@ exited with status %d", command, [task terminationStatus]);
+            [task release];
+            return nil;
+        }
 
         result = [[NSString alloc] initWithData:data
                                        encoding:NSUTF8StringEncoding];
