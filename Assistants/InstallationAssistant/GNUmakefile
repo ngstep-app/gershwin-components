@@ -1,5 +1,7 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
+GNUSTEP_SYSTEM_APPS := $(GNUSTEP_SYSTEM_APPS)/Utilities
+
 # Application configuration
 APP_NAME = InstallationAssistant
 
@@ -42,37 +44,3 @@ after-all::
 	@chmod +x $(APP_NAME).app/Resources/installer-Linux.sh 2>/dev/null || true
 	@echo "Installer scripts ready"
 
-# Custom install target
-.PHONY: custom-install custom-uninstall
-
-install:: custom-install
-
-custom-install: $(APP_NAME)$(EXEEXT)
-	@if [ -n "$(DESTDIR)" ]; then \
-		echo "Installing $(APP_NAME) to $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities"; \
-		mkdir -p $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities; \
-		rm -rf $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities/$(APP_NAME).app; \
-		cp -R $(APP_NAME).app $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities/; \
-	else \
-		echo "Installing $(APP_NAME) to $(GNUSTEP_SYSTEM_APPS)/Utilities"; \
-		mkdir -p $(GNUSTEP_SYSTEM_APPS)/Utilities; \
-		rm -rf $(GNUSTEP_SYSTEM_APPS)/Utilities/$(APP_NAME).app; \
-		cp -R $(APP_NAME).app $(GNUSTEP_SYSTEM_APPS)/Utilities/; \
-	fi
-
-# Override uninstall target to properly support DESTDIR
-uninstall:: custom-uninstall
-
-custom-uninstall:
-	@if [ -n "$(DESTDIR)" ]; then \
-		echo "Uninstalling $(APP_NAME) from $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities"; \
-		rm -rf $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities/$(APP_NAME).app; \
-	else \
-		echo "Uninstalling $(APP_NAME) from $(GNUSTEP_SYSTEM_APPS)/Utilities"; \
-		rm -rf $(GNUSTEP_SYSTEM_APPS)/Utilities/$(APP_NAME).app; \
-	fi
-
-# Override built-in install targets to do nothing
-internal-application-install::
-
-internal-application-uninstall::
