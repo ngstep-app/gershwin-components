@@ -58,9 +58,40 @@ after-all::
 	@cp Resources/de.lproj/Localizable.strings $(APP_NAME).app/Resources/de.lproj/ 2>/dev/null || true
 	@echo "Localized resource structure fixed"
 
-# Post-installation tasks
-after-install::
+# Custom install target - install to Utilities
+.PHONY: custom-install custom-uninstall
+
+install:: custom-install
+
+custom-install: $(APP_NAME)$(EXEEXT)
+	@if [ -n "$(DESTDIR)" ]; then \
+		echo "Installing $(APP_NAME) to $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities"; \
+		mkdir -p $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities; \
+		rm -rf $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities/$(APP_NAME).app; \
+		cp -R $(APP_NAME).app $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities/; \
+	else \
+		echo "Installing $(APP_NAME) to $(GNUSTEP_SYSTEM_APPS)/Utilities"; \
+		mkdir -p $(GNUSTEP_SYSTEM_APPS)/Utilities; \
+		rm -rf $(GNUSTEP_SYSTEM_APPS)/Utilities/$(APP_NAME).app; \
+		cp -R $(APP_NAME).app $(GNUSTEP_SYSTEM_APPS)/Utilities/; \
+	fi
 	@echo "Create Live Media Assistant has been installed successfully."
+
+uninstall:: custom-uninstall
+
+custom-uninstall:
+	@if [ -n "$(DESTDIR)" ]; then \
+		echo "Uninstalling $(APP_NAME) from $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities"; \
+		rm -rf $(DESTDIR)$(GNUSTEP_SYSTEM_APPS)/Utilities/$(APP_NAME).app; \
+	else \
+		echo "Uninstalling $(APP_NAME) from $(GNUSTEP_SYSTEM_APPS)/Utilities"; \
+		rm -rf $(GNUSTEP_SYSTEM_APPS)/Utilities/$(APP_NAME).app; \
+	fi
+
+# Override built-in install targets to do nothing
+internal-application-install::
+
+internal-application-uninstall::
 
 clean::
 	@echo "Cleaning CreateLiveMediaAssistant..."
