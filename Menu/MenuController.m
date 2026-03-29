@@ -279,8 +279,9 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         return;
     }
 
-    // Re-read the primary screen geometry
-    self.screenFrame = [[NSScreen mainScreen] frame];
+    // Re-read the primary screen geometry (screens[0] is the xrandr primary;
+    // mainScreen may return the menu's own window screen which is circular)
+    self.screenFrame = [[[NSScreen screens] objectAtIndex:0] frame];
     self.screenSize = self.screenFrame.size;
     NSLog(@"MenuController: New screen frame: %.0f,%.0f %.0fx%.0f",
           self.screenFrame.origin.x, self.screenFrame.origin.y,
@@ -450,9 +451,9 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     attributes = [NSMutableDictionary new];
     [attributes setObject:menuFont forKey:NSFontAttributeName];
     
-    self.screenFrame = [[NSScreen mainScreen] frame];
+    self.screenFrame = [[[NSScreen screens] objectAtIndex:0] frame];
     self.screenSize = self.screenFrame.size;
-    NSLog(@"MenuController: Screen frame: %.0f,%.0f %.0fx%.0f", 
+    NSLog(@"MenuController: Screen frame: %.0f,%.0f %.0fx%.0f",
           self.screenFrame.origin.x, self.screenFrame.origin.y, self.screenSize.width, self.screenSize.height);
     
     color = [self backgroundColor];
