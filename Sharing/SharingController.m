@@ -851,10 +851,11 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     // - 8px between control and its label
     // - 20px between control groups
     
-    NSView *mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 595, 550)];
+    CGFloat viewHeight = 390;
+    NSView *mainView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 595, viewHeight)];
     [mainView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-    
-    CGFloat yPos = 550 - METRICS_CONTENT_TOP_MARGIN;  // Start from top with proper margin
+
+    CGFloat yPos = viewHeight - METRICS_CONTENT_TOP_MARGIN;  // Start from top with proper margin
     CGFloat leftMargin = METRICS_CONTENT_SIDE_MARGIN;  // 24px from window edge
     CGFloat width = 595 - (METRICS_CONTENT_SIDE_MARGIN * 2);  // 24px margins on both sides
     
@@ -926,9 +927,8 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     
     yPos -= METRICS_SPACE_16;  // 16px between title and first control
     
-    // Each service row allocates space for checkbox + optional info label (16px total vertical for both)
-    // Checkboxes are spaced 36px apart (18px checkbox + 8px to info + 10px to next checkbox)
-    CGFloat serviceRowHeight = METRICS_RADIO_BUTTON_SIZE + METRICS_SPACE_8 + 17 + METRICS_SPACE_8;  // 51px per row
+    // Each service row: checkbox + info label + spacing to next row
+    CGFloat serviceRowHeight = METRICS_RADIO_BUTTON_SIZE + 17 + METRICS_SPACE_8;  // 43px per row
     
     // SSH Service
     sshCheckbox = [[NSButton alloc] initWithFrame:NSMakeRect(leftMargin, yPos - METRICS_RADIO_BUTTON_SIZE, 200, METRICS_RADIO_BUTTON_SIZE)];
@@ -949,7 +949,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     [sshStatusLabel setTextColor:[NSColor grayColor]];
     [mainView addSubview:sshStatusLabel];
     
-    sshInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - METRICS_SPACE_8 - 17, width - METRICS_SPACE_16, 17)];
+    sshInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - 17, width - METRICS_SPACE_16, 17)];
     [sshInfoLabel setStringValue:@""];
     [sshInfoLabel setBezeled:NO];
     [sshInfoLabel setDrawsBackground:NO];
@@ -981,7 +981,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     [sftpStatusLabel setTextColor:[NSColor grayColor]];
     [mainView addSubview:sftpStatusLabel];
     
-    sftpInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - METRICS_SPACE_8 - 17, width - METRICS_SPACE_16, 17)];
+    sftpInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - 17, width - METRICS_SPACE_16, 17)];
     [sftpInfoLabel setStringValue:@""];
     [sftpInfoLabel setBezeled:NO];
     [sftpInfoLabel setDrawsBackground:NO];
@@ -1013,7 +1013,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     [afpStatusLabel setTextColor:[NSColor grayColor]];
     [mainView addSubview:afpStatusLabel];
     
-    afpInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - METRICS_SPACE_8 - 17, width - METRICS_SPACE_16, 17)];
+    afpInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - 17, width - METRICS_SPACE_16, 17)];
     [afpInfoLabel setStringValue:@""];
     [afpInfoLabel setBezeled:NO];
     [afpInfoLabel setDrawsBackground:NO];
@@ -1045,7 +1045,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     [smbStatusLabel setTextColor:[NSColor grayColor]];
     [mainView addSubview:smbStatusLabel];
     
-    smbInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - METRICS_SPACE_8 - 17, width - METRICS_SPACE_16, 17)];
+    smbInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - 17, width - METRICS_SPACE_16, 17)];
     [smbInfoLabel setStringValue:@""];
     [smbInfoLabel setBezeled:NO];
     [smbInfoLabel setDrawsBackground:NO];
@@ -1077,7 +1077,7 @@ static const float METRICS_SPACE_20 = 20.0;  // Between control groups, checkbox
     [vncStatusLabel setTextColor:[NSColor grayColor]];
     [mainView addSubview:vncStatusLabel];
     
-    vncInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - METRICS_SPACE_8 - 17, width - METRICS_SPACE_16, 17)];
+    vncInfoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(leftMargin + METRICS_SPACE_16, yPos - METRICS_RADIO_BUTTON_SIZE - 17, width - METRICS_SPACE_16, 17)];
     [vncInfoLabel setStringValue:@""];
     [vncInfoLabel setBezeled:NO];
     [vncInfoLabel setDrawsBackground:NO];
