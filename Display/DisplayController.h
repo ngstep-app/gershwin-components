@@ -69,5 +69,6 @@
 - (void)autoConfigureDisplays;
 - (void)saveSettings:(id)sender;
 - (void)updateSaveButtonState;
+- (BOOL)hasSavedMirrorConfig;
 
 @end

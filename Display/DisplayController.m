@@ -256,36 +256,75 @@ static NSMutableDictionary *activeDialogsByID = nil;
                 [displayView setNeedsDisplay:YES];
             }
 
-            // Detect mirroring: all connected displays share the same position
+            // Detect mirroring: all connected displays share the same position,
+            // but only treat as mirrored if the user has explicitly saved a
+            // mirror configuration.  Without saved settings Xorg places all
+            // outputs at 0,0 which looks mirrored but is just the default —
+            // we should extend in that case.
             NSUInteger currentCount = [displays count];
             BOOL wasMirrored = [mirrorDisplaysCheckbox state] == NSOnState;
             if (mirrorDisplaysCheckbox) {
                 if (currentCount > 1) {
-                    BOOL mirrored = YES;
+                    [mirrorDisplaysCheckbox setEnabled:YES];
+                    BOOL positionsMatch = YES;
                     NSPoint firstPos = [[displays objectAtIndex:0] frame].origin;
                     for (NSUInteger i = 1; i < currentCount; i++) {
                         NSPoint pos = [[displays objectAtIndex:i] frame].origin;
                         if (pos.x != firstPos.x || pos.y != firstPos.y) {
-                            mirrored = NO;
+                            positionsMatch = NO;
                             break;
                         }
                     }
+                    // Only report mirrored when the user saved a mirror config
+                    BOOL mirrored = positionsMatch && [self hasSavedMirrorConfig];
                     [mirrorDisplaysCheckbox setState:mirrored ? NSOnState : NSOffState];
+
+                    // Positions overlap but no saved mirror config — auto-extend
+                    if (positionsMatch && !mirrored) {
+                        NSDebugLog(@"DisplayController: Displays at same position without saved mirror config — auto-extending");
+                        CGFloat xOffset = 0;
+                        for (DisplayInfo *display in displays) {
+                            NSRect f = [display frame];
+                            f.origin.x = xOffset;
+                            f.origin.y = 0;
+                            [display setFrame:f];
+                            xOffset += f.size.width;
+                        }
+                        previousDisplayCount = currentCount;
+                        if (displayView) {
+                            [displayView updateDisplayRects];
+                            [displayView setNeedsDisplay:YES];
+                        }
+                        [self updateResolutionPopup];
+                        [self applyDisplayConfiguration];
+                        // Auto-extend is not a user change — reset the
+                        // baseline so Save Settings stays disabled.
+                        [savedStateSnapshot release];
+                        savedStateSnapshot = [[self currentStateSnapshot] copy];
+                        [self updateSaveButtonState];
+                        return;
+                    }
                 } else {
                     // Single or no display — mirroring is not applicable
                     [mirrorDisplaysCheckbox setState:NSOffState];
+                    [mirrorDisplaysCheckbox setEnabled:NO];
                 }
             }
 
-            // A new display was hot-plugged: if mirroring was on before
-            // OR the new layout looks mirrored, activate it so the new
-            // display actually turns on (xrandr --auto --same-as).
+            // A new display was hot-plugged while the user had explicitly
+            // enabled mirroring — re-apply mirror to include the new output.
             BOOL isMirrored = [mirrorDisplaysCheckbox state] == NSOnState;
-            if ((wasMirrored || isMirrored) && currentCount > previousDisplayCount && currentCount > 1) {
+            if (wasMirrored && isMirrored && currentCount > previousDisplayCount && currentCount > 1) {
                 NSDebugLog(@"DisplayController: New display detected while mirroring — auto-applying mirror");
                 previousDisplayCount = currentCount;
                 [self mirrorDisplaysChanged:nil];
                 return; // mirrorDisplaysChanged will trigger its own refresh
+            }
+            // Display count changed due to hot-plug/unplug — reset the
+            // baseline snapshot so Save Settings reflects user changes only.
+            if (currentCount != previousDisplayCount) {
+                [savedStateSnapshot release];
+                savedStateSnapshot = [[self currentStateSnapshot] copy];
             }
             previousDisplayCount = currentCount;
 
@@ -1041,6 +1080,59 @@ static NSMutableDictionary *activeDialogsByID = nil;
 // Marker comments used to identify our managed sections in xorg.conf
 static NSString *const GERSHWIN_BEGIN = @"# BEGIN Gershwin Display Settings";
 static NSString *const GERSHWIN_END   = @"# END Gershwin Display Settings";
+
+- (BOOL)hasSavedMirrorConfig
+{
+    NSString *xorgConfPath = @"/etc/X11/xorg.conf";
+    NSString *contents = [NSString stringWithContentsOfFile:xorgConfPath
+                                                  encoding:NSUTF8StringEncoding
+                                                     error:NULL];
+    if (!contents) return NO;
+
+    NSRange beginRange = [contents rangeOfString:GERSHWIN_BEGIN];
+    NSRange endRange   = [contents rangeOfString:GERSHWIN_END];
+    if (beginRange.location == NSNotFound || endRange.location == NSNotFound)
+        return NO;
+
+    NSString *block = [contents substringWithRange:
+        NSMakeRange(beginRange.location,
+                    endRange.location + endRange.length - beginRange.location)];
+
+    // Collect all Position values from the saved block
+    NSMutableArray *positions = [NSMutableArray array];
+    NSArray *lines = [block componentsSeparatedByString:@"\n"];
+    for (NSString *line in lines) {
+        NSString *trimmed = [line stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceCharacterSet]];
+        // Match: Option "Position" "X Y"
+        if ([trimmed hasPrefix:@"Option"] &&
+            [trimmed rangeOfString:@"\"Position\""].location != NSNotFound) {
+            // Extract the value between the last pair of quotes
+            NSRange lastQuote = [trimmed rangeOfString:@"\"" options:NSBackwardsSearch];
+            if (lastQuote.location != NSNotFound && lastQuote.location > 0) {
+                NSRange secondLastQuote = [trimmed rangeOfString:@"\""
+                                                        options:NSBackwardsSearch
+                                                          range:NSMakeRange(0, lastQuote.location)];
+                if (secondLastQuote.location != NSNotFound) {
+                    NSString *pos = [trimmed substringWithRange:
+                        NSMakeRange(secondLastQuote.location + 1,
+                                    lastQuote.location - secondLastQuote.location - 1)];
+                    [positions addObject:pos];
+                }
+            }
+        }
+    }
+
+    if ([positions count] < 2) return NO;
+
+    // All positions the same means mirrored was saved
+    NSString *first = [positions objectAtIndex:0];
+    for (NSUInteger i = 1; i < [positions count]; i++) {
+        if (![[positions objectAtIndex:i] isEqualToString:first])
+            return NO;
+    }
+    return YES;
+}
 
 - (NSString *)generateXorgConfSections
 {
