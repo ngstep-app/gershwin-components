@@ -544,14 +544,20 @@ static NSMutableDictionary *activeDialogsByID = nil;
         
         if (primary) {
             NSDebugLog(@"DisplayController: Enabling mirroring with primary display: %@", [primary name]);
-            
+
             [args addObject:@"--output"];
             [args addObject:[primary output]];
             [args addObject:@"--auto"];
             [args addObject:@"--primary"];
-            
+
+            NSPoint primaryPos = [primary frame].origin;
             for (DisplayInfo *display in displays) {
                 if (display != primary) {
+                    // Update model immediately so snapshot reflects the change
+                    NSRect f = [display frame];
+                    f.origin = primaryPos;
+                    [display setFrame:f];
+
                     [args addObject:@"--output"];
                     [args addObject:[display output]];
                     [args addObject:@"--same-as"];
@@ -559,12 +565,23 @@ static NSMutableDictionary *activeDialogsByID = nil;
                     NSDebugLog(@"DisplayController: Mirroring %@ to %@", [display name], [primary name]);
                 }
             }
-            
+
             [self runXrandrWithArgs:args];
         }
     } else {
         // Disable mirroring - arrange displays side by side
         NSDebugLog(@"DisplayController: Disabling mirroring, arranging displays side by side");
+
+        // Update model immediately — place displays side by side
+        CGFloat xOffset = 0;
+        for (DisplayInfo *display in displays) {
+            NSRect f = [display frame];
+            f.origin.x = xOffset;
+            f.origin.y = 0;
+            [display setFrame:f];
+            xOffset += f.size.width;
+        }
+
         [self applyDisplayConfiguration];
     }
 }
@@ -591,6 +608,9 @@ static NSMutableDictionary *activeDialogsByID = nil;
         
         NSDebugLog(@"DisplayController: Changing resolution for %@ from %@ to %@", [targetDisplay name], currentRes, selectedResolution);
         
+        // Update model immediately so save button reflects the change
+        [targetDisplay setCurrentResolutionString:selectedResolution];
+
         // Apply the new resolution
         NSArray *args = @[@"--output", [targetDisplay output], @"--mode", selectedResolution];
         [self runXrandrWithArgs:args];
@@ -816,6 +836,9 @@ static NSMutableDictionary *activeDialogsByID = nil;
     }
 
     NSDebugLog(@"DisplayController: Running xrandr with args: %@", args);
+
+    // Update save button immediately — the display model is already changed
+    [self updateSaveButtonState];
 
     NSString *path = [xrandrPath retain];
     NSArray *argsCopy = [args retain];
