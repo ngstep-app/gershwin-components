@@ -16,6 +16,7 @@
     self = [super initWithFrame:frame];
     if (self) {
         isDragging = NO;
+        isDraggingMenuBar = NO;
         showsMenuBar = NO;
         isSelected = NO;
     }
@@ -85,18 +86,29 @@
 {
     NSPoint localPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
     dragOffset = localPoint;
-    isDragging = NO; // Don't start dragging immediately
-    
+    isDragging = NO;
+    isDraggingMenuBar = NO;
+
+    // Check if the click is on the menu bar area of this (primary) display
+    if (showsMenuBar) {
+        NSRect bounds = [self bounds];
+        float menuBarHeight = MIN(18, bounds.size.height * 0.25);
+        NSRect menuBarRect = NSMakeRect(2, bounds.size.height - menuBarHeight - 2, bounds.size.width - 4, menuBarHeight);
+        if (NSPointInRect(localPoint, menuBarRect)) {
+            isDraggingMenuBar = YES;
+        }
+    }
+
     // Notify the parent view (DisplayView) that this display was clicked
     NSView *parentView = [self superview];
     if ([parentView isKindOfClass:[DisplayView class]]) {
         DisplayView *displayView = (DisplayView *)parentView;
         DisplayController *controller = [displayView controller];
-        
+
         if (controller && [controller respondsToSelector:@selector(selectDisplay:)] && displayInfo) {
             // Select this display
             [controller selectDisplay:displayInfo];
-            
+
             // Update all display rect views to show/hide selection
             NSArray *allRectViews = [displayView displayRects];
             for (DisplayRectView *rectView in allRectViews) {
@@ -105,7 +117,7 @@
             }
         }
     }
-    
+
     // Set up for potential dragging on next mouse move
     isDragging = YES;
 }
@@ -113,35 +125,42 @@
 - (void)mouseDragged:(NSEvent *)theEvent
 {
     if (!isDragging || !displayInfo) return;
-    
+
     NSPoint windowPoint = [theEvent locationInWindow];
     if (![[self superview] respondsToSelector:@selector(convertPoint:fromView:)]) {
         return;
     }
-    
+
     NSPoint parentPoint = [[self superview] convertPoint:windowPoint fromView:nil];
-    
+
+    // When dragging the menu bar, don't move the display rect — just track position
+    if (isDraggingMenuBar) {
+        menuBarDragPoint = parentPoint;
+        [[self superview] setNeedsDisplay:YES];
+        return;
+    }
+
     NSPoint newOrigin = NSMakePoint(parentPoint.x - dragOffset.x, parentPoint.y - dragOffset.y);
-    
+
     // Keep within superview bounds with safety margins
     NSView *superview = [self superview];
     if (!superview) return;
-    
+
     NSRect superBounds = [superview bounds];
     NSRect frame = [self frame];
-    
+
     // Add safety margins to prevent going completely off-screen
     float margin = 10.0;
     newOrigin.x = MAX(-frame.size.width + margin, MIN(newOrigin.x, superBounds.size.width - margin));
     newOrigin.y = MAX(-frame.size.height + margin, MIN(newOrigin.y, superBounds.size.height - margin));
-    
+
     [self setFrameOrigin:newOrigin];
-    
+
     // Update the display info with scaled coordinates
     NSRect newFrame = [displayInfo frame];
     newFrame.origin = newOrigin;
     [displayInfo setFrame:newFrame];
-    
+
     // Mark superview as needing redisplay
     [superview setNeedsDisplay:YES];
 }
@@ -149,43 +168,55 @@
 - (void)mouseUp:(NSEvent *)theEvent
 {
     if (!isDragging) return;
-    
+
+    BOOL wasDraggingMenuBar = isDraggingMenuBar;
     isDragging = NO;
-    
+    isDraggingMenuBar = NO;
+
     NSView *parentView = [self superview];
     if (!parentView || ![parentView isKindOfClass:[DisplayView class]]) {
         return;
     }
-    
+
     DisplayView *displayView = (DisplayView *)parentView;
-    
-    // Check if we dropped on the menu bar area of another display
-    NSPoint windowPoint = [theEvent locationInWindow];
-    NSPoint parentPoint = [parentView convertPoint:windowPoint fromView:nil];
-    DisplayRectView *targetView = [displayView displayRectAtPoint:parentPoint];
-    
-    if (targetView && targetView != self && [targetView displayInfo] && displayInfo) {
-        // Transfer primary status (menu bar) to the target display
-        [self setShowsMenuBar:NO];
-        [targetView setShowsMenuBar:YES];
-        
-        // Update display info
-        [displayInfo setIsPrimary:NO];
-        [[targetView displayInfo] setIsPrimary:YES];
-        
-        // Apply changes via controller
+
+    if (wasDraggingMenuBar) {
+        // Menu bar drag: find which display the cursor is over (excluding self)
+        NSPoint windowPoint = [theEvent locationInWindow];
+        NSPoint parentPoint = [parentView convertPoint:windowPoint fromView:nil];
+
+        NSArray *allRectViews = [displayView displayRects];
+        DisplayRectView *targetView = nil;
+        for (DisplayRectView *rectView in allRectViews) {
+            if (rectView != self && NSPointInRect(parentPoint, [rectView frame])) {
+                targetView = rectView;
+                break;
+            }
+        }
+
+        if (targetView && [targetView displayInfo] && displayInfo) {
+            // Transfer primary status (menu bar) to the target display
+            [self setShowsMenuBar:NO];
+            [targetView setShowsMenuBar:YES];
+
+            // Update display info
+            [displayInfo setIsPrimary:NO];
+            [[targetView displayInfo] setIsPrimary:YES];
+
+            // Apply changes via controller
+            DisplayController *controller = [displayView controller];
+            if (controller && [controller respondsToSelector:@selector(setPrimaryDisplay:)]) {
+                [controller setPrimaryDisplay:[targetView displayInfo]];
+            }
+        }
+    } else {
+        // Display arrangement drag: apply the new position
         DisplayController *controller = [displayView controller];
-        if (controller && [controller respondsToSelector:@selector(setPrimaryDisplay:)]) {
-            [controller setPrimaryDisplay:[targetView displayInfo]];
+        if (controller && [controller respondsToSelector:@selector(applyDisplayConfiguration)]) {
+            [controller applyDisplayConfiguration];
         }
     }
-    
-    // Apply the new arrangement
-    DisplayController *controller = [displayView controller];
-    if (controller && [controller respondsToSelector:@selector(applyDisplayConfiguration)]) {
-        [controller applyDisplayConfiguration];
-    }
-    
+
     [parentView setNeedsDisplay:YES];
 }
 

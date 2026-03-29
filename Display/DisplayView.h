@@ -16,9 +16,11 @@
 {
     DisplayInfo *displayInfo;
     BOOL isDragging;
+    BOOL isDraggingMenuBar;
     BOOL showsMenuBar;
     BOOL isSelected;
     NSPoint dragOffset;
+    NSPoint menuBarDragPoint;
 }
 
 @property (retain) DisplayInfo *displayInfo;
