@@ -70,6 +70,8 @@ static NSMutableDictionary *activeDialogsByID = nil;
     [mirrorDisplaysCheckbox release];
     [xrandrPath release];
     [lastXrandrOutput release];
+    [saveButton release];
+    [savedStateSnapshot release];
     [super dealloc];
 }
 
@@ -168,14 +170,14 @@ static NSMutableDictionary *activeDialogsByID = nil;
     [mainView addSubview:resolutionPopup];
 
     // Save Settings button
-    NSButton *saveButton = [[NSButton alloc] initWithFrame:NSMakeRect(availableWidth - 120, 32, 100, 25)];
+    saveButton = [[NSButton alloc] initWithFrame:NSMakeRect(availableWidth - 120, 32, 100, 25)];
     [saveButton setTitle:@"Save Settings"];
     [saveButton setButtonType:NSMomentaryPushInButton];
     [saveButton setBezelStyle:NSRoundedBezelStyle];
     [saveButton setTarget:self];
     [saveButton setAction:@selector(saveSettings:)];
+    [saveButton setEnabled:NO];
     [mainView addSubview:saveButton];
-    [saveButton release];
 
     // Do not call refreshDisplays: here — the DisplayPane's didSelect
     // will trigger it once the view is in the window hierarchy.
@@ -256,6 +258,8 @@ static NSMutableDictionary *activeDialogsByID = nil;
 
             // Update resolution popup
             [self updateResolutionPopup];
+
+            [self updateSaveButtonState];
         });
     });
 }
@@ -943,6 +947,40 @@ static NSMutableDictionary *activeDialogsByID = nil;
     return selectedDisplay;
 }
 
+- (NSString *)currentStateSnapshot
+{
+    NSMutableString *snap = [NSMutableString string];
+    NSArray *sorted = [displays sortedArrayUsingComparator:^NSComparisonResult(DisplayInfo *a, DisplayInfo *b) {
+        return [[a output] compare:[b output]];
+    }];
+    for (DisplayInfo *d in sorted) {
+        if (![d isConnected]) continue;
+        NSRect f = [d frame];
+        [snap appendFormat:@"%@:%@:%.0f,%.0f:%d\n",
+            [d output],
+            [d currentResolutionString] ? [d currentResolutionString] : @"",
+            f.origin.x, f.origin.y,
+            [d isPrimary]];
+    }
+    return snap;
+}
+
+- (void)updateSaveButtonState
+{
+    if (!saveButton) return;
+
+    if (!savedStateSnapshot) {
+        // No saved snapshot yet — take one now (initial state)
+        savedStateSnapshot = [[self currentStateSnapshot] copy];
+        [saveButton setEnabled:NO];
+        return;
+    }
+
+    NSString *current = [self currentStateSnapshot];
+    BOOL changed = ![current isEqualToString:savedStateSnapshot];
+    [saveButton setEnabled:changed];
+}
+
 // Marker comments used to identify our managed sections in xorg.conf
 static NSString *const GERSHWIN_BEGIN = @"# BEGIN Gershwin Display Settings";
 static NSString *const GERSHWIN_END   = @"# END Gershwin Display Settings";
@@ -1069,6 +1107,10 @@ static NSString *const GERSHWIN_END   = @"# END Gershwin Display Settings";
         [task waitUntilExit];
 
         if ([task terminationStatus] == 0) {
+            [savedStateSnapshot release];
+            savedStateSnapshot = [[self currentStateSnapshot] copy];
+            [saveButton setEnabled:NO];
+
             NSRunAlertPanel(@"Save Settings",
                            @"Display settings saved to %@.\n"
                            @"They will take effect on next X server restart.",

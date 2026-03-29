@@ -42,6 +42,8 @@
     DisplayInfo *selectedDisplay; // Currently selected display for resolution changes
     BOOL isRefreshing; // Guards against concurrent refreshDisplays: calls
     NSString *lastXrandrOutput; // Cached xrandr output to avoid redundant process spawns
+    NSButton *saveButton;
+    NSString *savedStateSnapshot; // Snapshot of display state at last save/load
 }
 
 - (NSView *)createMainView;
@@ -65,5 +67,6 @@
 - (BOOL)isXrandrAvailable;
 - (void)autoConfigureDisplays;
 - (void)saveSettings:(id)sender;
+- (void)updateSaveButtonState;
 
 @end
