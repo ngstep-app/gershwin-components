@@ -256,6 +256,20 @@ static NSMutableDictionary *activeDialogsByID = nil;
                 [displayView setNeedsDisplay:YES];
             }
 
+            // Detect mirroring: all connected displays share the same position
+            if (mirrorDisplaysCheckbox && [displays count] > 1) {
+                BOOL mirrored = YES;
+                NSPoint firstPos = [[displays objectAtIndex:0] frame].origin;
+                for (NSUInteger i = 1; i < [displays count]; i++) {
+                    NSPoint pos = [[displays objectAtIndex:i] frame].origin;
+                    if (pos.x != firstPos.x || pos.y != firstPos.y) {
+                        mirrored = NO;
+                        break;
+                    }
+                }
+                [mirrorDisplaysCheckbox setState:mirrored ? NSOnState : NSOffState];
+            }
+
             // Update resolution popup
             [self updateResolutionPopup];
 
