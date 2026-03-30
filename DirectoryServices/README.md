@@ -20,15 +20,14 @@ sudo -E gmake install
 
 To start dshelper automatically at boot:
 
-| Platform | Enable | Start |
-|----------|--------|-------|
-| FreeBSD | `sudo sysrc dshelper_enable=YES` | `sudo service dshelper start` |
-| Linux (sysvinit) | `sudo update-rc.d dshelper defaults` | `sudo service dshelper start` |
-| Linux (systemd) | `sudo systemctl enable gdomap dshelper` | `sudo systemctl start gdomap dshelper` |
+```sh
+sudo update-rc.d dshelper defaults
+sudo service dshelper start
+```
 
 The service runs before the login manager, ensuring directory users can log in.
 
-**Note:** The dshelper service requires **gdomap** (GNUstep Distributed Objects name server) for network service discovery. On FreeBSD and Linux sysvinit, gdomap is bundled with the dshelper service and starts/stops automatically. On Linux systemd, gdomap runs as a separate service unit—enable both as shown above.
+**Note:** The dshelper service requires **gdomap** (GNUstep Distributed Objects name server) for network service discovery. gdomap is bundled with the dshelper service and starts/stops automatically.
 
 ## Quick Start
 
@@ -430,4 +429,4 @@ The Linux backend in `DSPlatformLinux.m` is currently a stub. To complete it:
 1. Implement `configureNFSExports` to write `/etc/exports` (Linux format)
 2. Implement `enableNFSServer`/`startNFSServer` using systemctl or service commands
 3. Implement `addFstabEntry` with Linux NFS mount options
-4. Test on both systemd and sysvinit systems
+4. Test on sysvinit systems

@@ -123,7 +123,7 @@ static int main_write_xauth_entry(
 // X11 I/O error handler for main - called when X connection is lost
 static int mainXIOErrorHandler(Display *display) {
     NSLog(@"[ERROR] X11 I/O error in main() - X server connection lost");
-    // Exit immediately to allow systemd to restart us
+    // Exit immediately to allow init to restart us
     exit(1);
 }
 

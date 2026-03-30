@@ -38,21 +38,11 @@ install:: all
 		(cd .; tar chfX - /System/Library/Makefiles/tar-exclude-list $(APP_NAME).app) | sh -c 'cd "$(INSTALL_APPS_DIR)" && tar xf -'; \
 	fi
 	@echo "Installing service script..."
-	@if [ -n "$(DESTDIR)" ]; then \
-		echo "Installing to $(DESTDIR)/usr/local/etc/rc.d/loginwindow (staged install)"; \
-		mkdir -p $(DESTDIR)/usr/local/etc/rc.d; \
-		install -m 555 loginwindow $(DESTDIR)/usr/local/etc/rc.d/loginwindow; \
-	elif [ -d "/usr/local/etc/rc.d" ]; then \
-		echo "Installing to /usr/local/etc/rc.d/loginwindow (FreeBSD rc.d)"; \
-		install -m 555 loginwindow /usr/local/etc/rc.d/loginwindow; \
-	elif [ -d /etc/systemd/system ]; then \
-		echo "Installing loginwindow.service (systemd)"; \
-		install -m 644 loginwindow.service /etc/systemd/system/loginwindow.service; \
-	elif [ -d /etc/init.d ]; then \
+	@if [ -d /etc/init.d ]; then \
 		echo "Installing loginwindow init script (sysvinit)"; \
 		install -m 755 loginwindow.init /etc/init.d/loginwindow; \
 	else \
-		echo "No supported init system detected, skipping service install."; \
+		echo "No /etc/init.d directory found, skipping service install."; \
 	fi
 	@echo "Note: PAM configuration will be auto-generated to enable X11 authorization"
 	@echo "Installation complete."
