@@ -541,9 +541,58 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 - (void)displaySystemOnlyMenu
 {
     NSLog(@"AppMenuWidget: No application menu - showing system-only ⌘ menu");
-    // An empty menu is enough; setupMenuViewWithMenu: will prepend the ⌘ system item automatically.
-    NSMenu *emptyMenu = [[NSMenu alloc] initWithTitle:@""];
-    [self setupMenuViewWithMenu:emptyMenu];
+    // Build a lightweight default menubar when no app menu is exported.
+    // setupMenuViewWithMenu: prepends the ⌘ system menu item automatically.
+    NSMenu *mainMenu = [[NSMenu alloc] initWithTitle:@""];
+
+    NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:NSLocalizedString(@"File", @"Fallback File menu title")];
+    NSMenuItem *closeItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Close", @"Close active window")
+                                  action:@selector(closeActiveWindow:)
+                              keyEquivalent:@"w"];
+    [closeItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+    [closeItem setTarget:self];
+    [fileMenu addItem:closeItem];
+
+    NSMenuItem *fileMenuItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"File", @"Fallback File menu title")
+                                   action:nil
+                               keyEquivalent:@""];
+    [fileMenuItem setSubmenu:fileMenu];
+    [mainMenu addItem:fileMenuItem];
+
+    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:NSLocalizedString(@"Edit", @"Fallback Edit menu title")];
+    NSMenuItem *undoItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Undo", @"Undo action")
+                                 action:@selector(undo:)
+                             keyEquivalent:@"z"];
+    [undoItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+    [editMenu addItem:undoItem];
+
+    [editMenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *cutItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Cut", @"Cut action")
+                                action:@selector(cut:)
+                            keyEquivalent:@"x"];
+    [cutItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+    [editMenu addItem:cutItem];
+
+    NSMenuItem *copyItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Copy", @"Copy action")
+                                 action:@selector(copy:)
+                             keyEquivalent:@"c"];
+    [copyItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+    [editMenu addItem:copyItem];
+
+    NSMenuItem *pasteItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Paste", @"Paste action")
+                                  action:@selector(paste:)
+                              keyEquivalent:@"v"];
+    [pasteItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+    [editMenu addItem:pasteItem];
+
+    NSMenuItem *editMenuItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Edit", @"Fallback Edit menu title")
+                                   action:nil
+                               keyEquivalent:@""];
+    [editMenuItem setSubmenu:editMenu];
+    [mainMenu addItem:editMenuItem];
+
+    [self setupMenuViewWithMenu:mainMenu];
 }
 
 - (void)clearMenuAndHideView
