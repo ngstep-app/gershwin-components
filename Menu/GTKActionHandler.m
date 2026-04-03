@@ -8,6 +8,8 @@
 #import "GTKActionHandler.h"
 #import "DBusConnection.h"
 #import "X11ShortcutManager.h"
+#import "MenuUtils.h"
+#import "WindowMonitor.h"
 
 // Static storage for GTK action information
 static NSMutableDictionary *gtkMenuItemToActionMap = nil;
@@ -200,6 +202,36 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
     NSLog(@"GTKActionHandler: Triggering GTK action '%@' for menu item '%@' (service=%@, path=%@)", 
           actionName, [menuItem title], serviceName, actionPath);
     
+        // Refresh the bus name and action path from the current window's X11 properties.
+        // The stored service name is a D-Bus unique name (":1.xx") captured at menu-import
+        // time.  If the app has since reconnected to D-Bus it will have a new unique name;
+        // calling the old one returns "ServiceUnknown".  Additionally, the stored actionPath
+        // is typically the _GTK_MENUBAR_OBJECT_PATH (org.gtk.Menus), NOT the
+        // _GTK_APPLICATION_OBJECT_PATH (org.gtk.Actions) — using the wrong path causes the
+        // same error even when the service is reachable.
+        unsigned long activeWindowId = [[WindowMonitor sharedMonitor] currentActiveWindow];
+        if (activeWindowId != 0) {
+            NSString *freshBusName = [MenuUtils getWindowProperty:activeWindowId
+                                                         atomName:@"_GTK_UNIQUE_BUS_NAME"];
+            if (freshBusName && [freshBusName length] > 0) {
+                if (![freshBusName isEqualToString:serviceName]) {
+                    NSLog(@"GTKActionHandler: Bus name refreshed from %@ to %@", serviceName, freshBusName);
+                }
+                serviceName = freshBusName;
+            }
+            // Prefer the application object path (org.gtk.Actions) over the menubar
+            // object path (org.gtk.Menus) — they implement different D-Bus interfaces.
+            NSString *appPath = [MenuUtils getWindowProperty:activeWindowId
+                                                   atomName:@"_GTK_APPLICATION_OBJECT_PATH"];
+            if (appPath && [appPath length] > 0) {
+                if (![appPath isEqualToString:actionPath]) {
+                    NSLog(@"GTKActionHandler: Action path refreshed from %@ to %@ (_GTK_APPLICATION_OBJECT_PATH)",
+                          actionPath, appPath);
+                }
+                actionPath = appPath;
+            }
+        }
+
     // Strip "unity." prefix from action name for actual D-Bus call
     // The menu contains "unity.-Quit" but the actual action is "-Quit"
     NSString *actualActionName = actionName;

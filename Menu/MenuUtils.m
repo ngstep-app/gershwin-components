@@ -559,11 +559,19 @@ static dispatch_once_t _sharedDisplayOnce;
 {
     if (windowId == 0) return NO;
 
-    // Canonical/KDE-style: app stores its D-Bus service name on the window
-    if ([self getWindowMenuService:windowId] != nil) return YES;
+    // Canonical/KDE-style: app stores BOTH its D-Bus service name AND the object path.
+    // A service name alone is not enough — the window may simply be inheriting the
+    // property from its parent process.
+    if ([self getWindowMenuService:windowId] != nil &&
+        [self getWindowMenuPath:windowId] != nil) return YES;
 
-    // GTK apps advertise via _GTK_UNIQUE_BUS_NAME
-    if ([self getWindowProperty:windowId atomName:@"_GTK_UNIQUE_BUS_NAME"] != nil) return YES;
+    // GTK apps advertise via BOTH _GTK_UNIQUE_BUS_NAME and _GTK_MENUBAR_OBJECT_PATH.
+    // Transient/child windows (dialogs, file choosers) often carry _GTK_UNIQUE_BUS_NAME
+    // from the parent process but do NOT set _GTK_MENUBAR_OBJECT_PATH because they
+    // don't export their own menu.  Requiring both prevents a false-positive that
+    // would cause a needless 2-second wait on every dialog focus change.
+    if ([self getWindowProperty:windowId atomName:@"_GTK_UNIQUE_BUS_NAME"] != nil &&
+        [self getWindowProperty:windowId atomName:@"_GTK_MENUBAR_OBJECT_PATH"] != nil) return YES;
 
     // GNUstep apps are identified by _GNUSTEP_WM_ATTR on the window
     if ([self getWindowProperty:windowId atomName:@"_GNUSTEP_WM_ATTR"] != nil) return YES;
