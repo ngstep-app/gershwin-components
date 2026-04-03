@@ -12,6 +12,7 @@
 #import "X11ShortcutManager.h"
 #import "GTKActionHandler.h"
 #import "DBusMenuActionHandler.h"
+#import "DBusConnection.h"
 #import "ActionSearch.h"
 #import <X11/Xlib.h>
 #import <X11/Xutil.h>
@@ -131,6 +132,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 @property (nonatomic, assign) unsigned long pendingClearWindowId;
 
 - (unsigned long)findDesktopWindowId;
+- (BOOL)windowLikelyWillRegisterMenuSoon:(unsigned long)windowId;
 - (void)clearMenuAndHideView;
 
 @end
@@ -494,6 +496,60 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     return [MenuUtils findDesktopWindow];
 }
 
+- (BOOL)windowLikelyWillRegisterMenuSoon:(unsigned long)windowId
+{
+    if (windowId == 0) {
+        return NO;
+    }
+
+    // Fast reject for windows that don't even advertise menu-related properties.
+    if (![MenuUtils windowIndicatesMenuSupport:windowId]) {
+        return NO;
+    }
+
+    // GNUstep windows should publish a menu via our native IPC path shortly.
+    if ([MenuUtils getWindowProperty:windowId atomName:@"_GNUSTEP_WM_ATTR"] != nil) {
+        return YES;
+    }
+
+    GNUDBusConnection *bus = [GNUDBusConnection sessionBus];
+    if (!bus || ![bus isConnected]) {
+        return NO;
+    }
+
+    // Canonical/KDE-style endpoint
+    NSString *service = [MenuUtils getWindowMenuService:windowId];
+    NSString *path = [MenuUtils getWindowMenuPath:windowId];
+    if (service && path) {
+        id intro = [bus callMethod:@"Introspect"
+                         onService:service
+                        objectPath:path
+                         interface:@"org.freedesktop.DBus.Introspectable"
+                         arguments:nil];
+        if ([intro isKindOfClass:[NSString class]] &&
+            [(NSString *)intro containsString:@"com.canonical.dbusmenu"]) {
+            return YES;
+        }
+    }
+
+    // GTK endpoint
+    NSString *gtkService = [MenuUtils getWindowProperty:windowId atomName:@"_GTK_UNIQUE_BUS_NAME"];
+    NSString *gtkMenuPath = [MenuUtils getWindowProperty:windowId atomName:@"_GTK_MENUBAR_OBJECT_PATH"];
+    if (gtkService && gtkMenuPath) {
+        id intro = [bus callMethod:@"Introspect"
+                         onService:gtkService
+                        objectPath:gtkMenuPath
+                         interface:@"org.freedesktop.DBus.Introspectable"
+                         arguments:nil];
+        if ([intro isKindOfClass:[NSString class]] &&
+            [(NSString *)intro containsString:@"org.gtk.Menus"]) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
 // Always display a menu with at least the system ⌘ item, even when no application menu is available.
 - (void)displaySystemOnlyMenu
 {
@@ -715,12 +771,11 @@ static int handleX11Error(Display *display, XErrorEvent *event)
                 return;
             }
 
-            // ANTI-FLICKER: If we have an old menu AND the new window actually advertises
-            // AppMenu support (GTK, GNUstep, or Canonical), keep the old menu visible for
-            // up to 2 seconds while the new app registers.  Apps that don't support AppMenu
-            // will never register, so we skip the wait entirely for them.
-            if (self.currentMenu != nil && [MenuUtils windowIndicatesMenuSupport:windowId]) {
-                NSLog(@"AppMenuWidget: Window %lu indicates AppMenu support but not registered yet - preserving old menu for up to 2s", windowId);
+            // ANTI-FLICKER: If we have an old menu and the new window appears to have a
+            // live AppMenu endpoint, keep the old menu visible for up to 2 seconds while
+            // registration catches up.  If no live endpoint is detectable, skip waiting.
+            if (self.currentMenu != nil && [self windowLikelyWillRegisterMenuSoon:windowId]) {
+                NSLog(@"AppMenuWidget: Window %lu has a live AppMenu endpoint but is not registered yet - preserving old menu for up to 2s", windowId);
 
                 // Cancel any existing grace period timer
                 if (self.noMenuGracePeriodTimer) {
