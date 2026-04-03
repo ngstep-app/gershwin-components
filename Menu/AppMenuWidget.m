@@ -220,18 +220,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         return;
     }
     
-    NSLog(@"AppMenuWidget: Setting up placeholder menu with initial item (deferred)");
-    NSMenu *placeholderMenu = [[NSMenu alloc] initWithTitle:@""];
-    NSMenuItem *helloItem = [[NSMenuItem alloc] initWithTitle:@" " action:nil keyEquivalent:@""];
-    [helloItem setEnabled:NO];
-    [placeholderMenu addItem:helloItem];
-    
+    NSLog(@"AppMenuWidget: Setting up initial system-only menu");
     @try {
-        [self setupMenuViewWithMenu:placeholderMenu];
-        NSLog(@"AppMenuWidget: Successfully set up initial menu view with placeholder");
+        [self displaySystemOnlyMenu];
+        NSLog(@"AppMenuWidget: Successfully set up initial system-only menu");
     }
     @catch (NSException *exception) {
-        NSLog(@"AppMenuWidget: Exception during placeholder menu setup: %@", exception);
+        NSLog(@"AppMenuWidget: Exception during initial menu setup: %@", exception);
         self.menuView = nil;
     }
 }
@@ -542,6 +537,15 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     return result;
 }
 
+// Always display a menu with at least the system ⌘ item, even when no application menu is available.
+- (void)displaySystemOnlyMenu
+{
+    NSLog(@"AppMenuWidget: No application menu - showing system-only ⌘ menu");
+    // An empty menu is enough; setupMenuViewWithMenu: will prepend the ⌘ system item automatically.
+    NSMenu *emptyMenu = [[NSMenu alloc] initWithTitle:@""];
+    [self setupMenuViewWithMenu:emptyMenu];
+}
+
 - (void)clearMenuAndHideView
 {
     // Cancel any pending grace period timer
@@ -552,18 +556,11 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     }
     
     [self clearMenu:YES];
-    self.currentMenu = nil;
     self.currentWindowId = 0; // Ensure we stop showing menus for this window
     self.lastLoadedMenuWindowId = 0; // Reset so next focus will load fresh
     self.needsRedraw = YES;
-    if (self.menuView) {
-        [self.menuView setHidden:YES];
-    }
-    // Ensure overlay views (RoundedCornersView) are redrawn after clearing
-    NSWindow *window = [self window];
-    if (window) {
-        [[window contentView] setNeedsDisplay:YES];
-    }
+    // Always keep the system ⌘ menu visible even when there is no application menu.
+    [self displaySystemOnlyMenu];
 }
 
 - (void)clearMenu
