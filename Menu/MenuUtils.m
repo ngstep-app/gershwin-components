@@ -555,6 +555,22 @@ static dispatch_once_t _sharedDisplayOnce;
     return success;
 }
 
++ (BOOL)windowIndicatesMenuSupport:(unsigned long)windowId
+{
+    if (windowId == 0) return NO;
+
+    // Canonical/KDE-style: app stores its D-Bus service name on the window
+    if ([self getWindowMenuService:windowId] != nil) return YES;
+
+    // GTK apps advertise via _GTK_UNIQUE_BUS_NAME
+    if ([self getWindowProperty:windowId atomName:@"_GTK_UNIQUE_BUS_NAME"] != nil) return YES;
+
+    // GNUstep apps are identified by _GNUSTEP_WM_ATTR on the window
+    if ([self getWindowProperty:windowId atomName:@"_GNUSTEP_WM_ATTR"] != nil) return YES;
+
+    return NO;
+}
+
 + (BOOL)advertiseGlobalMenuSupport
 {
     Display *display = [self openDisplay];

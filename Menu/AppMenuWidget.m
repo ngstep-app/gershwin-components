@@ -131,7 +131,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 @property (nonatomic, assign) unsigned long pendingClearWindowId;
 
 - (unsigned long)findDesktopWindowId;
-- (BOOL)displayDesktopMenuIfAvailableWithReason:(NSString *)reason;
 - (void)clearMenuAndHideView;
 
 @end
@@ -190,10 +189,9 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         
         // Tight-loop prevention initialisation
         self.isInsideDisplayMenuForWindow = NO;
-        self.isInsideDesktopFallback = NO;
         self.lastUpdateForActiveWindowTime = 0;
         self.lastUpdateForActiveWindowId = 0;
-        self.noMenuGracePeriodFireCount = 0;
+        self.gracePeriodStartTime = 0;
         
         // Register this widget for X11 error handling
         [AppMenuWidget setCurrentWidget:self];
@@ -411,8 +409,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
         self.currentWindowId = activeWindow;
         
-        // Reset grace period fire count for new window focus
-        self.noMenuGracePeriodFireCount = 0;
+        // Reset grace period start time for new window focus
+        self.gracePeriodStartTime = 0;
         
         // Track PID and timestamp for the new anti-flicker mechanism
         pid_t newPid = [MenuUtils getWindowPID:activeWindow];
@@ -434,107 +432,66 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     }
 }
 
+// Maximum time we preserve the previous app's menu while waiting for the new window to
+// register its own menu.  During this window the old menu is kept visible — it will be
+// replaced the moment the new menu arrives, so users rarely see it for the full duration.
+#define MENU_WAIT_GRACE_PERIOD_MAX_SECS 2.0
+#define MENU_WAIT_GRACE_PERIOD_POLL_INTERVAL 0.2
+
 - (void)noMenuGracePeriodExpired:(NSTimer *)timer
 {
     NSNumber *windowIdNum = [timer userInfo];
     unsigned long windowId = [windowIdNum unsignedLongValue];
-    
+
     self.noMenuGracePeriodTimer = nil;
     self.pendingClearWindowId = 0;
-    
-    // TIGHT-LOOP GUARD: Limit the number of consecutive grace-period fires for the same scenario
-    self.noMenuGracePeriodFireCount++;
-    if (self.noMenuGracePeriodFireCount > 3) {
-        NSLog(@"AppMenuWidget: Grace period fired %lu times without success - forcing clear to break potential loop",
-              (unsigned long)self.noMenuGracePeriodFireCount);
-        self.noMenuGracePeriodFireCount = 0;
-        [self clearMenuAndHideView];
-        return;
-    }
-    
-    NSLog(@"AppMenuWidget: Grace period expired for window %lu (attempt %lu) - checking if menu now available",
-          windowId, (unsigned long)self.noMenuGracePeriodFireCount);
-    
-    // CRITICAL: Only clear menu if we're still on the same window
-    // If we've switched to a different window, this timer is stale
+
+    // CRITICAL: Ignore the timer if we have already moved on to a different window.
     if (self.currentWindowId != windowId) {
-        NSLog(@"AppMenuWidget: Window changed from %lu to %lu - ignoring stale grace period timer", windowId, self.currentWindowId);
-        self.noMenuGracePeriodFireCount = 0;
+        NSLog(@"AppMenuWidget: Window changed to %lu - discarding stale grace-period timer for %lu",
+              self.currentWindowId, windowId);
+        self.gracePeriodStartTime = 0;
         return;
     }
-    
-    // Check if this window now has a menu registered
+
+    // Check if the window has registered its menu since the last poll.
     if ([self.protocolManager hasMenuForWindow:windowId]) {
-        NSLog(@"AppMenuWidget: Window %lu now has menu - loading it", windowId);
-        self.noMenuGracePeriodFireCount = 0;
-        // Trigger a refresh to load the newly available menu
+        NSLog(@"AppMenuWidget: Window %lu registered its menu - loading immediately", windowId);
+        self.gracePeriodStartTime = 0;
+        // Reset optimisation guard so the load is not skipped.
+        self.lastLoadedMenuWindowId = 0;
         [self updateForActiveWindowId:windowId];
         return;
     }
-    
-    // Still no menu after grace period AND still on same window - clear the old menu
-    NSLog(@"AppMenuWidget: Window %lu still has no menu after grace period - clearing", windowId);
-    self.noMenuGracePeriodFireCount = 0;
-    if ([self displayDesktopMenuIfAvailableWithReason:@"grace period expired, no menu"]) {
+
+    // Decide whether to keep polling based on elapsed time.
+    NSTimeInterval elapsed = (self.gracePeriodStartTime > 0)
+        ? ([NSDate timeIntervalSinceReferenceDate] - self.gracePeriodStartTime)
+        : MENU_WAIT_GRACE_PERIOD_MAX_SECS; // safety: if start wasn't recorded, don't loop
+
+    if (elapsed < MENU_WAIT_GRACE_PERIOD_MAX_SECS && self.currentMenu != nil) {
+        NSLog(@"AppMenuWidget: Window %lu still waiting for menu (%.2fs / %.0fs) - rescheduling poll",
+              windowId, elapsed, MENU_WAIT_GRACE_PERIOD_MAX_SECS);
+        self.pendingClearWindowId = windowId;
+        self.noMenuGracePeriodTimer =
+            [NSTimer scheduledTimerWithTimeInterval:MENU_WAIT_GRACE_PERIOD_POLL_INTERVAL
+                                             target:self
+                                           selector:@selector(noMenuGracePeriodExpired:)
+                                           userInfo:[NSNumber numberWithUnsignedLong:windowId]
+                                            repeats:NO];
         return;
     }
+
+    // Grace period exhausted without the new window registering a menu.
+    NSLog(@"AppMenuWidget: Window %lu has no menu after %.2fs grace period - clearing",
+          windowId, elapsed);
+    self.gracePeriodStartTime = 0;
     [self clearMenuAndHideView];
 }
 
 - (unsigned long)findDesktopWindowId
 {
     return [MenuUtils findDesktopWindow];
-}
-
-- (BOOL)displayDesktopMenuIfAvailableWithReason:(NSString *)reason
-{
-    // TIGHT-LOOP GUARD: Prevent re-entrance (desktopFallback -> displayMenuForWindow -> desktopFallback)
-    if (self.isInsideDesktopFallback) {
-        NSLog(@"AppMenuWidget: Re-entrant displayDesktopMenuIfAvailableWithReason blocked (%@)", reason);
-        return NO;
-    }
-    self.isInsideDesktopFallback = YES;
-
-    BOOL result = NO;
-
-    @try {
-
-    if (!self.protocolManager) {
-        NSLog(@"AppMenuWidget: Cannot display Desktop menu (%@) - no protocol manager", reason);
-        return NO;
-    }
-
-    unsigned long desktopWindowId = [self findDesktopWindowId];
-    if (desktopWindowId == 0) {
-        NSLog(@"AppMenuWidget: Desktop menu not available (%@) - no Desktop window", reason);
-        return NO;
-    }
-
-    if (![self.protocolManager hasMenuForWindow:desktopWindowId]) {
-        NSLog(@"AppMenuWidget: Desktop window 0x%lx has no registered menu (%@)", desktopWindowId, reason);
-        return NO;
-    }
-
-    NSString *desktopAppName = nil;
-    @try {
-        desktopAppName = [MenuUtils getApplicationNameForWindow:desktopWindowId];
-    }
-    @catch (NSException *exception) {
-        NSLog(@"AppMenuWidget: Exception getting Desktop app name for window 0x%lx: %@", desktopWindowId, exception);
-        desktopAppName = nil;
-    }
-
-    BOOL isDifferentApp = !self.currentApplicationName || !desktopAppName || ![self.currentApplicationName isEqualToString:desktopAppName];
-    NSLog(@"AppMenuWidget: Switching to Desktop menu 0x%lx (%@)", desktopWindowId, reason);
-    self.currentWindowId = desktopWindowId;
-    [self displayMenuForWindow:desktopWindowId isDifferentApp:isDifferentApp];
-    result = YES;
-
-    } // @try
-    @finally {
-        self.isInsideDesktopFallback = NO;
-    }
-    return result;
 }
 
 // Always display a menu with at least the system ⌘ item, even when no application menu is available.
@@ -686,12 +643,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // ANTI-FLICKER: Don't clear the old menu yet - keep it visible while loading the new one
     // We'll clear it after successfully loading the new menu
     
-    // If no window specified, always try Desktop fallback first; if not available, clear immediately
     if (windowId == 0) {
-        NSLog(@"AppMenuWidget: displayMenuForWindow called with 0 - attempting Desktop fallback");
-        if ([self displayDesktopMenuIfAvailableWithReason:@"no focused window"]) {
-            return; // Desktop menu displayed
-        }
+        NSLog(@"AppMenuWidget: displayMenuForWindow called with 0 - hiding menu");
         [self clearMenuAndHideView];
         return;
     }
@@ -700,10 +653,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     BOOL windowValid = [AppMenuWidget isWindowStillValid:windowId];
     if (!windowValid) {
         NSLog(@"AppMenuWidget: Window %lu validity check failed - may be closing or not yet mapped", windowId);
-        // Try Desktop fallback immediately; if not available clear the menu instantly
-        if ([self displayDesktopMenuIfAvailableWithReason:@"window invalid/closing"]) {
-            return;
-        }
 
         // If a menu is registered for this window despite validation failure, attempt to load it
         if ([self.protocolManager hasMenuForWindow:windowId]) {
@@ -737,10 +686,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
         if (!appHasWindows) {
             NSLog(@"AppMenuWidget: Application %@ has no visible windows - not displaying its menu", appName);
-            if (![MenuUtils isDesktopWindow:windowId] &&
-                [self displayDesktopMenuIfAvailableWithReason:@"application has no visible windows"]) {
-                return;
-            }
             [self clearMenuAndHideView];
             return;
         }
@@ -766,30 +711,25 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             // If it's the Desktop window and it has no menu, clear immediately
             if ([MenuUtils isDesktopWindow:windowId]) {
                 NSLog(@"AppMenuWidget: Desktop window %lu has no menu registered yet", windowId);
-                if ([self displayDesktopMenuIfAvailableWithReason:@"desktop has no menu"]) {
-                    return;
-                }
                 [self clearMenuAndHideView];
                 return;
             }
 
-            // Try Desktop fallback for active window with no registered menu
-            if ([self displayDesktopMenuIfAvailableWithReason:@"active window has no menu"]) {
-                return;
-            }
+            // ANTI-FLICKER: If we have an old menu AND the new window actually advertises
+            // AppMenu support (GTK, GNUstep, or Canonical), keep the old menu visible for
+            // up to 2 seconds while the new app registers.  Apps that don't support AppMenu
+            // will never register, so we skip the wait entirely for them.
+            if (self.currentMenu != nil && [MenuUtils windowIndicatesMenuSupport:windowId]) {
+                NSLog(@"AppMenuWidget: Window %lu indicates AppMenu support but not registered yet - preserving old menu for up to 2s", windowId);
 
-            // ANTI-FLICKER: Don't clear immediately - app might be registering its menu
-            // Keep old menu visible for 0.2s grace period, then clear if still no menu
-            if (self.currentMenu != nil) {
-                NSLog(@"AppMenuWidget: Window %lu has no menu yet - keeping old menu visible for 0.2s grace period", windowId);
-                
                 // Cancel any existing grace period timer
                 if (self.noMenuGracePeriodTimer) {
                     [self.noMenuGracePeriodTimer invalidate];
                     self.noMenuGracePeriodTimer = nil;
                 }
-                
-                // Schedule timer to clear menu after grace period
+
+                // Record when we started waiting so noMenuGracePeriodExpired can enforce the cap.
+                self.gracePeriodStartTime = [NSDate timeIntervalSinceReferenceDate];
                 self.pendingClearWindowId = windowId;
                 self.noMenuGracePeriodTimer = [NSTimer scheduledTimerWithTimeInterval:0.2
                                                                                 target:self
@@ -798,8 +738,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
                                                                                repeats:NO];
                 return;
             }
-            
-            // No current menu to preserve - clear immediately
+
+            // Nothing to show at all - clear immediately
             [self clearMenuAndHideView];
             return;
         } else {
@@ -824,9 +764,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             return;
         }
 
-        if ([self displayDesktopMenuIfAvailableWithReason:@"exception during menu protocol check"]) {
-            return;
-        }
 #if ENABLE_FALLBACK_MENUS
         // Create fallback File->Close menu on exception
         NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
@@ -853,22 +790,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
     if (!menu) {
         NSLog(@"AppMenuWidget: Failed to get menu for window %lu (protocol manager)", windowId);
-        // Prevent fallback menu for desktop windows
-        if ([MenuUtils isDesktopWindow:windowId]) {
-            NSLog(@"AppMenuWidget: Desktop window %lu has no menu from protocol manager", windowId);
-            if ([self displayDesktopMenuIfAvailableWithReason:@"desktop protocol returned nil"]) {
-                return;
-            }
-            [self clearMenuAndHideView];
-            return;
-        }
-
-        // Try desktop fallback first
-        if ([self displayDesktopMenuIfAvailableWithReason:@"protocol manager returned nil menu"]) {
-            return;
-        }
-
-        // Otherwise clear and hide - no built-in fallbacks
         [self clearMenuAndHideView];
         return;
     }
@@ -883,20 +804,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     BOOL isPlaceholder = [self isPlaceholderMenu:menu];
     NSLog(@"AppMenuWidget: isPlaceholderMenu: %@", isPlaceholder ? @"YES" : @"NO");
     
-    // If this is a placeholder menu, prefer Desktop fallback; otherwise clear immediately
     if (isPlaceholder) {
-        // Prevent fallback menu for desktop windows
-        if ([MenuUtils isDesktopWindow:windowId]) {
-            NSLog(@"AppMenuWidget: Desktop window %lu provided placeholder menu", windowId);
-            [self clearMenuAndHideView];
-            return;
-        }
-
-        if ([self displayDesktopMenuIfAvailableWithReason:@"placeholder menu for active window"]) {
-            return;
-        }
-
-        NSLog(@"AppMenuWidget: Placeholder menu detected and no Desktop fallback available - clearing");
+        NSLog(@"AppMenuWidget: Placeholder menu - clearing");
         [self clearMenuAndHideView];
         return;
     }
@@ -2033,10 +1942,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         self.needsRedraw = YES;
         self.currentMenu = nil;
 
-        // Try to switch to Desktop menu if available
-        if (![self displayDesktopMenuIfAvailableWithReason:@"current window disappeared"]) {
-            NSLog(@"AppMenuWidget: Desktop menu not available after window disappearance");
-        }
     }
 }
 

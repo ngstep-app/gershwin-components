@@ -29,4 +29,12 @@
 + (BOOL)advertiseGlobalMenuSupport;
 + (void)removeGlobalMenuSupport;
 
+/**
+ * Returns YES if the window has any X11 property that indicates it intends to
+ * export an application menu (GTK _GTK_UNIQUE_BUS_NAME, Canonical/KDE
+ * _KDE_NET_WM_APPMENU_SERVICE_NAME, or GNUstep _GNUSTEP_WM_ATTR).
+ * Used to decide whether to wait for a menu to appear after a window switch.
+ */
++ (BOOL)windowIndicatesMenuSupport:(unsigned long)windowId;
+
 @end

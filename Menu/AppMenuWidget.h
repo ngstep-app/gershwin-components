@@ -37,10 +37,9 @@
 
 // Tight-loop prevention guards
 @property (nonatomic, assign) BOOL isInsideDisplayMenuForWindow;   // re-entrance guard
-@property (nonatomic, assign) BOOL isInsideDesktopFallback;        // re-entrance guard for desktop fallback
 @property (nonatomic, assign) NSTimeInterval lastUpdateForActiveWindowTime; // rate limit updateForActiveWindowId
 @property (nonatomic, assign) unsigned long lastUpdateForActiveWindowId;    // dedup repeated calls
-@property (nonatomic, assign) NSUInteger noMenuGracePeriodFireCount;        // prevent infinite grace period retries
+@property (nonatomic, assign) NSTimeInterval gracePeriodStartTime;          // start time of current menu-wait grace period
 @property (nonatomic, assign) unsigned long lastLoadedMenuWindowId;          // tracks which window we last loaded a menu for
 
 - (void)updateForActiveWindow;
