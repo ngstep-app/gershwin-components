@@ -20,7 +20,6 @@ static const CGFloat kSmallMargin = 10.0;
 static const CGFloat kLabelHeight = 17.0;
 static const CGFloat kSliderHeight = 21.0;
 static const CGFloat kCheckboxHeight = 18.0;
-static const CGFloat kPopupHeight = 26.0;
 static const CGFloat kTableRowHeight = 18.0;
 
 @implementation SoundController
@@ -149,13 +148,6 @@ static const CGFloat kTableRowHeight = 18.0;
     [mainTabView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [mainTabView setTabViewType:NSTopTabsBezelBorder];
     
-    // Create Sound Effects tab
-    NSTabViewItem *effectsTab = [[NSTabViewItem alloc] initWithIdentifier:@"effects"];
-    [effectsTab setLabel:@"Sound Effects"];
-    [self createSoundEffectsTab:effectsTab];
-    [mainTabView addTabViewItem:effectsTab];
-    [effectsTab release];
-    
     // Create Output tab
     NSTabViewItem *outputTab = [[NSTabViewItem alloc] initWithIdentifier:@"output"];
     [outputTab setLabel:@"Output"];
@@ -169,6 +161,13 @@ static const CGFloat kTableRowHeight = 18.0;
     [self createInputTab:inputTab];
     [mainTabView addTabViewItem:inputTab];
     [inputTab release];
+    
+    // Create Sound Effects tab
+    NSTabViewItem *effectsTab = [[NSTabViewItem alloc] initWithIdentifier:@"effects"];
+    [effectsTab setLabel:@"Sound Effects"];
+    [self createSoundEffectsTab:effectsTab];
+    [mainTabView addTabViewItem:effectsTab];
+    [effectsTab release];
     
     [mainView addSubview:mainTabView];
     [mainTabView release];
@@ -235,30 +234,6 @@ static const CGFloat kTableRowHeight = 18.0;
     CGFloat rightX = kMargin + listWidth + kMargin;
     CGFloat rightWidth = contentWidth - rightX - kMargin;
     CGFloat rightY = yPos - kSmallMargin;
-    
-    // Play alerts and sound effects through: label
-    alertDeviceLabel = [[NSTextField alloc] initWithFrame:
-                        NSMakeRect(rightX, rightY - kLabelHeight, rightWidth, kLabelHeight)];
-    [alertDeviceLabel setStringValue:@"Play alerts and sound effects through:"];
-    [alertDeviceLabel setBezeled:NO];
-    [alertDeviceLabel setEditable:NO];
-    [alertDeviceLabel setSelectable:NO];
-    [alertDeviceLabel setDrawsBackground:NO];
-    [alertDeviceLabel setFont:[NSFont systemFontOfSize:12]];
-    [[tab view] addSubview:alertDeviceLabel];
-    [alertDeviceLabel release];
-    
-    rightY -= kLabelHeight + 5;
-    
-    // Alert device popup
-    alertDevicePopup = [[NSPopUpButton alloc] initWithFrame:
-                        NSMakeRect(rightX, rightY - kPopupHeight, rightWidth - 20, kPopupHeight)
-                                                  pullsDown:NO];
-    [alertDevicePopup setTarget:self];
-    [alertDevicePopup setAction:@selector(alertDeviceChanged:)];
-    [[tab view] addSubview:alertDevicePopup];
-    
-    rightY -= kPopupHeight + kMargin;
     
     // Alert volume label
     alertVolumeLabel = [[NSTextField alloc] initWithFrame:
@@ -827,7 +802,18 @@ static const CGFloat kTableRowHeight = 18.0;
     // Update alert sounds list (done here because GNUstep/FreeBSD crashes
     // if this runs as a separate call in the dispatch block)
     [alertSounds removeAllObjects];
-    [alertSounds addObjectsFromArray:[backend availableAlertSounds]];
+    NSMutableArray *uniqueSounds = [[NSMutableArray alloc] init];
+    NSMutableSet *seenNames = [[NSMutableSet alloc] init];
+    
+    for (AlertSound *sound in [backend availableAlertSounds]) {
+        if (![seenNames containsObject:sound.name]) {
+            [uniqueSounds addObject:sound];
+            [seenNames addObject:sound.name];
+        }
+    }
+    [alertSounds addObjectsFromArray:uniqueSounds];
+    [uniqueSounds release];
+    [seenNames release];
     
     AlertSound *currentAlertSnd = [backend currentAlertSound];
     [selectedAlertSound release];
@@ -845,20 +831,12 @@ static const CGFloat kTableRowHeight = 18.0;
             }
         }
     }
-
-    // Update alert device popup
-    [alertDevicePopup removeAllItems];
-    for (AudioDevice *device in outputDevices) {
-        [alertDevicePopup addItemWithTitle:device.displayName ?: device.name];
-    }
     
-    // Select current alert device
-    AudioDevice *alertDev = [backend alertSoundDevice];
-    if (alertDev) {
-        NSUInteger idx = [outputDevices indexOfObject:alertDev];
-        if (idx != NSNotFound) {
-            [alertDevicePopup selectItemAtIndex:idx];
-        }
+    // Ensure alert sound device is set to current output device
+    if (selectedOutputDevice) {
+        dispatch_async(backendQueue, ^{
+            [backend setAlertSoundDevice:selectedOutputDevice];
+        });
     }
 }
 
@@ -1218,30 +1196,6 @@ static const CGFloat kTableRowHeight = 18.0;
         }
     });
     dispatch_resume(alertVolumeTimer);
-}
-
-- (IBAction)alertDeviceChanged:(id)sender
-{
-    NSLog(@"SoundController: UI ACTION - alertDeviceChanged:");
-    NSInteger index = [alertDevicePopup indexOfSelectedItem];
-    NSLog(@"SoundController:   selected index = %ld, outputDevices count = %lu",
-          (long)index, (unsigned long)[outputDevices count]);
-    if (index >= 0 && index < (NSInteger)[outputDevices count]) {
-        AudioDevice *device = [[outputDevices objectAtIndex:index] retain];
-        NSLog(@"SoundController:   device name = %@", device.name);
-        dispatch_async(backendQueue, ^{
-            BOOL success = [backend setAlertSoundDevice:device];
-            [device release];
-            NSLog(@"SoundController:   setAlertSoundDevice: %@", success ? @"SUCCESS" : @"FAILED");
-            if (!success) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    NSRunAlertPanel(@"Device Error",
-                                  @"Could not change the alert sound output device. Please check your audio hardware.",
-                                  @"OK", nil, nil);
-                });
-            }
-        });
-    }
 }
 
 - (IBAction)playUIEffectsChanged:(id)sender

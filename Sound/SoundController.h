@@ -34,10 +34,6 @@
     NSSlider *alertVolumeSlider;
     NSTextField *alertVolumeLabel;
     
-    // Play alerts through device popup
-    NSPopUpButton *alertDevicePopup;
-    NSTextField *alertDeviceLabel;
-    
     // Checkboxes
     NSButton *playUIEffectsCheckbox;
     NSButton *playVolumeFeedbackCheckbox;
@@ -142,7 +138,6 @@
 // Actions - Sound Effects
 - (IBAction)alertSoundSelected:(id)sender;
 - (IBAction)alertVolumeChanged:(id)sender;
-- (IBAction)alertDeviceChanged:(id)sender;
 - (IBAction)playUIEffectsChanged:(id)sender;
 - (IBAction)playVolumeFeedbackChanged:(id)sender;
 

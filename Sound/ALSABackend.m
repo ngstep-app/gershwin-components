@@ -505,12 +505,20 @@ static NSString *const kMicControl = @"Mic";
                   value:(NSString *)value 
                    card:(int)cardIndex
 {
-    NSString *output = [self runCommand:amixerPath 
-                          withArguments:@[@"-c", 
-                            [NSString stringWithFormat:@"%d", cardIndex],
-                            @"sset", control, value]];
+    NSString *cardStr = [NSString stringWithFormat:@"%d", cardIndex];
+    NSArray *args = @[@"-c", cardStr, @"sset", control, value];
     
-    return (output != nil);
+    NSString *output = [self runCommand:amixerPath withArguments:args];
+    
+    if (!output) {
+        NSLog(@"ALSABackend: setMixerControl: FAILED - %@=%@ on card %d", 
+              control, value, cardIndex);
+        return NO;
+    }
+    
+    NSLog(@"ALSABackend: setMixerControl: SUCCESS - %@=%@ on card %d", 
+          control, value, cardIndex);
+    return YES;
 }
 
 #pragma mark - Immediate ALSA Control Switching
@@ -529,13 +537,11 @@ static NSString *const kMicControl = @"Mic";
     NSString *output = [self runCommand:amixerPath withArguments:args];
     
     if (output == nil) {
-        NSLog(@"ALSABackend: switchALSAControlImmediately: FAILED - amixer returned no output");
+        NSLog(@"ALSABackend: switchALSAControlImmediately: FAILED");
         return NO;
     }
     
     NSLog(@"ALSABackend: switchALSAControlImmediately: SUCCESS");
-    NSLog(@"ALSABackend:   output: %@", output);
-    
     return YES;
 }
 
@@ -1535,11 +1541,12 @@ static NSString *const kMicControl = @"Mic";
     @autoreleasepool {
         NSTask *task = [[NSTask alloc] init];
         NSPipe *pipe = [NSPipe pipe];
+        NSPipe *errorPipe = [NSPipe pipe];
 
         [task setLaunchPath:command];
         [task setArguments:args];
         [task setStandardOutput:pipe];
-        [task setStandardError:[NSPipe pipe]];
+        [task setStandardError:errorPipe];
 
         @try {
             [task launch];
@@ -1550,10 +1557,15 @@ static NSString *const kMicControl = @"Mic";
         }
 
         NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
+        NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
         [task waitUntilExit];
 
         if ([task terminationStatus] != 0) {
-            NSLog(@"Command %@ exited with status %d", command, [task terminationStatus]);
+            NSString *errorOutput = [[NSString alloc] initWithData:errorData 
+                                                           encoding:NSUTF8StringEncoding];
+            NSLog(@"Command %@ exited with status %d, stderr: %@", 
+                  command, [task terminationStatus], errorOutput);
+            [errorOutput release];
             [task release];
             return nil;
         }
