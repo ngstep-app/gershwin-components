@@ -395,23 +395,79 @@ static NSString *const kMicControl = @"Mic";
             AudioControl *volControl = [[AudioControl alloc] init];
             volControl.identifier = controlName;
             volControl.name = controlName;
-            
+
             NSNumber *volNum = [ctrl objectForKey:@"volume"];
             if (volNum) {
                 volControl.value = [volNum floatValue] / 100.0;
+                volControl.minValue = 0.0;
+                volControl.maxValue = 1.0;
             }
-            
+
             NSNumber *muteNum = [ctrl objectForKey:@"muted"];
             if (muteNum) {
                 volControl.isMuted = [muteNum boolValue];
                 volControl.hasMuteControl = YES;
             }
-            
+
             device.volumeControl = volControl;
             [volControl release];
-            break;
+            return;
         }
     }
+
+    // Fall back to the first listed ALSA control if no known control found.
+    if ([controls count] > 0) {
+        NSString *firstControl = [[controls allKeys] firstObject];
+        NSDictionary *ctrl = [controls objectForKey:firstControl];
+        if (ctrl) {
+            AudioControl *volControl = [[AudioControl alloc] init];
+            volControl.identifier = firstControl;
+            volControl.name = firstControl;
+
+            NSNumber *volNum = [ctrl objectForKey:@"volume"];
+            if (volNum) {
+                volControl.value = [volNum floatValue] / 100.0;
+                volControl.minValue = 0.0;
+                volControl.maxValue = 1.0;
+            }
+
+            NSNumber *muteNum = [ctrl objectForKey:@"muted"];
+            if (muteNum) {
+                volControl.isMuted = [muteNum boolValue];
+                volControl.hasMuteControl = YES;
+            }
+
+            device.volumeControl = volControl;
+            [volControl release];
+        }
+    }
+}
+
+- (NSString *)preferredMixerControlNameForDevice:(AudioDevice *)device 
+                                         isOutput:(BOOL)isOutput
+{
+    if (!device) return nil;
+
+    // Prefer control associated with loaded mixer state, if any.
+    if (device.volumeControl && device.volumeControl.identifier.length > 0) {
+        return device.volumeControl.identifier;
+    }
+
+    NSDictionary *controls = [self getMixerControls:device.cardIndex];
+    if (!controls || [controls count] == 0) return nil;
+
+    NSArray *outputPriority = @[kMasterControl, kPCMControl, kSpeakerControl, kHeadphoneControl];
+    NSArray *inputPriority = @[kCaptureControl, kMicControl];
+    NSArray *priority = isOutput ? outputPriority : inputPriority;
+
+    for (NSString *controlName in priority) {
+        if ([controls objectForKey:controlName]) {
+            return controlName;
+        }
+    }
+
+    // Fallback to first found control name
+    return [[controls allKeys] firstObject];
 }
 
 #pragma mark - Mixer Control
@@ -708,25 +764,41 @@ static NSString *const kMicControl = @"Mic";
 - (float)outputVolume
 {
     if (!defaultOutput) return 0.0;
-    
-    // Get current volume from mixer — try Master first (primary ALSA control),
-    // fall back to PCM
+
+    NSString *controlName = [self preferredMixerControlNameForDevice:defaultOutput isOutput:YES];
+    if (!controlName) {
+        return defaultOutput.volumeControl ? defaultOutput.volumeControl.value : 0.0;
+    }
+
     NSString *output = [self runCommand:amixerPath
                           withArguments:@[@"-c",
                             [NSString stringWithFormat:@"%d", currentOutputCard],
-                            @"sget", kMasterControl]];
+                            @"sget", controlName]];
 
-    if (!output || ![output containsString:@"Playback"]) {
-        output = [self runCommand:amixerPath
-                    withArguments:@[@"-c",
-                      [NSString stringWithFormat:@"%d", currentOutputCard],
-                      @"sget", kPCMControl]];
+    if (!output) {
+        // Try fallback controls in priority order
+        NSArray *fallbackControls = @[kMasterControl, kPCMControl, kSpeakerControl, kHeadphoneControl];
+        for (NSString *candidate in fallbackControls) {
+            if ([candidate isEqualToString:controlName]) continue;
+            output = [self runCommand:amixerPath
+                        withArguments:@[@"-c",
+                          [NSString stringWithFormat:@"%d", currentOutputCard],
+                          @"sget", candidate]];
+            if (output) {
+                controlName = candidate;
+                break;
+            }
+        }
     }
-    
+
     if (output) {
-        return [self parseVolumeFromMixerOutput:output];
+        float volume = [self parseVolumeFromMixerOutput:output];
+        if (defaultOutput.volumeControl) {
+            defaultOutput.volumeControl.value = volume;
+        }
+        return volume;
     }
-    
+
     return defaultOutput.volumeControl ? defaultOutput.volumeControl.value : 0.0;
 }
 
@@ -735,34 +807,43 @@ static NSString *const kMicControl = @"Mic";
     NSLog(@"ALSABackend: setOutputVolume: %.2f", volume);
     if (volume < 0.0) volume = 0.0;
     if (volume > 1.0) volume = 1.0;
-    
+
     int percent = (int)(volume * 100);
     NSString *value = [NSString stringWithFormat:@"%d%%", percent];
     NSLog(@"ALSABackend:   setting to %@, card %d", value, currentOutputCard);
-    
-    // Try Master first (primary ALSA control), fall back to PCM
-    BOOL success = [self setMixerControl:kMasterControl
+
+    NSString *controlName = [self preferredMixerControlNameForDevice:defaultOutput isOutput:YES];
+    if (!controlName) {
+        controlName = kMasterControl;
+    }
+
+    BOOL success = [self setMixerControl:controlName
                                    value:value
                                     card:currentOutputCard];
 
     if (!success) {
-        NSLog(@"ALSABackend:   Master control failed, trying PCM");
-        success = [self setMixerControl:kPCMControl
-                                  value:value
-                                   card:currentOutputCard];
+        NSArray *fallbackControls = @[kMasterControl, kPCMControl, kSpeakerControl, kHeadphoneControl];
+        for (NSString *candidate in fallbackControls) {
+            if ([candidate isEqualToString:controlName]) continue;
+            if ([self setMixerControl:candidate value:value card:currentOutputCard]) {
+                controlName = candidate;
+                success = YES;
+                break;
+            }
+        }
     }
-    
+
     if (success && defaultOutput.volumeControl) {
         defaultOutput.volumeControl.value = volume;
+        defaultOutput.volumeControl.identifier = controlName;
     }
-    
+
     NSLog(@"ALSABackend: setOutputVolume: %@", success ? @"SUCCESS" : @"FAILED");
-    
-    // Play feedback if enabled
+
     if (success && playVolumeChangeFeedback) {
         [self playVolumeFeedback];
     }
-    
+
     return success;
 }
 
@@ -770,22 +851,40 @@ static NSString *const kMicControl = @"Mic";
 {
     if (!defaultOutput) return NO;
 
+    NSString *controlName = [self preferredMixerControlNameForDevice:defaultOutput isOutput:YES];
+    if (!controlName) {
+        controlName = kMasterControl;
+    }
+
     NSString *output = [self runCommand:amixerPath
                           withArguments:@[@"-c",
                             [NSString stringWithFormat:@"%d", currentOutputCard],
-                            @"sget", kMasterControl]];
+                            @"sget", controlName]];
 
     if (!output) {
-        output = [self runCommand:amixerPath
-                    withArguments:@[@"-c",
-                      [NSString stringWithFormat:@"%d", currentOutputCard],
-                      @"sget", kPCMControl]];
+        NSArray *fallbackControls = @[kMasterControl, kPCMControl, kSpeakerControl, kHeadphoneControl];
+        for (NSString *candidate in fallbackControls) {
+            if ([candidate isEqualToString:controlName]) continue;
+            output = [self runCommand:amixerPath
+                        withArguments:@[@"-c",
+                          [NSString stringWithFormat:@"%d", currentOutputCard],
+                          @"sget", candidate]];
+            if (output) {
+                controlName = candidate;
+                break;
+            }
+        }
     }
-    
+
     if (output) {
-        return [self parseMuteFromMixerOutput:output];
+        BOOL muted = [self parseMuteFromMixerOutput:output];
+        if (defaultOutput.volumeControl) {
+            defaultOutput.volumeControl.isMuted = muted;
+            defaultOutput.volumeControl.identifier = controlName;
+        }
+        return muted;
     }
-    
+
     return defaultOutput.volumeControl ? defaultOutput.volumeControl.isMuted : NO;
 }
 
@@ -794,22 +893,33 @@ static NSString *const kMicControl = @"Mic";
     NSLog(@"ALSABackend: setOutputMuted: %@", muted ? @"YES" : @"NO");
     NSString *value = muted ? @"mute" : @"unmute";
     NSLog(@"ALSABackend:   setting to %@, card %d", value, currentOutputCard);
-    
-    BOOL success = [self setMixerControl:kMasterControl
+
+    NSString *controlName = [self preferredMixerControlNameForDevice:defaultOutput isOutput:YES];
+    if (!controlName) {
+        controlName = kMasterControl;
+    }
+
+    BOOL success = [self setMixerControl:controlName
                                    value:value
                                     card:currentOutputCard];
 
     if (!success) {
-        NSLog(@"ALSABackend:   Master control failed, trying PCM");
-        success = [self setMixerControl:kPCMControl
-                                  value:value
-                                   card:currentOutputCard];
+        NSArray *fallbackControls = @[kMasterControl, kPCMControl, kSpeakerControl, kHeadphoneControl];
+        for (NSString *candidate in fallbackControls) {
+            if ([candidate isEqualToString:controlName]) continue;
+            if ([self setMixerControl:candidate value:value card:currentOutputCard]) {
+                controlName = candidate;
+                success = YES;
+                break;
+            }
+        }
     }
 
     if (success && defaultOutput.volumeControl) {
         defaultOutput.volumeControl.isMuted = muted;
+        defaultOutput.volumeControl.identifier = controlName;
     }
-    
+
     NSLog(@"ALSABackend: setOutputMuted: %@", success ? @"SUCCESS" : @"FAILED");
     return success;
 }
@@ -834,23 +944,41 @@ static NSString *const kMicControl = @"Mic";
 - (float)inputVolume
 {
     if (!defaultInput) return 0.0;
-    
+
+    NSString *controlName = [self preferredMixerControlNameForDevice:defaultInput isOutput:NO];
+    if (!controlName) {
+        controlName = kCaptureControl;
+    }
+
     NSString *output = [self runCommand:amixerPath 
                           withArguments:@[@"-c", 
                             [NSString stringWithFormat:@"%d", currentInputCard],
-                            @"sget", kCaptureControl]];
-    
+                            @"sget", controlName]];
+
     if (!output) {
-        output = [self runCommand:amixerPath 
-                    withArguments:@[@"-c", 
-                      [NSString stringWithFormat:@"%d", currentInputCard],
-                      @"sget", kMicControl]];
+        NSArray *fallbackControls = @[kCaptureControl, kMicControl];
+        for (NSString *candidate in fallbackControls) {
+            if ([candidate isEqualToString:controlName]) continue;
+            output = [self runCommand:amixerPath 
+                        withArguments:@[@"-c", 
+                          [NSString stringWithFormat:@"%d", currentInputCard],
+                          @"sget", candidate]];
+            if (output) {
+                controlName = candidate;
+                break;
+            }
+        }
     }
-    
+
     if (output) {
-        return [self parseVolumeFromMixerOutput:output];
+        float volume = [self parseVolumeFromMixerOutput:output];
+        if (defaultInput.volumeControl) {
+            defaultInput.volumeControl.value = volume;
+            defaultInput.volumeControl.identifier = controlName;
+        }
+        return volume;
     }
-    
+
     return defaultInput.volumeControl ? defaultInput.volumeControl.value : 0.0;
 }
 
@@ -859,26 +987,37 @@ static NSString *const kMicControl = @"Mic";
     NSLog(@"ALSABackend: setInputVolume: %.2f", volume);
     if (volume < 0.0) volume = 0.0;
     if (volume > 1.0) volume = 1.0;
-    
+
     int percent = (int)(volume * 100);
     NSString *value = [NSString stringWithFormat:@"%d%%", percent];
     NSLog(@"ALSABackend:   setting to %@, card %d", value, currentInputCard);
-    
-    BOOL success = [self setMixerControl:kCaptureControl 
+
+    NSString *controlName = [self preferredMixerControlNameForDevice:defaultInput isOutput:NO];
+    if (!controlName) {
+        controlName = kCaptureControl;
+    }
+
+    BOOL success = [self setMixerControl:controlName 
                                    value:value 
                                     card:currentInputCard];
-    
+
     if (!success) {
-        NSLog(@"ALSABackend:   Capture control failed, trying Mic");
-        success = [self setMixerControl:kMicControl 
-                                  value:value 
-                                   card:currentInputCard];
+        NSArray *fallbackControls = @[kCaptureControl, kMicControl];
+        for (NSString *candidate in fallbackControls) {
+            if ([candidate isEqualToString:controlName]) continue;
+            if ([self setMixerControl:candidate value:value card:currentInputCard]) {
+                controlName = candidate;
+                success = YES;
+                break;
+            }
+        }
     }
-    
+
     if (success && defaultInput.volumeControl) {
         defaultInput.volumeControl.value = volume;
+        defaultInput.volumeControl.identifier = controlName;
     }
-    
+
     NSLog(@"ALSABackend: setInputVolume: %@", success ? @"SUCCESS" : @"FAILED");
     return success;
 }
@@ -886,16 +1025,41 @@ static NSString *const kMicControl = @"Mic";
 - (BOOL)isInputMuted
 {
     if (!defaultInput) return NO;
-    
+
+    NSString *controlName = [self preferredMixerControlNameForDevice:defaultInput isOutput:NO];
+    if (!controlName) {
+        controlName = kCaptureControl;
+    }
+
     NSString *output = [self runCommand:amixerPath 
                           withArguments:@[@"-c", 
                             [NSString stringWithFormat:@"%d", currentInputCard],
-                            @"sget", kCaptureControl]];
-    
-    if (output) {
-        return [self parseMuteFromMixerOutput:output];
+                            @"sget", controlName]];
+
+    if (!output) {
+        NSArray *fallbackControls = @[kCaptureControl, kMicControl];
+        for (NSString *candidate in fallbackControls) {
+            if ([candidate isEqualToString:controlName]) continue;
+            output = [self runCommand:amixerPath 
+                        withArguments:@[@"-c", 
+                          [NSString stringWithFormat:@"%d", currentInputCard],
+                          @"sget", candidate]];
+            if (output) {
+                controlName = candidate;
+                break;
+            }
+        }
     }
-    
+
+    if (output) {
+        BOOL muted = [self parseMuteFromMixerOutput:output];
+        if (defaultInput.volumeControl) {
+            defaultInput.volumeControl.isMuted = muted;
+            defaultInput.volumeControl.identifier = controlName;
+        }
+        return muted;
+    }
+
     return defaultInput.volumeControl ? defaultInput.volumeControl.isMuted : NO;
 }
 
@@ -904,15 +1068,33 @@ static NSString *const kMicControl = @"Mic";
     NSLog(@"ALSABackend: setInputMuted: %@", muted ? @"YES" : @"NO");
     NSString *value = muted ? @"mute" : @"unmute";
     NSLog(@"ALSABackend:   setting to %@, card %d", value, currentInputCard);
-    
-    BOOL success = [self setMixerControl:kCaptureControl 
+
+    NSString *controlName = [self preferredMixerControlNameForDevice:defaultInput isOutput:NO];
+    if (!controlName) {
+        controlName = kCaptureControl;
+    }
+
+    BOOL success = [self setMixerControl:controlName 
                                    value:value 
                                     card:currentInputCard];
-    
+
+    if (!success) {
+        NSArray *fallbackControls = @[kCaptureControl, kMicControl];
+        for (NSString *candidate in fallbackControls) {
+            if ([candidate isEqualToString:controlName]) continue;
+            if ([self setMixerControl:candidate value:value card:currentInputCard]) {
+                controlName = candidate;
+                success = YES;
+                break;
+            }
+        }
+    }
+
     if (success && defaultInput.volumeControl) {
         defaultInput.volumeControl.isMuted = muted;
+        defaultInput.volumeControl.identifier = controlName;
     }
-    
+
     NSLog(@"ALSABackend: setInputMuted: %@", success ? @"SUCCESS" : @"FAILED");
     return success;
 }
