@@ -130,11 +130,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 @property (nonatomic, assign) NSTimeInterval lastWindowSwitchTime;
 @property (nonatomic, strong) NSTimer *noMenuGracePeriodTimer;
 @property (nonatomic, assign) unsigned long pendingClearWindowId;
-// Cached desktop window ID — set the first time we identify one, avoids unreliable X11 re-scans
-@property (nonatomic, assign) unsigned long cachedDesktopWindowId;
 
 - (unsigned long)findDesktopWindowId;
-- (NSMenu *)desktopFallbackMenuIfAvailable;
 - (BOOL)windowLikelyWillRegisterMenuSoon:(unsigned long)windowId;
 - (void)clearMenuAndHideView;
 
@@ -557,45 +554,58 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 - (void)displaySystemOnlyMenu
 {
     NSLog(@"AppMenuWidget: No application menu - showing system-only ⌘ menu");
-    NSMenu *mainMenu = [self desktopFallbackMenuIfAvailable];
-    if (!mainMenu) {
-        // Keep only the system menu when no application menu is available and
-        // there is no cached Desktop menu to reuse.
-        mainMenu = [[NSMenu alloc] initWithTitle:@""];
-    }
+    // Build a lightweight default menubar when no app menu is exported.
+    // setupMenuViewWithMenu: prepends the ⌘ system menu item automatically.
+    NSMenu *mainMenu = [[NSMenu alloc] initWithTitle:@""];
+
+    NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:NSLocalizedString(@"File", @"Fallback File menu title")];
+    NSMenuItem *closeItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Close", @"Close active window")
+                                  action:@selector(closeActiveWindow:)
+                              keyEquivalent:@"w"];
+    [closeItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+    [closeItem setTarget:self];
+    [fileMenu addItem:closeItem];
+
+    NSMenuItem *fileMenuItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"File", @"Fallback File menu title")
+                                   action:nil
+                               keyEquivalent:@""];
+    [fileMenuItem setSubmenu:fileMenu];
+    [mainMenu addItem:fileMenuItem];
+
+    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:NSLocalizedString(@"Edit", @"Fallback Edit menu title")];
+    NSMenuItem *undoItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Undo", @"Undo action")
+                                 action:@selector(undo:)
+                             keyEquivalent:@"z"];
+    [undoItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+    [editMenu addItem:undoItem];
+
+    [editMenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *cutItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Cut", @"Cut action")
+                                action:@selector(cut:)
+                            keyEquivalent:@"x"];
+    [cutItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+    [editMenu addItem:cutItem];
+
+    NSMenuItem *copyItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Copy", @"Copy action")
+                                 action:@selector(copy:)
+                             keyEquivalent:@"c"];
+    [copyItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+    [editMenu addItem:copyItem];
+
+    NSMenuItem *pasteItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Paste", @"Paste action")
+                                  action:@selector(paste:)
+                              keyEquivalent:@"v"];
+    [pasteItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+    [editMenu addItem:pasteItem];
+
+    NSMenuItem *editMenuItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Edit", @"Fallback Edit menu title")
+                                   action:nil
+                               keyEquivalent:@""];
+    [editMenuItem setSubmenu:editMenu];
+    [mainMenu addItem:editMenuItem];
 
     [self setupMenuViewWithMenu:mainMenu];
-}
-
-- (NSMenu *)desktopFallbackMenuIfAvailable
-{
-    if (!self.protocolManager) {
-        return nil;
-    }
-
-    // Prefer the cached ID (set when a Desktop window registers its menu) to avoid
-    // an unreliable XQueryTree scan which may miss reparented windows.
-    unsigned long desktopWindowId = self.cachedDesktopWindowId;
-    if (desktopWindowId == 0) {
-        desktopWindowId = [self findDesktopWindowId];
-    }
-    if (desktopWindowId == 0) {
-        return nil;
-    }
-
-    if (![self.protocolManager hasMenuForWindow:desktopWindowId]) {
-        NSDebugLog(@"AppMenuWidget: Desktop window %lu has no cached menu yet", desktopWindowId);
-        return nil;
-    }
-
-    NSMenu *desktopMenu = [self.protocolManager getMenuForWindow:desktopWindowId];
-    if (!desktopMenu || [[desktopMenu itemArray] count] == 0) {
-        NSDebugLog(@"AppMenuWidget: Desktop window %lu menu unavailable after cache check", desktopWindowId);
-        return nil;
-    }
-
-    NSLog(@"AppMenuWidget: Reusing Desktop window %lu menu as system-only fallback", desktopWindowId);
-    return desktopMenu;
 }
 
 - (void)clearMenuAndHideView
@@ -1115,35 +1125,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         NSLog(@"AppMenuWidget: Failed to get active window for newly registered window check due to X11 error");
     });
     
-    // Special case: Desktop windows are never the X11 active window, but their menu
-    // is used as the system-only fallback.  Cache the window ID and, when no app menu
-    // is visible, directly load the Desktop menu without an additional X11 scan.
-    if ([MenuUtils isDesktopWindow:windowId]) {
-        // Cache so desktopFallbackMenuIfAvailable can find it without re-scanning.
-        self.cachedDesktopWindowId = windowId;
-
-        if (self.currentWindowId == 0 || self.currentMenu == nil) {
-            NSLog(@"AppMenuWidget: Desktop window %lu registered its menu - loading it directly", windowId);
-            @try {
-                NSMenu *desktopMenu = [self.protocolManager getMenuForWindow:windowId];
-                if (desktopMenu && [[desktopMenu itemArray] count] > 0) {
-                    NSLog(@"AppMenuWidget: Desktop menu has %lu items - setting up menu view",
-                          (unsigned long)[[desktopMenu itemArray] count]);
-                    [self setupMenuViewWithMenu:desktopMenu];
-                } else {
-                    NSLog(@"AppMenuWidget: Desktop menu empty or nil - falling back to system-only");
-                    [self displaySystemOnlyMenu];
-                }
-            }
-            @catch (NSException *exception) {
-                NSLog(@"AppMenuWidget: Exception loading Desktop menu for window %lu: %@", windowId, exception);
-            }
-        } else {
-            NSLog(@"AppMenuWidget: Desktop window %lu registered its menu (app menu currently active - not refreshing)", windowId);
-        }
-        return;
-    }
-
     // If the newly registered window is the currently active window, display its menu immediately
     if (activeWindow == windowId) {
         NSLog(@"AppMenuWidget: Newly registered window %lu is currently active, forcing menu load", windowId);
