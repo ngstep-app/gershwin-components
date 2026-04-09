@@ -22,6 +22,151 @@
 #import "GWBundleCreator.h"
 #import "GWUtils.h"
 
+/* Forward declaration */
+static NSString *resolveElfBinaryWithDepth(NSString *execPath, NSString *rootPath,
+                                           BOOL verbose, int depth);
+
+/* Follow shell script wrapper chains to find the real ELF binary.
+ * Recursively parses shell scripts, expanding simple variable assignments
+ * and following exec statements until an ELF binary is found.
+ * maxDepth prevents infinite loops. */
+static NSString *resolveElfBinary(NSString *execPath, NSString *rootPath,
+                                  BOOL verbose)
+{
+  return resolveElfBinaryWithDepth(execPath, rootPath, verbose, 0);
+}
+
+static NSString *resolveElfBinaryWithDepth(NSString *execPath, NSString *rootPath,
+                                           BOOL verbose, int depth)
+{
+  if (depth > 5 || !execPath)
+    return execPath;
+
+  NSString *fullExec = [rootPath stringByAppendingPathComponent:execPath];
+  NSFileManager *fm = [NSFileManager defaultManager];
+
+  if (![fm fileExistsAtPath:fullExec])
+    return execPath;
+
+  /* Check if it's already an ELF binary */
+  int fd = open([fullExec fileSystemRepresentation], O_RDONLY);
+  if (fd < 0)
+    return execPath;
+  char hdr[4];
+  ssize_t n = read(fd, hdr, 4);
+  close(fd);
+
+  if (n == 4 && hdr[0] == 0x7f && hdr[1] == 'E' &&
+      hdr[2] == 'L' && hdr[3] == 'F')
+    return execPath;  /* Already ELF */
+
+  if (n < 2 || hdr[0] != '#' || hdr[1] != '!')
+    return execPath;  /* Not a shell script either */
+
+  /* Parse the shell script to find variable assignments and exec targets */
+  NSString *script = [NSString stringWithContentsOfFile:fullExec
+                                               encoding:NSUTF8StringEncoding
+                                                  error:NULL];
+  if (!script)
+    return execPath;
+
+  /* Collect simple VAR=value assignments (no quotes, no spaces in value) */
+  NSMutableDictionary *vars = [NSMutableDictionary dictionary];
+  NSArray *lines = [script componentsSeparatedByString:@"\n"];
+
+  for (NSString *line in lines)
+    {
+      NSString *t = [line stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceCharacterSet]];
+
+      /* Skip comments and empty lines */
+      if ([t length] == 0 || [t hasPrefix:@"#"])
+        continue;
+
+      /* Match VAR=value (simple assignments without export) */
+      NSRange eq = [t rangeOfString:@"="];
+      if (eq.location != NSNotFound && eq.location > 0)
+        {
+          NSString *before = [t substringToIndex:eq.location];
+          /* Check it looks like a variable name (letters, digits, underscore) */
+          NSCharacterSet *varChars = [NSCharacterSet characterSetWithCharactersInString:
+            @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"];
+          /* Also handle 'export VAR=value' */
+          NSString *varName = before;
+          if ([before hasPrefix:@"export "])
+            varName = [before substringFromIndex:7];
+          varName = [varName stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceCharacterSet]];
+          NSString *trimVar = [varName stringByTrimmingCharactersInSet:varChars];
+
+          if ([trimVar length] == 0 && [varName length] > 0)
+            {
+              NSString *value = [t substringFromIndex:eq.location + 1];
+              /* Strip surrounding quotes */
+              if (([value hasPrefix:@"\""] && [value hasSuffix:@"\""]) ||
+                  ([value hasPrefix:@"'"] && [value hasSuffix:@"'"]))
+                value = [value substringWithRange:NSMakeRange(1, [value length] - 2)];
+
+              /* Expand known variables in the value */
+              for (NSString *k in vars)
+                {
+                  value = [value stringByReplacingOccurrencesOfString:
+                    [NSString stringWithFormat:@"$%@", k] withString:[vars objectForKey:k]];
+                  value = [value stringByReplacingOccurrencesOfString:
+                    [NSString stringWithFormat:@"${%@}", k] withString:[vars objectForKey:k]];
+                }
+
+              [vars setObject:value forKey:varName];
+            }
+        }
+    }
+
+  /* Now scan for exec statements to find the target binary */
+  for (NSString *line in lines)
+    {
+      NSString *t = [line stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceCharacterSet]];
+
+      if (![t hasPrefix:@"exec "])
+        continue;
+
+      /* Extract the command after exec */
+      NSString *cmd = [t substringFromIndex:5];
+      NSArray *tokens = [cmd componentsSeparatedByString:@" "];
+      if ([tokens count] == 0)
+        continue;
+
+      NSString *target = [tokens objectAtIndex:0];
+
+      /* Expand variables */
+      for (NSString *k in vars)
+        {
+          target = [target stringByReplacingOccurrencesOfString:
+            [NSString stringWithFormat:@"$%@", k] withString:[vars objectForKey:k]];
+          target = [target stringByReplacingOccurrencesOfString:
+            [NSString stringWithFormat:@"${%@}", k] withString:[vars objectForKey:k]];
+        }
+
+      /* Skip targets that still have unresolved variables */
+      if ([target rangeOfString:@"$"].location != NSNotFound)
+        continue;
+
+      /* Check if this target exists in the staging root */
+      NSString *fullTarget = [rootPath stringByAppendingPathComponent:target];
+      if (![fm fileExistsAtPath:fullTarget])
+        continue;
+
+      if (verbose)
+        fprintf(stderr, "  %s exec -> %s\n", [execPath UTF8String], [target UTF8String]);
+
+      /* Recurse — target could be another shell script */
+      return resolveElfBinaryWithDepth(target, rootPath, verbose, depth + 1);
+    }
+
+  /* No exec found — return original */
+  return execPath;
+}
+
 static void print_usage(const char *prog)
 {
   fprintf(stderr,
@@ -300,6 +445,11 @@ int main(int argc, char *argv[])
       [pool release];
       exit(EXIT_FAILURE);
     }
+
+  /* If mainExec is a shell script wrapper, follow the chain of scripts
+   * until we find the real ELF binary.  This avoids problems with
+   * hardcoded paths in Debian wrapper scripts. */
+  mainExec = resolveElfBinary(mainExec, [pm rootPath], verbose);
 
   if (verbose)
     fprintf(stderr, "Application: %s\nExecutable: %s\n",

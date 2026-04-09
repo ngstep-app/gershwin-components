@@ -53,16 +53,16 @@
   [script appendString:@"BUNDLE=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n"];
   [script appendString:@"C=\"${BUNDLE}/Contents\"\n\n"];
 
-  /* Library paths - cover all Debian library locations */
+  /* Library paths - cover all Debian library locations including
+   * subdirectories (e.g., pulseaudio/, pipewire/, private/) */
   [script appendString:@"# Library search paths\n"];
   [script appendFormat:
-    @"export LD_LIBRARY_PATH="
-    @"\"${C}/usr/lib/%@"
-    @":${C}/usr/lib"
-    @":${C}/lib/%@"
-    @":${C}/lib"
-    @"${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n\n",
-    multiarch, multiarch];
+    @"_LP=\"${C}/usr/lib/%@:${C}/usr/lib:${C}/lib/%@:${C}/lib\"\n"
+    @"for _d in \"${C}/usr/lib/%@\"/*/  \"${C}/usr/lib\"/*/; do\n"
+    @"    [ -d \"$_d\" ] && _LP=\"${_LP}:${_d%%/}\"\n"
+    @"done\n"
+    @"export LD_LIBRARY_PATH=\"${_LP}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n\n",
+    multiarch, multiarch, multiarch];
 
   /* PATH for helper binaries */
   [script appendString:@"# Executable search path\n"];
