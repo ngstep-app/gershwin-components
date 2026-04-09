@@ -230,6 +230,31 @@ static int runCommandStatus(NSString *launchPath, NSArray *arguments,
         }
     }
 
+  /* Include Debian Essential packages — these are assumed present on every
+   * Debian system and no package declares dependencies on them, but our
+   * staging root is empty so they must be explicitly added. */
+  NSString *essentialOutput = runCommand(@"/usr/bin/dpkg-query",
+    @[@"-W", @"-f", @"${Package} ${Essential}\n"]);
+  if (essentialOutput)
+    {
+      NSArray *essLines = [essentialOutput componentsSeparatedByString:@"\n"];
+      for (NSString *line in essLines)
+        {
+          if (![line hasSuffix:@" yes"])
+            continue;
+          NSString *pkg = [line substringToIndex:[line length] - 4];
+          if ([pkg length] == 0)
+            continue;
+          if ([_skipPackages containsObject:pkg])
+            continue;
+          if (![seen containsObject:pkg])
+            {
+              [seen addObject:pkg];
+              [_resolvedPackages addObject:pkg];
+            }
+        }
+    }
+
   fprintf(stderr, "Resolved %lu packages to bundle\n",
           (unsigned long)[_resolvedPackages count]);
 
