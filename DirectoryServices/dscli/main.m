@@ -1048,7 +1048,8 @@ static int cmdInit(void) {
     NSArray *dirs = @[
         @"/Local/Library/DirectoryServices",
         @"/Local/Users",
-        @"/Local/Applications"
+        @"/Local/Applications",
+        @"/Network"
     ];
 
     for (NSString *dir in dirs) {
@@ -1064,6 +1065,22 @@ static int cmdInit(void) {
             }
             printf("Created: %s\n", [dir UTF8String]);
         }
+    }
+
+    // Create /Volumes with sticky bit (1777) so any user can create
+    // mount point directories, same as /tmp.  Works on both Linux
+    // and FreeBSD.
+    if (![fm fileExistsAtPath:@"/Volumes"]) {
+        [fm createDirectoryAtPath:@"/Volumes"
+      withIntermediateDirectories:YES
+                       attributes:@{NSFilePosixPermissions: @01777}
+                            error:&error];
+        if (error) {
+            fprintf(stderr, "Failed to create /Volumes: %s\n",
+                    [[error localizedDescription] UTF8String]);
+            return 1;
+        }
+        printf("Created: /Volumes (sticky bit)\n");
     }
 
     // Create empty plists if they don't exist
