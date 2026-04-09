@@ -7,6 +7,8 @@
 #import "PWBundleAssembler.h"
 #import "GWUtils.h"
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 @implementation PWBundleAssembler
 
@@ -81,10 +83,20 @@
         }
     }
 
+  fprintf(stderr, "Copying complete, rewriting RPATH...\n");
+
   /* Run patchelf on all ELF binaries */
-  if (![self rewriteRPATH])
+  @try
     {
-      fprintf(stderr, "Warning: RPATH rewriting had errors (launcher LD_LIBRARY_PATH will compensate)\n");
+      if (![self rewriteRPATH])
+        {
+          fprintf(stderr, "Warning: RPATH rewriting had errors (launcher LD_LIBRARY_PATH will compensate)\n");
+        }
+    }
+  @catch (NSException *ex)
+    {
+      fprintf(stderr, "Warning: RPATH rewriting crashed: %s (%s)\n",
+              [[ex reason] UTF8String], [[ex name] UTF8String]);
     }
 
   /* Optionally strip debug symbols */
@@ -93,6 +105,7 @@
       [self stripBinaries];
     }
 
+  fprintf(stderr, "Bundle assembly complete.\n");
   return YES;
 }
 
@@ -119,6 +132,42 @@
         }
     }
 
+  /* Check for symlinks first — attributesOfItemAtPath does not follow
+   * symlinks, so it detects broken symlinks that fileExistsAtPath misses. */
+  NSDictionary *attrs = [fm attributesOfItemAtPath:src error:NULL];
+  if (!attrs)
+    {
+      fprintf(stderr, "  Cannot stat: %s\n", [src UTF8String]);
+      return NO;
+    }
+
+  if ([[attrs fileType] isEqualToString:NSFileTypeSymbolicLink])
+    {
+      NSString *dstParent = [dst stringByDeletingLastPathComponent];
+      [fm createDirectoryAtPath:dstParent
+        withIntermediateDirectories:YES
+                         attributes:nil
+                              error:NULL];
+
+      NSString *target = [fm pathContentOfSymbolicLinkAtPath:src];
+      if (target)
+        {
+          [fm removeItemAtPath:dst error:NULL];
+          if (![fm createSymbolicLinkAtPath:dst
+                         withDestinationPath:target
+                                       error:&error])
+            {
+              fprintf(stderr, "  Symlink failed: %s -> %s: %s\n",
+                      [dst UTF8String], [target UTF8String],
+                      [[error localizedDescription] UTF8String]);
+              return NO;
+            }
+          return YES;
+        }
+      fprintf(stderr, "  Symlink unreadable: %s\n", [src UTF8String]);
+      return NO;
+    }
+
   BOOL isDir = NO;
   if (![fm fileExistsAtPath:src isDirectory:&isDir])
     return NO;
@@ -132,24 +181,17 @@
                          attributes:nil
                               error:NULL];
 
-      /* Preserve symlinks */
-      NSDictionary *attrs = [fm attributesOfItemAtPath:src error:NULL];
-      if ([[attrs fileType] isEqualToString:NSFileTypeSymbolicLink])
-        {
-          NSString *target = [fm pathContentOfSymbolicLinkAtPath:src];
-          if (target)
-            {
-              [fm removeItemAtPath:dst error:NULL];
-              return [fm createSymbolicLinkAtPath:dst
-                              withDestinationPath:target
-                                            error:&error];
-            }
-          return NO;
-        }
-
       if ([fm fileExistsAtPath:dst])
         [fm removeItemAtPath:dst error:NULL];
-      return [fm copyItemAtPath:src toPath:dst error:&error];
+
+      if (![fm copyItemAtPath:src toPath:dst error:&error])
+        {
+          fprintf(stderr, "  Copy failed: %s -> %s: %s\n",
+                  [src UTF8String], [dst UTF8String],
+                  [[error localizedDescription] UTF8String]);
+          return NO;
+        }
+      return YES;
     }
 
   /* Create destination directory */
@@ -195,8 +237,21 @@
   NSString *contentsPath = [_bundlePath stringByAppendingPathComponent:@"Contents"];
   NSArray *elfFiles = [self findElfFilesIn:contentsPath];
 
+  /* Open /dev/null once and detect multiarch once, outside the loop */
+  int devNullFd = open("/dev/null", O_WRONLY);
+  if (devNullFd < 0)
+    {
+      fprintf(stderr, "Warning: cannot open /dev/null\n");
+      return NO;
+    }
+  NSFileHandle *devNull = [[NSFileHandle alloc] initWithFileDescriptor:devNullFd
+                                                        closeOnDealloc:YES];
+  NSString *multiarch = [self detectMultiarchTriple];
+
   for (NSString *elfPath in elfFiles)
     {
+      NSAutoreleasePool *inner = [[NSAutoreleasePool alloc] init];
+
       /* Compute relative path from the ELF file to Contents/usr/lib
        * and Contents/lib directories */
       NSString *elfDir = [elfPath stringByDeletingLastPathComponent];
@@ -206,8 +261,6 @@
       NSMutableArray *rpaths = [NSMutableArray array];
       [rpaths addObject:[NSString stringWithFormat:@"$ORIGIN/%@/usr/lib", relToContents]];
 
-      /* Add multi-arch path */
-      NSString *multiarch = [self detectMultiarchTriple];
       if (multiarch)
         [rpaths addObject:[NSString stringWithFormat:@"$ORIGIN/%@/usr/lib/%@",
                            relToContents, multiarch]];
@@ -222,16 +275,12 @@
       NSTask *task = [[NSTask alloc] init];
       [task setLaunchPath:patchelf];
       [task setArguments:@[@"--set-rpath", rpath, elfPath]];
-      NSFileHandle *devNull = [NSFileHandle fileHandleForWritingAtPath:@"/dev/null"];
       [task setStandardOutput:devNull];
-      NSPipe *errPipe = _verbose ? [NSPipe pipe] : nil;
-      if (errPipe)
-        [task setStandardError:errPipe];
-      else
-        [task setStandardError:devNull];
-      [task launch];
-      if (errPipe)
+      if (_verbose)
         {
+          NSPipe *errPipe = [NSPipe pipe];
+          [task setStandardError:errPipe];
+          [task launch];
           NSData *errData = [[errPipe fileHandleForReading] readDataToEndOfFile];
           [task waitUntilExit];
           if ([task terminationStatus] != 0)
@@ -245,11 +294,15 @@
         }
       else
         {
+          [task setStandardError:devNull];
+          [task launch];
           [task waitUntilExit];
         }
       [task release];
+      [inner release];
     }
 
+  [devNull release];
   return YES;
 }
 
@@ -274,21 +327,18 @@
       if (![[attrs fileType] isEqualToString:NSFileTypeRegular])
         continue;
 
-      /* Check ELF magic bytes */
-      NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:fullPath];
-      if (!fh)
+      /* Check ELF magic bytes using raw fd to avoid leaking file handles */
+      int fd = open([fullPath fileSystemRepresentation], O_RDONLY);
+      if (fd < 0)
         continue;
-      NSData *magic = [fh readDataOfLength:4];
-      [fh closeFile];
+      unsigned char magic[4];
+      ssize_t n = read(fd, magic, 4);
+      close(fd);
 
-      if ([magic length] >= 4)
+      if (n == 4 && magic[0] == 0x7f && magic[1] == 'E' &&
+          magic[2] == 'L' && magic[3] == 'F')
         {
-          const unsigned char *bytes = [magic bytes];
-          if (bytes[0] == 0x7f && bytes[1] == 'E' &&
-              bytes[2] == 'L' && bytes[3] == 'F')
-            {
-              [result addObject:fullPath];
-            }
+          [result addObject:fullPath];
         }
     }
 

@@ -259,6 +259,28 @@ int main(int argc, char *argv[])
         mainExec = firstToken;
     }
 
+  /* If mainExec is a bare command (no path), resolve it within the staging root */
+  if (mainExec && ![mainExec hasPrefix:@"/"])
+    {
+      NSArray *searchDirs = @[@"/usr/bin", @"/usr/sbin", @"/bin", @"/sbin",
+                              @"/usr/games"];
+      NSString *found = nil;
+      for (NSString *dir in searchDirs)
+        {
+          NSString *candidate = [NSString stringWithFormat:@"%@/%@", dir, mainExec];
+          NSString *fullCandidate = [[pm rootPath] stringByAppendingPathComponent:candidate];
+          if ([fm fileExistsAtPath:fullCandidate])
+            {
+              found = candidate;
+              break;
+            }
+        }
+      if (found)
+        mainExec = found;
+      else
+        mainExec = [NSString stringWithFormat:@"/usr/bin/%@", mainExec];
+    }
+
   /* Fallback: look for executable matching package name */
   if (!mainExec)
     {
@@ -407,35 +429,43 @@ int main(int argc, char *argv[])
    * AppKit calls in GWDocumentIcon that require a window server.
    * When a display IS available, use GWBundleCreator for full
    * document-type icon generation. */
-  if (getenv("DISPLAY"))
+  @try
     {
-      GWBundleCreator *plistCreator = [[GWBundleCreator alloc] init];
-      if (![plistCreator createInfoPlist:bundlePath
-                             desktopInfo:parser
-                                 appName:appName
-                               execPath:mainExec
-                           iconFilename:copiedIconFilename])
+      if (getenv("DISPLAY"))
         {
-          fprintf(stderr, "Warning: failed to create Info.plist\n");
+          GWBundleCreator *plistCreator = [[GWBundleCreator alloc] init];
+          if (![plistCreator createInfoPlist:bundlePath
+                                 desktopInfo:parser
+                                     appName:bundleName
+                                   execPath:mainExec
+                               iconFilename:copiedIconFilename])
+            {
+              fprintf(stderr, "Warning: failed to create Info.plist\n");
+            }
+          [plistCreator release];
         }
-      [plistCreator release];
-    }
-  else
-    {
-      /* Headless: write a basic Info.plist without document type icons */
-      NSMutableDictionary *plist = [NSMutableDictionary dictionary];
-      [plist setObject:@"8.0" forKey:@"NSAppVersion"];
-      [plist setObject:bundleName forKey:@"NSExecutable"];
-      [plist setObject:appName forKey:@"NSApplicationName"];
-      [plist setObject:@"1.0" forKey:@"NSApplicationVersion"];
-      [plist setObject:appName forKey:@"CFBundleName"];
-      if (copiedIconFilename)
-        [plist setObject:[copiedIconFilename lastPathComponent] forKey:@"NSIcon"];
+      else
+        {
+          /* Headless: write a basic Info.plist without document type icons */
+          NSMutableDictionary *plist = [NSMutableDictionary dictionary];
+          [plist setObject:@"8.0" forKey:@"NSAppVersion"];
+          [plist setObject:bundleName forKey:@"NSExecutable"];
+          [plist setObject:appName forKey:@"NSApplicationName"];
+          [plist setObject:@"1.0" forKey:@"NSApplicationVersion"];
+          [plist setObject:appName forKey:@"CFBundleName"];
+          if (copiedIconFilename)
+            [plist setObject:[copiedIconFilename lastPathComponent] forKey:@"NSIcon"];
 
-      NSString *plistPath = [NSString stringWithFormat:@"%@/Resources/Info.plist",
-                              bundlePath];
-      if (![plist writeToFile:plistPath atomically:YES])
-        fprintf(stderr, "Warning: failed to write Info.plist\n");
+          NSString *plistPath = [NSString stringWithFormat:@"%@/Resources/Info.plist",
+                                  bundlePath];
+          if (![plist writeToFile:plistPath atomically:YES])
+            fprintf(stderr, "Warning: failed to write Info.plist\n");
+        }
+    }
+  @catch (NSException *exception)
+    {
+      fprintf(stderr, "Warning: Info.plist creation failed: %s (%s)\n",
+              [[exception reason] UTF8String], [[exception name] UTF8String]);
     }
 
   /* ── Phase 7: Create squashfs image ── */
