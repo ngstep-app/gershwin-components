@@ -1,0 +1,513 @@
+/*
+ * Copyright (c) 2025-2026 Simon Peter
+ * Modified by Joseph Maloney, 2026
+ *
+ * Based on appwrap by Simon Peter.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+#import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <getopt.h>
+
+#import "PWPackageManager.h"
+#import "PWBundleAssembler.h"
+#import "PWLauncherGenerator.h"
+#import "DesktopFileParser.h"
+#import "GWBundleCreator.h"
+#import "GWUtils.h"
+
+static void print_usage(const char *prog)
+{
+  fprintf(stderr,
+    "Usage: %s [OPTIONS] <package-name> [output-directory]\n"
+    "\n"
+    "Create a self-contained GNUstep .app bundle from a Debian/Devuan package.\n"
+    "\n"
+    "Options:\n"
+    "  -s, --skip-list FILE   Path to package skip list (packages on the host)\n"
+    "  -e, --exec PATH        Main executable path within package (e.g., /usr/bin/app)\n"
+    "  -N, --name NAME        Override application name for the bundle\n"
+    "  -i, --icon PATH        Override icon (path on host filesystem)\n"
+    "  -f, --force            Overwrite existing bundle without asking\n"
+    "      --strip             Strip debug symbols from binaries\n"
+    "      --keep-root         Don't delete the staging root after bundling\n"
+    "  -v, --verbose          Show detailed progress\n"
+    "  -h, --help             Show this help\n"
+    "\n"
+    "The skip list is a text file with one package name per line.\n"
+    "Packages in this list are assumed to be on the host system and\n"
+    "will not be installed into the staging root. Generate from a\n"
+    "Gershwin live ISO with: dpkg-query -W -f '${Package}\\n'\n",
+    prog);
+}
+
+int main(int argc, char *argv[])
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  /* Minimal NSApplication for AppKit image operations (icon rasterization).
+   * Only initialize if a display is available; pkgwrap works without it. */
+  if (getenv("DISPLAY"))
+    {
+      [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"NSApplicationSuppressPSN"];
+      (void)[NSApplication sharedApplication];
+    }
+  setenv("APPWRAP_NO_GUI", "1", 0);
+
+  BOOL forceOverwrite = NO;
+  BOOL verbose = NO;
+  BOOL doStrip = NO;
+  BOOL keepRoot = NO;
+  char *skipListArg = NULL;
+  char *execArg = NULL;
+  char *nameArg = NULL;
+  char *iconArg = NULL;
+
+  static struct option long_options[] = {
+    {"skip-list",  required_argument, 0, 's'},
+    {"exec",       required_argument, 0, 'e'},
+    {"name",       required_argument, 0, 'N'},
+    {"icon",       required_argument, 0, 'i'},
+    {"force",      no_argument,       0, 'f'},
+    {"strip",      no_argument,       0, 'S'},
+    {"keep-root",  no_argument,       0, 'K'},
+    {"verbose",    no_argument,       0, 'v'},
+    {"help",       no_argument,       0, 'h'},
+    {0, 0, 0, 0}
+  };
+
+  int opt;
+  int option_index = 0;
+  while ((opt = getopt_long(argc, argv, "s:e:N:i:fvh", long_options, &option_index)) != -1)
+    {
+      switch (opt)
+        {
+        case 's': skipListArg = optarg; break;
+        case 'e': execArg = optarg; break;
+        case 'N': nameArg = optarg; break;
+        case 'i': iconArg = optarg; break;
+        case 'f': forceOverwrite = YES; break;
+        case 'S': doStrip = YES; break;
+        case 'K': keepRoot = YES; break;
+        case 'v': verbose = YES; break;
+        case 'h':
+          print_usage(argv[0]);
+          [pool release];
+          exit(EXIT_SUCCESS);
+        default:
+          print_usage(argv[0]);
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+    }
+
+  /* Package name is required */
+  if (optind >= argc)
+    {
+      fprintf(stderr, "Error: package name required\n");
+      print_usage(argv[0]);
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+
+  NSString *packageName = [NSString stringWithUTF8String:argv[optind]];
+  NSString *outputDir = nil;
+
+  if (optind + 1 < argc)
+    outputDir = [NSString stringWithUTF8String:argv[optind + 1]];
+  else
+    outputDir = NSHomeDirectory();
+
+  outputDir = [outputDir stringByExpandingTildeInPath];
+
+  /* Create output directory if needed */
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSError *error = nil;
+  if (![fm fileExistsAtPath:outputDir])
+    {
+      if (![fm createDirectoryAtPath:outputDir
+             withIntermediateDirectories:YES
+                              attributes:nil
+                                   error:&error])
+        {
+          fprintf(stderr, "Failed to create output directory %s: %s\n",
+                  [outputDir UTF8String], [[error localizedDescription] UTF8String]);
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+    }
+
+  /* ── Phase 1: Resolve, download, and extract package ── */
+  fprintf(stderr, "pkgwrap: bundling '%s'\n", [packageName UTF8String]);
+
+  PWPackageManager *pm = [[PWPackageManager alloc] initWithPackage:packageName
+                                                           verbose:verbose];
+
+  /* Load skip list if provided */
+  NSString *skipListPath = skipListArg
+    ? [[NSString stringWithUTF8String:skipListArg] stringByExpandingTildeInPath]
+    : nil;
+
+  /* Also check for a default skip list in Resources/ */
+  if (!skipListPath)
+    {
+      NSString *defaultSkipList = @"/System/Library/pkgwrap/gershwin-base-packages.txt";
+      if ([fm fileExistsAtPath:defaultSkipList])
+        skipListPath = defaultSkipList;
+    }
+
+  if (skipListPath)
+    {
+      if (![pm loadSkipList:skipListPath])
+        {
+          fprintf(stderr, "Warning: could not load skip list\n");
+        }
+    }
+
+  if (![pm setupStagingRoot])
+    {
+      fprintf(stderr, "Failed to create staging directory\n");
+      [pm release];
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+
+  if (![pm resolveDependencies])
+    {
+      fprintf(stderr, "Failed to resolve dependencies for '%s'\n",
+              [packageName UTF8String]);
+      if (!keepRoot) [pm cleanup];
+      [pm release];
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+
+  if (![pm downloadPackages])
+    {
+      fprintf(stderr, "Failed to download packages\n");
+      if (!keepRoot) [pm cleanup];
+      [pm release];
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+
+  if (![pm extractPackages])
+    {
+      fprintf(stderr, "Failed to extract packages\n");
+      if (!keepRoot) [pm cleanup];
+      [pm release];
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+
+  /* ── Phase 2: Discover application metadata ── */
+  NSString *desktopPath = [pm findDesktopFile];
+  NSString *appName = nil;
+  NSString *iconName = nil;
+  NSString *execCommand = nil;
+  DesktopFileParser *parser = nil;
+
+  if (desktopPath)
+    {
+      if (verbose)
+        fprintf(stderr, "Found desktop file: %s\n", [desktopPath UTF8String]);
+
+      parser = [[DesktopFileParser alloc] initWithFile:desktopPath];
+      if (parser)
+        {
+          appName = [parser stringForKey:@"Name"];
+          iconName = [parser stringForKey:@"Icon"];
+          execCommand = [parser stringForKey:@"Exec"];
+        }
+    }
+
+  /* Override name if provided */
+  if (nameArg)
+    appName = [NSString stringWithUTF8String:nameArg];
+
+  /* Fallback app name to package name with capitalised first letter */
+  if (!appName || [appName length] == 0)
+    {
+      appName = [[[packageName substringToIndex:1] uppercaseString]
+                  stringByAppendingString:[packageName substringFromIndex:1]];
+    }
+
+  NSString *bundleName = [GWUtils sanitizeFileName:appName];
+
+  /* Determine the main executable path (relative to root) */
+  NSString *mainExec = nil;
+  if (execArg)
+    {
+      mainExec = [NSString stringWithUTF8String:execArg];
+    }
+  else if (execCommand)
+    {
+      /* Extract the binary path from the Exec= field.
+       * Strip field codes and take the first token. */
+      NSString *sanitized = [GWUtils sanitizeExecCommand:execCommand];
+      NSScanner *sc = [NSScanner scannerWithString:sanitized];
+      NSString *firstToken = nil;
+      [sc scanUpToCharactersFromSet:[NSCharacterSet whitespaceCharacterSet]
+                         intoString:&firstToken];
+      if (firstToken)
+        mainExec = firstToken;
+    }
+
+  /* Fallback: look for executable matching package name */
+  if (!mainExec)
+    {
+      NSString *candidate = [NSString stringWithFormat:@"/usr/bin/%@", packageName];
+      NSString *fullCandidate = [[pm rootPath] stringByAppendingPathComponent:candidate];
+      if ([fm fileExistsAtPath:fullCandidate])
+        mainExec = candidate;
+    }
+
+  if (!mainExec)
+    {
+      fprintf(stderr, "Could not determine main executable.\n"
+                      "Use --exec to specify it (e.g., --exec /usr/bin/chromium)\n");
+      if (!keepRoot) [pm cleanup];
+      [parser release];
+      [pm release];
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+
+  if (verbose)
+    fprintf(stderr, "Application: %s\nExecutable: %s\n",
+            [appName UTF8String], [mainExec UTF8String]);
+
+  /* ── Phase 3: Check for existing squashfs output ── */
+  NSString *squashfsPath = [NSString stringWithFormat:@"%@/%@.squashfs",
+                             outputDir, bundleName];
+
+  if ([fm fileExistsAtPath:squashfsPath])
+    {
+      if (!forceOverwrite)
+        {
+          fprintf(stderr, "Output already exists: %s\nOverwrite? (y/n) ",
+                  [squashfsPath UTF8String]);
+          fflush(stderr);
+          int response = getchar();
+          if (response != 'y' && response != 'Y')
+            {
+              fprintf(stderr, "Cancelled.\n");
+              if (!keepRoot) [pm cleanup];
+              [parser release];
+              [pm release];
+              [pool release];
+              exit(EXIT_FAILURE);
+            }
+        }
+
+      if (![fm removeItemAtPath:squashfsPath error:&error])
+        {
+          fprintf(stderr, "Failed to remove existing file: %s\n",
+                  [[error localizedDescription] UTF8String]);
+          if (!keepRoot) [pm cleanup];
+          [parser release];
+          [pm release];
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+    }
+
+  /* Create a temporary build directory in the user's home.
+   * The .app bundle is built inside this dir, then the whole dir
+   * is compressed into a squashfs so that when mounted the user
+   * sees the .app bundle (not its raw contents). */
+  char buildTmpl[PATH_MAX];
+  snprintf(buildTmpl, sizeof(buildTmpl), "%s/pkgwrap-build-XXXXXX",
+           [NSHomeDirectory() UTF8String]);
+  char *buildResult = mkdtemp(buildTmpl);
+  if (!buildResult)
+    {
+      fprintf(stderr, "Failed to create temporary build directory\n");
+      if (!keepRoot) [pm cleanup];
+      [parser release];
+      [pm release];
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+  NSString *buildDir = [NSString stringWithUTF8String:buildResult];
+  NSString *bundlePath = [NSString stringWithFormat:@"%@/%@.app", buildDir, bundleName];
+
+  /* ── Phase 4: Assemble the bundle ── */
+  fprintf(stderr, "Assembling bundle: %s\n", [bundlePath UTF8String]);
+
+  PWBundleAssembler *assembler = [[PWBundleAssembler alloc]
+    initWithAppName:bundleName
+           rootPath:[pm rootPath]
+         bundlePath:bundlePath
+            verbose:verbose
+              strip:doStrip];
+
+  if (![assembler assembleBundle])
+    {
+      fprintf(stderr, "Failed to assemble bundle\n");
+      if (!keepRoot) [pm cleanup];
+      [assembler release];
+      [parser release];
+      [pm release];
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+
+  /* ── Phase 5: Generate launcher script ── */
+  NSString *launcherPath = [NSString stringWithFormat:@"%@/%@", bundlePath, bundleName];
+
+  if (![PWLauncherGenerator generateLauncherAtPath:launcherPath
+                                           appName:bundleName
+                                          mainExec:mainExec])
+    {
+      fprintf(stderr, "Failed to generate launcher script\n");
+      if (!keepRoot) [pm cleanup];
+      [assembler release];
+      [parser release];
+      [pm release];
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+
+  /* ── Phase 6: Icon and metadata ── */
+  NSString *resourcesPath = [bundlePath stringByAppendingPathComponent:@"Resources"];
+  NSString *copiedIconFilename = nil;
+
+  /* Find and copy icon */
+  NSString *resolvedIcon = nil;
+  if (iconArg)
+    {
+      resolvedIcon = [[NSString stringWithUTF8String:iconArg] stringByExpandingTildeInPath];
+    }
+  else if (iconName)
+    {
+      resolvedIcon = [assembler findIconInRoot:iconName];
+    }
+
+  if (resolvedIcon)
+    {
+      GWBundleCreator *creator = [[GWBundleCreator alloc] init];
+      copiedIconFilename = [creator copyIconToBundle:resolvedIcon
+                                    toBundleResources:resourcesPath
+                                             appName:bundleName];
+      [creator release];
+
+      if (verbose && copiedIconFilename)
+        fprintf(stderr, "Icon: %s\n", [copiedIconFilename UTF8String]);
+    }
+
+  /* Create Info.plist.
+   * When no display is available, create it directly to avoid
+   * AppKit calls in GWDocumentIcon that require a window server.
+   * When a display IS available, use GWBundleCreator for full
+   * document-type icon generation. */
+  if (getenv("DISPLAY"))
+    {
+      GWBundleCreator *plistCreator = [[GWBundleCreator alloc] init];
+      if (![plistCreator createInfoPlist:bundlePath
+                             desktopInfo:parser
+                                 appName:appName
+                               execPath:mainExec
+                           iconFilename:copiedIconFilename])
+        {
+          fprintf(stderr, "Warning: failed to create Info.plist\n");
+        }
+      [plistCreator release];
+    }
+  else
+    {
+      /* Headless: write a basic Info.plist without document type icons */
+      NSMutableDictionary *plist = [NSMutableDictionary dictionary];
+      [plist setObject:@"8.0" forKey:@"NSAppVersion"];
+      [plist setObject:bundleName forKey:@"NSExecutable"];
+      [plist setObject:appName forKey:@"NSApplicationName"];
+      [plist setObject:@"1.0" forKey:@"NSApplicationVersion"];
+      [plist setObject:appName forKey:@"CFBundleName"];
+      if (copiedIconFilename)
+        [plist setObject:[copiedIconFilename lastPathComponent] forKey:@"NSIcon"];
+
+      NSString *plistPath = [NSString stringWithFormat:@"%@/Resources/Info.plist",
+                              bundlePath];
+      if (![plist writeToFile:plistPath atomically:YES])
+        fprintf(stderr, "Warning: failed to write Info.plist\n");
+    }
+
+  /* ── Phase 7: Create squashfs image ── */
+  fprintf(stderr, "Creating squashfs image...\n");
+
+  NSString *mksquashfs = @"/usr/bin/mksquashfs";
+  if (![fm fileExistsAtPath:mksquashfs])
+    {
+      fprintf(stderr, "mksquashfs not found. Install squashfs-tools.\n");
+      [fm removeItemAtPath:buildDir error:NULL];
+      if (!keepRoot) [pm cleanup];
+      [assembler release];
+      [parser release];
+      [pm release];
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+
+  NSTask *sqfs = [[NSTask alloc] init];
+  [sqfs setLaunchPath:mksquashfs];
+  [sqfs setArguments:@[buildDir, squashfsPath,
+                       @"-comp", @"zstd",
+                       @"-Xcompression-level", @"19",
+                       @"-noappend"]];
+  if (!verbose)
+    {
+      NSFileHandle *devNull = [NSFileHandle fileHandleForWritingAtPath:@"/dev/null"];
+      [sqfs setStandardOutput:devNull];
+    }
+  [sqfs launch];
+  [sqfs waitUntilExit];
+
+  if ([sqfs terminationStatus] != 0)
+    {
+      fprintf(stderr, "mksquashfs failed (exit %d)\n", [sqfs terminationStatus]);
+      [sqfs release];
+      [fm removeItemAtPath:buildDir error:NULL];
+      if (!keepRoot) [pm cleanup];
+      [assembler release];
+      [parser release];
+      [pm release];
+      [pool release];
+      exit(EXIT_FAILURE);
+    }
+  [sqfs release];
+
+  /* Remove the temporary build directory */
+  [fm removeItemAtPath:buildDir error:NULL];
+
+  /* ── Phase 8: Cleanup staging root ── */
+  if (keepRoot)
+    fprintf(stderr, "Staging root kept at: %s\n", [[pm rootPath] UTF8String]);
+  else
+    [pm cleanup];
+
+  /* Report success */
+  fprintf(stderr, "\nSuccessfully created: %s\n", [squashfsPath UTF8String]);
+
+  /* Show squashfs size */
+  NSDictionary *sqfsAttrs = [fm attributesOfItemAtPath:squashfsPath error:NULL];
+  if (sqfsAttrs)
+    {
+      unsigned long long size = [sqfsAttrs fileSize];
+      if (size > 1073741824)
+        fprintf(stderr, "Image size: %.1f GB\n", size / 1073741824.0);
+      else
+        fprintf(stderr, "Image size: %.1f MB\n", size / 1048576.0);
+    }
+
+  [assembler release];
+  [parser release];
+  [pm release];
+  [pool release];
+  exit(EXIT_SUCCESS);
+}
