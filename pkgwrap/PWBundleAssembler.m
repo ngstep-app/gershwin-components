@@ -252,6 +252,14 @@
     {
       NSAutoreleasePool *inner = [[NSAutoreleasePool alloc] init];
 
+      /* Skip the dynamic linker itself — patchelf corrupts it */
+      NSString *elfName = [elfPath lastPathComponent];
+      if ([elfName hasPrefix:@"ld-linux"] || [elfName hasPrefix:@"ld.so"])
+        {
+          [inner release];
+          continue;
+        }
+
       /* Compute relative path from the ELF file to Contents/usr/lib
        * and Contents/lib directories */
       NSString *elfDir = [elfPath stringByDeletingLastPathComponent];

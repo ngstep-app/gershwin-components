@@ -102,8 +102,29 @@
   [script appendString:@"    set -- \"$@\" \"$arg\"\n"];
   [script appendString:@"done\n\n"];
 
-  /* Execute the main binary */
-  [script appendFormat:@"exec \"${C}%@\" \"$@\"\n", mainExec];
+  /* Locate the bundled ld-linux dynamic linker.  Use it to invoke binaries
+   * so the bundle is fully self-contained — works on any Linux distro
+   * (even musl-based or older glibc) and on FreeBSD via linuxulator. */
+  [script appendString:@"# Locate bundled dynamic linker\n"];
+  [script appendFormat:
+    @"LD_LINUX=\"\"\n"
+    @"for f in \"${C}/lib/%@/ld-linux\"*.so.* \"${C}/lib64/ld-linux\"*.so.* \"${C}/lib/ld-linux\"*.so.*; do\n"
+    @"    [ -f \"$f\" ] && LD_LINUX=\"$f\" && break\n"
+    @"done\n\n",
+    multiarch];
+
+  [script appendString:@"# Execute the main binary\n"];
+  [script appendFormat:
+    @"MAIN=\"${C}%@\"\n"
+    @"if [ -n \"$LD_LINUX\" ]; then\n"
+    @"    if head -c4 \"$MAIN\" 2>/dev/null | grep -q ELF; then\n"
+    @"        exec \"$LD_LINUX\" \"$MAIN\" \"$@\"\n"
+    @"    else\n"
+    @"        exec \"$LD_LINUX\" \"${C}/usr/bin/bash\" \"$MAIN\" \"$@\"\n"
+    @"    fi\n"
+    @"fi\n"
+    @"exec \"$MAIN\" \"$@\"\n",
+    mainExec];
 
   /* Write the script */
   NSError *error = nil;
