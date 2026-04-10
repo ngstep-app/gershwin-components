@@ -34,7 +34,6 @@ pkgwrap --localpkg custom-build.deb -v ~/Applications/
 **Example: bundling Slack from a downloaded .deb**
 
 ```sh
-wget https://downloads.slack-edge.com/desktop-releases/linux/x64/4.47.69/slack-desktop-4.47.69-amd64.deb
 pkgwrap --localpkg slack-desktop-4.47.69-amd64.deb
 ```
 
