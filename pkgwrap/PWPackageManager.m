@@ -275,71 +275,138 @@ static int runCommandStatus(NSString *launchPath, NSArray *arguments,
       return NO;
     }
 
-  fprintf(stderr, "Downloading %lu packages...\n",
-          (unsigned long)[_resolvedPackages count]);
+  NSFileManager *fm = [NSFileManager defaultManager];
 
-  /* apt-get download puts .deb files in the current directory.
-   * We cd to our deb cache and download in batches. */
-  NSMutableArray *args = [NSMutableArray arrayWithObjects:
-    @"download", nil];
-  [args addObjectsFromArray:_resolvedPackages];
+  /* Use the system apt cache (/var/cache/apt/archives/) so pkgwrap
+   * shares cached .debs with apt-get install, apt-get upgrade, etc.
+   * Any package already installed or previously downloaded on the
+   * host is reused without a network round-trip. */
+  NSString *aptCache = @"/var/cache/apt/archives";
 
-  NSFileHandle *devNull = [NSFileHandle fileHandleForWritingAtPath:@"/dev/null"];
-  NSTask *task = [[NSTask alloc] init];
-  [task setLaunchPath:@"/usr/bin/apt-get"];
-  [task setArguments:args];
-  [task setCurrentDirectoryPath:_debCachePath];
-  if (!_verbose)
-    [task setStandardOutput:devNull];
-  [task launch];
-  [task waitUntilExit];
-  int status = [task terminationStatus];
-  [task release];
-
-  if (status != 0)
+  /* Copy matching .debs from the apt cache into our working directory.
+   * Try hard link first (instant, no disk space), fall back to copy. */
+  NSArray *aptFiles = [fm contentsOfDirectoryAtPath:aptCache error:NULL];
+  for (NSString *pkg in _resolvedPackages)
     {
-      /* Some packages may fail (virtual packages, etc.).
-       * Try downloading one by one and skip failures. */
-      fprintf(stderr, "Batch download had errors; retrying individually...\n");
-      int downloaded = 0;
-      int skipped = 0;
-      for (NSString *pkg in _resolvedPackages)
+      NSString *prefix = [pkg stringByAppendingString:@"_"];
+      for (NSString *f in aptFiles)
         {
-          NSTask *t = [[NSTask alloc] init];
-          [t setLaunchPath:@"/usr/bin/apt-get"];
-          [t setArguments:@[@"download", pkg]];
-          [t setCurrentDirectoryPath:_debCachePath];
-          [t setStandardOutput:devNull];
-          [t setStandardError:devNull];
-          [t launch];
-          [t waitUntilExit];
-          int s = [t terminationStatus];
-          [t release];
-
-          if (s == 0)
-            downloaded++;
-          else
+          if ([f hasPrefix:prefix] && [f hasSuffix:@".deb"])
             {
-              skipped++;
-              if (_verbose)
-                fprintf(stderr, "  Skipped: %s (not downloadable)\n",
-                        [pkg UTF8String]);
+              NSString *dst = [_debCachePath stringByAppendingPathComponent:f];
+              if (![fm fileExistsAtPath:dst])
+                {
+                  NSString *src = [aptCache stringByAppendingPathComponent:f];
+                  if (link([src fileSystemRepresentation],
+                           [dst fileSystemRepresentation]) != 0)
+                    [fm copyItemAtPath:src toPath:dst error:NULL];
+                }
+              break;
             }
         }
-      fprintf(stderr, "Downloaded %d packages, skipped %d\n",
-              downloaded, skipped);
-      if (downloaded == 0)
-        return NO;
     }
 
-  /* Count downloaded .deb files */
-  NSFileManager *fm = [NSFileManager defaultManager];
+  /* Figure out which packages we still need to download */
+  NSMutableArray *needed = [NSMutableArray array];
+  NSArray *existing = [fm contentsOfDirectoryAtPath:_debCachePath error:NULL];
+  for (NSString *pkg in _resolvedPackages)
+    {
+      BOOL found = NO;
+      NSString *prefix = [pkg stringByAppendingString:@"_"];
+      for (NSString *f in existing)
+        {
+          if ([f hasPrefix:prefix] && [f hasSuffix:@".deb"])
+            {
+              found = YES;
+              break;
+            }
+        }
+      if (!found)
+        [needed addObject:pkg];
+    }
+
+  if ([needed count] < [_resolvedPackages count])
+    fprintf(stderr, "%d packages from apt cache, %lu to download\n",
+            (int)([_resolvedPackages count] - [needed count]),
+            (unsigned long)[needed count]);
+  else
+    fprintf(stderr, "Downloading %lu packages...\n",
+            (unsigned long)[_resolvedPackages count]);
+
+  if ([needed count] > 0)
+    {
+      /* apt-get download puts .deb files in the current directory. */
+      NSMutableArray *args = [NSMutableArray arrayWithObjects:
+        @"download", nil];
+      [args addObjectsFromArray:needed];
+
+      NSFileHandle *devNull = [NSFileHandle fileHandleForWritingAtPath:@"/dev/null"];
+      NSTask *task = [[NSTask alloc] init];
+      [task setLaunchPath:@"/usr/bin/apt-get"];
+      [task setArguments:args];
+      [task setCurrentDirectoryPath:_debCachePath];
+      if (!_verbose)
+        [task setStandardOutput:devNull];
+      [task launch];
+      [task waitUntilExit];
+      int status = [task terminationStatus];
+      [task release];
+
+      if (status != 0)
+        {
+          fprintf(stderr, "Batch download had errors; retrying individually...\n");
+          int downloaded = 0;
+          int skipped = 0;
+          for (NSString *pkg in needed)
+            {
+              NSTask *t = [[NSTask alloc] init];
+              [t setLaunchPath:@"/usr/bin/apt-get"];
+              [t setArguments:@[@"download", pkg]];
+              [t setCurrentDirectoryPath:_debCachePath];
+              [t setStandardOutput:devNull];
+              [t setStandardError:devNull];
+              [t launch];
+              [t waitUntilExit];
+              int s = [t terminationStatus];
+              [t release];
+
+              if (s == 0)
+                downloaded++;
+              else
+                {
+                  skipped++;
+                  if (_verbose)
+                    fprintf(stderr, "  Skipped: %s (not downloadable)\n",
+                            [pkg UTF8String]);
+                }
+            }
+          fprintf(stderr, "Downloaded %d packages, skipped %d\n",
+                  downloaded, skipped);
+        }
+
+      /* Copy newly downloaded .debs back into the apt cache so future
+       * apt operations and pkgwrap runs can reuse them. */
+      NSArray *nowFiles = [fm contentsOfDirectoryAtPath:_debCachePath error:NULL];
+      for (NSString *f in nowFiles)
+        {
+          if (![f hasSuffix:@".deb"])
+            continue;
+          NSString *dst = [aptCache stringByAppendingPathComponent:f];
+          if (![fm fileExistsAtPath:dst])
+            {
+              NSString *src = [_debCachePath stringByAppendingPathComponent:f];
+              [fm copyItemAtPath:src toPath:dst error:NULL];
+            }
+        }
+    }
+
+  /* Count total .deb files available */
   NSArray *files = [fm contentsOfDirectoryAtPath:_debCachePath error:NULL];
   int debCount = 0;
   for (NSString *f in files)
     if ([f hasSuffix:@".deb"])
       debCount++;
-  fprintf(stderr, "Downloaded %d .deb files\n", debCount);
+  fprintf(stderr, "Total %d .deb files ready\n", debCount);
 
   return debCount > 0;
 }

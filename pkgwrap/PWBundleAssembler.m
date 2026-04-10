@@ -83,6 +83,37 @@
         }
     }
 
+  /* Copy the LD_PRELOAD redirect library into the bundle */
+  {
+    NSString *redirectSrc = @"/System/Library/pkgwrap/pkgwrap-redirect.so";
+    NSString *redirectDir = [contentsPath stringByAppendingPathComponent:@"lib"];
+    NSString *redirectDst = [redirectDir stringByAppendingPathComponent:@"pkgwrap-redirect.so"];
+
+    if ([fm fileExistsAtPath:redirectSrc])
+      {
+        [fm createDirectoryAtPath:redirectDir
+           withIntermediateDirectories:YES
+                            attributes:nil
+                                 error:NULL];
+        [fm removeItemAtPath:redirectDst error:NULL];
+        if ([fm copyItemAtPath:redirectSrc toPath:redirectDst error:&error])
+          {
+            if (_verbose)
+              fprintf(stderr, "Copied pkgwrap-redirect.so into bundle\n");
+          }
+        else
+          {
+            fprintf(stderr, "Warning: could not copy pkgwrap-redirect.so: %s\n",
+                    [[error localizedDescription] UTF8String]);
+          }
+      }
+    else
+      {
+        fprintf(stderr, "Warning: pkgwrap-redirect.so not found at %s\n",
+                [redirectSrc UTF8String]);
+      }
+  }
+
   fprintf(stderr, "Copying complete, rewriting RPATH...\n");
 
   /* Run patchelf on all ELF binaries */

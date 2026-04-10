@@ -183,6 +183,8 @@ static void print_usage(const char *prog)
     "  -f, --force            Overwrite existing bundle without asking\n"
     "      --strip             Strip debug symbols from binaries\n"
     "      --keep-root         Don't delete the staging root after bundling\n"
+    "      --enable-redirect   Force LD_PRELOAD path redirect in launcher\n"
+    "      --no-redirect       Disable LD_PRELOAD path redirect in launcher\n"
     "  -v, --verbose          Show detailed progress\n"
     "  -h, --help             Show this help\n"
     "\n"
@@ -210,6 +212,7 @@ int main(int argc, char *argv[])
   BOOL verbose = NO;
   BOOL doStrip = NO;
   BOOL keepRoot = NO;
+  int redirectOverride = 0;  /* 0=auto, 1=force-on, -1=force-off */
   char *skipListArg = NULL;
   char *execArg = NULL;
   char *nameArg = NULL;
@@ -217,16 +220,18 @@ int main(int argc, char *argv[])
   char *launchArgsArg = NULL;
 
   static struct option long_options[] = {
-    {"skip-list",    required_argument, 0, 's'},
-    {"exec",         required_argument, 0, 'e'},
-    {"name",         required_argument, 0, 'N'},
-    {"icon",         required_argument, 0, 'i'},
-    {"launch-args",  required_argument, 0, 'L'},
-    {"force",        no_argument,       0, 'f'},
-    {"strip",        no_argument,       0, 'S'},
-    {"keep-root",    no_argument,       0, 'K'},
-    {"verbose",      no_argument,       0, 'v'},
-    {"help",         no_argument,       0, 'h'},
+    {"skip-list",        required_argument, 0, 's'},
+    {"exec",             required_argument, 0, 'e'},
+    {"name",             required_argument, 0, 'N'},
+    {"icon",             required_argument, 0, 'i'},
+    {"launch-args",      required_argument, 0, 'L'},
+    {"force",            no_argument,       0, 'f'},
+    {"strip",            no_argument,       0, 'S'},
+    {"keep-root",        no_argument,       0, 'K'},
+    {"enable-redirect",  no_argument,       0, 'R'},
+    {"no-redirect",      no_argument,       0, 'D'},
+    {"verbose",          no_argument,       0, 'v'},
+    {"help",             no_argument,       0, 'h'},
     {0, 0, 0, 0}
   };
 
@@ -244,6 +249,8 @@ int main(int argc, char *argv[])
         case 'f': forceOverwrite = YES; break;
         case 'S': doStrip = YES; break;
         case 'K': keepRoot = YES; break;
+        case 'R': redirectOverride = 1; break;
+        case 'D': redirectOverride = -1; break;
         case 'v': verbose = YES; break;
         case 'h':
           print_usage(argv[0]);
@@ -496,6 +503,53 @@ int main(int argc, char *argv[])
     ? [NSString stringWithUTF8String:launchArgsArg]
     : nil;
 
+  /* Decide whether the LD_PRELOAD redirect library should be enabled.
+   * Auto-detection: disable for Qt6 apps (Qt6 + Mesa/EGL crashes with
+   * open() interception via LD_PRELOAD).  Enable for apps with hardcoded
+   * absolute paths (like GIMP) that have no env var override.
+   * Manual override via --enable-redirect / --no-redirect. */
+  BOOL needsRedirect = NO;  /* default off — env vars cover most cases */
+  if (redirectOverride == 1)
+    {
+      needsRedirect = YES;
+    }
+  else if (redirectOverride == -1)
+    {
+      needsRedirect = NO;
+    }
+  else
+    {
+      /* Auto-detect: check for Qt6 linkage which crashes with LD_PRELOAD */
+      NSString *rootPath = [pm rootPath];
+      NSString *fullExec = [rootPath stringByAppendingPathComponent:mainExec];
+      BOOL hasQt6 = NO;
+
+      NSTask *lddTask = [[NSTask alloc] init];
+      NSPipe *lddPipe = [NSPipe pipe];
+      [lddTask setLaunchPath:@"/usr/bin/ldd"];
+      [lddTask setArguments:@[fullExec]];
+      [lddTask setStandardOutput:lddPipe];
+      [lddTask setStandardError:[NSPipe pipe]];
+      [lddTask launch];
+      [lddTask waitUntilExit];
+      NSData *lddData = [[lddPipe fileHandleForReading] readDataToEndOfFile];
+      NSString *lddOutput = [[[NSString alloc] initWithData:lddData
+                               encoding:NSUTF8StringEncoding] autorelease];
+      [lddTask release];
+
+      if ([lddOutput rangeOfString:@"libQt6Core"].location != NSNotFound ||
+          [lddOutput rangeOfString:@"libQt6Gui"].location != NSNotFound)
+        hasQt6 = YES;
+
+      if (hasQt6)
+        {
+          needsRedirect = NO;
+          if (verbose)
+            fprintf(stderr, "Qt6 app detected — disabling LD_PRELOAD redirect "
+                            "(known crash with Qt6/Mesa open() interception)\n");
+        }
+    }
+
   if (verbose)
     {
       fprintf(stderr, "Application: %s\nExecutable: %s\n",
@@ -504,6 +558,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Chromium-based: yes (--no-sandbox on FreeBSD)\n");
       if (launchArgs)
         fprintf(stderr, "Extra launch args: %s\n", [launchArgs UTF8String]);
+      fprintf(stderr, "LD_PRELOAD redirect: %s\n",
+              needsRedirect ? "enabled" : "disabled");
     }
 
   /* ── Phase 3: Check for existing squashfs output ── */
@@ -589,6 +645,7 @@ int main(int argc, char *argv[])
                                            appName:bundleName
                                           mainExec:mainExec
                                      chromiumBased:isChromiumBased
+                                     needsRedirect:needsRedirect
                                         launchArgs:launchArgs])
     {
       fprintf(stderr, "Failed to generate launcher script\n");

@@ -23,4 +23,21 @@ ADDITIONAL_LDFLAGS += -lgnustep-base -lgnustep-gui
 
 include $(GNUSTEP_MAKEFILES)/tool.make
 
+# Build the LD_PRELOAD redirect library (plain C shared library)
+REDIRECT_SO = obj/pkgwrap-redirect.so
+REDIRECT_INSTALL_DIR = /System/Library/pkgwrap
+
+$(REDIRECT_SO): pkgwrap-redirect.c
+	@mkdir -p obj
+	$(CC) -shared -fPIC -O2 -Wall -o $@ $< -ldl
+
+after-all:: $(REDIRECT_SO)
+
+after-install:: $(REDIRECT_SO)
+	@mkdir -p $(REDIRECT_INSTALL_DIR)
+	cp $(REDIRECT_SO) $(REDIRECT_INSTALL_DIR)/pkgwrap-redirect.so
+
+after-clean::
+	rm -f $(REDIRECT_SO)
+
 -include GNUmakefile.postamble

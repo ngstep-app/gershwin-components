@@ -12,6 +12,7 @@
                        appName:(NSString *)appName
                       mainExec:(NSString *)mainExec
                  chromiumBased:(BOOL)chromiumBased
+                 needsRedirect:(BOOL)needsRedirect
                     launchArgs:(NSString *)launchArgs;
 
 @end

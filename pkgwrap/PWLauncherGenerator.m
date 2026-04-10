@@ -12,6 +12,7 @@
                        appName:(NSString *)appName
                       mainExec:(NSString *)mainExec
                  chromiumBased:(BOOL)chromiumBased
+                 needsRedirect:(BOOL)needsRedirect
                     launchArgs:(NSString *)launchArgs
 {
   /* Determine multi-arch triplet from the host */
@@ -54,6 +55,19 @@
   /* Resolve bundle directory */
   [script appendString:@"BUNDLE=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n"];
   [script appendString:@"C=\"${BUNDLE}/Contents\"\n\n"];
+
+  /* LD_PRELOAD path redirect — transparently redirects filesystem
+   * lookups for /usr/share/, /usr/lib/, /etc/ into the bundle.
+   * Only enabled for apps with hardcoded absolute paths (e.g., GIMP).
+   * Disabled for Qt6/Mesa apps where open() interception causes crashes. */
+  if (needsRedirect)
+    {
+      [script appendString:@"# Path redirect for bundled files\n"];
+      [script appendString:@"export BUNDLE_CONTENTS=\"${C}\"\n"];
+      [script appendString:@"_REDIR=/System/Library/pkgwrap/pkgwrap-redirect.so\n"];
+      [script appendString:@"[ -f \"$_REDIR\" ] && \\\n"];
+      [script appendString:@"    export LD_PRELOAD=\"${_REDIR}${LD_PRELOAD:+:$LD_PRELOAD}\"\n\n"];
+    }
 
   /* Library paths - cover all Debian library locations including
    * subdirectories (e.g., pulseaudio/, pipewire/, private/) */
@@ -120,6 +134,18 @@
   [script appendFormat:@"[ -d \"${C}/usr/lib/%@/girepository-1.0\" ] && \\\n", multiarch];
   [script appendFormat:@"    export GI_TYPELIB_PATH=\"${C}/usr/lib/%@/girepository-1.0\"\n\n", multiarch];
 
+  /* App-specific env vars for programs that support runtime path overrides.
+   * These cover hardcoded paths that can't be caught by LD_PRELOAD alone
+   * (e.g., when the app uses open64 which bypasses our open wrapper). */
+
+  [script appendString:@"# GIMP 3.0 path overrides\n"];
+  [script appendString:@"[ -d \"${C}/usr/share/gimp\" ] && \\\n"];
+  [script appendString:@"    export GIMP3_DATADIR=\"${C}/usr/share/gimp/3.0\"\n"];
+  [script appendString:@"[ -d \"${C}/etc/gimp\" ] && \\\n"];
+  [script appendString:@"    export GIMP3_SYSCONFDIR=\"${C}/etc/gimp/3.0\"\n"];
+  [script appendFormat:@"[ -d \"${C}/usr/lib/%@/gimp/3.0\" ] && \\\n", multiarch];
+  [script appendFormat:@"    export GIMP3_PLUGINDIR=\"${C}/usr/lib/%@/gimp/3.0\"\n\n", multiarch];
+
   /* Filter GNUstep-specific arguments (same as appwrap) */
   [script appendString:@"# Filter GNUstep arguments\n"];
   [script appendString:@"for arg do\n"];
@@ -157,10 +183,13 @@
 
   [script appendString:@"\n"];
 
+  /* Use bundled ld-linux only on FreeBSD (linuxulator needs it for
+   * full self-containment).  On native Linux, the system ld-linux
+   * works fine with LD_LIBRARY_PATH and avoids LD_PRELOAD conflicts. */
   [script appendString:@"# Execute the main binary\n"];
   [script appendFormat:
     @"MAIN=\"${C}%@\"\n"
-    @"if [ -n \"$LD_LINUX\" ]; then\n"
+    @"if [ -n \"$LD_LINUX\" ] && [ \"$(uname -s)\" != \"Linux\" ]; then\n"
     @"    if head -c4 \"$MAIN\" 2>/dev/null | grep -q ELF; then\n"
     @"        exec \"$LD_LINUX\" \"$MAIN\" $EXTRA_ARGS \"$@\"\n"
     @"    else\n"
