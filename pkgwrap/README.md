@@ -37,11 +37,28 @@ pkgwrap --localpkg custom-build.deb -v ~/Applications/
 pkgwrap --localdir DIR --name NAME --exec PATH --icon PATH [OPTIONS] [output-directory]
 ```
 
-Bundles an existing directory tree directly (no apt, no dependency resolution). The directory should contain a filesystem layout (e.g., `usr/bin/`, `usr/lib/`, etc.). Requires `--name`, `--exec`, and `--icon`.
+Bundles an existing directory tree directly (no apt, no dependency resolution). The directory can be a standard filesystem layout (e.g., `usr/bin/`, `usr/lib/`) or a flat application directory. Requires `--name`, `--exec`, and `--icon`.
 
 ```
 pkgwrap --localdir /opt/myapp --name "My App" --exec /usr/bin/myapp --icon ~/myapp.png
 ```
+
+**Example: bundling Basilisk browser from an extracted tarball**
+
+```sh
+pkgwrap --localdir basilisk \
+  --name "Basilisk" \
+  --exec /basilisk \
+  --icon basilisk/browser/icons/mozicon128.png \
+  -f -v
+```
+
+- `--localdir basilisk` — use the `basilisk/` directory as the source tree
+- `--name "Basilisk"` — name the bundle "Basilisk.app"
+- `--exec /basilisk` — the main executable (relative to the directory root)
+- `--icon basilisk/browser/icons/mozicon128.png` — application icon
+- `-f` — overwrite existing bundle without prompting
+- `-v` — show detailed progress
 
 ## Options
 

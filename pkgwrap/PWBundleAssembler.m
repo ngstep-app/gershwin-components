@@ -52,34 +52,72 @@
         }
     }
 
-  /* Copy relevant directories from the staging root into Contents/
-   * preserving the Debian filesystem layout. */
-  NSArray *copyDirs = @[@"usr", @"etc", @"lib", @"opt"];
-  /* Directories to skip entirely */
+  /* Directories to skip entirely (Debian packaging noise) */
   NSSet *skipDirs = [NSSet setWithArray:@[
     @"usr/share/doc", @"usr/share/man", @"usr/share/info",
     @"usr/share/lintian", @"usr/share/bug", @"usr/share/menu",
     @"usr/share/locale"
   ]];
 
-  for (NSString *dir in copyDirs)
+  /* Decide what to copy.  For Debian filesystem layouts, only copy
+   * known directories (usr, etc, lib, opt).  For flat directory layouts
+   * (e.g., extracted tarballs via --localdir), copy everything. */
+  BOOL isDebianLayout = [fm fileExistsAtPath:
+    [_rootPath stringByAppendingPathComponent:@"usr"]];
+  NSArray *copyItems = nil;
+
+  if (isDebianLayout)
     {
-      NSString *srcDir = [_rootPath stringByAppendingPathComponent:dir];
-      if (![fm fileExistsAtPath:srcDir])
+      copyItems = @[@"usr", @"etc", @"lib", @"opt"];
+    }
+  else
+    {
+      /* Flat layout — copy all top-level items */
+      copyItems = [fm contentsOfDirectoryAtPath:_rootPath error:NULL];
+      if (!copyItems)
+        copyItems = @[];
+    }
+
+  for (NSString *item in copyItems)
+    {
+      NSString *srcItem = [_rootPath stringByAppendingPathComponent:item];
+      if (![fm fileExistsAtPath:srcItem])
         continue;
 
-      NSString *dstDir = [contentsPath stringByAppendingPathComponent:dir];
+      NSString *dstItem = [contentsPath stringByAppendingPathComponent:item];
 
-      if (_verbose)
-        fprintf(stderr, "Copying %s/ into bundle...\n", [dir UTF8String]);
+      /* Check if it's a file or directory */
+      BOOL isDir = NO;
+      [fm fileExistsAtPath:srcItem isDirectory:&isDir];
 
-      if (![self copyDirectory:srcDir
-                   toDirectory:dstDir
-                      skipDirs:skipDirs
-                    relativeTo:_rootPath])
+      if (isDir)
         {
-          fprintf(stderr, "Warning: some files in %s/ could not be copied\n",
-                  [dir UTF8String]);
+          if (_verbose)
+            fprintf(stderr, "Copying %s/ into bundle...\n", [item UTF8String]);
+
+          if (![self copyDirectory:srcItem
+                       toDirectory:dstItem
+                          skipDirs:skipDirs
+                        relativeTo:_rootPath])
+            {
+              fprintf(stderr, "Warning: some files in %s/ could not be copied\n",
+                      [item UTF8String]);
+            }
+        }
+      else
+        {
+          /* Single file — copy directly */
+          NSString *dstParent = [dstItem stringByDeletingLastPathComponent];
+          [fm createDirectoryAtPath:dstParent
+             withIntermediateDirectories:YES
+                              attributes:nil
+                                   error:NULL];
+          [fm removeItemAtPath:dstItem error:NULL];
+          if (![fm copyItemAtPath:srcItem toPath:dstItem error:&error])
+            {
+              fprintf(stderr, "Warning: could not copy %s: %s\n",
+                      [item UTF8String], [[error localizedDescription] UTF8String]);
+            }
         }
     }
 
