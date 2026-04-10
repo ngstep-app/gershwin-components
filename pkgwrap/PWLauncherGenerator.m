@@ -94,6 +94,30 @@
   [script appendFormat:@"[ -d \"${C}/usr/lib/%@/qt5/plugins\" ] && \\\n", multiarch];
   [script appendFormat:@"    export QT_PLUGIN_PATH=\"${C}/usr/lib/%@/qt5/plugins\"\n\n", multiarch];
 
+  [script appendString:@"# babl extensions (GIMP)\n"];
+  [script appendFormat:@"[ -d \"${C}/usr/lib/%@/babl-0.1\" ] && \\\n", multiarch];
+  [script appendFormat:@"    export BABL_PATH=\"${C}/usr/lib/%@/babl-0.1\"\n\n", multiarch];
+
+  [script appendString:@"# GEGL operations (GIMP)\n"];
+  [script appendFormat:@"[ -d \"${C}/usr/lib/%@/gegl-0.4\" ] && \\\n", multiarch];
+  [script appendFormat:@"    export GEGL_PATH=\"${C}/usr/lib/%@/gegl-0.4\"\n\n", multiarch];
+
+  [script appendString:@"# GStreamer plugins\n"];
+  [script appendFormat:@"[ -d \"${C}/usr/lib/%@/gstreamer-1.0\" ] && \\\n", multiarch];
+  [script appendFormat:@"    export GST_PLUGIN_PATH=\"${C}/usr/lib/%@/gstreamer-1.0\"\n\n", multiarch];
+
+  [script appendString:@"# Mesa/DRI drivers\n"];
+  [script appendFormat:@"[ -d \"${C}/usr/lib/%@/dri\" ] && \\\n", multiarch];
+  [script appendFormat:@"    export LIBGL_DRIVERS_PATH=\"${C}/usr/lib/%@/dri\"\n\n", multiarch];
+
+  [script appendString:@"# Pango modules\n"];
+  [script appendFormat:@"[ -d \"${C}/usr/lib/%@/pango\" ] && \\\n", multiarch];
+  [script appendFormat:@"    export PANGO_LIBDIR=\"${C}/usr/lib/%@\"\n\n", multiarch];
+
+  [script appendString:@"# GObject introspection typelibs\n"];
+  [script appendFormat:@"[ -d \"${C}/usr/lib/%@/girepository-1.0\" ] && \\\n", multiarch];
+  [script appendFormat:@"    export GI_TYPELIB_PATH=\"${C}/usr/lib/%@/girepository-1.0\"\n\n", multiarch];
+
   /* Filter GNUstep-specific arguments (same as appwrap) */
   [script appendString:@"# Filter GNUstep arguments\n"];
   [script appendString:@"for arg do\n"];
