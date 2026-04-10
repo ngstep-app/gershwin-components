@@ -19,10 +19,12 @@
 - (BOOL)loadSkipList:(NSString *)path;
 - (BOOL)setupStagingRoot;
 - (BOOL)resolveDependencies;
+- (BOOL)resolveDependenciesForLocalDeb:(NSString *)debPath;
 - (BOOL)downloadPackages;
 - (BOOL)extractPackages;
 - (NSString *)findDesktopFile;
 - (NSString *)rootPath;
+- (void)setLocalRootPath:(NSString *)path;
 - (NSArray *)resolvedPackageNames;
 - (void)cleanup;
 

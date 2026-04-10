@@ -54,6 +54,8 @@ static int runCommandStatus(NSString *launchPath, NSArray *arguments,
 {
   NSMutableArray *_resolvedPackages;
   NSString *_debCachePath;
+  NSString *_localDebPath;
+  BOOL _localDirMode;
 }
 
 - (instancetype)initWithPackage:(NSString *)package verbose:(BOOL)verbose
@@ -470,19 +472,24 @@ static int runCommandStatus(NSString *launchPath, NSArray *arguments,
   /* Strategy 1: Query the primary package's .deb to find which .desktop
    * files it actually ships.  This avoids picking up .desktop files from
    * dependency packages (e.g., python3.13.desktop when bundling obs-studio).
-   * The .deb filename follows the convention: <package>_<version>_<arch>.deb */
-  if (_debCachePath)
+   * For --localpkg mode, the local deb path is used directly.
+   * For apt mode, the .deb filename convention: <package>_<version>_<arch>.deb */
+  if (_debCachePath || _localDebPath)
     {
-      NSArray *debs = [fm contentsOfDirectoryAtPath:_debCachePath error:NULL];
-      NSString *primaryDeb = nil;
-      NSString *prefix = [NSString stringWithFormat:@"%@_", _packageName];
+      NSString *primaryDeb = _localDebPath;
 
-      for (NSString *deb in debs)
+      if (!primaryDeb)
         {
-          if ([deb hasPrefix:prefix] && [deb hasSuffix:@".deb"])
+          NSArray *debs = [fm contentsOfDirectoryAtPath:_debCachePath error:NULL];
+          NSString *prefix = [NSString stringWithFormat:@"%@_", _packageName];
+
+          for (NSString *deb in debs)
             {
-              primaryDeb = [_debCachePath stringByAppendingPathComponent:deb];
-              break;
+              if ([deb hasPrefix:prefix] && [deb hasSuffix:@".deb"])
+                {
+                  primaryDeb = [_debCachePath stringByAppendingPathComponent:deb];
+                  break;
+                }
             }
         }
 
@@ -561,8 +568,176 @@ static int runCommandStatus(NSString *launchPath, NSArray *arguments,
   return nil;
 }
 
+/* Set the root path directly for --localdir mode (no extraction needed). */
+- (void)setLocalRootPath:(NSString *)path
+{
+  [_rootPath release];
+  _rootPath = [path copy];
+  _localDirMode = YES;
+}
+
+/* Resolve dependencies from a local .deb file's Depends field.
+ * The local deb is copied into the working cache and its dependencies
+ * are resolved from apt, just like the normal apt mode. */
+- (BOOL)resolveDependenciesForLocalDeb:(NSString *)debPath
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+
+  /* Remember the local deb path for findDesktopFile */
+  _localDebPath = [debPath copy];
+
+  /* Copy the local deb into our working cache */
+  NSString *debName = [debPath lastPathComponent];
+  NSString *dst = [_debCachePath stringByAppendingPathComponent:debName];
+  [fm removeItemAtPath:dst error:NULL];
+  if (![fm copyItemAtPath:debPath toPath:dst error:NULL])
+    {
+      fprintf(stderr, "Failed to copy local deb to staging area\n");
+      return NO;
+    }
+
+  /* Read the Depends field from the deb */
+  NSString *depends = runCommand(@"/usr/bin/dpkg-deb",
+    @[@"-f", debPath, @"Depends"]);
+  if (!depends)
+    depends = @"";
+  depends = [depends stringByTrimmingCharactersInSet:
+    [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+  /* Also read Pre-Depends */
+  NSString *preDepends = runCommand(@"/usr/bin/dpkg-deb",
+    @[@"-f", debPath, @"Pre-Depends"]);
+  if (preDepends)
+    {
+      preDepends = [preDepends stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+      if ([preDepends length] > 0)
+        {
+          if ([depends length] > 0)
+            depends = [depends stringByAppendingFormat:@", %@", preDepends];
+          else
+            depends = preDepends;
+        }
+    }
+
+  fprintf(stderr, "Local package dependencies: %s\n", [depends UTF8String]);
+
+  /* Parse the comma-separated dependency list.
+   * Each entry is like: "libfoo (>= 1.0)" or "libfoo | libbar".
+   * We take the first alternative and strip version constraints. */
+  NSMutableSet *depNames = [NSMutableSet set];
+  NSArray *entries = [depends componentsSeparatedByString:@","];
+  for (NSString *entry in entries)
+    {
+      NSString *trimmed = [entry stringByTrimmingCharactersInSet:
+        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+      if ([trimmed length] == 0)
+        continue;
+
+      /* Take first alternative if "a | b" */
+      NSRange pipeRange = [trimmed rangeOfString:@"|"];
+      if (pipeRange.location != NSNotFound)
+        trimmed = [[trimmed substringToIndex:pipeRange.location]
+          stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+      /* Strip version constraint "(>= 1.0)" */
+      NSRange parenRange = [trimmed rangeOfString:@"("];
+      if (parenRange.location != NSNotFound)
+        trimmed = [[trimmed substringToIndex:parenRange.location]
+          stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+      /* Strip :arch qualifier */
+      NSRange colonRange = [trimmed rangeOfString:@":"];
+      if (colonRange.location != NSNotFound)
+        trimmed = [trimmed substringToIndex:colonRange.location];
+
+      if ([trimmed length] > 0)
+        [depNames addObject:trimmed];
+    }
+
+  /* Now resolve the full dependency tree for each direct dependency
+   * using apt-cache depends --recurse */
+  NSMutableSet *allPackages = [NSMutableSet set];
+  for (NSString *dep in depNames)
+    {
+      if ([_skipPackages containsObject:dep])
+        continue;
+
+      NSString *output = runCommand(@"/usr/bin/apt-cache",
+        @[@"depends", @"--recurse",
+          @"--no-recommends", @"--no-suggests",
+          @"--no-conflicts", @"--no-breaks",
+          @"--no-replaces", @"--no-enhances",
+          dep]);
+
+      if (!output)
+        continue;
+
+      NSArray *lines = [output componentsSeparatedByString:@"\n"];
+      for (NSString *line in lines)
+        {
+          if ([line length] == 0)
+            continue;
+          unichar first = [line characterAtIndex:0];
+          if (first == ' ' || first == '\t' || first == '|')
+            continue;
+
+          NSString *pkg = [line stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+          if ([pkg hasPrefix:@"<"] && [pkg hasSuffix:@">"])
+            continue;
+
+          NSRange cr = [pkg rangeOfString:@":"];
+          if (cr.location != NSNotFound)
+            pkg = [pkg substringToIndex:cr.location];
+
+          if ([pkg length] > 0 && ![_skipPackages containsObject:pkg])
+            [allPackages addObject:pkg];
+        }
+    }
+
+  /* Add essential packages */
+  NSString *essentialOutput = runCommand(@"/usr/bin/dpkg-query",
+    @[@"-W", @"-f", @"${Package} ${Essential}\n"]);
+  if (essentialOutput)
+    {
+      NSArray *essLines = [essentialOutput componentsSeparatedByString:@"\n"];
+      for (NSString *line in essLines)
+        {
+          if (![line hasSuffix:@" yes"])
+            continue;
+          NSString *pkg = [line substringToIndex:[line length] - 4];
+          if ([pkg length] > 0 && ![_skipPackages containsObject:pkg])
+            [allPackages addObject:pkg];
+        }
+    }
+
+  /* Build the resolved list (exclude the local package itself) */
+  for (NSString *pkg in allPackages)
+    {
+      if (![pkg isEqualToString:_packageName])
+        [_resolvedPackages addObject:pkg];
+    }
+
+  fprintf(stderr, "Resolved %lu dependency packages (plus local deb)\n",
+          (unsigned long)[_resolvedPackages count]);
+
+  if (_verbose)
+    {
+      for (NSString *pkg in _resolvedPackages)
+        fprintf(stderr, "  %s\n", [pkg UTF8String]);
+    }
+
+  return YES;
+}
+
 - (NSString *)rootPath
 {
+  if (_localDirMode)
+    return _rootPath;
   /* Return the extraction root, not the temp dir */
   return [_rootPath stringByAppendingPathComponent:@"root"];
 }
@@ -592,6 +767,7 @@ static int runCommandStatus(NSString *launchPath, NSArray *arguments,
   [_resolvedPackages release];
   [_arch release];
   if (_debCachePath) [_debCachePath release];
+  if (_localDebPath) [_localDebPath release];
   if (_rootPath) [_rootPath release];
   [super dealloc];
 }

@@ -171,8 +171,18 @@ static void print_usage(const char *prog)
 {
   fprintf(stderr,
     "Usage: %s [OPTIONS] <package-name> [output-directory]\n"
+    "       %s --localpkg FILE [OPTIONS] [output-directory]\n"
+    "       %s --localdir DIR --name NAME --exec PATH --icon PATH [OPTIONS] [output-directory]\n"
     "\n"
-    "Create a self-contained GNUstep .app bundle from a Debian/Devuan package.\n"
+    "Create a self-contained GNUstep .app bundle from a Debian/Devuan package,\n"
+    "a local .deb file, or an existing directory tree.\n"
+    "\n"
+    "Source options (pick one):\n"
+    "  <package-name>         Pull from apt repositories (default)\n"
+    "      --localpkg FILE    Use a local .deb as the primary package;\n"
+    "                         dependencies are resolved and downloaded from apt\n"
+    "      --localdir DIR     Bundle an existing directory tree (no apt);\n"
+    "                         requires --name, --exec, and --icon\n"
     "\n"
     "Options:\n"
     "  -s, --skip-list FILE   Path to package skip list (packages on the host)\n"
@@ -180,6 +190,8 @@ static void print_usage(const char *prog)
     "  -N, --name NAME        Override application name for the bundle\n"
     "  -i, --icon PATH        Override icon (path on host filesystem)\n"
     "  -L, --launch-args ARGS Extra arguments baked into the launcher exec line\n"
+    "      --overlay DIR       Copy contents of DIR into bundle's Contents/\n"
+    "                         (merged recursively, overwriting existing files)\n"
     "  -f, --force            Overwrite existing bundle without asking\n"
     "      --strip             Strip debug symbols from binaries\n"
     "      --keep-root         Don't delete the staging root after bundling\n"
@@ -192,7 +204,7 @@ static void print_usage(const char *prog)
     "Packages in this list are assumed to be on the host system and\n"
     "will not be installed into the staging root. Generate from a\n"
     "Gershwin live ISO with: dpkg-query -W -f '${Package}\\n'\n",
-    prog);
+    prog, prog, prog);
 }
 
 int main(int argc, char *argv[])
@@ -218,6 +230,9 @@ int main(int argc, char *argv[])
   char *nameArg = NULL;
   char *iconArg = NULL;
   char *launchArgsArg = NULL;
+  char *localPkgArg = NULL;
+  char *localDirArg = NULL;
+  char *overlayArg = NULL;
 
   static struct option long_options[] = {
     {"skip-list",        required_argument, 0, 's'},
@@ -225,6 +240,9 @@ int main(int argc, char *argv[])
     {"name",             required_argument, 0, 'N'},
     {"icon",             required_argument, 0, 'i'},
     {"launch-args",      required_argument, 0, 'L'},
+    {"localpkg",         required_argument, 0, 'P'},
+    {"localdir",         required_argument, 0, 'T'},
+    {"overlay",          required_argument, 0, 'O'},
     {"force",            no_argument,       0, 'f'},
     {"strip",            no_argument,       0, 'S'},
     {"keep-root",        no_argument,       0, 'K'},
@@ -246,6 +264,9 @@ int main(int argc, char *argv[])
         case 'N': nameArg = optarg; break;
         case 'i': iconArg = optarg; break;
         case 'L': launchArgsArg = optarg; break;
+        case 'P': localPkgArg = optarg; break;
+        case 'T': localDirArg = optarg; break;
+        case 'O': overlayArg = optarg; break;
         case 'f': forceOverwrite = YES; break;
         case 'S': doStrip = YES; break;
         case 'K': keepRoot = YES; break;
@@ -263,28 +284,119 @@ int main(int argc, char *argv[])
         }
     }
 
-  /* Package name is required */
-  if (optind >= argc)
+  /* ── Determine source mode ── */
+  NSString *localPkgPath = localPkgArg
+    ? [[NSString stringWithUTF8String:localPkgArg] stringByExpandingTildeInPath]
+    : nil;
+  NSString *localDirPath = localDirArg
+    ? [[NSString stringWithUTF8String:localDirArg] stringByExpandingTildeInPath]
+    : nil;
+
+  NSString *packageName = nil;
+  NSString *outputDir = nil;
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSError *error = nil;
+
+  if (localDirPath)
     {
-      fprintf(stderr, "Error: package name required\n");
-      print_usage(argv[0]);
-      [pool release];
-      exit(EXIT_FAILURE);
+      /* --localdir mode: requires --name, --exec, --icon */
+      if (!nameArg)
+        {
+          fprintf(stderr, "Error: --localdir requires --name\n");
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+      if (!execArg)
+        {
+          fprintf(stderr, "Error: --localdir requires --exec\n");
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+      if (!iconArg)
+        {
+          fprintf(stderr, "Error: --localdir requires --icon\n");
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+      if (![fm fileExistsAtPath:localDirPath])
+        {
+          fprintf(stderr, "Error: directory '%s' not found\n",
+                  [localDirPath UTF8String]);
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+      packageName = [NSString stringWithUTF8String:nameArg];
+    }
+  else if (localPkgPath)
+    {
+      /* --localpkg mode: extract package name from the .deb */
+      if (![fm fileExistsAtPath:localPkgPath])
+        {
+          fprintf(stderr, "Error: file '%s' not found\n",
+                  [localPkgPath UTF8String]);
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+      /* Get the package name from the deb's control data */
+      NSString *pkgField = nil;
+      {
+        NSTask *dpkgTask = [[NSTask alloc] init];
+        NSPipe *dpkgPipe = [NSPipe pipe];
+        [dpkgTask setLaunchPath:@"/usr/bin/dpkg-deb"];
+        [dpkgTask setArguments:@[@"-f", localPkgPath, @"Package"]];
+        [dpkgTask setStandardOutput:dpkgPipe];
+        [dpkgTask setStandardError:[NSPipe pipe]];
+        [dpkgTask launch];
+        NSData *dpkgData = [[dpkgPipe fileHandleForReading] readDataToEndOfFile];
+        [dpkgTask waitUntilExit];
+        pkgField = [[[NSString alloc] initWithData:dpkgData
+                      encoding:NSUTF8StringEncoding] autorelease];
+        [dpkgTask release];
+      }
+      if (pkgField)
+        pkgField = [pkgField stringByTrimmingCharactersInSet:
+          [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+      if (!pkgField || [pkgField length] == 0)
+        {
+          fprintf(stderr, "Error: could not read Package field from '%s'\n",
+                  [localPkgPath UTF8String]);
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+      packageName = pkgField;
+    }
+  else
+    {
+      /* Default apt mode: package name is a positional argument */
+      if (optind >= argc)
+        {
+          fprintf(stderr, "Error: package name required\n");
+          print_usage(argv[0]);
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+      packageName = [NSString stringWithUTF8String:argv[optind]];
     }
 
-  NSString *packageName = [NSString stringWithUTF8String:argv[optind]];
-  NSString *outputDir = nil;
-
-  if (optind + 1 < argc)
-    outputDir = [NSString stringWithUTF8String:argv[optind + 1]];
+  /* Output directory: next positional arg, or home directory */
+  if (localDirPath || localPkgPath)
+    {
+      if (optind < argc)
+        outputDir = [NSString stringWithUTF8String:argv[optind]];
+      else
+        outputDir = NSHomeDirectory();
+    }
   else
-    outputDir = NSHomeDirectory();
+    {
+      if (optind + 1 < argc)
+        outputDir = [NSString stringWithUTF8String:argv[optind + 1]];
+      else
+        outputDir = NSHomeDirectory();
+    }
 
   outputDir = [outputDir stringByExpandingTildeInPath];
 
   /* Create output directory if needed */
-  NSFileManager *fm = [NSFileManager defaultManager];
-  NSError *error = nil;
   if (![fm fileExistsAtPath:outputDir])
     {
       if (![fm createDirectoryAtPath:outputDir
@@ -300,66 +412,104 @@ int main(int argc, char *argv[])
     }
 
   /* ── Phase 1: Resolve, download, and extract package ── */
-  fprintf(stderr, "pkgwrap: bundling '%s'\n", [packageName UTF8String]);
+  PWPackageManager *pm = nil;
 
-  PWPackageManager *pm = [[PWPackageManager alloc] initWithPackage:packageName
-                                                           verbose:verbose];
-
-  /* Load skip list if provided */
-  NSString *skipListPath = skipListArg
-    ? [[NSString stringWithUTF8String:skipListArg] stringByExpandingTildeInPath]
-    : nil;
-
-  /* Also check for a default skip list in Resources/ */
-  if (!skipListPath)
+  if (localDirPath)
     {
-      NSString *defaultSkipList = @"/System/Library/pkgwrap/gershwin-base-packages.txt";
-      if ([fm fileExistsAtPath:defaultSkipList])
-        skipListPath = defaultSkipList;
+      /* --localdir: skip all package management, use directory as-is */
+      fprintf(stderr, "pkgwrap: bundling directory '%s' as '%s'\n",
+              [localDirPath UTF8String], [packageName UTF8String]);
+
+      /* Create a minimal PWPackageManager just to hold the root path.
+       * The root path IS the user-supplied directory. */
+      pm = [[PWPackageManager alloc] initWithPackage:packageName
+                                              verbose:verbose];
+      [pm setLocalRootPath:localDirPath];
     }
-
-  if (skipListPath)
+  else
     {
-      if (![pm loadSkipList:skipListPath])
+      if (localPkgPath)
+        fprintf(stderr, "pkgwrap: bundling local package '%s' (%s)\n",
+                [packageName UTF8String], [localPkgPath UTF8String]);
+      else
+        fprintf(stderr, "pkgwrap: bundling '%s'\n", [packageName UTF8String]);
+
+      pm = [[PWPackageManager alloc] initWithPackage:packageName
+                                              verbose:verbose];
+
+      /* Load skip list if provided */
+      NSString *skipListPath = skipListArg
+        ? [[NSString stringWithUTF8String:skipListArg] stringByExpandingTildeInPath]
+        : nil;
+
+      /* Also check for a default skip list in Resources/ */
+      if (!skipListPath)
         {
-          fprintf(stderr, "Warning: could not load skip list\n");
+          NSString *defaultSkipList = @"/System/Library/pkgwrap/gershwin-base-packages.txt";
+          if ([fm fileExistsAtPath:defaultSkipList])
+            skipListPath = defaultSkipList;
         }
-    }
 
-  if (![pm setupStagingRoot])
-    {
-      fprintf(stderr, "Failed to create staging directory\n");
-      [pm release];
-      [pool release];
-      exit(EXIT_FAILURE);
-    }
+      if (skipListPath)
+        {
+          if (![pm loadSkipList:skipListPath])
+            {
+              fprintf(stderr, "Warning: could not load skip list\n");
+            }
+        }
 
-  if (![pm resolveDependencies])
-    {
-      fprintf(stderr, "Failed to resolve dependencies for '%s'\n",
-              [packageName UTF8String]);
-      if (!keepRoot) [pm cleanup];
-      [pm release];
-      [pool release];
-      exit(EXIT_FAILURE);
-    }
+      if (![pm setupStagingRoot])
+        {
+          fprintf(stderr, "Failed to create staging directory\n");
+          [pm release];
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
 
-  if (![pm downloadPackages])
-    {
-      fprintf(stderr, "Failed to download packages\n");
-      if (!keepRoot) [pm cleanup];
-      [pm release];
-      [pool release];
-      exit(EXIT_FAILURE);
-    }
+      if (localPkgPath)
+        {
+          /* --localpkg: resolve deps from the deb's Depends field, then
+           * copy the local deb into the cache and download the rest. */
+          if (![pm resolveDependenciesForLocalDeb:localPkgPath])
+            {
+              fprintf(stderr, "Failed to resolve dependencies for '%s'\n",
+                      [localPkgPath UTF8String]);
+              if (!keepRoot) [pm cleanup];
+              [pm release];
+              [pool release];
+              exit(EXIT_FAILURE);
+            }
+        }
+      else
+        {
+          if (![pm resolveDependencies])
+            {
+              fprintf(stderr, "Failed to resolve dependencies for '%s'\n",
+                      [packageName UTF8String]);
+              if (!keepRoot) [pm cleanup];
+              [pm release];
+              [pool release];
+              exit(EXIT_FAILURE);
+            }
+        }
 
-  if (![pm extractPackages])
-    {
-      fprintf(stderr, "Failed to extract packages\n");
-      if (!keepRoot) [pm cleanup];
-      [pm release];
-      [pool release];
-      exit(EXIT_FAILURE);
+      if (![pm downloadPackages])
+        {
+          fprintf(stderr, "Failed to download packages\n");
+          if (!keepRoot) [pm cleanup];
+          [pm release];
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
+
+      if (![pm extractPackages])
+        {
+          fprintf(stderr, "Failed to extract packages\n");
+          if (!keepRoot) [pm cleanup];
+          [pm release];
+          [pool release];
+          exit(EXIT_FAILURE);
+        }
     }
 
   /* ── Phase 2: Discover application metadata ── */
@@ -636,6 +786,40 @@ int main(int argc, char *argv[])
       [pm release];
       [pool release];
       exit(EXIT_FAILURE);
+    }
+
+  /* ── Phase 4b: Apply overlay directory ── */
+  if (overlayArg)
+    {
+      NSString *overlayPath = [[NSString stringWithUTF8String:overlayArg]
+                                stringByExpandingTildeInPath];
+      NSString *contentsPath = [bundlePath stringByAppendingPathComponent:@"Contents"];
+
+      if (![fm fileExistsAtPath:overlayPath])
+        {
+          fprintf(stderr, "Warning: overlay directory '%s' not found, skipping\n",
+                  [overlayPath UTF8String]);
+        }
+      else
+        {
+          fprintf(stderr, "Applying overlay from %s...\n", [overlayPath UTF8String]);
+
+          /* Use cp -a to recursively merge, overwriting existing files */
+          NSTask *cpTask = [[NSTask alloc] init];
+          [cpTask setLaunchPath:@"/bin/cp"];
+          [cpTask setArguments:@[@"-a", @"-f",
+            [overlayPath stringByAppendingString:@"/."],
+            contentsPath]];
+          [cpTask launch];
+          [cpTask waitUntilExit];
+
+          if ([cpTask terminationStatus] != 0)
+            fprintf(stderr, "Warning: overlay copy had errors\n");
+          else if (verbose)
+            fprintf(stderr, "Overlay applied successfully\n");
+
+          [cpTask release];
+        }
     }
 
   /* ── Phase 5: Generate launcher script ── */
