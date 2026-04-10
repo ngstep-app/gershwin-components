@@ -10,6 +10,8 @@
 
 + (BOOL)generateLauncherAtPath:(NSString *)launcherPath
                        appName:(NSString *)appName
-                      mainExec:(NSString *)mainExec;
+                      mainExec:(NSString *)mainExec
+                 chromiumBased:(BOOL)chromiumBased
+                    launchArgs:(NSString *)launchArgs;
 
 @end

@@ -11,6 +11,8 @@
 + (BOOL)generateLauncherAtPath:(NSString *)launcherPath
                        appName:(NSString *)appName
                       mainExec:(NSString *)mainExec
+                 chromiumBased:(BOOL)chromiumBased
+                    launchArgs:(NSString *)launchArgs
 {
   /* Determine multi-arch triplet from the host */
   NSString *multiarch = nil;
@@ -137,17 +139,35 @@
     @"done\n\n",
     multiarch];
 
+  /* Platform-specific and user-supplied launch arguments */
+  [script appendString:@"# Extra launch arguments\n"];
+  [script appendString:@"EXTRA_ARGS=\"\"\n"];
+
+  if (chromiumBased)
+    {
+      [script appendString:@"# Chromium/Electron sandbox requires clone3/user namespaces\n"];
+      [script appendString:@"# which are unavailable on FreeBSD linuxulator\n"];
+      [script appendString:@"case \"$(uname -s)\" in\n"];
+      [script appendString:@"    FreeBSD) EXTRA_ARGS=\"--no-sandbox\" ;;\n"];
+      [script appendString:@"esac\n"];
+    }
+
+  if (launchArgs && [launchArgs length] > 0)
+    [script appendFormat:@"EXTRA_ARGS=\"${EXTRA_ARGS:+$EXTRA_ARGS }%@\"\n", launchArgs];
+
+  [script appendString:@"\n"];
+
   [script appendString:@"# Execute the main binary\n"];
   [script appendFormat:
     @"MAIN=\"${C}%@\"\n"
     @"if [ -n \"$LD_LINUX\" ]; then\n"
     @"    if head -c4 \"$MAIN\" 2>/dev/null | grep -q ELF; then\n"
-    @"        exec \"$LD_LINUX\" \"$MAIN\" \"$@\"\n"
+    @"        exec \"$LD_LINUX\" \"$MAIN\" $EXTRA_ARGS \"$@\"\n"
     @"    else\n"
-    @"        exec \"$LD_LINUX\" \"${C}/usr/bin/bash\" \"$MAIN\" \"$@\"\n"
+    @"        exec \"$LD_LINUX\" \"${C}/usr/bin/bash\" \"$MAIN\" $EXTRA_ARGS \"$@\"\n"
     @"    fi\n"
     @"fi\n"
-    @"exec \"$MAIN\" \"$@\"\n",
+    @"exec \"$MAIN\" $EXTRA_ARGS \"$@\"\n",
     mainExec];
 
   /* Write the script */

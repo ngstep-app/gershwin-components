@@ -179,6 +179,7 @@ static void print_usage(const char *prog)
     "  -e, --exec PATH        Main executable path within package (e.g., /usr/bin/app)\n"
     "  -N, --name NAME        Override application name for the bundle\n"
     "  -i, --icon PATH        Override icon (path on host filesystem)\n"
+    "  -L, --launch-args ARGS Extra arguments baked into the launcher exec line\n"
     "  -f, --force            Overwrite existing bundle without asking\n"
     "      --strip             Strip debug symbols from binaries\n"
     "      --keep-root         Don't delete the staging root after bundling\n"
@@ -213,23 +214,25 @@ int main(int argc, char *argv[])
   char *execArg = NULL;
   char *nameArg = NULL;
   char *iconArg = NULL;
+  char *launchArgsArg = NULL;
 
   static struct option long_options[] = {
-    {"skip-list",  required_argument, 0, 's'},
-    {"exec",       required_argument, 0, 'e'},
-    {"name",       required_argument, 0, 'N'},
-    {"icon",       required_argument, 0, 'i'},
-    {"force",      no_argument,       0, 'f'},
-    {"strip",      no_argument,       0, 'S'},
-    {"keep-root",  no_argument,       0, 'K'},
-    {"verbose",    no_argument,       0, 'v'},
-    {"help",       no_argument,       0, 'h'},
+    {"skip-list",    required_argument, 0, 's'},
+    {"exec",         required_argument, 0, 'e'},
+    {"name",         required_argument, 0, 'N'},
+    {"icon",         required_argument, 0, 'i'},
+    {"launch-args",  required_argument, 0, 'L'},
+    {"force",        no_argument,       0, 'f'},
+    {"strip",        no_argument,       0, 'S'},
+    {"keep-root",    no_argument,       0, 'K'},
+    {"verbose",      no_argument,       0, 'v'},
+    {"help",         no_argument,       0, 'h'},
     {0, 0, 0, 0}
   };
 
   int opt;
   int option_index = 0;
-  while ((opt = getopt_long(argc, argv, "s:e:N:i:fvh", long_options, &option_index)) != -1)
+  while ((opt = getopt_long(argc, argv, "s:e:N:i:L:fvh", long_options, &option_index)) != -1)
     {
       switch (opt)
         {
@@ -237,6 +240,7 @@ int main(int argc, char *argv[])
         case 'e': execArg = optarg; break;
         case 'N': nameArg = optarg; break;
         case 'i': iconArg = optarg; break;
+        case 'L': launchArgsArg = optarg; break;
         case 'f': forceOverwrite = YES; break;
         case 'S': doStrip = YES; break;
         case 'K': keepRoot = YES; break;
@@ -451,9 +455,56 @@ int main(int argc, char *argv[])
    * hardcoded paths in Debian wrapper scripts. */
   mainExec = resolveElfBinary(mainExec, [pm rootPath], verbose);
 
+  /* Detect Chromium/Electron-based applications by scanning the staging
+   * root for telltale files.  These apps need --no-sandbox on FreeBSD
+   * because the linuxulator lacks clone3/user namespace support. */
+  BOOL isChromiumBased = NO;
+  {
+    NSArray *chromiumSignatures = @[
+      @"chrome-sandbox",
+      @"chrome_crashpad_handler",
+      @"chrome_100_percent.pak",
+      @"libcef.so",
+      @"resources/app.asar",
+      @"snapshot_blob.bin"
+    ];
+
+    NSString *rootPath = [pm rootPath];
+    NSDirectoryEnumerator *dirEnum = [fm enumeratorAtPath:rootPath];
+    NSString *relPath;
+    while ((relPath = [dirEnum nextObject]))
+      {
+        NSString *lastComponent = [relPath lastPathComponent];
+        for (NSString *sig in chromiumSignatures)
+          {
+            if ([lastComponent isEqualToString:sig] ||
+                [relPath hasSuffix:sig])
+              {
+                isChromiumBased = YES;
+                if (verbose)
+                  fprintf(stderr, "Detected Chromium/Electron app (found %s)\n",
+                          [sig UTF8String]);
+                break;
+              }
+          }
+        if (isChromiumBased)
+          break;
+      }
+  }
+
+  NSString *launchArgs = launchArgsArg
+    ? [NSString stringWithUTF8String:launchArgsArg]
+    : nil;
+
   if (verbose)
-    fprintf(stderr, "Application: %s\nExecutable: %s\n",
-            [appName UTF8String], [mainExec UTF8String]);
+    {
+      fprintf(stderr, "Application: %s\nExecutable: %s\n",
+              [appName UTF8String], [mainExec UTF8String]);
+      if (isChromiumBased)
+        fprintf(stderr, "Chromium-based: yes (--no-sandbox on FreeBSD)\n");
+      if (launchArgs)
+        fprintf(stderr, "Extra launch args: %s\n", [launchArgs UTF8String]);
+    }
 
   /* ── Phase 3: Check for existing squashfs output ── */
   NSString *squashfsPath = [NSString stringWithFormat:@"%@/%@.squashfs",
@@ -536,7 +587,9 @@ int main(int argc, char *argv[])
 
   if (![PWLauncherGenerator generateLauncherAtPath:launcherPath
                                            appName:bundleName
-                                          mainExec:mainExec])
+                                          mainExec:mainExec
+                                     chromiumBased:isChromiumBased
+                                        launchArgs:launchArgs])
     {
       fprintf(stderr, "Failed to generate launcher script\n");
       if (!keepRoot) [pm cleanup];
