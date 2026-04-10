@@ -183,7 +183,7 @@
     {
       [script appendString:@"# Chromium/Electron sandbox requires clone3/user namespaces\n"];
       [script appendString:@"# which are unavailable on FreeBSD linuxulator\n"];
-      [script appendString:@"case \"$(uname -s)\" in\n"];
+      [script appendString:@"case \"$(/usr/bin/uname -s)\" in\n"];
       [script appendString:@"    FreeBSD) EXTRA_ARGS=\"--no-sandbox\" ;;\n"];
       [script appendString:@"esac\n"];
     }
@@ -199,7 +199,7 @@
   [script appendString:@"# Execute the main binary\n"];
   [script appendFormat:
     @"MAIN=\"${C}%@\"\n"
-    @"if [ -n \"$LD_LINUX\" ] && [ \"$(uname -s)\" != \"Linux\" ]; then\n"
+    @"if [ -n \"$LD_LINUX\" ] && [ \"$(/usr/bin/uname -s)\" != \"Linux\" ]; then\n"
     @"    if head -c4 \"$MAIN\" 2>/dev/null | grep -q ELF; then\n"
     @"        exec \"$LD_LINUX\" \"$MAIN\" $EXTRA_ARGS \"$@\"\n"
     @"    else\n"

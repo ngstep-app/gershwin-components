@@ -337,10 +337,13 @@ static int runCommandStatus(NSString *launchPath, NSArray *arguments,
 
   if ([needed count] > 0)
     {
-      /* apt-get download puts .deb files in the current directory. */
+      /* apt-get download puts .deb files in the current directory.
+       * Append :arch to each package name to ensure only the native
+       * architecture is downloaded (avoids pulling i386 libs on amd64). */
       NSMutableArray *args = [NSMutableArray arrayWithObjects:
         @"download", nil];
-      [args addObjectsFromArray:needed];
+      for (NSString *pkg in needed)
+        [args addObject:[NSString stringWithFormat:@"%@:%@", pkg, _arch]];
 
       NSFileHandle *devNull = [NSFileHandle fileHandleForWritingAtPath:@"/dev/null"];
       NSTask *task = [[NSTask alloc] init];
@@ -363,7 +366,8 @@ static int runCommandStatus(NSString *launchPath, NSArray *arguments,
             {
               NSTask *t = [[NSTask alloc] init];
               [t setLaunchPath:@"/usr/bin/apt-get"];
-              [t setArguments:@[@"download", pkg]];
+              [t setArguments:@[@"download",
+                [NSString stringWithFormat:@"%@:%@", pkg, _arch]]];
               [t setCurrentDirectoryPath:_debCachePath];
               [t setStandardOutput:devNull];
               [t setStandardError:devNull];
