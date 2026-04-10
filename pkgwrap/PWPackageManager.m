@@ -400,9 +400,87 @@ static int runCommandStatus(NSString *launchPath, NSArray *arguments,
   if ([fm fileExistsAtPath:exact])
     return exact;
 
-  /* Search for any .desktop file containing the package name */
+  /* Strategy 1: Query the primary package's .deb to find which .desktop
+   * files it actually ships.  This avoids picking up .desktop files from
+   * dependency packages (e.g., python3.13.desktop when bundling obs-studio).
+   * The .deb filename follows the convention: <package>_<version>_<arch>.deb */
+  if (_debCachePath)
+    {
+      NSArray *debs = [fm contentsOfDirectoryAtPath:_debCachePath error:NULL];
+      NSString *primaryDeb = nil;
+      NSString *prefix = [NSString stringWithFormat:@"%@_", _packageName];
+
+      for (NSString *deb in debs)
+        {
+          if ([deb hasPrefix:prefix] && [deb hasSuffix:@".deb"])
+            {
+              primaryDeb = [_debCachePath stringByAppendingPathComponent:deb];
+              break;
+            }
+        }
+
+      if (primaryDeb)
+        {
+          NSString *listing = runCommand(@"/usr/bin/dpkg-deb",
+            @[@"-c", primaryDeb]);
+
+          if (listing && [listing length] > 0)
+            {
+              NSArray *lines = [listing componentsSeparatedByString:@"\n"];
+              NSMutableArray *desktopFiles = [NSMutableArray array];
+
+              for (NSString *line in lines)
+                {
+                  /* dpkg-deb -c output has paths like:
+                   * ./usr/share/applications/com.obsproject.Studio.desktop */
+                  NSRange appsRange = [line rangeOfString:@"usr/share/applications/"];
+                  if (appsRange.location == NSNotFound)
+                    continue;
+
+                  NSString *tail = [line substringFromIndex:
+                    appsRange.location + [@ "usr/share/applications/" length]];
+                  tail = [tail stringByTrimmingCharactersInSet:
+                    [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+                  if ([tail hasSuffix:@".desktop"] && [tail length] > 8)
+                    [desktopFiles addObject:tail];
+                }
+
+              if ([desktopFiles count] == 1)
+                {
+                  NSString *found = [appsDir stringByAppendingPathComponent:
+                    [desktopFiles objectAtIndex:0]];
+                  if ([fm fileExistsAtPath:found])
+                    return found;
+                }
+              else if ([desktopFiles count] > 1)
+                {
+                  /* Multiple .desktop files — prefer one matching package name */
+                  for (NSString *df in desktopFiles)
+                    {
+                      if ([[df lowercaseString]
+                            rangeOfString:[_packageName lowercaseString]].location
+                              != NSNotFound)
+                        {
+                          NSString *found = [appsDir
+                            stringByAppendingPathComponent:df];
+                          if ([fm fileExistsAtPath:found])
+                            return found;
+                        }
+                    }
+                  /* Otherwise use the first from the primary package */
+                  NSString *found = [appsDir stringByAppendingPathComponent:
+                    [desktopFiles objectAtIndex:0]];
+                  if ([fm fileExistsAtPath:found])
+                    return found;
+                }
+            }
+        }
+    }
+
+  /* Strategy 2: Fallback — search merged directory for substring match.
+   * Do NOT fall back to an arbitrary .desktop file from a dependency. */
   NSArray *files = [fm contentsOfDirectoryAtPath:appsDir error:NULL];
-  NSString *best = nil;
   for (NSString *file in files)
     {
       if (![file hasSuffix:@".desktop"])
@@ -411,12 +489,9 @@ static int runCommandStatus(NSString *launchPath, NSArray *arguments,
       if ([[file lowercaseString]
             rangeOfString:[_packageName lowercaseString]].location != NSNotFound)
         return [appsDir stringByAppendingPathComponent:file];
-
-      if (!best)
-        best = [appsDir stringByAppendingPathComponent:file];
     }
 
-  return best;
+  return nil;
 }
 
 - (NSString *)rootPath
