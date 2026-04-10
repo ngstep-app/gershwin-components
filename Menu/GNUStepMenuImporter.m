@@ -189,8 +189,23 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
 
 - (BOOL)hasMenuForWindow:(unsigned long)windowId
 {
-    if ([self.menusByWindow objectForKey:@(windowId)]) {
+    NSNumber *key = [NSNumber numberWithUnsignedLong:windowId];
+    if ([self.menusByWindow objectForKey:key]) {
         return YES;
+    }
+
+    /* Also check with alternative NSNumber representations —
+     * Distributed Objects may store the key with a different
+     * underlying numeric type. */
+    for (NSNumber *storedKey in self.menusByWindow) {
+        if ([storedKey unsignedLongValue] == windowId) {
+            NSLog(@"GNUStepMenuImporter: Found menu for window %lu via numeric comparison (key type mismatch: stored=%@ lookup=%@)",
+                  windowId, [storedKey className], [key className]);
+            /* Re-store under the canonical key so future lookups are fast */
+            self.menusByWindow[key] = self.menusByWindow[storedKey];
+            self.clientNamesByWindow[key] = self.clientNamesByWindow[storedKey];
+            return YES;
+        }
     }
     
     // Proactively probe the client for this window if we don't have a menu
@@ -281,6 +296,8 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
     NSNumber *windowKey = @(windowId);
     [self.menusByWindow removeObjectForKey:windowKey];
     [self.clientNamesByWindow removeObjectForKey:windowKey];
+    [self.lastMenuDataByWindow removeObjectForKey:windowKey];
+    [self.lastMenuUpdateTimeByWindow removeObjectForKey:windowKey];
 
     if (self.appMenuWidget && self.appMenuWidget.currentWindowId == windowId) {
         NSLog(@"GNUStepMenuImporter: Current menu window %lu unregistered - refreshing menu", windowId);

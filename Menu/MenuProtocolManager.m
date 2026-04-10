@@ -148,12 +148,48 @@
     return NO;
 }
 
+/* If a non-GNUstep menu was found, check whether the GNUstep handler also
+ * has a stub menu for this window (registered by pkgwrap-menu-stub).  If so,
+ * prepend the stub items to give bundled apps a standard app-name menu
+ * alongside their native DBus menus. */
+/* If a non-GNUstep menu was found, check whether the GNUstep handler also
+ * has a stub menu for this window (registered by pkgwrap-menu-stub).  If so,
+ * prepend the stub items to give bundled apps a standard app-name menu
+ * alongside their native DBus menus.
+ *
+ * The stub may register slightly after the DBus menu due to startup timing.
+ * When no stub is found yet, we return the DBus menu as-is — the stub's
+ * deferred menu check will trigger a re-display once it registers. */
+- (NSMenu *)prependGNUstepStubIfNeeded:(NSMenu *)dbusMenu
+                             forWindow:(unsigned long)windowId
+                        primaryHandler:(id<MenuProtocolHandler>)primaryHandler
+{
+    id<MenuProtocolHandler> gnustepHandler = [self handlerForType:MenuProtocolTypeGNUstep];
+    if (!gnustepHandler || gnustepHandler == primaryHandler)
+        return dbusMenu;
+
+    NSMenu *stubMenu = [gnustepHandler getMenuForWindow:windowId];
+    if (!stubMenu || [stubMenu numberOfItems] == 0)
+        return dbusMenu;
+
+    /* Build a merged menu: stub items first, then DBus items */
+    NSMenu *merged = [[NSMenu alloc] initWithTitle:[dbusMenu title]];
+
+    for (NSInteger i = 0; i < [stubMenu numberOfItems]; i++)
+        [merged addItem:[[stubMenu itemAtIndex:i] copy]];
+
+    for (NSInteger i = 0; i < [dbusMenu numberOfItems]; i++)
+        [merged addItem:[[dbusMenu itemAtIndex:i] copy]];
+
+    return merged;
+}
+
 - (NSMenu *)getMenuForWindow:(unsigned long)windowId
 {
     @try {
         NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
         NSNumber *protocolTypeNum = [self.windowToProtocolMap objectForKey:windowKey];
-        
+
         if (protocolTypeNum) {
             // We know which protocol handles this window
             MenuProtocolType protocolType = [protocolTypeNum integerValue];
@@ -163,11 +199,15 @@
                 if (protocolType == 0) protoName = @"Canonical/DBus";
                 else if (protocolType == 1) protoName = @"GTK";
                 else if (protocolType == 2) protoName = @"GNUstep";
-                
+
                 NSLog(@"MenuProtocolManager: Window %lu handled by protocol: %@ (Type %lu) [Cached]", windowId, protoName, (unsigned long)protocolType);
 
                 NSMenu *menu = [handler getMenuForWindow:windowId];
                 if (menu) {
+                    if (protocolType != MenuProtocolTypeGNUstep)
+                        menu = [self prependGNUstepStubIfNeeded:menu
+                                                     forWindow:windowId
+                                                primaryHandler:handler];
                     return menu;
                 }
                 // Cached protocol returned nil — remove stale mapping so other protocols
@@ -177,7 +217,7 @@
                 return nil;
             }
         }
-        
+
         // Try all protocols to find one that can provide a menu
         for (NSUInteger i = 0; i < [self.protocolHandlers count]; i++) {
             id handler = [self.protocolHandlers objectAtIndex:i];
@@ -186,13 +226,18 @@
                 if (menu) {
                     // Cache which protocol handles this window
                     [self.windowToProtocolMap setObject:[NSNumber numberWithUnsignedLong:i] forKey:windowKey];
-                    
+
                     NSString *protoName = @"Unknown";
                     if (i == 0) protoName = @"Canonical/DBus";
                     else if (i == 1) protoName = @"GTK";
                     else if (i == 2) protoName = @"GNUstep";
-                    
+
                     NSLog(@"MenuProtocolManager: Window %lu handled by protocol: %@ (Type %lu)", windowId, protoName, (unsigned long)i);
+
+                    if ((MenuProtocolType)i != MenuProtocolTypeGNUstep)
+                        menu = [self prependGNUstepStubIfNeeded:menu
+                                                     forWindow:windowId
+                                                primaryHandler:handler];
                     return menu;
                 }
             }

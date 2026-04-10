@@ -12,12 +12,18 @@ pkgwrap_OBJC_FILES = \
 	../appwrap/GWDocumentIcon.m \
 	../appwrap/GWUtils.m
 
+TOOL_NAME += pkgwrap-menu-stub
+
+pkgwrap-menu-stub_OBJC_FILES = pkgwrap-menu-stub.m
+
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 pkgwrap_INSTALL_DIR = $(GNUSTEP_SYSTEM_TOOLS)
+pkgwrap-menu-stub_INSTALL_DIR = $(GNUSTEP_SYSTEM_TOOLS)
 
 CC ?= $(shell command -v clang19 2>/dev/null || command -v clang 2>/dev/null || echo cc)
 ADDITIONAL_OBJCFLAGS += -I../appwrap -Wall -Wextra -Werror -O2
 ADDITIONAL_LDFLAGS += -lgnustep-base -lgnustep-gui
+pkgwrap-menu-stub_LDFLAGS = -lgnustep-base -lX11
 
 -include GNUmakefile.preamble
 

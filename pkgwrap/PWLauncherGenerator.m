@@ -146,6 +146,16 @@
   [script appendFormat:@"[ -d \"${C}/usr/lib/%@/gimp/3.0\" ] && \\\n", multiarch];
   [script appendFormat:@"    export GIMP3_PLUGINDIR=\"${C}/usr/lib/%@/gimp/3.0\"\n\n", multiarch];
 
+  /* Launch the menu stub helper in the background.  It registers a
+   * standard app-name menu (Services, Hide, Quit) with Menu.app via
+   * the GNUstep MenuServer protocol.  It monitors the main app's PID
+   * and exits automatically when the app terminates. */
+  [script appendString:@"# Application menu stub for Menu.app\n"];
+  [script appendString:@"_MENU_STUB=/System/Library/Tools/pkgwrap-menu-stub\n"];
+  [script appendString:@"if [ -x \"$_MENU_STUB\" ]; then\n"];
+  [script appendFormat:@"    \"$_MENU_STUB\" \"%@\" $$ &\n", appName];
+  [script appendString:@"fi\n\n"];
+
   /* Filter GNUstep-specific arguments (same as appwrap) */
   [script appendString:@"# Filter GNUstep arguments\n"];
   [script appendString:@"for arg do\n"];

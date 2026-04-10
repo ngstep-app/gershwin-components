@@ -387,6 +387,29 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     }
 
     if (shouldUpdate) {
+        // If the new active window has no PID, it may be a window manager
+        // decoration (title bar).  Check if it shares a parent with the
+        // current window — if so, the user clicked the same app's title
+        // bar and we should keep the current menu.
+        if (activeWindow != 0 && self.currentWindowId != 0 &&
+            [MenuUtils getWindowPID:activeWindow] == 0) {
+            Display *dpy = [MenuUtils sharedDisplay];
+            if (dpy) {
+                Window newParent = 0, curParent = 0;
+                Window root, *children;
+                unsigned int nchildren;
+                if (XQueryTree(dpy, activeWindow, &root, &newParent, &children, &nchildren)) {
+                    if (children) XFree(children);
+                }
+                if (XQueryTree(dpy, self.currentWindowId, &root, &curParent, &children, &nchildren)) {
+                    if (children) XFree(children);
+                }
+                if (newParent != 0 && newParent == curParent) {
+                    return;  // Same frame — title bar click
+                }
+            }
+        }
+
         // Calculate newAppName first
         NSString *newAppName = nil;
         if (activeWindow != 0) {
