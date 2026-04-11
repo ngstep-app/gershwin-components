@@ -8,6 +8,36 @@ NSS module and helper daemon for managing users and groups via plist files.
 - **dscli** - User and group management CLI (`/System/Library/Tools/dscli`)
 - **nss_gershwin** - NSS module (`/System/Library/Libraries/nss_gershwin.so.1`)
 
+## Linux Packages
+
+### Devuan (sysvinit)
+
+```sh
+# Required (gdomap service discovery)
+apt install rpcbind
+
+# Optional (client/server mode only)
+apt install nfs-kernel-server nfs-common
+```
+
+### Arch Linux (systemd)
+
+```sh
+# Required (gdomap service discovery)
+pacman -S rpcbind
+
+# Optional (client/server mode only)
+pacman -S nfs-utils
+```
+
+### Notes
+
+- `rpcbind` is required for gdomap service discovery
+- NFS packages are only needed for client/server mode (`dscli promote`, `dscli join`). Local-only accounts (`dscli init`, `dscli user add`, etc.) work without them
+- On Arch, `nfs-utils` provides both server and client functionality (no separate `nfs-common`)
+- On Devuan, `nfs-kernel-server` pulls in `nfs-common` automatically
+- The implementation auto-detects systemd vs sysvinit at runtime, so the same binary works on both Devuan and Arch without recompilation
+
 ## Building
 
 ```sh
@@ -387,11 +417,9 @@ The `dscli promote`, `demote`, `join`, and `leave` commands use platform-specifi
 | File | Platform | Status |
 |------|----------|--------|
 | DSPlatformFreeBSD.m | FreeBSD | Complete |
-| DSPlatformLinux.m | Linux | Stub |
+| DSPlatformLinux.m | Linux | Complete |
 
-The factory function `DSPlatformCreate()` returns the appropriate backend based on compile-time platform detection.
-
-**Note:** On Linux, only standalone mode is currently supported. The `promote`, `demote`, `join`, and `leave` commands will fail until the Linux backend is completed. Linux users can still use `dscli init` and manage local users/groups via plist files.
+The factory function `DSPlatformCreate()` returns the appropriate backend based on compile-time platform detection. The Linux backend auto-detects systemd vs sysvinit at runtime.
 
 ### Adding a New Backend
 
@@ -423,11 +451,3 @@ Example for a new platform:
 @end
 ```
 
-### Completing the Linux Backend
-
-The Linux backend in `DSPlatformLinux.m` is currently a stub. To complete it:
-
-1. Implement `configureNFSExports` to write `/etc/exports` (Linux format)
-2. Implement `enableNFSServer`/`startNFSServer` using systemctl or service commands
-3. Implement `addFstabEntry` with Linux NFS mount options
-4. Test on both systemd and sysvinit systems
