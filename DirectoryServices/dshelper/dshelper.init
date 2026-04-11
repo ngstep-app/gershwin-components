@@ -29,7 +29,7 @@ case "$1" in
         # Start gdomap if not already running (required for distributed objects)
         if ! pgrep gdomap; then
             echo "Starting gdomap"
-            /System/Library/Tools/gdomap -p
+            /System/Library/Tools/gdomap
         fi
         $DAEMON
         ;;
