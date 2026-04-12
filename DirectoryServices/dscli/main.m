@@ -195,24 +195,39 @@ static int cmdList(void) {
     if (isServer) {
         printf("Role: Server\n");
 
-        // Show connected clients using showmount
+        // Show connected clients. Prefer live kernel state from the platform
+        // backend; fall back to showmount -a (historical, often stale).
         printf("\nConnected Clients:\n");
-        FILE *fp = popen("showmount -a 2>/dev/null | tail -n +2 | grep -v '^$'", "r");
-        if (fp) {
-            char buf[256];
-            int count = 0;
-            while (fgets(buf, sizeof(buf), fp)) {
-                // Format: "host:mountpoint"
-                char *colon = strchr(buf, ':');
-                if (colon) {
-                    *colon = '\0';
-                    printf("  %s\n", buf);
-                    count++;
+        id<DSPlatform> platform = DSPlatformCreate();
+        NSArray<NSString *> *clients = nil;
+        if (platform && [platform respondsToSelector:@selector(connectedClients)]) {
+            clients = [platform connectedClients];
+        }
+        if (clients) {
+            if ([clients count] == 0) {
+                printf("  (none)\n");
+            } else {
+                for (NSString *c in clients) {
+                    printf("  %s\n", [c UTF8String]);
                 }
             }
-            pclose(fp);
-            if (count == 0) {
-                printf("  (none)\n");
+        } else {
+            FILE *fp = popen("showmount -a 2>/dev/null | tail -n +2 | grep -v '^$'", "r");
+            if (fp) {
+                char buf[256];
+                int count = 0;
+                while (fgets(buf, sizeof(buf), fp)) {
+                    char *colon = strchr(buf, ':');
+                    if (colon) {
+                        *colon = '\0';
+                        printf("  %s\n", buf);
+                        count++;
+                    }
+                }
+                pclose(fp);
+                if (count == 0) {
+                    printf("  (none)\n");
+                }
             }
         }
     } else if (isClient) {

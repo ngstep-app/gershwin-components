@@ -33,6 +33,11 @@
 - (BOOL)unmountNetwork;
 - (BOOL)removeFstabEntry;
 
+@optional
+// Server: list currently-connected NFS client IPs (live, not historical).
+// Returns nil if the platform has no implementation yet; caller may fall back.
+- (NSArray<NSString *> *)connectedClients;
+
 @end
 
 // Get the appropriate platform implementation for the current system

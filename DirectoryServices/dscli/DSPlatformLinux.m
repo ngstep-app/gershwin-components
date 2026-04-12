@@ -450,6 +450,92 @@
     return YES;
 }
 
+#pragma mark - Server Status
+
+- (NSArray<NSString *> *)connectedClients
+{
+    // Query the kernel for live NFS connections (port 2049 ESTABLISHED).
+    // /proc/net/tcp state 01 = ESTABLISHED; local port 0801 = 2049.
+    // Prefer /proc parsing so this works without ss(8) installed.
+    NSMutableSet<NSString *> *peers = [NSMutableSet set];
+
+    FILE *fp = fopen("/proc/net/tcp", "r");
+    if (fp) {
+        char line[512];
+        // Skip header
+        if (fgets(line, sizeof(line), fp)) {
+            while (fgets(line, sizeof(line), fp)) {
+                // Format: sl local_addr:port rem_addr:port st ...
+                char localHex[64], remHex[64];
+                unsigned int state = 0;
+                if (sscanf(line, "%*d: %63s %63s %x", localHex, remHex, &state) == 3) {
+                    if (state != 0x01) continue; // ESTABLISHED only
+                    char *lcolon = strchr(localHex, ':');
+                    if (!lcolon) continue;
+                    unsigned int lport = (unsigned int)strtoul(lcolon + 1, NULL, 16);
+                    if (lport != 2049) continue;
+                    char *rcolon = strchr(remHex, ':');
+                    if (!rcolon) continue;
+                    *rcolon = '\0';
+                    unsigned int a1, a2, a3, a4;
+                    if (sscanf(remHex, "%2x%2x%2x%2x", &a4, &a3, &a2, &a1) == 4) {
+                        NSString *ip = [NSString stringWithFormat:@"%u.%u.%u.%u",
+                                        a1, a2, a3, a4];
+                        [peers addObject:ip];
+                    }
+                }
+            }
+        }
+        fclose(fp);
+    }
+
+    // Also check /proc/net/tcp6 for IPv4-mapped and IPv6 peers on port 2049.
+    FILE *fp6 = fopen("/proc/net/tcp6", "r");
+    if (fp6) {
+        char line[512];
+        if (fgets(line, sizeof(line), fp6)) {
+            while (fgets(line, sizeof(line), fp6)) {
+                char localHex[128], remHex[128];
+                unsigned int state = 0;
+                if (sscanf(line, "%*d: %127s %127s %x", localHex, remHex, &state) == 3) {
+                    if (state != 0x01) continue;
+                    char *lcolon = strrchr(localHex, ':');
+                    if (!lcolon) continue;
+                    unsigned int lport = (unsigned int)strtoul(lcolon + 1, NULL, 16);
+                    if (lport != 2049) continue;
+                    char *rcolon = strrchr(remHex, ':');
+                    if (!rcolon) continue;
+                    *rcolon = '\0';
+                    // Address is 32 hex chars. IPv4-mapped ends with ffff then 4 bytes.
+                    size_t len = strlen(remHex);
+                    if (len >= 8) {
+                        const char *last8 = remHex + len - 8;
+                        unsigned int a1, a2, a3, a4;
+                        if (sscanf(last8, "%2x%2x%2x%2x", &a4, &a3, &a2, &a1) == 4) {
+                            // Only treat as IPv4 if the preceding bytes look like ::ffff:
+                            if (len == 32) {
+                                char prefix[25];
+                                strncpy(prefix, remHex, 24);
+                                prefix[24] = '\0';
+                                if (strcasecmp(prefix, "0000000000000000FFFF0000") == 0) {
+                                    NSString *ip = [NSString stringWithFormat:@"%u.%u.%u.%u",
+                                                    a1, a2, a3, a4];
+                                    [peers addObject:ip];
+                                    continue;
+                                }
+                            }
+                            // Otherwise, leave IPv6 formatting to a future improvement.
+                        }
+                    }
+                }
+            }
+        }
+        fclose(fp6);
+    }
+
+    return [[peers allObjects] sortedArrayUsingSelector:@selector(compare:)];
+}
+
 #pragma mark - Discovery
 
 - (NSString *)discoverDirectoryServer
