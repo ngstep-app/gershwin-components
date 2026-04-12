@@ -168,6 +168,13 @@
               [[ex reason] UTF8String], [[ex name] UTF8String]);
     }
 
+  /* Ensure unversioned .so symlinks exist for every versioned library.
+   * Qt5 and similar libraries do dlopen("libssl.so") without a version
+   * suffix; without the symlink in the bundle, ld.so falls through to
+   * /etc/ld.so.cache and loads the HOST copy, ending up with two
+   * libssl/libcrypto in the same process and broken SSL error paths. */
+  [self ensureUnversionedSoSymlinks];
+
   /* Optionally strip debug symbols */
   if (_strip)
     {
@@ -176,6 +183,51 @@
 
   fprintf(stderr, "Bundle assembly complete.\n");
   return YES;
+}
+
+- (void)ensureUnversionedSoSymlinks
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *contentsPath = [_bundlePath stringByAppendingPathComponent:@"Contents"];
+  NSDirectoryEnumerator *e = [fm enumeratorAtPath:contentsPath];
+  NSString *relPath;
+  NSUInteger created = 0;
+
+  while ((relPath = [e nextObject]))
+    {
+      NSString *name = [relPath lastPathComponent];
+      NSRange r = [name rangeOfString:@".so."];
+      if (r.location == NSNotFound)
+        continue;
+      if (![name hasPrefix:@"lib"])
+        continue;
+
+      NSString *fullPath = [contentsPath stringByAppendingPathComponent:relPath];
+      NSDictionary *attrs = [fm attributesOfItemAtPath:fullPath error:NULL];
+      NSString *ftype = [attrs fileType];
+      /* Only create links for real files; existing symlinks (e.g. the
+       * distro-provided libfoo.so.1 -> libfoo.so.1.2.3) are fine to ignore. */
+      if (![ftype isEqualToString:NSFileTypeRegular])
+        continue;
+
+      NSString *base = [name substringToIndex:r.location + 3]; /* "libfoo.so" */
+      NSString *dir = [fullPath stringByDeletingLastPathComponent];
+      NSString *linkPath = [dir stringByAppendingPathComponent:base];
+
+      /* Don't clobber an existing file or link */
+      if ([fm fileExistsAtPath:linkPath] ||
+          [[fm attributesOfItemAtPath:linkPath error:NULL] fileType])
+        continue;
+
+      if ([fm createSymbolicLinkAtPath:linkPath
+                   withDestinationPath:name
+                                 error:NULL])
+        created++;
+    }
+
+  if (_verbose)
+    fprintf(stderr, "Created %lu unversioned .so symlinks\n",
+            (unsigned long)created);
 }
 
 /* Recursively copy a directory tree, skipping paths in skipDirs */
