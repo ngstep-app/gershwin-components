@@ -106,9 +106,12 @@
     @"[ -f \"${PIXBUF_CACHE}\" ] && export GDK_PIXBUF_MODULE_FILE=\"${PIXBUF_CACHE}\"\n\n",
     multiarch];
 
-  [script appendString:@"# Qt plugins\n"];
-  [script appendFormat:@"[ -d \"${C}/usr/lib/%@/qt5/plugins\" ] && \\\n", multiarch];
-  [script appendFormat:@"    export QT_PLUGIN_PATH=\"${C}/usr/lib/%@/qt5/plugins\"\n\n", multiarch];
+  [script appendString:@"# Qt plugins (prefer Qt6 when present, fall back to Qt5)\n"];
+  [script appendFormat:@"if [ -d \"${C}/usr/lib/%@/qt6/plugins\" ]; then\n", multiarch];
+  [script appendFormat:@"    export QT_PLUGIN_PATH=\"${C}/usr/lib/%@/qt6/plugins\"\n", multiarch];
+  [script appendFormat:@"elif [ -d \"${C}/usr/lib/%@/qt5/plugins\" ]; then\n", multiarch];
+  [script appendFormat:@"    export QT_PLUGIN_PATH=\"${C}/usr/lib/%@/qt5/plugins\"\n", multiarch];
+  [script appendString:@"fi\n\n"];
 
   [script appendString:@"# babl extensions (GIMP)\n"];
   [script appendFormat:@"[ -d \"${C}/usr/lib/%@/babl-0.1\" ] && \\\n", multiarch];
