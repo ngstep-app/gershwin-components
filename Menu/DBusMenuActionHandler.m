@@ -9,21 +9,16 @@
 #import "DBusConnection.h"
 #import "X11ShortcutManager.h"
 
-// Static variables to store DBus connection info for menu actions
-static NSMutableDictionary *menuItemToServiceMap = nil;
-static NSMutableDictionary *menuItemToObjectPathMap = nil;
-static NSMutableDictionary *menuItemToConnectionMap = nil;
+// DBus info is stored on each NSMenuItem via -setRepresentedObject: with a
+// dictionary under the key "dbusInfo".  NSMenuItem copies retain the
+// representedObject, so the info survives the deep copy performed by
+// MenuProtocolManager.prependGNUstepStubIfNeeded (which merges a GNUstep stub
+// menu with a DBus menu for pkgwrap-bundled apps).  The previous scheme
+// keyed a static dict by the item's pointer, which broke as soon as the
+// menu was copied.
+static NSString *const kDBusInfoKey = @"dbusInfo";
 
 @implementation DBusMenuActionHandler
-
-+ (void)initialize
-{
-    if (self == [DBusMenuActionHandler class]) {
-        menuItemToServiceMap = [[NSMutableDictionary alloc] init];
-        menuItemToObjectPathMap = [[NSMutableDictionary alloc] init];
-        menuItemToConnectionMap = [[NSMutableDictionary alloc] init];
-    }
-}
 
 + (void)setupActionForMenuItem:(NSMenuItem *)menuItem
                    serviceName:(NSString *)serviceName
@@ -34,15 +29,22 @@ static NSMutableDictionary *menuItemToConnectionMap = nil;
         NSLog(@"DBusMenuActionHandler: ERROR: Missing required parameters for action setup");
         return;
     }
-    
+
     [menuItem setTarget:[DBusMenuActionHandler class]];
     [menuItem setAction:@selector(menuItemAction:)];
-    
-    // Store DBus connection info for this menu item
-    NSString *menuItemKey = [NSString stringWithFormat:@"%p", menuItem];
-    [menuItemToServiceMap setObject:serviceName forKey:menuItemKey];
-    [menuItemToObjectPathMap setObject:objectPath forKey:menuItemKey];
-    [menuItemToConnectionMap setObject:dbusConnection forKey:menuItemKey];
+
+    // Preserve any existing representedObject (DBusMenuParser sets it to the
+    // item ID as an NSNumber) by wrapping it alongside the DBus info.
+    id existing = [menuItem representedObject];
+    NSMutableDictionary *info = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+                                 serviceName,    @"serviceName",
+                                 objectPath,     @"objectPath",
+                                 dbusConnection, @"dbusConnection",
+                                 nil];
+    if (existing) {
+        info[@"itemId"] = existing;
+    }
+    [menuItem setRepresentedObject:@{ kDBusInfoKey: info }];
     
     NSLog(@"DBusMenuActionHandler: Set up action for menu item '%@' (ID=%ld, service=%@, path=%@)", 
           [menuItem title], (long)[menuItem tag], serviceName, objectPath);
@@ -69,13 +71,18 @@ static NSMutableDictionary *menuItemToConnectionMap = nil;
 + (void)menuItemAction:(id)sender
 {
     NSMenuItem *menuItem = (NSMenuItem *)sender;
-    NSString *menuItemKey = [NSString stringWithFormat:@"%p", menuItem];
-    
-    // Retrieve DBus connection info for this menu item
-    NSString *serviceName = [menuItemToServiceMap objectForKey:menuItemKey];
-    NSString *objectPath = [menuItemToObjectPathMap objectForKey:menuItemKey];
-    GNUDBusConnection *dbusConnection = [menuItemToConnectionMap objectForKey:menuItemKey];
-    
+
+    // Retrieve DBus connection info from the menu item's representedObject.
+    NSDictionary *rep = nil;
+    id raw = [menuItem representedObject];
+    if ([raw isKindOfClass:[NSDictionary class]]) {
+        rep = [(NSDictionary *)raw objectForKey:kDBusInfoKey];
+    }
+
+    NSString *serviceName = [rep objectForKey:@"serviceName"];
+    NSString *objectPath = [rep objectForKey:@"objectPath"];
+    GNUDBusConnection *dbusConnection = [rep objectForKey:@"dbusConnection"];
+
     if (!serviceName || !objectPath || !dbusConnection) {
         NSLog(@"DBusMenuActionHandler: ERROR: Missing DBus info for menu item '%@'", [menuItem title]);
         NSLog(@"DBusMenuActionHandler: Service: %@, Path: %@, Connection: %@", serviceName, objectPath, dbusConnection);
@@ -138,11 +145,6 @@ static NSMutableDictionary *menuItemToConnectionMap = nil;
 {
     NSLog(@"DBusMenuActionHandler: Performing cleanup...");
     [[X11ShortcutManager sharedManager] cleanup];
-    
-    // Clean up static dictionaries
-    [menuItemToServiceMap removeAllObjects];
-    [menuItemToObjectPathMap removeAllObjects];
-    [menuItemToConnectionMap removeAllObjects];
 }
 
 @end
