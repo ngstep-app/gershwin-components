@@ -84,18 +84,18 @@ static const CGFloat kStatusAreaHeight = 60;
         }
 
         if (isFreeBSD) {
-            NSLog(@"[Network] Detected FreeBSD, using BSD backend");
+            NSDebugLLog(@"gwcomp", @"[Network] Detected FreeBSD, using BSD backend");
             backend = [[BSDBackend alloc] init];
         } else {
-            NSLog(@"[Network] Detected Linux/other, using NetworkManager backend");
+            NSDebugLLog(@"gwcomp", @"[Network] Detected Linux/other, using NetworkManager backend");
             backend = [[NMBackend alloc] init];
         }
         [backend setDelegate:self];
         
         if (![backend isAvailable]) {
-            NSLog(@"[Network] NetworkManager backend is not available");
+            NSDebugLLog(@"gwcomp", @"[Network] NetworkManager backend is not available");
         } else {
-            NSLog(@"[Network] Using %@ version %@", [backend backendName], [backend backendVersion]);
+            NSDebugLLog(@"gwcomp", @"[Network] Using %@ version %@", [backend backendName], [backend backendVersion]);
         }
     }
     return self;
@@ -932,28 +932,28 @@ static const CGFloat kStatusAreaHeight = 60;
 - (void)refreshInterfaces:(NSTimer *)timer
 {
     @try {
-        NSLog(@"[Network] refreshInterfaces: starting...");
+        NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: starting...");
         
         if (!backend) {
-            NSLog(@"[Network] refreshInterfaces: backend is nil");
+            NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: backend is nil");
             return;
         }
         
         if (![backend isAvailable]) {
-            NSLog(@"[Network] refreshInterfaces: backend not available");
+            NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: backend not available");
             return;
         }
         
         NSArray *newInterfaces = [backend availableInterfaces];
         if (!newInterfaces) {
-            NSLog(@"[Network] refreshInterfaces: newInterfaces is nil");
+            NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: newInterfaces is nil");
             newInterfaces = [NSArray array];
         }
         
-        NSLog(@"[Network] refreshInterfaces: got %lu interfaces", (unsigned long)[newInterfaces count]);
+        NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: got %lu interfaces", (unsigned long)[newInterfaces count]);
         
         if (!interfaces) {
-            NSLog(@"[Network] refreshInterfaces: ERROR - interfaces array is nil!");
+            NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: ERROR - interfaces array is nil!");
             return;
         }
         
@@ -975,9 +975,9 @@ static const CGFloat kStatusAreaHeight = 60;
             
             if (foundInterface) {
                 selectedInterface = foundInterface;
-                NSLog(@"[Network] refreshInterfaces: preserved selection of '%@'", selectedName);
+                NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: preserved selection of '%@'", selectedName);
             } else {
-                NSLog(@"[Network] refreshInterfaces: selected interface '%@' no longer available", selectedName);
+                NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: selected interface '%@' no longer available", selectedName);
                 selectedInterface = nil;
             }
         }
@@ -985,11 +985,11 @@ static const CGFloat kStatusAreaHeight = 60;
         // If no selection, select first interface
         if (!selectedInterface && [interfaces count] > 0) {
             selectedInterface = [interfaces objectAtIndex:0];
-            NSLog(@"[Network] refreshInterfaces: auto-selected first interface '%@'", [selectedInterface name]);
+            NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: auto-selected first interface '%@'", [selectedInterface name]);
         }
         
         if (!serviceTable) {
-            NSLog(@"[Network] refreshInterfaces: serviceTable is nil");
+            NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: serviceTable is nil");
             return;
         }
         
@@ -1000,17 +1000,17 @@ static const CGFloat kStatusAreaHeight = 60;
             NSInteger index = [interfaces indexOfObject:selectedInterface];
             if (index != NSNotFound) {
                 [serviceTable selectRowIndexes:[NSIndexSet indexSetWithIndex:index] byExtendingSelection:NO];
-                NSLog(@"[Network] refreshInterfaces: synchronized table selection to row %ld", (long)index);
+                NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: synchronized table selection to row %ld", (long)index);
             }
         }
         
         [self updateDetailView];
         [self updateStatusDisplay];
         
-        NSLog(@"[Network] refreshInterfaces: complete");
+        NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: complete");
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] refreshInterfaces: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] refreshInterfaces: EXCEPTION: %@ - %@", [exception name], [exception reason]);
     }
 }
 
@@ -1073,14 +1073,14 @@ static const CGFloat kStatusAreaHeight = 60;
 {
     @try {
         if (!wlanNetworks) {
-            NSLog(@"[Network] wlanScanCompleted: wlanNetworks is nil!");
+            NSDebugLLog(@"gwcomp", @"[Network] wlanScanCompleted: wlanNetworks is nil!");
             return;
         }
         
         [wlanNetworks removeAllObjects];
         if (networks && [networks count] > 0) {
             [wlanNetworks addObjectsFromArray:networks];
-            NSLog(@"[Network] wlanScanCompleted: added %lu networks", (unsigned long)[networks count]);
+            NSDebugLLog(@"gwcomp", @"[Network] wlanScanCompleted: added %lu networks", (unsigned long)[networks count]);
         }
         
         if (wlanTable) {
@@ -1091,10 +1091,10 @@ static const CGFloat kStatusAreaHeight = 60;
             [scanProgress stopAnimation:nil];
         }
         
-        NSLog(@"[Network] wlanScanCompleted: done");
+        NSDebugLLog(@"gwcomp", @"[Network] wlanScanCompleted: done");
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] wlanScanCompleted: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] wlanScanCompleted: EXCEPTION: %@ - %@", [exception name], [exception reason]);
     }
 }
 
@@ -1135,7 +1135,7 @@ static const CGFloat kStatusAreaHeight = 60;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] updateStatusDisplay: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] updateStatusDisplay: EXCEPTION: %@ - %@", [exception name], [exception reason]);
     }
 }
 
@@ -1158,7 +1158,7 @@ static const CGFloat kStatusAreaHeight = 60;
         [disableButton setEnabled:isEnabled || isActive];
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] updateEnableDisableButtons: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] updateEnableDisableButtons: EXCEPTION: %@ - %@", [exception name], [exception reason]);
     }
 }
 
@@ -1166,18 +1166,18 @@ static const CGFloat kStatusAreaHeight = 60;
 {
     @try {
         if (!selectedInterface) {
-            NSLog(@"[Network] updateDetailView: no interface selected");
+            NSDebugLLog(@"gwcomp", @"[Network] updateDetailView: no interface selected");
             if (detailTabView) {
                 [detailTabView selectTabViewItemWithIdentifier:@"tcpip"];
             }
             return;
         }
         
-        NSLog(@"[Network] updateDetailView: updating for interface '%@' (type=%d)", 
+        NSDebugLLog(@"gwcomp", @"[Network] updateDetailView: updating for interface '%@' (type=%d)", 
               [selectedInterface name], (int)[selectedInterface type]);
         
         if (![interfaces containsObject:selectedInterface]) {
-            NSLog(@"[Network] updateDetailView: WARNING - selected interface not in list, trying to find by name");
+            NSDebugLLog(@"gwcomp", @"[Network] updateDetailView: WARNING - selected interface not in list, trying to find by name");
             // Try to find by name
             NSString *name = [selectedInterface name];
             BOOL found = NO;
@@ -1185,13 +1185,13 @@ static const CGFloat kStatusAreaHeight = 60;
                 if ([[iface name] isEqualToString:name]) {
                     selectedInterface = iface;
                     found = YES;
-                    NSLog(@"[Network] updateDetailView: found matching interface by name");
+                    NSDebugLLog(@"gwcomp", @"[Network] updateDetailView: found matching interface by name");
                     break;
                 }
             }
             
             if (!found) {
-                NSLog(@"[Network] updateDetailView: interface really not in list, clearing");
+                NSDebugLLog(@"gwcomp", @"[Network] updateDetailView: interface really not in list, clearing");
                 selectedInterface = nil;
                 if (detailTabView) {
                     [detailTabView selectTabViewItemWithIdentifier:@"tcpip"];
@@ -1329,10 +1329,10 @@ static const CGFloat kStatusAreaHeight = 60;
             }
         }
         
-        NSLog(@"[Network] updateDetailView: complete");
+        NSDebugLLog(@"gwcomp", @"[Network] updateDetailView: complete");
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] updateDetailView: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] updateDetailView: EXCEPTION: %@ - %@", [exception name], [exception reason]);
     }
 }
 
@@ -1372,7 +1372,7 @@ static const CGFloat kStatusAreaHeight = 60;
             displayName = [selectedInterface name];
         }
         
-        NSLog(@"[Network] Enabling interface: %@", displayName);
+        NSDebugLLog(@"gwcomp", @"[Network] Enabling interface: %@", displayName);
         
         BOOL success = [backend enableInterface:selectedInterface];
         
@@ -1391,7 +1391,7 @@ static const CGFloat kStatusAreaHeight = 60;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in enableInterface: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in enableInterface: %@ - %@", [exception name], [exception reason]);
         [self showErrorAlert:@"Error Enabling Interface" 
              informativeText:[NSString stringWithFormat:@"An unexpected error occurred: %@", [exception reason]]];
     }
@@ -1431,7 +1431,7 @@ static const CGFloat kStatusAreaHeight = 60;
         [alert release];
         
         if (response == NSAlertFirstButtonReturn) {
-            NSLog(@"[Network] Disabling interface: %@", displayName);
+            NSDebugLLog(@"gwcomp", @"[Network] Disabling interface: %@", displayName);
             
             BOOL success = [backend disableInterface:selectedInterface];
             
@@ -1451,7 +1451,7 @@ static const CGFloat kStatusAreaHeight = 60;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in disableInterface: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in disableInterface: %@ - %@", [exception name], [exception reason]);
         [self showErrorAlert:@"Error Disabling Interface" 
              informativeText:[NSString stringWithFormat:@"An unexpected error occurred: %@", [exception reason]]];
     }
@@ -1480,7 +1480,7 @@ static const CGFloat kStatusAreaHeight = 60;
 - (IBAction)locationChanged:(id)sender
 {
     NSString *location = [locationPopup titleOfSelectedItem];
-    NSLog(@"[Network] Location changed to: %@", location);
+    NSDebugLLog(@"gwcomp", @"[Network] Location changed to: %@", location);
     
     if ([backend respondsToSelector:@selector(setLocation:)]) {
         [backend setLocation:location];
@@ -1532,7 +1532,7 @@ static const CGFloat kStatusAreaHeight = 60;
             return;
         }
         
-        NSLog(@"[Network] Applying changes for: %@", [selectedInterface displayName]);
+        NSDebugLLog(@"gwcomp", @"[Network] Applying changes for: %@", [selectedInterface displayName]);
         
         // Create/update connection with new settings
         // This would need to be implemented based on what was changed
@@ -1543,7 +1543,7 @@ static const CGFloat kStatusAreaHeight = 60;
         [self refreshInterfaces:nil];
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in applyChanges: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in applyChanges: %@ - %@", [exception name], [exception reason]);
         [self showErrorAlert:@"Error Applying Changes" 
              informativeText:[NSString stringWithFormat:@"An unexpected error occurred: %@", [exception reason]]];
     }
@@ -1572,7 +1572,7 @@ static const CGFloat kStatusAreaHeight = 60;
         }
         
         NSString *interfaceName = [selectedInterface identifier];
-        NSLog(@"[Network] Renewing DHCP lease for: %@ (%@)", [selectedInterface name], interfaceName);
+        NSDebugLLog(@"gwcomp", @"[Network] Renewing DHCP lease for: %@ (%@)", [selectedInterface name], interfaceName);
         
         // Try using the network helper for DHCP renewal (more reliable than NetworkManager for some systems)
         if ([backend respondsToSelector:@selector(runPrivilegedHelper:error:)]) {
@@ -1581,7 +1581,7 @@ static const CGFloat kStatusAreaHeight = 60;
             BOOL success = [(NMBackend *)backend runPrivilegedHelper:args error:&error];
             
             if (success) {
-                NSLog(@"[Network] DHCP renewal initiated successfully");
+                NSDebugLLog(@"gwcomp", @"[Network] DHCP renewal initiated successfully");
                 [self showInfoAlert:@"DHCP Lease Renewal" 
                     informativeText:@"DHCP lease renewal has been initiated. This may take a few moments."];
                 
@@ -1593,12 +1593,12 @@ static const CGFloat kStatusAreaHeight = 60;
                                                 repeats:NO];
                 return;
             } else {
-                NSLog(@"[Network] DHCP renewal via helper failed: %@", error);
+                NSDebugLLog(@"gwcomp", @"[Network] DHCP renewal via helper failed: %@", error);
             }
         }
         
         // Fallback: Disconnect and reconnect to renew DHCP via NetworkManager
-        NSLog(@"[Network] Falling back to NetworkManager interface restart");
+        NSDebugLLog(@"gwcomp", @"[Network] Falling back to NetworkManager interface restart");
         [backend disableInterface:selectedInterface];
         
         // Schedule reconnection after delay
@@ -1609,7 +1609,7 @@ static const CGFloat kStatusAreaHeight = 60;
                                         repeats:NO];
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in renewDHCPLease: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in renewDHCPLease: %@ - %@", [exception name], [exception reason]);
         [self showErrorAlert:@"Error Renewing DHCP Lease" 
              informativeText:[NSString stringWithFormat:@"An unexpected error occurred: %@", [exception reason]]];
     }
@@ -1652,7 +1652,7 @@ static const CGFloat kStatusAreaHeight = 60;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in toggleWLANPower: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in toggleWLANPower: %@ - %@", [exception name], [exception reason]);
         [self showErrorAlert:@"Error Toggling WLAN" 
              informativeText:[NSString stringWithFormat:@"An unexpected error occurred: %@", [exception reason]]];
     }
@@ -1680,7 +1680,7 @@ static const CGFloat kStatusAreaHeight = 60;
         [self connectToNetwork:network];
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in joinNetwork: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in joinNetwork: %@ - %@", [exception name], [exception reason]);
         [self showErrorAlert:@"Error Joining Network" 
              informativeText:[NSString stringWithFormat:@"An unexpected error occurred: %@", [exception reason]]];
     }
@@ -1704,58 +1704,58 @@ static const CGFloat kStatusAreaHeight = 60;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in wlanTableDoubleClicked: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in wlanTableDoubleClicked: %@ - %@", [exception name], [exception reason]);
     }
 }
 
 - (void)connectToNetwork:(WLAN *)network
 {
-    NSLog(@"[Network] connectToNetwork: called");
+    NSDebugLLog(@"gwcomp", @"[Network] connectToNetwork: called");
     
     @try {
         if (!network) {
-            NSLog(@"[Network] connectToNetwork: network is nil");
+            NSDebugLLog(@"gwcomp", @"[Network] connectToNetwork: network is nil");
             [self showErrorAlert:@"Error" informativeText:@"No network specified."];
             return;
         }
         
-        NSLog(@"[Network] connectToNetwork: network SSID = '%@', security = %d, isConnected = %@",
+        NSDebugLLog(@"gwcomp", @"[Network] connectToNetwork: network SSID = '%@', security = %d, isConnected = %@",
               [network ssid], (int)[network security], [network isConnected] ? @"YES" : @"NO");
         
         if (!backend) {
-            NSLog(@"[Network] connectToNetwork: backend is nil");
+            NSDebugLLog(@"gwcomp", @"[Network] connectToNetwork: backend is nil");
             [self showErrorAlert:@"Cannot Connect" 
                  informativeText:@"The network management service is not available."];
             return;
         }
         
         if (![backend isAvailable]) {
-            NSLog(@"[Network] connectToNetwork: backend not available");
+            NSDebugLLog(@"gwcomp", @"[Network] connectToNetwork: backend not available");
             [self showErrorAlert:@"Cannot Connect" 
                  informativeText:@"The network management service is not available."];
             return;
         }
         
         if ([network isConnected]) {
-            NSLog(@"[Network] connectToNetwork: already connected, returning");
+            NSDebugLLog(@"gwcomp", @"[Network] connectToNetwork: already connected, returning");
             return; // Already connected
         }
         
         if ([network security] == WLANSecurityNone) {
             // Open network, connect directly
-            NSLog(@"[Network] connectToNetwork: open network, connecting directly");
+            NSDebugLLog(@"gwcomp", @"[Network] connectToNetwork: open network, connecting directly");
             [backend connectToWLAN:network withPassword:nil];
             [self refreshWLANNetworks];
         } else {
             // Secured network, show password dialog
-            NSLog(@"[Network] connectToNetwork: secured network, showing password dialog");
+            NSDebugLLog(@"gwcomp", @"[Network] connectToNetwork: secured network, showing password dialog");
             [self showPasswordPanelForNetwork:network];
         }
         
-        NSLog(@"[Network] connectToNetwork: done");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToNetwork: done");
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] connectToNetwork: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] connectToNetwork: EXCEPTION: %@ - %@", [exception name], [exception reason]);
         [self showErrorAlert:@"Error Connecting to Network" 
              informativeText:[NSString stringWithFormat:@"An unexpected error occurred: %@", [exception reason]]];
     }
@@ -1783,7 +1783,7 @@ static const CGFloat kStatusAreaHeight = 60;
         [joinNetworkPanel makeFirstResponder:joinNetworkSSIDField];
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in joinOtherNetwork: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in joinOtherNetwork: %@", [exception reason]);
         [self showErrorAlert:@"Error" informativeText:[exception reason]];
     }
 }
@@ -1819,7 +1819,7 @@ static const CGFloat kStatusAreaHeight = 60;
         [network release];
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in joinOtherNetworkConfirm: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in joinOtherNetworkConfirm: %@", [exception reason]);
         [self showErrorAlert:@"Error" informativeText:[exception reason]];
     }
 }
@@ -1833,22 +1833,22 @@ static const CGFloat kStatusAreaHeight = 60;
 - (IBAction)disconnectWLAN:(id)sender
 {
     @try {
-        NSLog(@"[Network] disconnectWLAN: called");
+        NSDebugLLog(@"gwcomp", @"[Network] disconnectWLAN: called");
         
         if (!backend) {
-            NSLog(@"[Network] disconnectWLAN: backend is nil");
+            NSDebugLLog(@"gwcomp", @"[Network] disconnectWLAN: backend is nil");
             [self showErrorAlert:@"Cannot Disconnect" informativeText:@"Network backend not available."];
             return;
         }
         
         if (![backend isAvailable]) {
-            NSLog(@"[Network] disconnectWLAN: backend not available");
+            NSDebugLLog(@"gwcomp", @"[Network] disconnectWLAN: backend not available");
             [self showErrorAlert:@"Cannot Disconnect" informativeText:@"Network service not available."];
             return;
         }
         
         BOOL success = [backend disconnectFromWLAN];
-        NSLog(@"[Network] disconnectWLAN: backend returned %@", success ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"[Network] disconnectWLAN: backend returned %@", success ? @"YES" : @"NO");
         
         // Schedule refresh after a short delay
         [NSTimer scheduledTimerWithTimeInterval:1.0
@@ -1858,7 +1858,7 @@ static const CGFloat kStatusAreaHeight = 60;
                                         repeats:NO];
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] disconnectWLAN: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] disconnectWLAN: EXCEPTION: %@ - %@", [exception name], [exception reason]);
         [self showErrorAlert:@"Error Disconnecting"
              informativeText:[NSString stringWithFormat:@"An unexpected error occurred: %@", [exception reason]]];
     }
@@ -1866,14 +1866,14 @@ static const CGFloat kStatusAreaHeight = 60;
 
 - (void)doRefreshAfterDisconnect:(NSTimer *)timer
 {
-    NSLog(@"[Network] doRefreshAfterDisconnect: refreshing...");
+    NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterDisconnect: refreshing...");
     @try {
         [self refreshWLANNetworks];
         [self refreshInterfaces:nil];
-        NSLog(@"[Network] doRefreshAfterDisconnect: complete");
+        NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterDisconnect: complete");
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] doRefreshAfterDisconnect: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterDisconnect: EXCEPTION: %@ - %@", [exception name], [exception reason]);
     }
 }
 
@@ -1886,31 +1886,31 @@ static const CGFloat kStatusAreaHeight = 60;
 
 - (void)showPasswordPanelForNetwork:(WLAN *)network
 {
-    NSLog(@"[Network] showPasswordPanelForNetwork: called");
+    NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: called");
     
     @try {
         if (!network) {
-            NSLog(@"[Network] showPasswordPanelForNetwork: network is nil");
+            NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: network is nil");
             [self showErrorAlert:@"Error" informativeText:@"No network specified."];
             return;
         }
         
-        NSLog(@"[Network] showPasswordPanelForNetwork: network SSID = '%@'", [network ssid]);
+        NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: network SSID = '%@'", [network ssid]);
         
         // Release previous pending network if any
         if (pendingNetwork) {
-            NSLog(@"[Network] showPasswordPanelForNetwork: releasing previous pendingNetwork");
+            NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: releasing previous pendingNetwork");
             [pendingNetwork release];
             pendingNetwork = nil;
         }
         
         // Retain the new pending network
         pendingNetwork = [network retain];
-        NSLog(@"[Network] showPasswordPanelForNetwork: pendingNetwork retained (retainCount: %lu)", 
+        NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: pendingNetwork retained (retainCount: %lu)", 
               (unsigned long)[pendingNetwork retainCount]);
         
         if (!passwordPanel) {
-            NSLog(@"[Network] showPasswordPanelForNetwork: ERROR - passwordPanel is nil!");
+            NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: ERROR - passwordPanel is nil!");
             [self showErrorAlert:@"Error" informativeText:@"Password dialog not available."];
             [pendingNetwork release];
             pendingNetwork = nil;
@@ -1918,23 +1918,23 @@ static const CGFloat kStatusAreaHeight = 60;
         }
         
         if (!passwordSSIDLabel) {
-            NSLog(@"[Network] showPasswordPanelForNetwork: ERROR - passwordSSIDLabel is nil!");
+            NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: ERROR - passwordSSIDLabel is nil!");
         } else {
             NSString *labelText = [NSString stringWithFormat:
                                    @"The network \"%@\" requires a password.", 
                                    [network ssid] ?: @"(unknown)"];
             [passwordSSIDLabel setStringValue:labelText];
-            NSLog(@"[Network] showPasswordPanelForNetwork: set label to '%@'", labelText);
+            NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: set label to '%@'", labelText);
         }
         
         if (!passwordField) {
-            NSLog(@"[Network] showPasswordPanelForNetwork: ERROR - passwordField is nil!");
+            NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: ERROR - passwordField is nil!");
         } else {
             [passwordField setStringValue:@""];
         }
         
         NSWindow *parentWindow = [mainView window];
-        NSLog(@"[Network] showPasswordPanelForNetwork: parentWindow = %@", parentWindow);
+        NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: parentWindow = %@", parentWindow);
         
         if (parentWindow) {
             [NSApp beginSheet:passwordPanel
@@ -1942,14 +1942,14 @@ static const CGFloat kStatusAreaHeight = 60;
                 modalDelegate:nil
                didEndSelector:nil
                   contextInfo:nil];
-            NSLog(@"[Network] showPasswordPanelForNetwork: sheet displayed");
+            NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: sheet displayed");
         } else {
-            NSLog(@"[Network] showPasswordPanelForNetwork: no parent window, showing as regular window");
+            NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: no parent window, showing as regular window");
             [passwordPanel makeKeyAndOrderFront:self];
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] showPasswordPanelForNetwork: EXCEPTION: %@ - %@", 
+        NSDebugLLog(@"gwcomp", @"[Network] showPasswordPanelForNetwork: EXCEPTION: %@ - %@", 
               [exception name], [exception reason]);
         [self showErrorAlert:@"Error" 
              informativeText:[NSString stringWithFormat:@"Could not show password dialog: %@", 
@@ -1959,25 +1959,25 @@ static const CGFloat kStatusAreaHeight = 60;
 
 - (IBAction)passwordConnect:(id)sender
 {
-    NSLog(@"[Network] passwordConnect: called");
+    NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: called");
     
     @try {
         // Close the sheet first
-        NSLog(@"[Network] passwordConnect: ending sheet...");
+        NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: ending sheet...");
         [NSApp endSheet:passwordPanel];
         [passwordPanel orderOut:self];
-        NSLog(@"[Network] passwordConnect: sheet closed");
+        NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: sheet closed");
         
         if (!pendingNetwork) {
-            NSLog(@"[Network] passwordConnect: ERROR - pendingNetwork is nil!");
+            NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: ERROR - pendingNetwork is nil!");
             [self showErrorAlert:@"Error" informativeText:@"No network selected."];
             return;
         }
         
-        NSLog(@"[Network] passwordConnect: pendingNetwork SSID = '%@'", [pendingNetwork ssid]);
+        NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: pendingNetwork SSID = '%@'", [pendingNetwork ssid]);
         
         if (!passwordField) {
-            NSLog(@"[Network] passwordConnect: ERROR - passwordField is nil!");
+            NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: ERROR - passwordField is nil!");
             [pendingNetwork release];
             pendingNetwork = nil;
             [self showErrorAlert:@"Error" informativeText:@"Password field not available."];
@@ -1985,10 +1985,10 @@ static const CGFloat kStatusAreaHeight = 60;
         }
         
         NSString *password = [passwordField stringValue];
-        NSLog(@"[Network] passwordConnect: password length = %lu", (unsigned long)[password length]);
+        NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: password length = %lu", (unsigned long)[password length]);
         
         if (!backend) {
-            NSLog(@"[Network] passwordConnect: ERROR - backend is nil!");
+            NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: ERROR - backend is nil!");
             [pendingNetwork release];
             pendingNetwork = nil;
             [self showErrorAlert:@"Error" informativeText:@"Network backend not available."];
@@ -1996,7 +1996,7 @@ static const CGFloat kStatusAreaHeight = 60;
         }
         
         if (![backend isAvailable]) {
-            NSLog(@"[Network] passwordConnect: ERROR - backend not available!");
+            NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: ERROR - backend not available!");
             [pendingNetwork release];
             pendingNetwork = nil;
             [self showErrorAlert:@"Error" informativeText:@"Network service not available."];
@@ -2007,7 +2007,7 @@ static const CGFloat kStatusAreaHeight = 60;
         WLAN *networkToConnect = [pendingNetwork retain];
         NSString *ssidToConnect = [[pendingNetwork ssid] copy];
         
-        NSLog(@"[Network] passwordConnect: calling backend connectToWLAN for '%@'", ssidToConnect);
+        NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: calling backend connectToWLAN for '%@'", ssidToConnect);
         
         // Release pending network before the potentially blocking call
         [pendingNetwork release];
@@ -2015,13 +2015,13 @@ static const CGFloat kStatusAreaHeight = 60;
         
         // Now connect
         BOOL success = [backend connectToWLAN:networkToConnect withPassword:password];
-        NSLog(@"[Network] passwordConnect: backend returned success = %@", success ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: backend returned success = %@", success ? @"YES" : @"NO");
         
         [networkToConnect release];
         [ssidToConnect release];
         
         // Refresh after a delay to show new connection
-        NSLog(@"[Network] passwordConnect: scheduling refresh timer");
+        NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: scheduling refresh timer");
         [NSTimer scheduledTimerWithTimeInterval:2.0
                                          target:self
                                        selector:@selector(doRefreshAfterConnect:)
@@ -2029,7 +2029,7 @@ static const CGFloat kStatusAreaHeight = 60;
                                         repeats:NO];
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] passwordConnect: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] passwordConnect: EXCEPTION: %@ - %@", [exception name], [exception reason]);
         if (pendingNetwork) {
             [pendingNetwork release];
             pendingNetwork = nil;
@@ -2042,10 +2042,10 @@ static const CGFloat kStatusAreaHeight = 60;
 
 - (void)doRefreshAfterConnect:(NSTimer *)timer
 {
-    NSLog(@"[Network] doRefreshAfterConnect: refreshing...");
+    NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterConnect: refreshing...");
     @try {
         if (!backend || ![backend isAvailable]) {
-            NSLog(@"[Network] doRefreshAfterConnect: backend not available");
+            NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterConnect: backend not available");
             return;
         }
         
@@ -2057,35 +2057,35 @@ static const CGFloat kStatusAreaHeight = 60;
         
         // Force update detail view to ensure correct interface is showing
         if (selectedInterface) {
-            NSLog(@"[Network] doRefreshAfterConnect: forcing detail view update for %@", [selectedInterface name]);
+            NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterConnect: forcing detail view update for %@", [selectedInterface name]);
             [self updateDetailView];
         }
         
-        NSLog(@"[Network] doRefreshAfterConnect: refresh complete");
+        NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterConnect: refresh complete");
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] doRefreshAfterConnect: EXCEPTION: %@ - %@", 
+        NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterConnect: EXCEPTION: %@ - %@", 
               [exception name], [exception reason]);
     }
 }
 
 - (IBAction)passwordCancel:(id)sender
 {
-    NSLog(@"[Network] passwordCancel: called");
+    NSDebugLLog(@"gwcomp", @"[Network] passwordCancel: called");
     
     @try {
         [NSApp endSheet:passwordPanel];
         [passwordPanel orderOut:self];
         
         if (pendingNetwork) {
-            NSLog(@"[Network] passwordCancel: releasing pendingNetwork");
+            NSDebugLLog(@"gwcomp", @"[Network] passwordCancel: releasing pendingNetwork");
             [pendingNetwork release];
             pendingNetwork = nil;
         }
-        NSLog(@"[Network] passwordCancel: done");
+        NSDebugLLog(@"gwcomp", @"[Network] passwordCancel: done");
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] passwordCancel: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] passwordCancel: EXCEPTION: %@ - %@", [exception name], [exception reason]);
     }
 }
 
@@ -2110,11 +2110,11 @@ static const CGFloat kStatusAreaHeight = 60;
 {
     @try {
         if (!selectedInterface) {
-            NSLog(@"[Network] toggleServiceActive: no interface selected");
+            NSDebugLLog(@"gwcomp", @"[Network] toggleServiceActive: no interface selected");
             return;
         }
         
-        NSLog(@"[Network] toggleServiceActive: interface '%@' isActive=%@", 
+        NSDebugLLog(@"gwcomp", @"[Network] toggleServiceActive: interface '%@' isActive=%@", 
               [selectedInterface name], [selectedInterface isActive] ? @"YES" : @"NO");
         
         BOOL success = NO;
@@ -2124,7 +2124,7 @@ static const CGFloat kStatusAreaHeight = 60;
             success = [backend enableInterface:selectedInterface];
         }
         
-        NSLog(@"[Network] toggleServiceActive: operation returned %@", success ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"[Network] toggleServiceActive: operation returned %@", success ? @"YES" : @"NO");
         
         // Refresh after a short delay to let NetworkManager update
         [NSTimer scheduledTimerWithTimeInterval:1.0
@@ -2134,7 +2134,7 @@ static const CGFloat kStatusAreaHeight = 60;
                                         repeats:NO];
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] toggleServiceActive: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] toggleServiceActive: EXCEPTION: %@ - %@", [exception name], [exception reason]);
         [self showErrorAlert:@"Error Toggling Interface" 
              informativeText:[NSString stringWithFormat:@"An unexpected error occurred: %@", [exception reason]]];
     }
@@ -2142,23 +2142,23 @@ static const CGFloat kStatusAreaHeight = 60;
 
 - (void)doRefreshAfterToggle:(NSTimer *)timer
 {
-    NSLog(@"[Network] doRefreshAfterToggle: refreshing interfaces...");
+    NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterToggle: refreshing interfaces...");
     @try {
         if (!self) {
-            NSLog(@"[Network] doRefreshAfterToggle: self is nil!");
+            NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterToggle: self is nil!");
             return;
         }
         
         if (!backend) {
-            NSLog(@"[Network] doRefreshAfterToggle: backend is nil");
+            NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterToggle: backend is nil");
             return;
         }
         
         [self refreshInterfaces:nil];
-        NSLog(@"[Network] doRefreshAfterToggle: refresh complete");
+        NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterToggle: refresh complete");
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] doRefreshAfterToggle: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] doRefreshAfterToggle: EXCEPTION: %@ - %@", [exception name], [exception reason]);
     }
 }
 
@@ -2247,7 +2247,7 @@ static const CGFloat kStatusAreaHeight = 60;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in numberOfRowsInTableView: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in numberOfRowsInTableView: %@", [exception reason]);
     }
     return 0;
 }
@@ -2289,7 +2289,7 @@ static const CGFloat kStatusAreaHeight = 60;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in tableView:objectValueForTableColumn:row: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in tableView:objectValueForTableColumn:row: %@", [exception reason]);
     }
     
     return nil;
@@ -2324,7 +2324,7 @@ static const CGFloat kStatusAreaHeight = 60;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] Exception in tableViewSelectionDidChange: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception in tableViewSelectionDidChange: %@", [exception reason]);
     }
 }
 
@@ -2362,14 +2362,14 @@ static const CGFloat kStatusAreaHeight = 60;
 {
     @try {
         if (!interfaces) {
-            NSLog(@"[Network] handleUpdatedInterfaces: interfaces array is nil!");
+            NSDebugLLog(@"gwcomp", @"[Network] handleUpdatedInterfaces: interfaces array is nil!");
             return;
         }
         
         [interfaces removeAllObjects];
         if (newInterfaces && [newInterfaces count] > 0) {
             [interfaces addObjectsFromArray:newInterfaces];
-            NSLog(@"[Network] handleUpdatedInterfaces: added %lu interfaces", (unsigned long)[newInterfaces count]);
+            NSDebugLLog(@"gwcomp", @"[Network] handleUpdatedInterfaces: added %lu interfaces", (unsigned long)[newInterfaces count]);
         }
         
         if (serviceTable) {
@@ -2377,10 +2377,10 @@ static const CGFloat kStatusAreaHeight = 60;
         }
         
         [self updateStatusDisplay];
-        NSLog(@"[Network] handleUpdatedInterfaces: complete");
+        NSDebugLLog(@"gwcomp", @"[Network] handleUpdatedInterfaces: complete");
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] handleUpdatedInterfaces: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] handleUpdatedInterfaces: EXCEPTION: %@ - %@", [exception name], [exception reason]);
     }
 }
 
@@ -2412,7 +2412,7 @@ static const CGFloat kStatusAreaHeight = 60;
 {
     @try {
         if (!error) {
-            NSLog(@"[Network] handleNetworkError: error is nil");
+            NSDebugLLog(@"gwcomp", @"[Network] handleNetworkError: error is nil");
             return;
         }
         
@@ -2421,15 +2421,15 @@ static const CGFloat kStatusAreaHeight = 60;
             errorDesc = @"An unknown error occurred";
         }
         
-        NSLog(@"[Network] handleNetworkError: showing alert for: %@", errorDesc);
+        NSDebugLLog(@"gwcomp", @"[Network] handleNetworkError: showing alert for: %@", errorDesc);
         
         // Use showErrorAlert which is more defensive
         [self showErrorAlert:@"Network Error" informativeText:errorDesc];
         
-        NSLog(@"[Network] handleNetworkError: alert dismissed");
+        NSDebugLLog(@"gwcomp", @"[Network] handleNetworkError: alert dismissed");
     }
     @catch (NSException *exception) {
-        NSLog(@"[Network] handleNetworkError: EXCEPTION: %@ - %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] handleNetworkError: EXCEPTION: %@ - %@", [exception name], [exception reason]);
     }
 }
 

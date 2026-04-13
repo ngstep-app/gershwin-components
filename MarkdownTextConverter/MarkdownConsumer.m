@@ -259,7 +259,7 @@ static BOOL isCodeFence(NSString *line, NSString **language);
 
   /* Explicitly check fc-match 'Helvetica' as some systems alias Helvetica to Nimbus Sans; prefer it if present */
   NSString *hel = [self _fontconfigFamilyForName:@"Helvetica"];
-  NSLog(@"[MarkdownConsumer] fc-match(Helvetica) -> %@", hel ? hel : @"(nil)");
+  NSDebugLLog(@"gwcomp", @"[MarkdownConsumer] fc-match(Helvetica) -> %@", hel ? hel : @"(nil)");
   if (hel && [hel length] > 0)
     {
       preferredSans = hel;
@@ -267,9 +267,9 @@ static BOOL isCodeFence(NSString *line, NSString **language);
 
   /* Also check Courier mapping for monospace */
   NSString *courCheck = [self _fontconfigFamilyForName:@"Courier"];
-  NSLog(@"[MarkdownConsumer] fc-match(Courier) -> %@", courCheck ? courCheck : @"(nil)");
+  NSDebugLLog(@"gwcomp", @"[MarkdownConsumer] fc-match(Courier) -> %@", courCheck ? courCheck : @"(nil)");
 
-  NSLog(@"[MarkdownConsumer] initial preferredSans from fonts.conf/fc-match: %@", preferredSans);
+  NSDebugLLog(@"gwcomp", @"[MarkdownConsumer] initial preferredSans from fonts.conf/fc-match: %@", preferredSans);
 
   // If fonts.conf/fc-match didn't yield a sans, prefer Nimbus if available (common Helvetica replacement)
   if (!preferredSans)
@@ -293,7 +293,7 @@ static BOOL isCodeFence(NSString *line, NSString **language);
   if (!body)
     body = fallbackBody;
   _bodyFont = RETAIN(body);
-  NSLog(@"[MarkdownConsumer] selected body font: %@", _bodyFont);
+  NSDebugLLog(@"gwcomp", @"[MarkdownConsumer] selected body font: %@", _bodyFont);
 
   /* Bold/italic variants based on body font family members */
   NSFont *bold = nil;

@@ -16,7 +16,7 @@
 
 @implementation SystemSetupAppDelegate
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
-    NSLog(@"SystemSetupAssistant: Last window closed, terminating application");
+    NSDebugLLog(@"gwcomp", @"SystemSetupAssistant: Last window closed, terminating application");
     return YES;
 }
 @end
@@ -27,11 +27,11 @@
 @implementation SystemSetupDelegate
 
 - (void)assistantWindowWillFinish:(GSAssistantWindow *)window {
-    NSLog(@"System setup assistant will finish");
+    NSDebugLLog(@"gwcomp", @"System setup assistant will finish");
 }
 
 - (void)assistantWindowDidFinish:(GSAssistantWindow *)window {
-    NSLog(@"System setup assistant finished");
+    NSDebugLLog(@"gwcomp", @"System setup assistant finished");
     [NSApp terminate:nil];
 }
 
@@ -59,52 +59,52 @@
 @implementation SystemSetupAssistant
 
 + (void)showSetupAssistant {
-    NSLog(@"[SystemSetupAssistant] Starting showSetupAssistant");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Starting showSetupAssistant");
     SystemSetupDelegate *delegate = [[SystemSetupDelegate alloc] init];
-    NSLog(@"[SystemSetupAssistant] Created delegate: %@", delegate);
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Created delegate: %@", delegate);
     
     // Build the assistant using the builder
-    NSLog(@"[SystemSetupAssistant] Creating builder...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Creating builder...");
     GSAssistantBuilder *builder = [GSAssistantBuilder builder];
-    NSLog(@"[SystemSetupAssistant] Created builder: %@", builder);
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Created builder: %@", builder);
     
     
-    NSLog(@"[SystemSetupAssistant] Setting title...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Setting title...");
     [builder withTitle:NSLocalizedString(@"System Setup Assistant", @"")];
     
-    NSLog(@"[SystemSetupAssistant] Setting icon...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Setting icon...");
     [builder withIcon:[NSImage imageNamed:@"NSApplicationIcon"]];
     
-    NSLog(@"[SystemSetupAssistant] Adding user info step...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Adding user info step...");
     SSUserInfoStep *userInfoStep = [[SSUserInfoStep alloc] init];
     [builder addStep:userInfoStep];
     [userInfoStep release];
     
-    NSLog(@"[SystemSetupAssistant] Adding preferences step...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Adding preferences step...");
     SSPreferencesStep *preferencesStep = [[SSPreferencesStep alloc] init];
     [builder addStep:preferencesStep];
     [preferencesStep release];
     
-    NSLog(@"[SystemSetupAssistant] Adding progress step...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Adding progress step...");
     [builder addProgressStep:@"Applying Settings" 
            description:@"Please wait while we apply your settings..."];
     
-    NSLog(@"[SystemSetupAssistant] Adding completion step...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Adding completion step...");
     [builder addCompletionWithMessage:@"Setup completed successfully! Your system is now ready to use." 
            success:YES];
     
-    NSLog(@"[SystemSetupAssistant] Building assistant...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Building assistant...");
     GSAssistantWindow *assistant = [builder build];
-    NSLog(@"[SystemSetupAssistant] Built assistant: %@", assistant);
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Built assistant: %@", assistant);
     
-    NSLog(@"[SystemSetupAssistant] Setting delegate...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Setting delegate...");
     assistant.delegate = delegate;
     
-    NSLog(@"[SystemSetupAssistant] Showing window...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Showing window...");
     [assistant showWindow:nil];
-    NSLog(@"[SystemSetupAssistant] Making window key and front...");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Making window key and front...");
     [assistant.window makeKeyAndOrderFront:nil];
-    NSLog(@"[SystemSetupAssistant] Assistant window should now be visible");
+    NSDebugLLog(@"gwcomp", @"[SystemSetupAssistant] Assistant window should now be visible");
 }
 
 @end

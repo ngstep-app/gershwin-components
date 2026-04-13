@@ -13,7 +13,7 @@ static DSHelper *helper = nil;
 static int pidFileFd = -1;
 
 void signalHandler(int sig) {
-    NSLog(@"dshelper: Received signal %d, shutting down...", sig);
+    NSDebugLLog(@"gwcomp", @"dshelper: Received signal %d, shutting down...", sig);
     [helper unregisterService];
     [helper stopServer];
     if (pidFileFd >= 0) {
@@ -160,21 +160,21 @@ int main(int argc, char *argv[]) {
                            }
                                 error:&error];
             if (error) {
-                NSLog(@"dshelper: Failed to create %@: %@", dirPath, error);
+                NSDebugLLog(@"gwcomp", @"dshelper: Failed to create %@: %@", dirPath, error);
             }
         }
 
         // Start server
         helper = [DSHelper sharedHelper];
 
-        NSLog(@"dshelper: Starting Directory Services Helper");
+        NSDebugLLog(@"gwcomp", @"dshelper: Starting Directory Services Helper");
 
         // Register with port name server for discovery BEFORE starting
         // the blocking accept loop (servers only)
         [helper registerService];
 
         if (![helper startServer]) {
-            NSLog(@"dshelper: Failed to start server");
+            NSDebugLLog(@"gwcomp", @"dshelper: Failed to start server");
             return 1;
         }
 

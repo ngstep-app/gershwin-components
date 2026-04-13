@@ -26,7 +26,7 @@ static dispatch_once_t _sharedDisplayOnce;
     dispatch_once(&_sharedDisplayOnce, ^{
         _sharedDisplay = XOpenDisplay(NULL);
         if (!_sharedDisplay) {
-            NSLog(@"MenuUtils: Failed to open shared X11 display");
+            NSDebugLLog(@"gwcomp", @"MenuUtils: Failed to open shared X11 display");
         }
     });
     return _sharedDisplay;
@@ -189,7 +189,7 @@ static dispatch_once_t _sharedDisplayOnce;
 {
     // Validate window ID - 0 means no window
     if (windowId == 0) {
-        NSLog(@"MenuUtils: Window ID is 0 (no active window), returning nil");
+        NSDebugLLog(@"gwcomp", @"MenuUtils: Window ID is 0 (no active window), returning nil");
         return nil;
     }
 
@@ -220,7 +220,7 @@ static dispatch_once_t _sharedDisplayOnce;
     
     // Low-level check if the window exists using XQueryTree might be more robust
     // but XGetWindowAttributes is usually sufficient.
-    NSLog(@"MenuUtils: XGetWindowAttributes failed for 0x%lx", windowId);
+    NSDebugLLog(@"gwcomp", @"MenuUtils: XGetWindowAttributes failed for 0x%lx", windowId);
     return NO;
 }
 
@@ -238,7 +238,7 @@ static dispatch_once_t _sharedDisplayOnce;
     if (XGetWindowAttributes(display, (Window)windowId, &attrs) == Success) {
         mapped = (attrs.map_state != IsUnmapped);
         if (!mapped) {
-            NSLog(@"MenuUtils: Window 0x%lx is unmapped (state %d)", windowId, attrs.map_state);
+            NSDebugLLog(@"gwcomp", @"MenuUtils: Window 0x%lx is unmapped (state %d)", windowId, attrs.map_state);
         }
     } else {
         // XGetWindowAttributes failure does NOT mean the window is unmapped.
@@ -529,10 +529,10 @@ static dispatch_once_t _sharedDisplayOnce;
         int result = XChangeProperty(display, (Window)windowId, serviceAtom, XA_STRING, 8,
                                    PropModeReplace, (unsigned char*)serviceStr, strlen(serviceStr));
         if (result != Success) {
-            NSLog(@"MenuUtils: Failed to set service property for window %lu", windowId);
+            NSDebugLLog(@"gwcomp", @"MenuUtils: Failed to set service property for window %lu", windowId);
             success = NO;
         } else {
-            NSLog(@"MenuUtils: Set _KDE_NET_WM_APPMENU_SERVICE_NAME=%@ for window %lu", service, windowId);
+            NSDebugLLog(@"gwcomp", @"MenuUtils: Set _KDE_NET_WM_APPMENU_SERVICE_NAME=%@ for window %lu", service, windowId);
         }
     }
     
@@ -543,10 +543,10 @@ static dispatch_once_t _sharedDisplayOnce;
         int result = XChangeProperty(display, (Window)windowId, pathAtom, XA_STRING, 8,
                                    PropModeReplace, (unsigned char*)pathStr, strlen(pathStr));
         if (result != Success) {
-            NSLog(@"MenuUtils: Failed to set path property for window %lu", windowId);
+            NSDebugLLog(@"gwcomp", @"MenuUtils: Failed to set path property for window %lu", windowId);
             success = NO;
         } else {
-            NSLog(@"MenuUtils: Set _KDE_NET_WM_APPMENU_OBJECT_PATH=%@ for window %lu", path, windowId);
+            NSDebugLLog(@"gwcomp", @"MenuUtils: Set _KDE_NET_WM_APPMENU_OBJECT_PATH=%@ for window %lu", path, windowId);
         }
     }
     
@@ -605,7 +605,7 @@ static dispatch_once_t _sharedDisplayOnce;
         XChangeProperty(display, dummyWindow, wmNameAtom, XInternAtom(display, "UTF8_STRING", False), 8,
                        PropModeReplace, (unsigned char*)wmName, strlen(wmName));
         
-        NSLog(@"MenuUtils: Set _NET_SUPPORTING_WM_CHECK for global menu support");
+        NSDebugLLog(@"gwcomp", @"MenuUtils: Set _NET_SUPPORTING_WM_CHECK for global menu support");
     }
     
     // Set _NET_SUPPORTED to advertise supported features
@@ -622,7 +622,7 @@ static dispatch_once_t _sharedDisplayOnce;
                        PropModeReplace, (unsigned char*)supportedFeatures, 
                        sizeof(supportedFeatures) / sizeof(Atom));
         
-        NSLog(@"MenuUtils: Set _NET_SUPPORTED with global menu atoms");
+        NSDebugLLog(@"gwcomp", @"MenuUtils: Set _NET_SUPPORTED with global menu atoms");
     }
     
     // Set KDE-specific property to indicate global menu support
@@ -632,7 +632,7 @@ static dispatch_once_t _sharedDisplayOnce;
         XChangeProperty(display, root, kdeMenuAtom, XA_CARDINAL, 32,
                        PropModeReplace, (unsigned char*)&value, 1);
         
-        NSLog(@"MenuUtils: Set _KDE_GLOBAL_MENU_AVAILABLE=1 on root window");
+        NSDebugLLog(@"gwcomp", @"MenuUtils: Set _KDE_GLOBAL_MENU_AVAILABLE=1 on root window");
     }
     
     // Set Unity-specific property for Ubuntu compatibility
@@ -642,7 +642,7 @@ static dispatch_once_t _sharedDisplayOnce;
         XChangeProperty(display, root, unityMenuAtom, XA_CARDINAL, 32,
                        PropModeReplace, (unsigned char*)&value, 1);
         
-        NSLog(@"MenuUtils: Set _UNITY_GLOBAL_MENU=1 on root window");
+        NSDebugLLog(@"gwcomp", @"MenuUtils: Set _UNITY_GLOBAL_MENU=1 on root window");
     }
     
     XFlush(display);
@@ -675,7 +675,7 @@ static dispatch_once_t _sharedDisplayOnce;
     XFlush(display);
     [self closeDisplay:display];
     
-    NSLog(@"MenuUtils: Removed global menu support properties from root window");
+    NSDebugLLog(@"gwcomp", @"MenuUtils: Removed global menu support properties from root window");
 }
 
 @end

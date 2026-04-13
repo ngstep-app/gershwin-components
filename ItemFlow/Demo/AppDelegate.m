@@ -69,7 +69,7 @@
 }
 
 - (void)itemFlowView:(ItemFlowView *)view didSelectItemAtIndex:(NSUInteger)index {
-    NSLog(@"Selected index: %lu", (unsigned long)index);
+    NSDebugLLog(@"gwcomp", @"Selected index: %lu", (unsigned long)index);
     [self.window setTitle:[NSString stringWithFormat:@"ItemFlow Demo - Selected: %lu", (unsigned long)index]];
 }
 

@@ -10,7 +10,7 @@
 
 + (void)showErrorAlertWithTitle:(NSString *)title message:(NSString *)message
 {
-  NSLog(@"%@: %@", title, message);
+  NSDebugLLog(@"gwcomp", @"%@: %@", title, message);
   fprintf(stderr, "%s\n", [message UTF8String]);
 
   const char *noGui = getenv("APPWRAP_NO_GUI");
@@ -229,7 +229,7 @@
         }
       @catch (NSException *e)
         {
-          NSLog(@"Failed to run '%@' due to exception: %@", t, e);
+          NSDebugLLog(@"gwcomp", @"Failed to run '%@' due to exception: %@", t, e);
         }
     }
 

@@ -75,19 +75,19 @@
 
 - (void)willUnselect
 {
-    NSLog(@"PrintersPane: willUnselect called");
+    NSDebugLLog(@"gwcomp", @"PrintersPane: willUnselect called");
 }
 
 - (void)didUnselect
 {
     [super didUnselect];
     [self stopRefreshTimer];
-    NSLog(@"PrintersPane: didUnselect called");
+    NSDebugLLog(@"gwcomp", @"PrintersPane: didUnselect called");
 }
 
 - (NSPreferencePaneUnselectReply)shouldUnselect
 {
-    NSLog(@"PrintersPane: shouldUnselect called, allowing unselect");
+    NSDebugLLog(@"gwcomp", @"PrintersPane: shouldUnselect called, allowing unselect");
     return NSUnselectNow;
 }
 

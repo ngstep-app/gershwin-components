@@ -50,14 +50,14 @@
         _availableSpace = 0;
         _userConfirmedWipe = NO;
         
-        NSLog(@"BackupAssistant: Controller initialized for home directories: %@", _homeDirectory);
+        NSDebugLLog(@"gwcomp", @"BackupAssistant: Controller initialized for home directories: %@", _homeDirectory);
     }
     return self;
 }
 
 - (void)showAssistant
 {
-    NSLog(@"BackupAssistant: Creating assistant window");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Creating assistant window");
     
     // Check ZFS availability first
     if (![self checkZFSAvailability]) {
@@ -112,28 +112,28 @@
     
     [_assistantWindow showWindow:nil];
     
-    NSLog(@"BackupAssistant: Assistant window shown");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Assistant window shown");
 }
 
 #pragma mark - GSAssistantWindowDelegate
 
 - (void)assistantWindowWillClose:(GSAssistantWindow *)window
 {
-    NSLog(@"BackupAssistant: Assistant window will close");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Assistant window will close");
     [self cleanupOnError];
 }
 
 - (void)assistantWindowDidCancel:(GSAssistantWindow *)window
 {
-    NSLog(@"BackupAssistant: Assistant cancelled by user");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Assistant cancelled by user");
     [self cleanupOnError];
     [NSApp terminate:nil];
 }
 
 - (void)assistantWindowDidFinish:(GSAssistantWindow *)window
 {
-    NSLog(@"BackupAssistant: Assistant completed successfully");
-    NSLog(@"BackupAssistant: Window remains open for user to review results");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Assistant completed successfully");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Window remains open for user to review results");
     // Don't terminate - let user close the window manually
 }
 
@@ -141,7 +141,7 @@
 
 - (BADiskAnalysisResult)analyzeDisk:(NSString *)diskDevice
 {
-    NSLog(@"BackupAssistant: Analyzing disk %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Analyzing disk %@", diskDevice);
     
     if (!diskDevice || [diskDevice length] == 0) {
         return BADiskAnalysisResultEmpty;
@@ -149,101 +149,101 @@
     
     // Check if disk has existing ZFS pool
     if ([BAZFSUtility diskHasZFSPool:diskDevice]) {
-        NSLog(@"BackupAssistant: Disk has existing ZFS pool");
+        NSDebugLLog(@"gwcomp", @"BackupAssistant: Disk has existing ZFS pool");
         
         // First check if the pool is already imported and available
         BOOL poolAlreadyExists = [BAZFSUtility poolExists:_zfsPoolName];
-        NSLog(@"BackupAssistant: Pool '%@' already exists/imported: %@", _zfsPoolName, poolAlreadyExists ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"BackupAssistant: Pool '%@' already exists/imported: %@", _zfsPoolName, poolAlreadyExists ? @"YES" : @"NO");
         
         if (poolAlreadyExists) {
             // Pool is already available, check if it has backup datasets
             NSArray *datasets = [BAZFSUtility getDatasets:_zfsPoolName];
             if (datasets && [datasets count] > 0) {
-                NSLog(@"BackupAssistant: Valid backup found on existing pool");
+                NSDebugLLog(@"gwcomp", @"BackupAssistant: Valid backup found on existing pool");
                 return BADiskAnalysisResultHasBackup;
             } else {
-                NSLog(@"BackupAssistant: Pool exists but no backup datasets found");
+                NSDebugLLog(@"gwcomp", @"BackupAssistant: Pool exists but no backup datasets found");
                 return BADiskAnalysisResultIncompatible;
             }
         } else {
             // Pool is not imported, try to import it
-            NSLog(@"BackupAssistant: Attempting to import pool '%@'", _zfsPoolName);
+            NSDebugLLog(@"gwcomp", @"BackupAssistant: Attempting to import pool '%@'", _zfsPoolName);
             if ([BAZFSUtility importPoolFromDisk:diskDevice poolName:_zfsPoolName]) {
                 NSArray *datasets = [BAZFSUtility getDatasets:_zfsPoolName];
                 if (datasets && [datasets count] > 0) {
-                    NSLog(@"BackupAssistant: Valid backup found after import");
+                    NSDebugLLog(@"gwcomp", @"BackupAssistant: Valid backup found after import");
                     return BADiskAnalysisResultHasBackup;
                 } else {
-                    NSLog(@"BackupAssistant: ZFS pool imported but no backup datasets found");
+                    NSDebugLLog(@"gwcomp", @"BackupAssistant: ZFS pool imported but no backup datasets found");
                     return BADiskAnalysisResultIncompatible;
                 }
             } else {
-                NSLog(@"BackupAssistant: ZFS pool corrupted or incompatible");
+                NSDebugLLog(@"gwcomp", @"BackupAssistant: ZFS pool corrupted or incompatible");
                 return BADiskAnalysisResultCorrupted;
             }
         }
     }
     
-    NSLog(@"BackupAssistant: Disk appears to be empty or non-ZFS");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Disk appears to be empty or non-ZFS");
     return BADiskAnalysisResultEmpty;
 }
 
 - (BOOL)createZFSPool:(NSString *)diskDevice
 {
-    NSLog(@"BackupAssistant: Creating ZFS pool on %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Creating ZFS pool on %@", diskDevice);
     
     if (![BAZFSUtility createPool:_zfsPoolName onDisk:diskDevice]) {
-        NSLog(@"ERROR: Failed to create ZFS pool on %@", diskDevice);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to create ZFS pool on %@", diskDevice);
         return NO;
     }
     
     // Create backup dataset
     NSString *datasetName = [NSString stringWithFormat:@"%@/home_backup", _zfsPoolName];
     if (![BAZFSUtility createDataset:datasetName]) {
-        NSLog(@"ERROR: Failed to create backup dataset %@", datasetName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to create backup dataset %@", datasetName);
         [BAZFSUtility destroyPool:_zfsPoolName];
         return NO;
     }
     
-    NSLog(@"BackupAssistant: Successfully created ZFS pool and backup dataset");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Successfully created ZFS pool and backup dataset");
     return YES;
 }
 
 - (BOOL)importZFSPool:(NSString *)diskDevice
 {
-    NSLog(@"BackupAssistant: Importing ZFS pool from %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Importing ZFS pool from %@", diskDevice);
     return [BAZFSUtility importPoolFromDisk:diskDevice poolName:_zfsPoolName];
 }
 
 - (BOOL)destroyExistingZFSPool:(NSString *)diskDevice
 {
-    NSLog(@"BackupAssistant: Destroying existing ZFS pool on %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Destroying existing ZFS pool on %@", diskDevice);
     
     // First, try to get the pool name from the disk
     NSString *poolName = [BAZFSUtility getPoolNameFromDisk:diskDevice];
     if (!poolName) {
-        NSLog(@"WARNING: Could not determine pool name from disk %@, using default name", diskDevice);
+        NSDebugLLog(@"gwcomp", @"WARNING: Could not determine pool name from disk %@, using default name", diskDevice);
         poolName = _zfsPoolName;
     }
     
-    NSLog(@"BackupAssistant: Attempting to destroy pool '%@'", poolName);
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Attempting to destroy pool '%@'", poolName);
     
     // First try to export the pool (graceful)
     if ([BAZFSUtility poolExists:poolName]) {
-        NSLog(@"BackupAssistant: Pool '%@' exists, attempting graceful export first", poolName);
+        NSDebugLLog(@"gwcomp", @"BackupAssistant: Pool '%@' exists, attempting graceful export first", poolName);
         if ([BAZFSUtility exportPool:poolName]) {
-            NSLog(@"BackupAssistant: Successfully exported pool '%@'", poolName);
+            NSDebugLLog(@"gwcomp", @"BackupAssistant: Successfully exported pool '%@'", poolName);
         } else {
-            NSLog(@"WARNING: Failed to export pool '%@', will try to destroy directly", poolName);
+            NSDebugLLog(@"gwcomp", @"WARNING: Failed to export pool '%@', will try to destroy directly", poolName);
         }
     }
     
     // Now destroy the pool
     BOOL success = [BAZFSUtility destroyPool:poolName];
     if (success) {
-        NSLog(@"BackupAssistant: Successfully destroyed pool '%@'", poolName);
+        NSDebugLLog(@"gwcomp", @"BackupAssistant: Successfully destroyed pool '%@'", poolName);
     } else {
-        NSLog(@"ERROR: Failed to destroy pool '%@'", poolName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to destroy pool '%@'", poolName);
     }
     
     return success;
@@ -257,7 +257,7 @@
 
 - (long long)calculateBackupSize
 {
-    NSLog(@"BackupAssistant: Calculating backup size for %@", _homeDirectory);
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Calculating backup size for %@", _homeDirectory);
     
     // Use du command to calculate directory size
     NSTask *task = [[NSTask alloc] init];
@@ -281,12 +281,12 @@
             if ([components count] > 0) {
                 long long size = [[components objectAtIndex:0] longLongValue];
                 
-                NSLog(@"BackupAssistant: Calculated backup size: %lld bytes", size);
+                NSDebugLLog(@"gwcomp", @"BackupAssistant: Calculated backup size: %lld bytes", size);
                 return size;
             }
         }
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to calculate backup size: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to calculate backup size: %@", [exception reason]);
     }
     
     return 0;
@@ -301,7 +301,7 @@
 
 - (BOOL)performBackupWithProgress:(void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BackupAssistant: Starting full backup operation");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Starting full backup operation");
     
     if (progressBlock) {
         progressBlock(0.1, NSLocalizedString(@"Preparing backup...", @"Backup progress message"));
@@ -312,18 +312,18 @@
     
     // Ensure the dataset exists - create it if it doesn't exist
     if (![BAZFSUtility datasetExists:datasetName]) {
-        NSLog(@"BackupAssistant: Dataset does not exist, creating it");
+        NSDebugLLog(@"gwcomp", @"BackupAssistant: Dataset does not exist, creating it");
         if (![BAZFSUtility createDataset:datasetName]) {
-            NSLog(@"ERROR: Failed to create dataset for backup");
+            NSDebugLLog(@"gwcomp", @"ERROR: Failed to create dataset for backup");
             return NO;
         }
     } else {
-        NSLog(@"BackupAssistant: Dataset already exists, proceeding with mount");
+        NSDebugLLog(@"gwcomp", @"BackupAssistant: Dataset already exists, proceeding with mount");
     }
     
     // Mount the dataset
     if (![BAZFSUtility mountDataset:datasetName atPath:mountPoint]) {
-        NSLog(@"ERROR: Failed to mount dataset for backup");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to mount dataset for backup");
         return NO;
     }
     
@@ -354,13 +354,13 @@
     // Unmount the dataset
     [BAZFSUtility unmountDataset:datasetName];
     
-    NSLog(@"BackupAssistant: Backup operation %@", success ? @"completed successfully" : @"failed");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Backup operation %@", success ? @"completed successfully" : @"failed");
     return success;
 }
 
 - (BOOL)performIncrementalBackupWithProgress:(void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BackupAssistant: Starting incremental backup operation");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Starting incremental backup operation");
     
     if (progressBlock) {
         progressBlock(0.1, NSLocalizedString(@"Preparing incremental backup...", @"Backup progress message"));
@@ -371,18 +371,18 @@
     
     // Ensure the dataset exists - create it if it doesn't exist
     if (![BAZFSUtility datasetExists:datasetName]) {
-        NSLog(@"BackupAssistant: Dataset does not exist, creating it");
+        NSDebugLLog(@"gwcomp", @"BackupAssistant: Dataset does not exist, creating it");
         if (![BAZFSUtility createDataset:datasetName]) {
-            NSLog(@"ERROR: Failed to create dataset for incremental backup");
+            NSDebugLLog(@"gwcomp", @"ERROR: Failed to create dataset for incremental backup");
             return NO;
         }
     } else {
-        NSLog(@"BackupAssistant: Dataset already exists, proceeding with mount");
+        NSDebugLLog(@"gwcomp", @"BackupAssistant: Dataset already exists, proceeding with mount");
     }
     
     // Mount the dataset
     if (![BAZFSUtility mountDataset:datasetName atPath:mountPoint]) {
-        NSLog(@"ERROR: Failed to mount dataset for incremental backup");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to mount dataset for incremental backup");
         return NO;
     }
     
@@ -413,13 +413,13 @@
     // Unmount the dataset
     [BAZFSUtility unmountDataset:datasetName];
     
-    NSLog(@"BackupAssistant: Incremental backup operation %@", success ? @"completed successfully" : @"failed");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Incremental backup operation %@", success ? @"completed successfully" : @"failed");
     return success;
 }
 
 - (BOOL)performRestoreWithProgress:(void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BackupAssistant: Starting restore operation");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Starting restore operation");
     
     if (progressBlock) {
         progressBlock(0.1, NSLocalizedString(@"Preparing restore...", @"Restore progress message"));
@@ -435,20 +435,20 @@
         }
         
         if (![BAZFSUtility rollbackToSnapshot:_selectedSnapshot]) {
-            NSLog(@"ERROR: Failed to rollback to snapshot %@", _selectedSnapshot);
+            NSDebugLLog(@"gwcomp", @"ERROR: Failed to rollback to snapshot %@", _selectedSnapshot);
             return NO;
         }
     }
     
     // Ensure the dataset exists - it should exist for restore operations
     if (![BAZFSUtility datasetExists:datasetName]) {
-        NSLog(@"ERROR: Dataset does not exist for restore operation");
+        NSDebugLLog(@"gwcomp", @"ERROR: Dataset does not exist for restore operation");
         return NO;
     }
     
     // Mount the dataset
     if (![BAZFSUtility mountDataset:datasetName atPath:mountPoint]) {
-        NSLog(@"ERROR: Failed to mount dataset for restore");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to mount dataset for restore");
         return NO;
     }
     
@@ -469,13 +469,13 @@
     // Unmount the dataset
     [BAZFSUtility unmountDataset:datasetName];
     
-    NSLog(@"BackupAssistant: Restore operation %@", success ? @"completed successfully" : @"failed");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Restore operation %@", success ? @"completed successfully" : @"failed");
     return success;
 }
 
 - (BOOL)performMountBackupWithProgress:(void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BackupAssistant: Starting mount backup operation");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Starting mount backup operation");
     
     if (progressBlock) {
         progressBlock(0.1, NSLocalizedString(@"Preparing to mount backup...", @"Mount progress message"));
@@ -486,7 +486,7 @@
     
     // Ensure the dataset exists
     if (![BAZFSUtility datasetExists:datasetName]) {
-        NSLog(@"ERROR: Dataset does not exist for mount operation");
+        NSDebugLLog(@"gwcomp", @"ERROR: Dataset does not exist for mount operation");
         return NO;
     }
     
@@ -496,7 +496,7 @@
     
     // Mount the dataset
     if (![BAZFSUtility mountDataset:datasetName atPath:mountPoint]) {
-        NSLog(@"ERROR: Failed to mount dataset");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to mount dataset");
         return NO;
     }
     
@@ -507,7 +507,7 @@
     // Verify the mount was successful
     NSFileManager *fileManager = [NSFileManager defaultManager];
     if (![fileManager fileExistsAtPath:mountPoint]) {
-        NSLog(@"ERROR: Mount point does not exist after mount operation");
+        NSDebugLLog(@"gwcomp", @"ERROR: Mount point does not exist after mount operation");
         return NO;
     }
     
@@ -515,8 +515,8 @@
         progressBlock(1.0, NSLocalizedString(@"Backup mounted successfully", @"Mount progress message"));
     }
     
-    NSLog(@"BackupAssistant: Mount backup operation completed successfully");
-    NSLog(@"BackupAssistant: Backup is now accessible at: %@", mountPoint);
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Mount backup operation completed successfully");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Backup is now accessible at: %@", mountPoint);
     return YES;
 }
 
@@ -524,7 +524,7 @@
 
 - (void)showOperationSuccess:(NSString *)message
 {
-    NSLog(@"BackupAssistant: Showing success message: %@", message);
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Showing success message: %@", message);
     _operationSuccessful = YES;
     
     if (_assistantWindow) {
@@ -535,7 +535,7 @@
 
 - (void)showOperationError:(NSString *)message
 {
-    NSLog(@"BackupAssistant: Showing error message: %@", message);
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Showing error message: %@", message);
     _operationSuccessful = NO;
     
     if (_assistantWindow) {
@@ -548,21 +548,21 @@
 
 - (BOOL)checkZFSAvailability
 {
-    NSLog(@"BackupAssistant: Checking ZFS availability");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Checking ZFS availability");
     return [BAZFSUtility isZFSAvailable];
 }
 
 - (BOOL)checkHomeDirectoryOnZFS
 {
-    NSLog(@"BackupAssistant: Checking if /home is on ZFS filesystem...");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Checking if /home is on ZFS filesystem...");
     
     NSString *homeDataset = [BAZFSUtility getZFSDatasetForPath:_homeDirectory];
     if (!homeDataset) {
-        NSLog(@"ERROR: /home directory is not on ZFS - this is a hard requirement");
+        NSDebugLLog(@"gwcomp", @"ERROR: /home directory is not on ZFS - this is a hard requirement");
         return NO;
     }
     
-    NSLog(@"BackupAssistant: /home is on ZFS dataset: %@", homeDataset);
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: /home is on ZFS dataset: %@", homeDataset);
     return YES;
 }
 
@@ -586,7 +586,7 @@
 
 - (void)cleanupOnError
 {
-    NSLog(@"BackupAssistant: Performing cleanup on error");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Performing cleanup on error");
     
     // Export any imported pools to clean up
     if (_zfsPoolName && [BAZFSUtility poolExists:_zfsPoolName]) {
@@ -596,7 +596,7 @@
 
 - (void)stopDiskRefreshTimers
 {
-    NSLog(@"BAController: Requesting all disk refresh timers to stop");
+    NSDebugLLog(@"gwcomp", @"BAController: Requesting all disk refresh timers to stop");
     // This will be called from BADiskSelectionStep when needed
     // Send notification to disk selection steps to stop their timers
     [[NSNotificationCenter defaultCenter] postNotificationName:@"BAStopDiskRefreshTimers" 

@@ -29,7 +29,7 @@
 - (instancetype)initWithRepository:(NSString *)owner name:(NSString *)name
 {
     if (self = [super init]) {
-        NSLog(@"DRIGitHubAPI: initializing with repo %@/%@", owner, name);
+        NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: initializing with repo %@/%@", owner, name);
         _repositoryOwner = owner;
         _repositoryName = name;
     }
@@ -40,14 +40,14 @@
 #pragma clang diagnostic ignored "-Wobjc-missing-super-calls"
 - (void)dealloc
 {
-    NSLog(@"DRIGitHubAPI: dealloc");
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: dealloc");
     [self cancelCurrentRequest];
 }
 #pragma clang diagnostic pop
 
 - (void)fetchReleasesIncludingPrereleases:(BOOL)includePrereleases
 {
-    NSLog(@"DRIGitHubAPI: fetchReleasesIncludingPrereleases: %@", includePrereleases ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: fetchReleasesIncludingPrereleases: %@", includePrereleases ? @"YES" : @"NO");
     
     [self cancelCurrentRequest];
     
@@ -56,7 +56,7 @@
     NSURL *url = [NSURL URLWithString:urlString];
     
     if (!url) {
-        NSLog(@"DRIGitHubAPI: invalid URL: %@", urlString);
+        NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: invalid URL: %@", urlString);
         NSError *error = [NSError errorWithDomain:@"DRIGitHubAPI" 
                                              code:1001 
                                          userInfo:@{NSLocalizedDescriptionKey: @"Invalid repository URL"}];
@@ -69,7 +69,7 @@
     [request setValue:@"DebianRuntimeInstaller/1.0" forHTTPHeaderField:@"User-Agent"];
     [request setTimeoutInterval:30.0];
     
-    NSLog(@"DRIGitHubAPI: making request to %@", urlString);
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: making request to %@", urlString);
     
     _downloadData = [[NSMutableData alloc] init];
     _currentConnection = [[NSURLConnection alloc] initWithRequest:request delegate:self];
@@ -79,7 +79,7 @@
 - (void)cancelCurrentRequest
 {
     if (_currentConnection) {
-        NSLog(@"DRIGitHubAPI: canceling current request");
+        NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: canceling current request");
         [_currentConnection cancel];
         _currentConnection = nil;
     }
@@ -90,23 +90,23 @@
 
 - (void)handleResponse:(NSURLResponse *)response data:(NSData *)data error:(NSError *)error
 {
-    NSLog(@"DRIGitHubAPI: handleResponse called");
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: handleResponse called");
     
     if (error) {
-        NSLog(@"DRIGitHubAPI: request failed with error: %@", error.localizedDescription);
+        NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: request failed with error: %@", error.localizedDescription);
         
         // Provide fallback data if GitHub API fails
-        NSLog(@"DRIGitHubAPI: providing fallback releases data");
+        NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: providing fallback releases data");
         NSArray *fallbackReleases = [self createFallbackReleases];
         [self.delegate gitHubAPI:self didFetchReleases:fallbackReleases];
         return;
     }
     
     NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
-    NSLog(@"DRIGitHubAPI: HTTP status code: %ld", (long)[httpResponse statusCode]);
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: HTTP status code: %ld", (long)[httpResponse statusCode]);
     
     if ([httpResponse statusCode] != 200) {
-        NSLog(@"DRIGitHubAPI: non-200 status code, using fallback data");
+        NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: non-200 status code, using fallback data");
         NSArray *fallbackReleases = [self createFallbackReleases];
         [self.delegate gitHubAPI:self didFetchReleases:fallbackReleases];
         return;
@@ -116,14 +116,14 @@
     id jsonResponse = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
     
     if (jsonError || ![jsonResponse isKindOfClass:[NSArray class]]) {
-        NSLog(@"DRIGitHubAPI: JSON parsing failed: %@", jsonError.localizedDescription);
+        NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: JSON parsing failed: %@", jsonError.localizedDescription);
         NSArray *fallbackReleases = [self createFallbackReleases];
         [self.delegate gitHubAPI:self didFetchReleases:fallbackReleases];
         return;
     }
     
     NSArray *releasesData = (NSArray *)jsonResponse;
-    NSLog(@"DRIGitHubAPI: parsed %lu releases from API", (unsigned long)[releasesData count]);
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: parsed %lu releases from API", (unsigned long)[releasesData count]);
     
     NSArray *releases = [self parseReleasesFromData:releasesData];
     [self.delegate gitHubAPI:self didFetchReleases:releases];
@@ -133,7 +133,7 @@
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
-    NSLog(@"DRIGitHubAPI: didReceiveResponse");
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: didReceiveResponse");
     _response = response;
 }
 
@@ -144,7 +144,7 @@
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
 {
-    NSLog(@"DRIGitHubAPI: connection finished, data length: %lu", (unsigned long)[_downloadData length]);
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: connection finished, data length: %lu", (unsigned long)[_downloadData length]);
     [self handleResponse:_response data:_downloadData error:nil];
     
     _response = nil;
@@ -154,7 +154,7 @@
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
 {
-    NSLog(@"DRIGitHubAPI: connection failed with error: %@", error.localizedDescription);
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: connection failed with error: %@", error.localizedDescription);
     [self handleResponse:nil data:nil error:error];
     
     _response = nil;
@@ -164,7 +164,7 @@
 
 - (NSArray *)parseReleasesFromData:(NSArray *)releasesData
 {
-    NSLog(@"DRIGitHubAPI: parseReleasesFromData");
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: parseReleasesFromData");
     NSMutableArray *releases = [[NSMutableArray alloc] init];
     
     for (NSDictionary *releaseDict in releasesData) {
@@ -209,7 +209,7 @@
         
         if (assets.count > 0) {
             [releases addObject:release];
-            NSLog(@"DRIGitHubAPI: added release '%@' with %lu assets", release.name, (unsigned long)assets.count);
+            NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: added release '%@' with %lu assets", release.name, (unsigned long)assets.count);
         }
     }
     
@@ -218,7 +218,7 @@
 
 - (NSArray *)createFallbackReleases
 {
-    NSLog(@"DRIGitHubAPI: createFallbackReleases");
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: createFallbackReleases");
     
     NSMutableArray *releases = [[NSMutableArray alloc] init];
     
@@ -256,7 +256,7 @@
     betaRelease.assets = @[betaAsset];
     [releases addObject:betaRelease];
     
-    NSLog(@"DRIGitHubAPI: created %lu fallback releases", (unsigned long)releases.count);
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: created %lu fallback releases", (unsigned long)releases.count);
     return [releases copy];
 }
 
@@ -264,7 +264,7 @@
 
 + (NSArray *)fetchReleasesFromRepository:(NSString *)owner name:(NSString *)name includePrereleases:(BOOL)includePrereleases
 {
-    NSLog(@"DRIGitHubAPI: fetchReleasesFromRepository (sync): %@/%@", owner, name);
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: fetchReleasesFromRepository (sync): %@/%@", owner, name);
     
     NSMutableArray *releases = [NSMutableArray array];
     
@@ -283,7 +283,7 @@
                                                     error:&error];
     
     if (error) {
-        NSLog(@"DRIGitHubAPI: Error fetching releases: %@", [error localizedDescription]);
+        NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: Error fetching releases: %@", [error localizedDescription]);
         // Return fallback data on error
         DRIGitHubAPI *fallbackAPI = [[DRIGitHubAPI alloc] initWithRepository:owner name:name];
         NSArray *fallbackReleases = [fallbackAPI createFallbackReleases];
@@ -291,7 +291,7 @@
     }
     
     if ([response statusCode] != 200) {
-        NSLog(@"DRIGitHubAPI: HTTP error %ld", (long)[response statusCode]);
+        NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: HTTP error %ld", (long)[response statusCode]);
         // Return fallback data on HTTP error
         DRIGitHubAPI *fallbackAPI = [[DRIGitHubAPI alloc] initWithRepository:owner name:name];
         NSArray *fallbackReleases = [fallbackAPI createFallbackReleases];
@@ -305,7 +305,7 @@
                                                       error:&jsonError];
     
     if (jsonError || ![jsonResult isKindOfClass:[NSArray class]]) {
-        NSLog(@"DRIGitHubAPI: JSON parsing error: %@", [jsonError localizedDescription]);
+        NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: JSON parsing error: %@", [jsonError localizedDescription]);
         // Return fallback data on JSON error
         DRIGitHubAPI *fallbackAPI = [[DRIGitHubAPI alloc] initWithRepository:owner name:name];
         NSArray *fallbackReleases = [fallbackAPI createFallbackReleases];
@@ -370,13 +370,13 @@
         [releases addObject:release];
     }
     
-    NSLog(@"DRIGitHubAPI: successfully parsed %lu releases", (unsigned long)releases.count);
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: successfully parsed %lu releases", (unsigned long)releases.count);
     return [releases copy];
 }
 
 + (NSArray *)extractImageAssetsFromReleases:(NSArray *)releases includePrereleases:(BOOL)includePrereleases
 {
-    NSLog(@"DRIGitHubAPI: extractImageAssetsFromReleases");
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: extractImageAssetsFromReleases");
     
     NSMutableArray *imageAssets = [NSMutableArray array];
     
@@ -410,7 +410,7 @@
         }
     }
     
-    NSLog(@"DRIGitHubAPI: found %lu image assets", (unsigned long)imageAssets.count);
+    NSDebugLLog(@"gwcomp", @"DRIGitHubAPI: found %lu image assets", (unsigned long)imageAssets.count);
     return [imageAssets copy];
 }
 

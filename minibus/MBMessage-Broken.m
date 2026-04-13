@@ -146,7 +146,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
 
 - (NSData *)serialize
 {
-    NSLog(@"Serializing message type=%d, replySerial=%lu", (int)_type, (unsigned long)_replySerial);
+    NSDebugLLog(@"gwcomp", @"Serializing message type=%d, replySerial=%lu", (int)_type, (unsigned long)_replySerial);
     
     NSMutableData *message = [NSMutableData data];
     
@@ -173,7 +173,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     // Header fields array length (just the data length, not including padding)
     uint32_t fieldsLength = (uint32_t)[headerFieldsData length];
     
-    NSLog(@"Header fields data length: %u bytes", fieldsLength);
+    NSDebugLLog(@"gwcomp", @"Header fields data length: %u bytes", fieldsLength);
     
     // Write fixed header
     [message appendBytes:&endian length:1];
@@ -193,11 +193,11 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     // Add body
     [message appendData:body];
     
-    NSLog(@"Final message length: %lu bytes", (unsigned long)[message length]);
+    NSDebugLLog(@"gwcomp", @"Final message length: %lu bytes", (unsigned long)[message length]);
     return message;
 }
     
-    NSLog(@"Header calculation: base=%lu, data=%lu, fieldsLength=%u, padding=%lu", 
+    NSDebugLLog(@"gwcomp", @"Header calculation: base=%lu, data=%lu, fieldsLength=%u, padding=%lu", 
           (unsigned long)baseHeaderLength, (unsigned long)headerFieldsDataLength, 
           fieldsLength, (unsigned long)paddingNeeded);
     
@@ -218,7 +218,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     // Add body
     [message appendData:body];
     
-    NSLog(@"Final message length: %lu bytes", (unsigned long)[message length]);
+    NSDebugLLog(@"gwcomp", @"Final message length: %lu bytes", (unsigned long)[message length]);
     return message;
 }
 
@@ -440,10 +440,10 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
 
 + (instancetype)messageFromData:(NSData *)data offset:(NSUInteger *)offset
 {
-    NSLog(@"messageFromData: starting parse at offset %lu, data length %lu", (unsigned long)*offset, (unsigned long)[data length]);
+    NSDebugLLog(@"gwcomp", @"messageFromData: starting parse at offset %lu, data length %lu", (unsigned long)*offset, (unsigned long)[data length]);
     
     if (*offset + 16 > [data length]) {
-        NSLog(@"messageFromData: not enough data for header (need 16 bytes, have %lu)", (unsigned long)([data length] - *offset));
+        NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for header (need 16 bytes, have %lu)", (unsigned long)([data length] - *offset));
         return nil; // Not enough data for header - don't advance offset
     }
     
@@ -453,10 +453,10 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     
     // Read fixed header
     uint8_t endian = bytes[pos++];
-    NSLog(@"messageFromData: endian byte 0x%02x ('%c')", endian, endian);
+    NSDebugLLog(@"gwcomp", @"messageFromData: endian byte 0x%02x ('%c')", endian, endian);
     
     if (endian != DBUS_LITTLE_ENDIAN && endian != DBUS_BIG_ENDIAN) {
-        NSLog(@"messageFromData: invalid endianness: 0x%02x - searching for next valid message", endian);
+        NSDebugLLog(@"gwcomp", @"messageFromData: invalid endianness: 0x%02x - searching for next valid message", endian);
         
         // Search for the next valid D-Bus message header
         NSUInteger searchOffset = originalOffset + 1;
@@ -470,7 +470,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                     uint8_t type = bytes[searchOffset + i + 1];
                     uint8_t version = bytes[searchOffset + i + 3];
                     if (type >= 1 && type <= 4 && version == DBUS_MAJOR_PROTOCOL_VERSION) {
-                        NSLog(@"Found potential valid message at offset %lu", (unsigned long)(searchOffset + i));
+                        NSDebugLLog(@"gwcomp", @"Found potential valid message at offset %lu", (unsigned long)(searchOffset + i));
                         *offset = searchOffset + i;
                         return nil; // Try parsing from this new offset
                     }
@@ -479,7 +479,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         }
         
         // No valid message found, skip the rest of the data
-        NSLog(@"No valid D-Bus message found, skipping to end of data");
+        NSDebugLLog(@"gwcomp", @"No valid D-Bus message found, skipping to end of data");
         *offset = [data length];
         return nil;
     }
@@ -491,10 +491,10 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     uint8_t flags __attribute__((unused)) = bytes[pos++];
     uint8_t version = bytes[pos++];
     
-    NSLog(@"messageFromData: type=%d, flags=%d, version=%d", message.type, flags, version);
+    NSDebugLLog(@"gwcomp", @"messageFromData: type=%d, flags=%d, version=%d", message.type, flags, version);
     
     if (version != DBUS_MAJOR_PROTOCOL_VERSION) {
-        NSLog(@"messageFromData: unsupported protocol version: %d - advancing offset by 4", version);
+        NSDebugLLog(@"gwcomp", @"messageFromData: unsupported protocol version: %d - advancing offset by 4", version);
         *offset = originalOffset + 4; // Advance by 4 bytes to skip this header
         return nil;
     }
@@ -505,12 +505,12 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         for (int i = 0; i < 32 && *offset + i < [data length]; i++) {
             [hexStr appendFormat:@"%02x ", bytes[*offset + i]];
         }
-        NSLog(@"Raw message bytes from offset %lu: %@", (unsigned long)*offset, hexStr);
+        NSDebugLLog(@"gwcomp", @"Raw message bytes from offset %lu: %@", (unsigned long)*offset, hexStr);
     }
     
     // Body length and serial - read individual bytes to check structure
     if (pos + 12 > [data length]) {
-        NSLog(@"messageFromData: not enough data for full header");
+        NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for full header");
         return nil; // Not enough data - don't advance offset
     }
     
@@ -518,7 +518,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     // Body length should be small for a Hello message
     uint32_t bodyLengthRaw = *(uint32_t *)(bytes + pos);
     if (bodyLengthRaw > 1000000) { // Sanity check - huge body length suggests parsing error
-        NSLog(@"messageFromData: suspicious body length 0x%08x - advancing offset by 16", bodyLengthRaw);
+        NSDebugLLog(@"gwcomp", @"messageFromData: suspicious body length 0x%08x - advancing offset by 16", bodyLengthRaw);
         *offset = originalOffset + 16; // Advance by header size to skip this message
         return nil;
     }
@@ -541,29 +541,29 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     }
     
     message.serial = serial;
-    NSLog(@"messageFromData: bodyLength=%u, serial=%u", bodyLength, serial);
+    NSDebugLLog(@"gwcomp", @"messageFromData: bodyLength=%u, serial=%u", bodyLength, serial);
     
     // Validate maximum message size (134,217,728 bytes = 128 MiB)
     NSUInteger totalMessageSize = 16 + headerFieldsLength + bodyLength;
     if (totalMessageSize > 134217728) {
-        NSLog(@"messageFromData: message size %lu exceeds maximum allowed (134217728 bytes) - rejecting", (unsigned long)totalMessageSize);
+        NSDebugLLog(@"gwcomp", @"messageFromData: message size %lu exceeds maximum allowed (134217728 bytes) - rejecting", (unsigned long)totalMessageSize);
         *offset = originalOffset + 16; // Advance by header size to skip this message
         return nil;
     }
     
     // Additional boundary check: make sure the entire message fits in available data
     if (*offset + totalMessageSize > [data length]) {
-        NSLog(@"messageFromData: message claims size %lu but only %lu bytes available from offset %lu", 
+        NSDebugLLog(@"gwcomp", @"messageFromData: message claims size %lu but only %lu bytes available from offset %lu", 
               (unsigned long)totalMessageSize, (unsigned long)([data length] - *offset), (unsigned long)*offset);
         return nil; // Don't advance offset - wait for more data
     }
     
-    NSLog(@"messageFromData: headerFieldsLength=%u", headerFieldsLength);
+    NSDebugLLog(@"gwcomp", @"messageFromData: headerFieldsLength=%u", headerFieldsLength);
     
     // Check if we have enough data for the basic header and header fields
     NSUInteger minNeeded = 16 + headerFieldsLength;
     if (*offset + minNeeded > [data length]) {
-        NSLog(@"messageFromData: not enough data for header fields (need %lu, have %lu)", 
+        NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for header fields (need %lu, have %lu)", 
               (unsigned long)minNeeded, (unsigned long)([data length] - *offset));
         return nil;
     }
@@ -573,7 +573,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     NSUInteger maxFieldIterations = 50; // Prevent infinite loops in header parsing
     NSUInteger fieldIterationCount = 0;
     
-    NSLog(@"messageFromData: parsing header fields from %lu to %lu", (unsigned long)pos, (unsigned long)headerFieldsEnd);
+    NSDebugLLog(@"gwcomp", @"messageFromData: parsing header fields from %lu to %lu", (unsigned long)pos, (unsigned long)headerFieldsEnd);
     
     while (pos < headerFieldsEnd && pos + 8 <= [data length] && fieldIterationCount < maxFieldIterations) {
         fieldIterationCount++;
@@ -582,7 +582,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         // Each header field is a struct: (BYTE fieldcode, VARIANT value)
         
         uint8_t fieldCode = bytes[pos++];
-        NSLog(@"messageFromData: parsing field code %d at pos %lu (field iteration %lu)", fieldCode, (unsigned long)(pos-1), (unsigned long)fieldIterationCount);
+        NSDebugLLog(@"gwcomp", @"messageFromData: parsing field code %d at pos %lu (field iteration %lu)", fieldCode, (unsigned long)(pos-1), (unsigned long)fieldIterationCount);
         
         if (fieldCode == 0) {
             // Field code 0 means padding, skip padding bytes
@@ -594,17 +594,17 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         // Variant signature - should be 1 byte length + signature + null + aligned value
         if (pos >= headerFieldsEnd) break;
         uint8_t sigLen = bytes[pos++];
-        NSLog(@"messageFromData: signature length %d", sigLen);
+        NSDebugLLog(@"gwcomp", @"messageFromData: signature length %d", sigLen);
         
         if (sigLen == 0 || pos + sigLen >= headerFieldsEnd) {
-            NSLog(@"messageFromData: invalid signature length, advancing by 8");
+            NSDebugLLog(@"gwcomp", @"messageFromData: invalid signature length, advancing by 8");
             pos += 8; // Skip some bytes and continue
             continue;
         }
         
         // Read signature
         char signature = bytes[pos];
-        NSLog(@"messageFromData: signature '%c' (0x%02x)", signature, signature);
+        NSDebugLLog(@"gwcomp", @"messageFromData: signature '%c' (0x%02x)", signature, signature);
         pos += sigLen + 1; // signature + null terminator
         // DO NOT align here! D-Bus header field variant value follows immediately after signature null terminator
         // Parse value based on signature
@@ -614,16 +614,16 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                 strLen = ntohl(strLen); // Convert from network (big-endian) to host order
             }
             pos += 4;
-            NSLog(@"messageFromData: string length %u", strLen);
+            NSDebugLLog(@"gwcomp", @"messageFromData: string length %u", strLen);
             if (strLen > 1024 || pos + strLen + 1 > headerFieldsEnd) {
-                NSLog(@"messageFromData: string too long or not enough data");
+                NSDebugLLog(@"gwcomp", @"messageFromData: string too long or not enough data");
                 break;
             }
             NSString *str = [[NSString alloc] initWithBytes:bytes + pos
                                                      length:strLen
                                                    encoding:NSUTF8StringEncoding];
             pos += strLen + 1; // +1 for null terminator
-            NSLog(@"messageFromData: field %d = '%@'", fieldCode, str);
+            NSDebugLLog(@"gwcomp", @"messageFromData: field %d = '%@'", fieldCode, str);
             switch (fieldCode) {
                 case DBUS_HEADER_FIELD_DESTINATION:
                     message.destination = str;
@@ -647,7 +647,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                 value = ntohl(value);
             }
             pos += 4;
-            NSLog(@"messageFromData: field %d = %u", fieldCode, value);
+            NSDebugLLog(@"gwcomp", @"messageFromData: field %d = %u", fieldCode, value);
             switch (fieldCode) {
                 case DBUS_HEADER_FIELD_REPLY_SERIAL:
                     message.replySerial = value;
@@ -656,20 +656,20 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         } else if (signature == 'g') { // signature
             // Signature format: length byte + signature string + null terminator
             if (pos >= headerFieldsEnd) {
-                NSLog(@"messageFromData: not enough data for signature length");
+                NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for signature length");
                 break;
             }
             uint8_t sigLen = bytes[pos++];
-            NSLog(@"messageFromData: signature length %u", sigLen);
+            NSDebugLLog(@"gwcomp", @"messageFromData: signature length %u", sigLen);
             if (sigLen > 255 || pos + sigLen + 1 > headerFieldsEnd) {
-                NSLog(@"messageFromData: signature too long or not enough data");
+                NSDebugLLog(@"gwcomp", @"messageFromData: signature too long or not enough data");
                 break;
             }
             NSString *sigStr = [[NSString alloc] initWithBytes:bytes + pos
                                                        length:sigLen
                                                      encoding:NSUTF8StringEncoding];
             pos += sigLen + 1; // +1 for null terminator
-            NSLog(@"messageFromData: field %d signature = '%@'", fieldCode, sigStr);
+            NSDebugLLog(@"gwcomp", @"messageFromData: field %d signature = '%@'", fieldCode, sigStr);
             switch (fieldCode) {
                 case DBUS_HEADER_FIELD_SIGNATURE:
                     message.signature = sigStr;
@@ -677,42 +677,42 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
             }
         } else {
             // Skip unknown field type
-            NSLog(@"messageFromData: skipping unknown signature '%c'", signature);
+            NSDebugLLog(@"gwcomp", @"messageFromData: skipping unknown signature '%c'", signature);
             pos += 8; // Skip some bytes and continue
         }
         
         // CPU protection: if we're not making progress, break
         if (pos == oldPos) {
-            NSLog(@"Header field parsing stuck at position %lu, breaking", (unsigned long)pos);
+            NSDebugLLog(@"gwcomp", @"Header field parsing stuck at position %lu, breaking", (unsigned long)pos);
             break;
         }
         
         // Additional protection: if we've hit the iteration limit
         if (fieldIterationCount >= maxFieldIterations) {
-            NSLog(@"Hit maximum field iteration limit (%lu), stopping header field parsing", (unsigned long)maxFieldIterations);
+            NSDebugLLog(@"gwcomp", @"Hit maximum field iteration limit (%lu), stopping header field parsing", (unsigned long)maxFieldIterations);
             break;
         }
     }
     // Ensure we're at the end of header fields
     NSUInteger oldPos = pos;
     pos = *offset + 16 + headerFieldsLength; // Skip to end of header fields from original offset
-    NSLog(@"messageFromData: position jump from %lu to %lu (offset=%lu, headerFieldsLength=%u)", 
+    NSDebugLLog(@"gwcomp", @"messageFromData: position jump from %lu to %lu (offset=%lu, headerFieldsLength=%u)", 
           (unsigned long)oldPos, (unsigned long)pos, (unsigned long)*offset, headerFieldsLength);
     
     // Align to 8-byte boundary for body  
     NSUInteger unalignedPos = pos;
     pos = alignTo(pos, 8);
-    NSLog(@"messageFromData: alignment: %lu -> %lu (added %lu padding bytes)", 
+    NSDebugLLog(@"gwcomp", @"messageFromData: alignment: %lu -> %lu (added %lu padding bytes)", 
           (unsigned long)unalignedPos, (unsigned long)pos, (unsigned long)(pos - unalignedPos));
     
     // Parse body using signature
     if (bodyLength > 0 && message.signature) {
-        NSLog(@"messageFromData: body parsing starts at pos=%lu, bodyLength=%u, bodyEnd=%lu", 
+        NSDebugLLog(@"gwcomp", @"messageFromData: body parsing starts at pos=%lu, bodyLength=%u, bodyEnd=%lu", 
               (unsigned long)pos, bodyLength, (unsigned long)(pos + bodyLength));
         
         // Check if we have enough data for the body
         if (pos + bodyLength > [data length]) {
-            NSLog(@"messageFromData: not enough data for body (need %u more bytes)", 
+            NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for body (need %u more bytes)", 
                   (unsigned)(pos + bodyLength - [data length]));
             return nil;
         }
@@ -723,24 +723,24 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         NSUInteger sigIndex = 0;
         NSUInteger sigLen = [message.signature length];
         
-        NSLog(@"messageFromData: parsing body with signature '%@'", message.signature);
+        NSDebugLLog(@"gwcomp", @"messageFromData: parsing body with signature '%@'", message.signature);
         
         while (pos < bodyEnd && sigIndex < sigLen) {
             char sigChar = sig[sigIndex];
-            NSLog(@"messageFromData: parsing argument %lu with signature char '%c' at pos %lu", (unsigned long)sigIndex, sigChar, (unsigned long)pos);
+            NSDebugLLog(@"gwcomp", @"messageFromData: parsing argument %lu with signature char '%c' at pos %lu", (unsigned long)sigIndex, sigChar, (unsigned long)pos);
             
             switch (sigChar) {
                 case 's': { // String
                     if (pos + 4 > bodyEnd) {
-                        NSLog(@"messageFromData: not enough data for string length");
+                        NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for string length");
                         goto done_parsing;
                     }
                     
                     // Debug: show the raw bytes being read for string length
-                    NSLog(@"messageFromData: reading string length from pos %lu (bodyEnd=%lu)", 
+                    NSDebugLLog(@"gwcomp", @"messageFromData: reading string length from pos %lu (bodyEnd=%lu)", 
                           (unsigned long)pos, (unsigned long)bodyEnd);
                     if (pos + 4 <= [data length]) {
-                        NSLog(@"messageFromData: raw string length bytes: %02x %02x %02x %02x", 
+                        NSDebugLLog(@"gwcomp", @"messageFromData: raw string length bytes: %02x %02x %02x %02x", 
                               bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3]);
                     }
                     
@@ -749,12 +749,12 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                     if (!littleEndian) {
                         strLen = ntohl(strLen);
                     }
-                    NSLog(@"messageFromData: string length raw=0x%08x converted=%u (littleEndian=%s)", 
+                    NSDebugLLog(@"gwcomp", @"messageFromData: string length raw=0x%08x converted=%u (littleEndian=%s)", 
                           rawStrLen, strLen, littleEndian ? "yes" : "no");
                     
                     // Additional validation: string length should be reasonable
                     if (strLen > bodyLength || strLen > 1048576) { // Max 1MB string
-                        NSLog(@"messageFromData: invalid string length %u (bodyLength=%u) - rejecting message", 
+                        NSDebugLLog(@"gwcomp", @"messageFromData: invalid string length %u (bodyLength=%u) - rejecting message", 
                               strLen, bodyLength);
                         goto done_parsing;
                     }
@@ -762,7 +762,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                     pos += 4;
                     
                     if (pos + strLen + 1 > bodyEnd) {
-                        NSLog(@"messageFromData: not enough data for string content (need %u bytes)", strLen + 1);
+                        NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for string content (need %u bytes)", strLen + 1);
                         goto done_parsing;
                     }
                     
@@ -771,9 +771,9 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                                                            encoding:NSUTF8StringEncoding];
                     if (str) {
                         [arguments addObject:str];
-                        NSLog(@"messageFromData: parsed string argument: '%@'", str);
+                        NSDebugLLog(@"gwcomp", @"messageFromData: parsed string argument: '%@'", str);
                     } else {
-                        NSLog(@"messageFromData: failed to parse string");
+                        NSDebugLLog(@"gwcomp", @"messageFromData: failed to parse string");
                         [arguments addObject:@""];
                     }
                     pos += strLen + 1; // +1 for null terminator
@@ -782,7 +782,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                 
                 case 'u': { // uint32
                     if (pos + 4 > bodyEnd) {
-                        NSLog(@"messageFromData: not enough data for uint32");
+                        NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for uint32");
                         goto done_parsing;
                     }
                     
@@ -791,14 +791,14 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                         num = ntohl(num);
                     }
                     [arguments addObject:@(num)];
-                    NSLog(@"messageFromData: parsed uint32 argument: %u", num);
+                    NSDebugLLog(@"gwcomp", @"messageFromData: parsed uint32 argument: %u", num);
                     pos += 4;
                     break;
                 }
                 
                 case 'i': { // int32
                     if (pos + 4 > bodyEnd) {
-                        NSLog(@"messageFromData: not enough data for int32");
+                        NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for int32");
                         goto done_parsing;
                     }
                     
@@ -807,24 +807,24 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                         num = ntohl(num);
                     }
                     [arguments addObject:@(num)];
-                    NSLog(@"messageFromData: parsed int32 argument: %d", num);
+                    NSDebugLLog(@"gwcomp", @"messageFromData: parsed int32 argument: %d", num);
                     pos += 4;
                     break;
                 }
                 
                 case 'a': { // Array - read the element type and parse the array
                     if (sigIndex + 1 >= sigLen) {
-                        NSLog(@"messageFromData: array signature incomplete");
+                        NSDebugLLog(@"gwcomp", @"messageFromData: array signature incomplete");
                         goto done_parsing;
                     }
                     
                     // Get the element type (next character in signature)
                     char elementType = sig[sigIndex + 1];
-                    NSLog(@"messageFromData: parsing array of type '%c'", elementType);
+                    NSDebugLLog(@"gwcomp", @"messageFromData: parsing array of type '%c'", elementType);
                     
                     // Read array length (number of bytes in array)
                     if (pos + 4 > bodyEnd) {
-                        NSLog(@"messageFromData: not enough data for array length");
+                        NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for array length");
                         goto done_parsing;
                     }
                     
@@ -834,10 +834,10 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                     }
                     pos += 4;
                     
-                    NSLog(@"messageFromData: array length %u bytes", arrayLength);
+                    NSDebugLLog(@"gwcomp", @"messageFromData: array length %u bytes", arrayLength);
                     
                     if (pos + arrayLength > bodyEnd) {
-                        NSLog(@"messageFromData: not enough data for array content");
+                        NSDebugLLog(@"gwcomp", @"messageFromData: not enough data for array content");
                         goto done_parsing;
                     }
                     
@@ -856,7 +856,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                             pos += 4;
                             
                             if (pos + strLen + 1 > arrayEnd) {
-                                NSLog(@"messageFromData: string in array too long");
+                                NSDebugLLog(@"gwcomp", @"messageFromData: string in array too long");
                                 break;
                             }
                             
@@ -865,12 +865,12 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                                                                    encoding:NSUTF8StringEncoding];
                             if (str) {
                                 [arrayElements addObject:str];
-                                NSLog(@"messageFromData: parsed array string element: '%@'", str);
+                                NSDebugLLog(@"gwcomp", @"messageFromData: parsed array string element: '%@'", str);
                             }
                             pos += strLen + 1; // +1 for null terminator
                         }
                     } else {
-                        NSLog(@"messageFromData: unsupported array element type '%c'", elementType);
+                        NSDebugLLog(@"gwcomp", @"messageFromData: unsupported array element type '%c'", elementType);
                         pos = arrayEnd; // Skip the entire array
                     }
                     
@@ -880,7 +880,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                 }
                 
                 default:
-                    NSLog(@"messageFromData: unsupported signature char '%c', skipping", sigChar);
+                    NSDebugLLog(@"gwcomp", @"messageFromData: unsupported signature char '%c', skipping", sigChar);
                     // Skip unknown types by advancing minimally
                     if (pos + 4 <= bodyEnd) {
                         pos += 4;
@@ -901,7 +901,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         NSMutableArray *arguments = [NSMutableArray array];
         NSUInteger bodyEnd = pos + bodyLength;
         
-        NSLog(@"messageFromData: no signature available, using fallback parsing");
+        NSDebugLLog(@"gwcomp", @"messageFromData: no signature available, using fallback parsing");
         
         while (pos < bodyEnd) {
             if (pos + 4 > bodyEnd) break;
@@ -940,7 +940,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         pos = bodyEnd;
     }
     
-    NSLog(@"messageFromData: final offset %lu (was %lu)", (unsigned long)pos, (unsigned long)*offset);
+    NSDebugLLog(@"gwcomp", @"messageFromData: final offset %lu (was %lu)", (unsigned long)pos, (unsigned long)*offset);
     *offset = pos;
     return message;
 }
@@ -952,7 +952,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     NSUInteger maxIterations = 10000; // Prevent infinite loops
     NSUInteger iterationCount = 0;
     
-    NSLog(@"Parsing messages from %lu bytes of data", (unsigned long)[data length]);
+    NSDebugLLog(@"gwcomp", @"Parsing messages from %lu bytes of data", (unsigned long)[data length]);
     
     // Debug: show first 32 bytes
     if ([data length] > 0) {
@@ -961,41 +961,41 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         for (NSUInteger i = 0; i < MIN([data length], 32); i++) {
             [hexString appendFormat:@"%02x ", bytes[i]];
         }
-        NSLog(@"Message data hex: %@", hexString);
+        NSDebugLLog(@"gwcomp", @"Message data hex: %@", hexString);
     }
     
     while (offset < [data length] && iterationCount < maxIterations) {
         NSUInteger oldOffset = offset;
         iterationCount++;
         
-        NSLog(@"Trying to parse message at offset %lu (iteration %lu)", (unsigned long)offset, (unsigned long)iterationCount);
+        NSDebugLLog(@"gwcomp", @"Trying to parse message at offset %lu (iteration %lu)", (unsigned long)offset, (unsigned long)iterationCount);
         MBMessage *message = [self messageFromData:data offset:&offset];
         if (message) {
-            NSLog(@"Successfully parsed message: %@", message);
+            NSDebugLLog(@"gwcomp", @"Successfully parsed message: %@", message);
             [messages addObject:message];
         } else {
-            NSLog(@"Failed to parse message at offset %lu", (unsigned long)offset);
+            NSDebugLLog(@"gwcomp", @"Failed to parse message at offset %lu", (unsigned long)offset);
             // Safety check: if offset hasn't advanced, break to prevent infinite loop
             if (offset == oldOffset) {
-                NSLog(@"Offset didn't advance, breaking to prevent infinite loop");
+                NSDebugLLog(@"gwcomp", @"Offset didn't advance, breaking to prevent infinite loop");
                 break;
             }
             
             // Additional safety: if we're making very small progress, skip ahead
             if (offset - oldOffset < 4 && iterationCount > 10) {
-                NSLog(@"Making very slow progress, skipping ahead by 16 bytes");
+                NSDebugLLog(@"gwcomp", @"Making very slow progress, skipping ahead by 16 bytes");
                 offset = oldOffset + 16;
             }
         }
         
         // CPU protection: if we've done too many iterations, stop
         if (iterationCount >= maxIterations) {
-            NSLog(@"Hit maximum iteration limit (%lu), stopping message parsing to prevent CPU overload", (unsigned long)maxIterations);
+            NSDebugLLog(@"gwcomp", @"Hit maximum iteration limit (%lu), stopping message parsing to prevent CPU overload", (unsigned long)maxIterations);
             break;
         }
     }
     
-    NSLog(@"Parsed %lu messages total in %lu iterations", (unsigned long)[messages count], (unsigned long)iterationCount);
+    NSDebugLLog(@"gwcomp", @"Parsed %lu messages total in %lu iterations", (unsigned long)[messages count], (unsigned long)iterationCount);
     return messages;
 }
 

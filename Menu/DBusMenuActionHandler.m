@@ -26,7 +26,7 @@ static NSString *const kDBusInfoKey = @"dbusInfo";
                 dbusConnection:(GNUDBusConnection *)dbusConnection
 {
     if (!menuItem || !serviceName || !objectPath || !dbusConnection) {
-        NSLog(@"DBusMenuActionHandler: ERROR: Missing required parameters for action setup");
+        NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: ERROR: Missing required parameters for action setup");
         return;
     }
 
@@ -46,25 +46,25 @@ static NSString *const kDBusInfoKey = @"dbusInfo";
     }
     [menuItem setRepresentedObject:@{ kDBusInfoKey: info }];
     
-    NSLog(@"DBusMenuActionHandler: Set up action for menu item '%@' (ID=%ld, service=%@, path=%@)", 
+    NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Set up action for menu item '%@' (ID=%ld, service=%@, path=%@)", 
           [menuItem title], (long)[menuItem tag], serviceName, objectPath);
     
     // Register global shortcut if we have a key equivalent and swapping is enabled
     if ([[menuItem keyEquivalent] length] > 0 && [menuItem keyEquivalentModifierMask] > 0) {
-        NSLog(@"DBusMenuActionHandler: Menu item '%@' has shortcut: %@+%lu", 
+        NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Menu item '%@' has shortcut: %@+%lu", 
               [menuItem title], [menuItem keyEquivalent], (unsigned long)[menuItem keyEquivalentModifierMask]);
         
         if ([[X11ShortcutManager sharedManager] shouldSwapCtrlAlt]) {
-            NSLog(@"DBusMenuActionHandler: Registering shortcut for menu item '%@'", [menuItem title]);
+            NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Registering shortcut for menu item '%@'", [menuItem title]);
             [[X11ShortcutManager sharedManager] registerShortcutForMenuItem:menuItem 
                                                                 serviceName:serviceName 
                                                                  objectPath:objectPath 
                                                              dbusConnection:dbusConnection];
         } else {
-            NSLog(@"DBusMenuActionHandler: Shortcut swapping disabled, not registering");
+            NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Shortcut swapping disabled, not registering");
         }
     } else {
-        NSLog(@"DBusMenuActionHandler: Menu item '%@' has no shortcut", [menuItem title]);
+        NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Menu item '%@' has no shortcut", [menuItem title]);
     }
 }
 
@@ -84,13 +84,13 @@ static NSString *const kDBusInfoKey = @"dbusInfo";
     GNUDBusConnection *dbusConnection = [rep objectForKey:@"dbusConnection"];
 
     if (!serviceName || !objectPath || !dbusConnection) {
-        NSLog(@"DBusMenuActionHandler: ERROR: Missing DBus info for menu item '%@'", [menuItem title]);
-        NSLog(@"DBusMenuActionHandler: Service: %@, Path: %@, Connection: %@", serviceName, objectPath, dbusConnection);
+        NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: ERROR: Missing DBus info for menu item '%@'", [menuItem title]);
+        NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Service: %@, Path: %@, Connection: %@", serviceName, objectPath, dbusConnection);
         return;
     }
     
     int menuItemId = [menuItem tag];
-    NSLog(@"DBusMenuActionHandler: Triggering action for menu item '%@' (ID=%d, service=%@, path=%@)", 
+    NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Triggering action for menu item '%@' (ID=%d, service=%@, path=%@)", 
           [menuItem title], menuItemId, serviceName, objectPath);
     
     // Send Event method call to activate the menu item
@@ -100,7 +100,7 @@ static NSString *const kDBusInfoKey = @"dbusInfo";
     // Create unsigned int NSNumber explicitly using NSValue approach
     unsigned int timestampValue = 0;
     NSNumber *timestampNumber = [[NSNumber alloc] initWithUnsignedInt:timestampValue];
-    NSLog(@"DBusMenuActionHandler: Timestamp NSNumber objCType: %s (unsigned int: %s)", 
+    NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Timestamp NSNumber objCType: %s (unsigned int: %s)", 
           [timestampNumber objCType], @encode(unsigned int));
     
     NSArray *arguments = [NSArray arrayWithObjects:
@@ -110,11 +110,11 @@ static NSString *const kDBusInfoKey = @"dbusInfo";
                          timestampNumber,                      // timestamp (uint32 - 0 for current time)
                          nil];
     
-    NSLog(@"DBusMenuActionHandler: Calling Event method with signature (isvu) and arguments: %@", arguments);
-    NSLog(@"DBusMenuActionHandler: Argument details:");
+    NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Calling Event method with signature (isvu) and arguments: %@", arguments);
+    NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Argument details:");
     for (NSUInteger i = 0; i < [arguments count]; i++) {
         id arg = [arguments objectAtIndex:i];
-        NSLog(@"DBusMenuActionHandler:   [%lu]: %@ (class: %@)", (unsigned long)i, arg, [arg class]);
+        NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler:   [%lu]: %@ (class: %@)", (unsigned long)i, arg, [arg class]);
     }
     
     id result = [dbusConnection callMethod:@"Event"
@@ -124,9 +124,9 @@ static NSString *const kDBusInfoKey = @"dbusInfo";
                                  arguments:arguments];
     
     if (result) {
-        NSLog(@"DBusMenuActionHandler: Event method call succeeded, result: %@", result);
+        NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Event method call succeeded, result: %@", result);
     } else {
-        NSLog(@"DBusMenuActionHandler: Event method call failed or returned nil");
+        NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Event method call failed or returned nil");
     }
 }
 
@@ -138,12 +138,12 @@ static NSString *const kDBusInfoKey = @"dbusInfo";
 + (void)setSwapCtrlAlt:(BOOL)swap
 {
     [[X11ShortcutManager sharedManager] setSwapCtrlAlt:swap];
-    NSLog(@"DBusMenuActionHandler: Ctrl/Alt swapping %@", swap ? @"enabled" : @"disabled");
+    NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Ctrl/Alt swapping %@", swap ? @"enabled" : @"disabled");
 }
 
 + (void)cleanup
 {
-    NSLog(@"DBusMenuActionHandler: Performing cleanup...");
+    NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Performing cleanup...");
     [[X11ShortcutManager sharedManager] cleanup];
 }
 

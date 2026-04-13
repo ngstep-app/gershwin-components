@@ -22,18 +22,18 @@ int main(int argc, const char * argv[])
             serviceName = [NSString stringWithUTF8String:argv[2]];
         }
         
-        NSLog(@"Testing StartServiceByName for %@", serviceName);
+        NSDebugLLog(@"gwcomp", @"Testing StartServiceByName for %@", serviceName);
         
         MBClient *client = [[MBClient alloc] init];
         
         if (![client connectToPath:socketPath]) {
-            NSLog(@"Failed to connect to daemon");
+            NSDebugLLog(@"gwcomp", @"Failed to connect to daemon");
             return 1;
         }
         
-        NSLog(@"Connected! Unique name: %@", client.uniqueName);
+        NSDebugLLog(@"gwcomp", @"Connected! Unique name: %@", client.uniqueName);
         
-        NSLog(@"Sending StartServiceByName request...");
+        NSDebugLLog(@"gwcomp", @"Sending StartServiceByName request...");
         MBMessage *reply = [client callMethod:@"org.freedesktop.DBus"
                                          path:@"/org/freedesktop/DBus"
                                     interface:@"org.freedesktop.DBus"
@@ -46,26 +46,26 @@ int main(int argc, const char * argv[])
                 NSUInteger result = [[reply.arguments objectAtIndex:0] unsignedIntegerValue];
                 switch (result) {
                     case 1:
-                        NSLog(@"SUCCESS: Service was already running");
+                        NSDebugLLog(@"gwcomp", @"SUCCESS: Service was already running");
                         break;
                     case 2:
-                        NSLog(@"SUCCESS: Service was started");
+                        NSDebugLLog(@"gwcomp", @"SUCCESS: Service was started");
                         break;
                     default:
-                        NSLog(@"SUCCESS: StartServiceByName returned %lu", (unsigned long)result);
+                        NSDebugLLog(@"gwcomp", @"SUCCESS: StartServiceByName returned %lu", (unsigned long)result);
                         break;
                 }
             } else {
-                NSLog(@"SUCCESS: StartServiceByName completed");
+                NSDebugLLog(@"gwcomp", @"SUCCESS: StartServiceByName completed");
             }
         } else if (reply && reply.type == MBMessageTypeError) {
-            NSLog(@"ERROR: StartServiceByName failed: %@", reply.errorName);
+            NSDebugLLog(@"gwcomp", @"ERROR: StartServiceByName failed: %@", reply.errorName);
             if ([reply.arguments count] > 0) {
-                NSLog(@"Error message: %@", [reply.arguments objectAtIndex:0]);
+                NSDebugLLog(@"gwcomp", @"Error message: %@", [reply.arguments objectAtIndex:0]);
             }
             return 1;
         } else {
-            NSLog(@"ERROR: No reply or timeout");
+            NSDebugLLog(@"gwcomp", @"ERROR: No reply or timeout");
             return 1;
         }
         

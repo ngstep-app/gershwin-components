@@ -44,7 +44,7 @@ extern int _dbus_string_get_length(const DBusString *str);
         _dbus_string_free(&guid);
         
         if (!_auth) {
-            NSLog(@"Failed to create DBusAuth server");
+            NSDebugLLog(@"gwcomp", @"Failed to create DBusAuth server");
             return nil;
         }
         
@@ -53,7 +53,7 @@ extern int _dbus_string_get_length(const DBusString *str);
         _dbus_string_init(_authIncoming);
         _dbus_string_init(_authOutgoing);
         
-        NSLog(@"Created MBConnectionDBus with fd=%d", fd);
+        NSDebugLLog(@"gwcomp", @"Created MBConnectionDBus with fd=%d", fd);
     }
     return self;
 }
@@ -76,7 +76,7 @@ extern int _dbus_string_get_length(const DBusString *str);
 }
 
 - (BOOL)processIncomingData:(NSData *)data {
-    NSLog(@"Processing %lu bytes of incoming data", (unsigned long)[data length]);
+    NSDebugLLog(@"gwcomp", @"Processing %lu bytes of incoming data", (unsigned long)[data length]);
     
     if (!_authCompleted) {
         // Add data to auth buffer
@@ -87,10 +87,10 @@ extern int _dbus_string_get_length(const DBusString *str);
         
         // Process authentication
         DBusAuthState state = _dbus_auth_do_work(_auth);
-        NSLog(@"Auth state: %d", state);
+        NSDebugLLog(@"gwcomp", @"Auth state: %d", state);
         
         if (state == DBUS_AUTH_STATE_AUTHENTICATED) {
-            NSLog(@"Authentication completed!");
+            NSDebugLLog(@"gwcomp", @"Authentication completed!");
             _authenticated = YES;
             _authCompleted = YES;
             
@@ -101,16 +101,16 @@ extern int _dbus_string_get_length(const DBusString *str);
                 const char *unusedData = _dbus_string_get_const_data(unused);
                 int unusedLen = _dbus_string_get_length(unused);
                 [_pendingData appendBytes:unusedData length:unusedLen];
-                NSLog(@"Found %d unused bytes after auth", unusedLen);
+                NSDebugLLog(@"gwcomp", @"Found %d unused bytes after auth", unusedLen);
             }
         } else if (state == DBUS_AUTH_STATE_NEED_DISCONNECT) {
-            NSLog(@"Authentication failed - disconnecting");
+            NSDebugLLog(@"gwcomp", @"Authentication failed - disconnecting");
             return NO;
         }
     } else {
         // Authentication complete, this is D-Bus message data
         [_pendingData appendBytes:[data bytes] length:[data length]];
-        NSLog(@"Added %lu bytes to pending message data", (unsigned long)[data length]);
+        NSDebugLLog(@"gwcomp", @"Added %lu bytes to pending message data", (unsigned long)[data length]);
     }
     
     return YES;
@@ -127,7 +127,7 @@ extern int _dbus_string_get_length(const DBusString *str);
             if (responseLen > 0) {
                 NSData *response = [NSData dataWithBytes:responseData length:responseLen];
                 _dbus_auth_bytes_sent(_auth, responseLen);
-                NSLog(@"Sending auth response: %lu bytes", (unsigned long)[response length]);
+                NSDebugLLog(@"gwcomp", @"Sending auth response: %lu bytes", (unsigned long)[response length]);
                 return response;
             }
         }
@@ -138,7 +138,7 @@ extern int _dbus_string_get_length(const DBusString *str);
 
 - (void)sendMessage:(MBMessage *)message {
     if (!_authenticated) {
-        NSLog(@"Cannot send message - not authenticated");
+        NSDebugLLog(@"gwcomp", @"Cannot send message - not authenticated");
         return;
     }
     
@@ -146,9 +146,9 @@ extern int _dbus_string_get_length(const DBusString *str);
     if (messageData) {
         ssize_t written = write(_fd, [messageData bytes], [messageData length]);
         if (written != [messageData length]) {
-            NSLog(@"Failed to write complete message: %zd/%lu", written, (unsigned long)[messageData length]);
+            NSDebugLLog(@"gwcomp", @"Failed to write complete message: %zd/%lu", written, (unsigned long)[messageData length]);
         } else {
-            NSLog(@"Sent message: %lu bytes", (unsigned long)[messageData length]);
+            NSDebugLLog(@"gwcomp", @"Sent message: %lu bytes", (unsigned long)[messageData length]);
         }
     }
 }

@@ -45,27 +45,27 @@ int main() {
         };
         
         NSData *msg2Data = [NSData dataWithBytes:msg2 length:sizeof(msg2)];
-        NSLog(@"Testing complete second message (%lu bytes)", [msg2Data length]);
+        NSDebugLLog(@"gwcomp", @"Testing complete second message (%lu bytes)", [msg2Data length]);
         
         // Check minimum length
-        NSLog(@"Header: endian=0x%02x type=%d flags=%d version=%d", 
+        NSDebugLLog(@"gwcomp", @"Header: endian=0x%02x type=%d flags=%d version=%d", 
               msg2[0], msg2[1], msg2[2], msg2[3]);
         uint32_t bodyLen = *(uint32_t*)(msg2 + 4);
         uint32_t serial = *(uint32_t*)(msg2 + 8); 
         uint32_t fieldsLen = *(uint32_t*)(msg2 + 12);
-        NSLog(@"Header: bodyLen=%u serial=%u fieldsLen=%u", bodyLen, serial, fieldsLen);
+        NSDebugLLog(@"gwcomp", @"Header: bodyLen=%u serial=%u fieldsLen=%u", bodyLen, serial, fieldsLen);
         
         NSUInteger expectedLen = 16 + fieldsLen + ((fieldsLen + 7) & ~7) + bodyLen - fieldsLen;
-        NSLog(@"Expected total length: %lu, actual: %lu", expectedLen, [msg2Data length]);
+        NSDebugLLog(@"gwcomp", @"Expected total length: %lu, actual: %lu", expectedLen, [msg2Data length]);
         
         NSUInteger offset = 0;
         MBMessage *parsed = [MBMessage messageFromData:msg2Data offset:&offset];
         
         if (parsed) {
-            NSLog(@"SUCCESS: Second message parsed, type=%d serial=%lu", (int)parsed.type, parsed.serial);
-            NSLog(@"         Member: %@", parsed.member);
+            NSDebugLLog(@"gwcomp", @"SUCCESS: Second message parsed, type=%d serial=%lu", (int)parsed.type, parsed.serial);
+            NSDebugLLog(@"gwcomp", @"         Member: %@", parsed.member);
         } else {
-            NSLog(@"FAILED: Could not parse second message");
+            NSDebugLLog(@"gwcomp", @"FAILED: Could not parse second message");
         }
     }
     return 0;

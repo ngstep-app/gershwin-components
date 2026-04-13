@@ -14,11 +14,11 @@
 int main() {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     
-    NSLog(@"Testing destroyPool method on exported backup_pool...");
+    NSDebugLLog(@"gwcomp", @"Testing destroyPool method on exported backup_pool...");
     
     BOOL result = [BAZFSUtility destroyPool:@"backup_pool"];
     
-    NSLog(@"Result: %@", result ? @"SUCCESS" : @"FAILURE");
+    NSDebugLLog(@"gwcomp", @"Result: %@", result ? @"SUCCESS" : @"FAILURE");
     
     [pool release];
     return result ? 0 : 1;

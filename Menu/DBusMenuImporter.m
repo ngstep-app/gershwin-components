@@ -66,48 +66,48 @@
 - (BOOL)registerService
 {
     if (!self.dbusConnection || ![self.dbusConnection isConnected]) {
-        NSLog(@"DBusMenuImporter: Cannot register service - not connected to DBus");
+        NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Cannot register service - not connected to DBus");
         return NO;
     }
     
-    NSLog(@"DBusMenuImporter: Attempting to register AppMenu.Registrar service...");
+    NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Attempting to register AppMenu.Registrar service...");
     // Try to register the AppMenu.Registrar service
     if ([self.dbusConnection registerService:@"com.canonical.AppMenu.Registrar"]) {
-        NSLog(@"DBusMenuImporter: ===== Successfully registered as AppMenu.Registrar service =====");
+        NSDebugLLog(@"gwcomp", @"DBusMenuImporter: ===== Successfully registered as AppMenu.Registrar service =====");
         
         // Register object path for the registrar interface
         if (![self.dbusConnection registerObjectPath:@"/com/canonical/AppMenu/Registrar"
                                        interface:@"com.canonical.AppMenu.Registrar"
                                          handler:self]) {
-            NSLog(@"DBusMenuImporter: Failed to register object path");
+            NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Failed to register object path");
             return NO;
         }
         
-        NSLog(@"DBusMenuImporter: Successfully connected to DBus and registered service");
+        NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Successfully connected to DBus and registered service");
         
         // Now that we're connected and the run loop is running, set up the cleanup timer
         if (!self.cleanupTimer) {
-            NSLog(@"DBusMenuImporter: Setting up cleanup timer...");
+            NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Setting up cleanup timer...");
             self.cleanupTimer = [NSTimer scheduledTimerWithTimeInterval:30.0
                                                             target:self
                                                           selector:@selector(cleanupStaleEntries:)
                                                           userInfo:nil
                                                            repeats:YES];
-            NSLog(@"DBusMenuImporter: Cleanup timer scheduled");
+            NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Cleanup timer scheduled");
         }
         
         // DO NOT scan for menus here - it causes 15 seconds of blocking!
         // Menus will be discovered on-demand when windows become active
-        NSLog(@"DBusMenuImporter: Skipping initial menu scan - menus discovered on-demand");
+        NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Skipping initial menu scan - menus discovered on-demand");
         return YES;
     } else {
-        NSLog(@"DBusMenuImporter: *** Could not register as primary AppMenu.Registrar ***");
-        NSLog(@"DBusMenuImporter: Another application is likely providing this service");
-        NSLog(@"DBusMenuImporter: Continuing in monitoring mode...");
+        NSDebugLLog(@"gwcomp", @"DBusMenuImporter: *** Could not register as primary AppMenu.Registrar ***");
+        NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Another application is likely providing this service");
+        NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Continuing in monitoring mode...");
         
         // Set up cleanup timer for monitoring mode too
         if (!self.cleanupTimer) {
-            NSLog(@"DBusMenuImporter: Setting up cleanup timer (monitoring mode)...");
+            NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Setting up cleanup timer (monitoring mode)...");
             self.cleanupTimer = [NSTimer scheduledTimerWithTimeInterval:30.0
                                                             target:self
                                                           selector:@selector(cleanupStaleEntries:)
@@ -248,7 +248,7 @@
         // immediately re-discovering X11 properties and re-registering the window.
         NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
         [self.failedWindows setObject:[NSDate date] forKey:windowKey];
-        NSLog(@"DBusMenuImporter: Cached failure for window %lu (suppressed for 30s)", windowId);
+        NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Cached failure for window %lu (suppressed for 30s)", windowId);
         // For registered windows that fail to load, return nil instead of fallback
         // This indicates the application should handle its own menus
         return nil;

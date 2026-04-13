@@ -52,7 +52,7 @@
         // Connect to DBus
         self.dbusConnection = [GNUDBusConnection sessionBus];
         
-        NSLog(@"AppMenuImporter: Initialized");
+        NSDebugLLog(@"gwcomp", @"AppMenuImporter: Initialized");
     }
     return self;
 }
@@ -64,7 +64,7 @@
 
 - (void)cleanup
 {
-    NSLog(@"AppMenuImporter: Cleaning up");
+    NSDebugLLog(@"gwcomp", @"AppMenuImporter: Cleaning up");
     
     [self cancelPendingImports];
     
@@ -117,19 +117,19 @@
         _menuQueue,
         ^{
             if (windowId != self->_currentXID) {
-                NSLog(@"AppMenuImporter: XID %lu is stale (current: %lu), skipping import", 
+                NSDebugLLog(@"gwcomp", @"AppMenuImporter: XID %lu is stale (current: %lu), skipping import", 
                       windowId, self->_currentXID);
                 return;
             }
             
             // Check if this is a GNUstep window
             if ([self isGNUstepWindow:windowId]) {
-                NSLog(@"AppMenuImporter: XID %lu is a GNUstep window, using GNUstep IPC", windowId);
+                NSDebugLLog(@"gwcomp", @"AppMenuImporter: XID %lu is a GNUstep window, using GNUstep IPC", windowId);
                 [self _handleGNUstepWindow:windowId];
                 return;
             }
             
-            NSLog(@"AppMenuImporter: Trying Canonical AppMenu for XID %lu", windowId);
+            NSDebugLLog(@"gwcomp", @"AppMenuImporter: Trying Canonical AppMenu for XID %lu", windowId);
             [self _tryCanonicalForXID:windowId];
         }
     );
@@ -159,14 +159,14 @@
                                        arguments:@[@(windowId)]];
     }
     @catch (NSException *exception) {
-        NSLog(@"AppMenuImporter: Exception calling Canonical AppMenu.Registrar: %@", exception);
-        NSLog(@"AppMenuImporter: This is expected if Canonical AppMenu support is not available");
+        NSDebugLLog(@"gwcomp", @"AppMenuImporter: Exception calling Canonical AppMenu.Registrar: %@", exception);
+        NSDebugLLog(@"gwcomp", @"AppMenuImporter: This is expected if Canonical AppMenu support is not available");
         // Fall through to fallback
     }
     
     dispatch_async(self->_menuQueue, ^{
         if (windowId != self->_currentXID) {
-            NSLog(@"AppMenuImporter: XID %lu became stale during Canonical query", windowId);
+            NSDebugLLog(@"gwcomp", @"AppMenuImporter: XID %lu became stale during Canonical query", windowId);
             return;
         }
         
@@ -176,15 +176,15 @@
             
             if (![service isKindOfClass:[NSString class]] || [service length] == 0 ||
                 ![path isKindOfClass:[NSString class]] || [path length] == 0) {
-                NSLog(@"AppMenuImporter: Canonical returned empty service/path, trying GTK fallback");
+                NSDebugLLog(@"gwcomp", @"AppMenuImporter: Canonical returned empty service/path, trying GTK fallback");
                 [self _fallbackToGTKPropertiesForXID:windowId];
                 return;
             }
             
-            NSLog(@"AppMenuImporter: Canonical AppMenu found - service: %@, path: %@", service, path);
+            NSDebugLLog(@"gwcomp", @"AppMenuImporter: Canonical AppMenu found - service: %@, path: %@", service, path);
             [self _importGTKMenusWithService:service path:path forXID:windowId];
         } else {
-            NSLog(@"AppMenuImporter: Canonical AppMenu not available, trying GTK fallback");
+            NSDebugLLog(@"gwcomp", @"AppMenuImporter: Canonical AppMenu not available, trying GTK fallback");
             [self _fallbackToGTKPropertiesForXID:windowId];
         }
     });
@@ -192,14 +192,14 @@
 
 - (void)_fallbackToGTKPropertiesForXID:(unsigned long)windowId
 {
-    NSLog(@"AppMenuImporter: Trying GTK properties fallback for XID %lu", windowId);
+    NSDebugLLog(@"gwcomp", @"AppMenuImporter: Trying GTK properties fallback for XID %lu", windowId);
     
     // Read GTK properties from X11 window
     NSString *service = [self _readX11StringProperty:windowId atom:"_GTK_UNIQUE_BUS_NAME"];
     NSString *path = [self _readX11StringProperty:windowId atom:"_GTK_APPLICATION_OBJECT_PATH"];
     
     if (!service || !path) {
-        NSLog(@"AppMenuImporter: No GTK menu properties found for XID %lu", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuImporter: No GTK menu properties found for XID %lu", windowId);
         
         // No menu available
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -211,7 +211,7 @@
         return;
     }
     
-    NSLog(@"AppMenuImporter: GTK properties found - service: %@, path: %@", service, path);
+    NSDebugLLog(@"gwcomp", @"AppMenuImporter: GTK properties found - service: %@, path: %@", service, path);
     [self _importGTKMenusWithService:service path:path forXID:windowId];
 }
 
@@ -219,7 +219,7 @@
                               path:(NSString *)path
                             forXID:(unsigned long)windowId
 {
-    NSLog(@"AppMenuImporter: Importing GTK menus from service: %@, path: %@", service, path);
+    NSDebugLLog(@"gwcomp", @"AppMenuImporter: Importing GTK menus from service: %@, path: %@", service, path);
     
     // Start menu tracking (synchronous, but we're already on background queue)
     [self.dbusConnection callMethod:@"Start"
@@ -237,23 +237,23 @@
     
     dispatch_async(self->_menuQueue, ^{
         if (windowId != self->_currentXID) {
-            NSLog(@"AppMenuImporter: XID %lu became stale during layout fetch", windowId);
+            NSDebugLLog(@"gwcomp", @"AppMenuImporter: XID %lu became stale during layout fetch", windowId);
             return;
         }
         
         if (!reply) {
-            NSLog(@"AppMenuImporter: Failed to get menu layout");
+            NSDebugLLog(@"gwcomp", @"AppMenuImporter: Failed to get menu layout");
             return;
         }
         
-        NSLog(@"AppMenuImporter: Received menu layout, building NSMenu");
+        NSDebugLLog(@"gwcomp", @"AppMenuImporter: Received menu layout, building NSMenu");
         
         // Build NSMenu from GTK layout on main queue
         dispatch_async(dispatch_get_main_queue(), ^{
             NSMenu *menu = [self _buildNSMenuFromGTKLayout:reply];
             
             if (menu) {
-                NSLog(@"AppMenuImporter: Menu built successfully with %ld items", [menu numberOfItems]);
+                NSDebugLLog(@"gwcomp", @"AppMenuImporter: Menu built successfully with %ld items", [menu numberOfItems]);
                 
                 // Cache the menu
                 self->_menuCache[@(windowId)] = menu;
@@ -267,7 +267,7 @@
                                                                   object:nil 
                                                                 userInfo:userInfo];
             } else {
-                NSLog(@"AppMenuImporter: Failed to build menu from layout");
+                NSDebugLLog(@"gwcomp", @"AppMenuImporter: Failed to build menu from layout");
             }
         });
     });
@@ -284,11 +284,11 @@
     
     // Don't subscribe twice
     if (_subscriptions[subscriptionKey]) {
-        NSLog(@"AppMenuImporter: Already subscribed to %@", subscriptionKey);
+        NSDebugLLog(@"gwcomp", @"AppMenuImporter: Already subscribed to %@", subscriptionKey);
         return;
     }
     
-    NSLog(@"AppMenuImporter: Subscribing to menu updates for %@", subscriptionKey);
+    NSDebugLLog(@"gwcomp", @"AppMenuImporter: Subscribing to menu updates for %@", subscriptionKey);
     
     // TODO: Implement DBus signal subscription
     // For now, just mark as subscribed
@@ -360,7 +360,7 @@
     // Check cache first
     NSMenu *cachedMenu = _menuCache[@(windowId)];
     if (cachedMenu) {
-        NSLog(@"AppMenuImporter: Returning cached menu for XID %lu", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuImporter: Returning cached menu for XID %lu", windowId);
         if (completion) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 completion(cachedMenu, nil);

@@ -28,7 +28,7 @@
 - (id)initWithTitle:(NSString *)title description:(NSString *)description
 {
     if (self = [super init]) {
-        NSLog(@"GSEnhancedProgressStep: init");
+        NSDebugLLog(@"gwcomp", @"GSEnhancedProgressStep: init");
         _stepTitle = title;
         _stepDescription = description;
         _phases = [[NSMutableArray alloc] init];
@@ -54,7 +54,7 @@
 
 - (void)setupView
 {
-    NSLog(@"GSEnhancedProgressStep: setupView");
+    NSDebugLLog(@"gwcomp", @"GSEnhancedProgressStep: setupView");
     
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 480, 360)];
 
@@ -152,7 +152,7 @@
 
 - (void)setPhase:(GSProgressPhase)phase withMessage:(NSString *)message
 {
-    NSLog(@"GSEnhancedProgressStep: setPhase: %ld withMessage: %@", (long)phase, message);
+    NSDebugLLog(@"gwcomp", @"GSEnhancedProgressStep: setPhase: %ld withMessage: %@", (long)phase, message);
     
     _currentPhase = phase;
     
@@ -165,7 +165,7 @@
 
 - (void)updateProgress:(float)progress withMessage:(NSString *)message
 {
-    NSLog(@"GSEnhancedProgressStep: updateProgress: %.2f withMessage: %@", progress, message);
+    NSDebugLLog(@"gwcomp", @"GSEnhancedProgressStep: updateProgress: %.2f withMessage: %@", progress, message);
     
     _progress = progress;
     
@@ -180,7 +180,7 @@
 
 - (void)completeWithSuccess:(BOOL)success error:(NSString *)error
 {
-    NSLog(@"GSEnhancedProgressStep: completeWithSuccess: %d error: %@", success, error);
+    NSDebugLLog(@"gwcomp", @"GSEnhancedProgressStep: completeWithSuccess: %d error: %@", success, error);
     
     _isCompleted = YES;
     _wasSuccessful = success;
@@ -235,7 +235,7 @@
 
 - (void)cancelPressed:(id)sender
 {
-    NSLog(@"GSEnhancedProgressStep: cancelPressed");
+    NSDebugLLog(@"gwcomp", @"GSEnhancedProgressStep: cancelPressed");
     
     if (_delegate && [_delegate respondsToSelector:@selector(progressStepDidCancel)]) {
         [_delegate progressStepDidCancel];
@@ -266,17 +266,17 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"GSEnhancedProgressStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"GSEnhancedProgressStep: stepWillAppear");
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"GSEnhancedProgressStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"GSEnhancedProgressStep: stepDidAppear");
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"GSEnhancedProgressStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"GSEnhancedProgressStep: stepWillDisappear");
 }
 
 @end

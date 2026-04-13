@@ -11,52 +11,52 @@ int main(int argc, char *argv[])
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   
-  NSLog(@"================================================");
-  NSLog(@"mDNS-SD Support Check");
-  NSLog(@"================================================");
-  NSLog(@"");
+  NSDebugLLog(@"gwcomp", @"================================================");
+  NSDebugLLog(@"gwcomp", @"mDNS-SD Support Check");
+  NSDebugLLog(@"gwcomp", @"================================================");
+  NSDebugLLog(@"gwcomp", @"");
   
   /* Check if NSNetServiceBrowser is available */
   Class netServiceBrowserClass = NSClassFromString(@"NSNetServiceBrowser");
   
   if (netServiceBrowserClass)
     {
-      NSLog(@"✓ SUCCESS: NSNetServiceBrowser class is available");
-      NSLog(@"  This GNUstep installation HAS mDNS-SD support");
-      NSLog(@"");
-      NSLog(@"  - NSNetServiceBrowser: %@", netServiceBrowserClass);
+      NSDebugLLog(@"gwcomp", @"✓ SUCCESS: NSNetServiceBrowser class is available");
+      NSDebugLLog(@"gwcomp", @"  This GNUstep installation HAS mDNS-SD support");
+      NSDebugLLog(@"gwcomp", @"");
+      NSDebugLLog(@"gwcomp", @"  - NSNetServiceBrowser: %@", netServiceBrowserClass);
       
       /* Check for related classes */
       Class netServiceClass = NSClassFromString(@"NSNetService");
       if (netServiceClass)
-        NSLog(@"  - NSNetService: %@", netServiceClass);
+        NSDebugLLog(@"gwcomp", @"  - NSNetService: %@", netServiceClass);
       
       Class netServiceDelegateClass = NSClassFromString(@"NSNetServiceDelegate");
       if (netServiceDelegateClass)
-        NSLog(@"  - NSNetServiceDelegate: %@", netServiceDelegateClass);
+        NSDebugLLog(@"gwcomp", @"  - NSNetServiceDelegate: %@", netServiceDelegateClass);
       
-      NSLog(@"");
-      NSLog(@"Action: NetworkBrowser will proceed with service discovery");
+      NSDebugLLog(@"gwcomp", @"");
+      NSDebugLLog(@"gwcomp", @"Action: NetworkBrowser will proceed with service discovery");
     }
   else
     {
-      NSLog(@"✗ WARNING: NSNetServiceBrowser class NOT available");
-      NSLog(@"  This GNUstep installation does NOT have mDNS-SD support");
-      NSLog(@"");
-      NSLog(@"To fix this issue:");
-      NSLog(@"  1. Install libdns_sd development files");
-      NSLog(@"     - Debian/Ubuntu: sudo apt-get install libavahi-compat-libdnssd-dev");
-      NSLog(@"     - Fedora/RHEL: sudo dnf install avahi-compat-libdns_sd-devel");
-      NSLog(@"     - FreeBSD/OpenBSD: sudo pkg install mDNSResponder");
-      NSLog(@"     - macOS: Xcode Command Line Tools (xcode-select --install)");
-      NSLog(@"");
-      NSLog(@"  2. Rebuild GNUstep with DNS-SD support");
-      NSLog(@"");
-      NSLog(@"Action: NetworkBrowser will show warning and ask user to continue or quit");
+      NSDebugLLog(@"gwcomp", @"✗ WARNING: NSNetServiceBrowser class NOT available");
+      NSDebugLLog(@"gwcomp", @"  This GNUstep installation does NOT have mDNS-SD support");
+      NSDebugLLog(@"gwcomp", @"");
+      NSDebugLLog(@"gwcomp", @"To fix this issue:");
+      NSDebugLLog(@"gwcomp", @"  1. Install libdns_sd development files");
+      NSDebugLLog(@"gwcomp", @"     - Debian/Ubuntu: sudo apt-get install libavahi-compat-libdnssd-dev");
+      NSDebugLLog(@"gwcomp", @"     - Fedora/RHEL: sudo dnf install avahi-compat-libdns_sd-devel");
+      NSDebugLLog(@"gwcomp", @"     - FreeBSD/OpenBSD: sudo pkg install mDNSResponder");
+      NSDebugLLog(@"gwcomp", @"     - macOS: Xcode Command Line Tools (xcode-select --install)");
+      NSDebugLLog(@"gwcomp", @"");
+      NSDebugLLog(@"gwcomp", @"  2. Rebuild GNUstep with DNS-SD support");
+      NSDebugLLog(@"gwcomp", @"");
+      NSDebugLLog(@"gwcomp", @"Action: NetworkBrowser will show warning and ask user to continue or quit");
     }
   
-  NSLog(@"");
-  NSLog(@"================================================");
+  NSDebugLLog(@"gwcomp", @"");
+  NSDebugLLog(@"gwcomp", @"================================================");
   
   [pool drain];
   return netServiceBrowserClass ? 0 : 1;

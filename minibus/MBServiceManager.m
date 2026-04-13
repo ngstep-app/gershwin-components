@@ -39,7 +39,7 @@
         [self loadServicesFromDirectory:servicePath];
     }
     
-    NSLog(@"Loaded %lu D-Bus services from %lu directories", 
+    NSDebugLLog(@"gwcomp", @"Loaded %lu D-Bus services from %lu directories", 
           (unsigned long)[_services count], (unsigned long)[_servicePaths count]);
 }
 
@@ -50,11 +50,11 @@
     
     NSArray *files = [fileManager contentsOfDirectoryAtPath:directory error:&error];
     if (!files) {
-        NSLog(@"Could not read service directory %@: %@", directory, error.localizedDescription);
+        NSDebugLLog(@"gwcomp", @"Could not read service directory %@: %@", directory, error.localizedDescription);
         return;
     }
     
-    NSLog(@"Scanning service directory: %@", directory);
+    NSDebugLLog(@"gwcomp", @"Scanning service directory: %@", directory);
     
     for (NSString *filename in files) {
         if (![filename hasSuffix:@".service"]) {
@@ -65,10 +65,10 @@
         MBServiceFile *serviceFile = [MBServiceFile serviceFileFromPath:fullPath];
         
         if (serviceFile && [serviceFile isValid]) {
-            NSLog(@"Loaded service: %@ -> %@", serviceFile.serviceName, serviceFile.executablePath);
+            NSDebugLLog(@"gwcomp", @"Loaded service: %@ -> %@", serviceFile.serviceName, serviceFile.executablePath);
             [_services setObject:serviceFile forKey:serviceFile.serviceName];
         } else {
-            NSLog(@"Invalid service file: %@", fullPath);
+            NSDebugLLog(@"gwcomp", @"Invalid service file: %@", fullPath);
         }
     }
 }
@@ -101,11 +101,11 @@
     
     // Check if already activating
     if ([_activatingServices objectForKey:serviceName]) {
-        NSLog(@"Service %@ is already being activated", serviceName);
+        NSDebugLLog(@"gwcomp", @"Service %@ is already being activated", serviceName);
         return YES; // Consider this success - activation is in progress
     }
     
-    NSLog(@"Activating service: %@ (exec: %@)", serviceName, serviceFile.executablePath);
+    NSDebugLLog(@"gwcomp", @"Activating service: %@ (exec: %@)", serviceName, serviceFile.executablePath);
     
     // Mark as activating
     [_activatingServices setObject:[NSDate date] forKey:serviceName];
@@ -129,7 +129,7 @@
     // Check if executable exists and is executable
     NSFileManager *fileManager = [NSFileManager defaultManager];
     if (![fileManager isExecutableFileAtPath:executable]) {
-        NSLog(@"Executable not found or not executable: %@", executable);
+        NSDebugLLog(@"gwcomp", @"Executable not found or not executable: %@", executable);
         if (error) {
             *error = [NSError errorWithDomain:@"MBServiceManager" 
                                          code:3 
@@ -145,7 +145,7 @@
     
     if (pid == -1) {
         // Fork failed
-        NSLog(@"Failed to fork for service activation: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"Failed to fork for service activation: %s", strerror(errno));
         if (error) {
             *error = [NSError errorWithDomain:@"MBServiceManager" 
                                          code:4 
@@ -206,7 +206,7 @@
         exit(1);
     } else {
         // Parent process - service activation started
-        NSLog(@"Started service %@ with PID %d", serviceName, pid);
+        NSDebugLLog(@"gwcomp", @"Started service %@ with PID %d", serviceName, pid);
         
         // We don't wait for the child here - it should connect to the bus independently
         // The daemon will detect when the service connects and mark activation as complete
@@ -225,7 +225,7 @@
     // Check if activation has been going on too long (timeout after 30 seconds)
     NSTimeInterval elapsed = [[NSDate date] timeIntervalSinceDate:activationStart];
     if (elapsed > 30.0) {
-        NSLog(@"Service activation timeout for %@ (%.1f seconds)", serviceName, elapsed);
+        NSDebugLLog(@"gwcomp", @"Service activation timeout for %@ (%.1f seconds)", serviceName, elapsed);
         [_activatingServices removeObjectForKey:serviceName];
         return NO;
     }
@@ -238,7 +238,7 @@
     NSDate *activationStart = [_activatingServices objectForKey:serviceName];
     if (activationStart) {
         NSTimeInterval elapsed = [[NSDate date] timeIntervalSinceDate:activationStart];
-        NSLog(@"Service activation completed for %@ (%.3f seconds)", serviceName, elapsed);
+        NSDebugLLog(@"gwcomp", @"Service activation completed for %@ (%.3f seconds)", serviceName, elapsed);
         [_activatingServices removeObjectForKey:serviceName];
     }
 }

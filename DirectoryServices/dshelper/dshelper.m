@@ -102,10 +102,10 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
     self.usersCacheDate = modDate;
 
     if (!self.usersCache) {
-        NSLog(@"dshelper: No users found at %@", path);
+        NSDebugLLog(@"gwcomp", @"dshelper: No users found at %@", path);
         self.usersCache = @{};
     } else {
-        NSLog(@"dshelper: Loaded %lu users from %@", (unsigned long)[self.usersCache count], path);
+        NSDebugLLog(@"gwcomp", @"dshelper: Loaded %lu users from %@", (unsigned long)[self.usersCache count], path);
     }
 
     return self.usersCache;
@@ -128,7 +128,7 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
     if (!self.groupsCache) {
         self.groupsCache = @{};
     } else {
-        NSLog(@"dshelper: Loaded %lu groups from %@", (unsigned long)[self.groupsCache count], path);
+        NSDebugLLog(@"gwcomp", @"dshelper: Loaded %lu groups from %@", (unsigned long)[self.groupsCache count], path);
     }
 
     return self.groupsCache;
@@ -254,7 +254,7 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
     // Create UNIX socket for local clients (NSS/PAM)
     _serverSocket = socket(AF_UNIX, SOCK_STREAM, 0);
     if (_serverSocket < 0) {
-        NSLog(@"dshelper: Failed to create UNIX socket: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"dshelper: Failed to create UNIX socket: %s", strerror(errno));
         return NO;
     }
 
@@ -265,7 +265,7 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
     strncpy(unixAddr.sun_path, DS_SOCKET_PATH, sizeof(unixAddr.sun_path) - 1);
 
     if (bind(_serverSocket, (struct sockaddr *)&unixAddr, sizeof(unixAddr)) < 0) {
-        NSLog(@"dshelper: Failed to bind UNIX socket: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"dshelper: Failed to bind UNIX socket: %s", strerror(errno));
         close(_serverSocket);
         _serverSocket = -1;
         return NO;
@@ -275,19 +275,19 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
     chmod(DS_SOCKET_PATH, 0666);
 
     if (listen(_serverSocket, 10) < 0) {
-        NSLog(@"dshelper: Failed to listen on UNIX socket: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"dshelper: Failed to listen on UNIX socket: %s", strerror(errno));
         close(_serverSocket);
         _serverSocket = -1;
         return NO;
     }
 
-    NSLog(@"dshelper: Listening on %s", DS_SOCKET_PATH);
+    NSDebugLLog(@"gwcomp", @"dshelper: Listening on %s", DS_SOCKET_PATH);
 
     // For servers, also create TCP socket for network discovery
     if ([self isServer]) {
         _discoverySocket = socket(AF_INET, SOCK_STREAM, 0);
         if (_discoverySocket < 0) {
-            NSLog(@"dshelper: Failed to create TCP socket: %s", strerror(errno));
+            NSDebugLLog(@"gwcomp", @"dshelper: Failed to create TCP socket: %s", strerror(errno));
         } else {
             int reuse = 1;
             setsockopt(_discoverySocket, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
@@ -299,15 +299,15 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
             tcpAddr.sin_port = htons(DS_SERVICE_PORT);
 
             if (bind(_discoverySocket, (struct sockaddr *)&tcpAddr, sizeof(tcpAddr)) < 0) {
-                NSLog(@"dshelper: Failed to bind TCP port %d: %s", DS_SERVICE_PORT, strerror(errno));
+                NSDebugLLog(@"gwcomp", @"dshelper: Failed to bind TCP port %d: %s", DS_SERVICE_PORT, strerror(errno));
                 close(_discoverySocket);
                 _discoverySocket = -1;
             } else if (listen(_discoverySocket, 10) < 0) {
-                NSLog(@"dshelper: Failed to listen on TCP port %d: %s", DS_SERVICE_PORT, strerror(errno));
+                NSDebugLLog(@"gwcomp", @"dshelper: Failed to listen on TCP port %d: %s", DS_SERVICE_PORT, strerror(errno));
                 close(_discoverySocket);
                 _discoverySocket = -1;
             } else {
-                NSLog(@"dshelper: Listening on TCP port %d", DS_SERVICE_PORT);
+                NSDebugLLog(@"gwcomp", @"dshelper: Listening on TCP port %d", DS_SERVICE_PORT);
             }
         }
     }
@@ -334,7 +334,7 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
         if (ready < 0) {
             if (errno == EINTR) continue;
             if (_running) {
-                NSLog(@"dshelper: select failed: %s", strerror(errno));
+                NSDebugLLog(@"gwcomp", @"dshelper: select failed: %s", strerror(errno));
             }
             break;
         }
@@ -408,7 +408,7 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
     uid_t peerUid = (uid_t)-1;
     gid_t peerGid = (gid_t)-1;
     if (getpeereid(clientFd, &peerUid, &peerGid) < 0) {
-        NSLog(@"dshelper: getpeereid failed: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"dshelper: getpeereid failed: %s", strerror(errno));
         // Default to non-root for safety
         peerUid = (uid_t)-1;
     }
@@ -691,7 +691,7 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
 - (BOOL)registerService {
     // Only register if we're a server (have Domain.plist)
     if (![self isServer]) {
-        NSLog(@"dshelper: Not a server, skipping service registration");
+        NSDebugLLog(@"gwcomp", @"dshelper: Not a server, skipping service registration");
         return YES;
     }
 
@@ -703,11 +703,11 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
 
     int result = system([cmd UTF8String]);
     if (result != 0) {
-        NSLog(@"dshelper: Failed to register with gdomap (exit %d)", result);
+        NSDebugLLog(@"gwcomp", @"dshelper: Failed to register with gdomap (exit %d)", result);
         return NO;
     }
 
-    NSLog(@"dshelper: Registered '%@' with gdomap on port %d", DS_SERVICE_NAME, DS_SERVICE_PORT);
+    NSDebugLLog(@"gwcomp", @"dshelper: Registered '%@' with gdomap on port %d", DS_SERVICE_NAME, DS_SERVICE_PORT);
     return YES;
 }
 
@@ -722,7 +722,7 @@ static int getpeereid(int sock, uid_t *euid, gid_t *egid) {
         DS_SERVICE_NAME];
 
     system([cmd UTF8String]);
-    NSLog(@"dshelper: Unregistered '%@' from gdomap", DS_SERVICE_NAME);
+    NSDebugLLog(@"gwcomp", @"dshelper: Unregistered '%@' from gdomap", DS_SERVICE_NAME);
 }
 
 @end

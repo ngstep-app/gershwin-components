@@ -185,7 +185,7 @@ NSDate *bootOrderChangedTime = nil;
 
 - (id)init
 {
-    NSLog(@"StartupDiskController: init called");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: init called");
     self = [super init];
     if (self) {
         bootEntries = [[NSMutableArray alloc] init];
@@ -198,46 +198,46 @@ NSDate *bootOrderChangedTime = nil;
         helperInputHandle = nil;
         helperOutputHandle = nil;
         
-        NSLog(@"StartupDiskController: init completed successfully");
-        NSLog(@"StartupDiskController: bootEntries = %@", bootEntries);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: init completed successfully");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: bootEntries = %@", bootEntries);
     } else {
-        NSLog(@"StartupDiskController: init failed - super init returned nil");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: init failed - super init returned nil");
     }
     return self;
 }
 
 - (void)setMainView:(NSView *)view
 {
-    NSLog(@"StartupDiskController: setMainView called with view = %@", view);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: setMainView called with view = %@", view);
     if (view) {
-        NSLog(@"StartupDiskController: view frame = %@", NSStringFromRect([view frame]));
-        NSLog(@"StartupDiskController: view bounds = %@", NSStringFromRect([view bounds]));
-        NSLog(@"StartupDiskController: view subviews count = %lu", (unsigned long)[[view subviews] count]);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: view frame = %@", NSStringFromRect([view frame]));
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: view bounds = %@", NSStringFromRect([view bounds]));
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: view subviews count = %lu", (unsigned long)[[view subviews] count]);
     } else {
-        NSLog(@"StartupDiskController: WARNING - view is nil!");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: WARNING - view is nil!");
         return;
     }
     
     mainView = view;
-    NSLog(@"StartupDiskController: Set mainView, about to call setupUI");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Set mainView, about to call setupUI");
     [self setupUI];
-    NSLog(@"StartupDiskController: setMainView completed");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: setMainView completed");
 }
 
 - (void)setupUI
 {
-    NSLog(@"StartupDiskController: setupUI called");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: setupUI called");
     
     if (!mainView) {
-        NSLog(@"StartupDiskController: ERROR - mainView is nil in setupUI!");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: ERROR - mainView is nil in setupUI!");
         return;
     }
     
     NSRect frame = [mainView frame];
-    NSLog(@"StartupDiskController: mainView frame in setupUI = %@", NSStringFromRect(frame));
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: mainView frame in setupUI = %@", NSStringFromRect(frame));
     
     // Title label
-    NSLog(@"StartupDiskController: Creating title label");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Creating title label");
     titleLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, frame.size.height - 50, frame.size.width - 40, 24)];
     [titleLabel setStringValue:@"Drag boot entries to arrange their priority order"];
     [titleLabel setBezeled:NO];
@@ -245,12 +245,12 @@ NSDate *bootOrderChangedTime = nil;
     [titleLabel setEditable:NO];
     [titleLabel setSelectable:NO];
     [titleLabel setFont:[NSFont systemFontOfSize:13]];
-    NSLog(@"StartupDiskController: Adding title label to mainView");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Adding title label to mainView");
     [mainView addSubview:titleLabel];
-    NSLog(@"StartupDiskController: Title label added successfully");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Title label added successfully");
     
     // Instruction label
-    NSLog(@"StartupDiskController: Creating instruction label");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Creating instruction label");
     instructionLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, frame.size.height - 75, frame.size.width - 40, 20)];
     [instructionLabel setStringValue:@"The first entry in the list will be used as the default startup disk"];
     [instructionLabel setBezeled:NO];
@@ -259,18 +259,18 @@ NSDate *bootOrderChangedTime = nil;
     [instructionLabel setSelectable:NO];
     [instructionLabel setFont:[NSFont systemFontOfSize:11]];
     [instructionLabel setTextColor:[NSColor secondaryLabelColor]];
-    NSLog(@"StartupDiskController: Adding instruction label to mainView");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Adding instruction label to mainView");
     [mainView addSubview:instructionLabel];
-    NSLog(@"StartupDiskController: Instruction label added successfully");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Instruction label added successfully");
     
     // Scroll view and table view for boot entries
-    NSLog(@"StartupDiskController: Creating scroll view and table view");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Creating scroll view and table view");
     scrollView = [[NSScrollView alloc] initWithFrame:NSMakeRect(20, 100, frame.size.width - 40, frame.size.height - 200)];
     [scrollView setHasVerticalScroller:YES];
     [scrollView setHasHorizontalScroller:NO];
     [scrollView setBorderType:NSBezelBorder];
     [scrollView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-    NSLog(@"StartupDiskController: Scroll view frame = %@", NSStringFromRect([scrollView frame]));
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Scroll view frame = %@", NSStringFromRect([scrollView frame]));
     
     NSRect tableFrame = NSMakeRect(0, 0, frame.size.width - 60, 200);
     tableView = [[EasyDragTableView alloc] initWithFrame:tableFrame];
@@ -300,27 +300,27 @@ NSDate *bootOrderChangedTime = nil;
     [column release];
     
     [scrollView setDocumentView:tableView];
-    NSLog(@"StartupDiskController: Adding scroll view to mainView");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Adding scroll view to mainView");
     [mainView addSubview:scrollView];
-    NSLog(@"StartupDiskController: Scroll view added successfully");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Scroll view added successfully");
     
     // Restart button
-    NSLog(@"StartupDiskController: Creating restart button");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Creating restart button");
     restartButton = [[NSButton alloc] initWithFrame:NSMakeRect(frame.size.width - 160, 60, 120, 32)];
     [restartButton setTitle:@"Restart..."];
     [restartButton setTarget:self];
     [restartButton setAction:@selector(restartClicked:)];
     [restartButton setAutoresizingMask:NSViewMinXMargin];
-    NSLog(@"StartupDiskController: Adding restart button to mainView");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Adding restart button to mainView");
     [mainView addSubview:restartButton];
-    NSLog(@"StartupDiskController: Restart button added successfully");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Restart button added successfully");
     
-    NSLog(@"StartupDiskController: setupUI completed - mainView now has %lu subviews", (unsigned long)[[mainView subviews] count]);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: setupUI completed - mainView now has %lu subviews", (unsigned long)[[mainView subviews] count]);
 }
 
 - (void)refreshBootEntries
 {
-    NSLog(@"StartupDiskController: refreshBootEntries called");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: refreshBootEntries called");
     
     // Don't refresh if the user has made changes that haven't been applied yet
     // But add a safety mechanism - if bootOrderChanged has been true for too long, reset it
@@ -332,12 +332,12 @@ NSDate *bootOrderChangedTime = nil;
         
         // If it's been more than 10 seconds since the flag was set, reset it
         if ([[NSDate date] timeIntervalSinceDate:localBootOrderChangedTime] > 10.0) {
-            NSLog(@"StartupDiskController: bootOrderChanged flag stuck for >10 seconds, resetting");
+            NSDebugLLog(@"gwcomp", @"StartupDiskController: bootOrderChanged flag stuck for >10 seconds, resetting");
             bootOrderChanged = NO;
             [localBootOrderChangedTime release];
             localBootOrderChangedTime = nil;
         } else {
-            NSLog(@"StartupDiskController: Skipping refresh because boot order has changed");
+            NSDebugLLog(@"gwcomp", @"StartupDiskController: Skipping refresh because boot order has changed");
             return;
         }
     } else {
@@ -349,7 +349,7 @@ NSDate *bootOrderChangedTime = nil;
     }
     
     [bootEntries removeAllObjects];
-    NSLog(@"StartupDiskController: Cleared bootEntries array");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Cleared bootEntries array");
     
     // Run efibootmgr in a background thread to avoid blocking the UI
     [NSThread detachNewThreadSelector:@selector(fetchBootEntriesInBackground) 
@@ -363,7 +363,7 @@ NSDate *bootOrderChangedTime = nil;
     
     // Start the helper process if not already running
     if (![self startHelperProcess]) {
-        NSLog(@"StartupDiskController: Failed to start helper process");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Failed to start helper process");
         [self performSelectorOnMainThread:@selector(handleBootEntriesResult:) 
                                withObject:[NSDictionary dictionaryWithObjectsAndKeys:
                                           [NSNumber numberWithBool:NO], @"success",
@@ -375,7 +375,7 @@ NSDate *bootOrderChangedTime = nil;
         return;
     }
     
-    NSLog(@"StartupDiskController: Sending list command to helper");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Sending list command to helper");
     NSString *response = nil;
     NSString *error = nil;
     BOOL success = [self sendHelperCommand:@"list" withResponse:&response withError:&error];
@@ -395,7 +395,7 @@ NSDate *bootOrderChangedTime = nil;
 {
     // Safely extract values with null checks
     if (!resultDict) {
-        NSLog(@"StartupDiskController: handleBootEntriesResult called with nil resultDict");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: handleBootEntriesResult called with nil resultDict");
         [self updateBootEntriesDisplay];
         return;
     }
@@ -409,7 +409,7 @@ NSDate *bootOrderChangedTime = nil;
     if (!output) output = @"";
     if (!errorOutput) errorOutput = @"";
     
-    NSLog(@"StartupDiskController: handleBootEntriesResult - success: %@, output length: %lu, error length: %lu", 
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: handleBootEntriesResult - success: %@, output length: %lu, error length: %lu", 
           success ? @"YES" : @"NO", 
           (unsigned long)[output length],
           (unsigned long)[errorOutput length]);
@@ -420,7 +420,7 @@ NSDate *bootOrderChangedTime = nil;
             [bootOrderChangedTime release];
             bootOrderChangedTime = nil;
         }
-        NSLog(@"StartupDiskController: efibootmgr failed: %@", errorOutput);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: efibootmgr failed: %@", errorOutput);
         
         // Show error panel instead of creating fake entries
         NSString *errorMessage;
@@ -452,20 +452,20 @@ NSDate *bootOrderChangedTime = nil;
         [self updateBootEntriesDisplay];
         return;
     } else {
-        NSLog(@"StartupDiskController: efibootmgr succeeded, parsing output");
-        NSLog(@"StartupDiskController: efibootmgr output length = %lu", (unsigned long)[output length]);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: efibootmgr succeeded, parsing output");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: efibootmgr output length = %lu", (unsigned long)[output length]);
         
         if ([output length] > 0) {
-            NSLog(@"StartupDiskController: efibootmgr stdout: %@", output);
+            NSDebugLLog(@"gwcomp", @"StartupDiskController: efibootmgr stdout: %@", output);
         }
         
         // Parse efibootmgr output
         NSArray *lines = [output componentsSeparatedByString:@"\n"];
-        NSLog(@"StartupDiskController: Split output into %lu lines", (unsigned long)[lines count]);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Split output into %lu lines", (unsigned long)[lines count]);
         
         int lineIndex = 0;
         for (NSString *line in lines) {
-            NSLog(@"StartupDiskController: Processing line %d: %@", lineIndex++, line);
+            NSDebugLLog(@"gwcomp", @"StartupDiskController: Processing line %d: %@", lineIndex++, line);
             
             // Look for lines containing "Boot" followed by 4 digits and an asterisk
             // This handles formats like "+Boot0000*" and " Boot2001*"
@@ -473,7 +473,7 @@ NSDate *bootOrderChangedTime = nil;
             NSRange bootRange = [trimmedLine rangeOfString:@"Boot"];
             
             if (bootRange.location != NSNotFound && [trimmedLine containsString:@"*"]) {
-                NSLog(@"StartupDiskController: Found boot entry line: %@", line);
+                NSDebugLLog(@"gwcomp", @"StartupDiskController: Found boot entry line: %@", line);
                 
                 // Find the position of "Boot" in the trimmed line
                 NSString *bootPart = [trimmedLine substringFromIndex:bootRange.location];
@@ -484,7 +484,7 @@ NSDate *bootOrderChangedTime = nil;
                     NSString *bootNum = [bootPart substringWithRange:NSMakeRange(4, 4)];
                     NSString *description = [[bootPart substringFromIndex:asteriskRange.location + 1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                     
-                    NSLog(@"StartupDiskController: Extracted bootNum = %@, raw description = %@", bootNum, description);
+                    NSDebugLLog(@"gwcomp", @"StartupDiskController: Extracted bootNum = %@, raw description = %@", bootNum, description);
                     
                     // Clean up description to remove device path info
                     NSRange hdRange = [description rangeOfString:@" HD("];
@@ -504,7 +504,7 @@ NSDate *bootOrderChangedTime = nil;
                     
                     // Skip empty descriptions
                     if ([description length] > 0) {
-                        NSLog(@"StartupDiskController: Cleaned description = %@", description);
+                        NSDebugLLog(@"gwcomp", @"StartupDiskController: Cleaned description = %@", description);
                         
                         NSDictionary *entry = [NSDictionary dictionaryWithObjectsAndKeys:
                                              bootNum, @"bootnum",
@@ -512,32 +512,32 @@ NSDate *bootOrderChangedTime = nil;
                                              [NSNumber numberWithBool:YES], @"active",
                                              nil];
                         [bootEntries addObject:entry];
-                        NSLog(@"StartupDiskController: Added boot entry: %@", entry);
+                        NSDebugLLog(@"gwcomp", @"StartupDiskController: Added boot entry: %@", entry);
                     } else {
-                        NSLog(@"StartupDiskController: Skipping entry with empty description");
+                        NSDebugLLog(@"gwcomp", @"StartupDiskController: Skipping entry with empty description");
                     }
                 }
             }
         }
     }
     
-    NSLog(@"StartupDiskController: bootEntries now contains %lu entries", (unsigned long)[bootEntries count]);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: bootEntries now contains %lu entries", (unsigned long)[bootEntries count]);
     for (int i = 0; i < [bootEntries count]; i++) {
-        NSLog(@"StartupDiskController: bootEntries[%d] = %@", i, [bootEntries objectAtIndex:i]);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: bootEntries[%d] = %@", i, [bootEntries objectAtIndex:i]);
     }
     
-    NSLog(@"StartupDiskController: About to call updateBootEntriesDisplay");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: About to call updateBootEntriesDisplay");
     [self updateBootEntriesDisplay];
-    NSLog(@"StartupDiskController: refreshBootEntries completed");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: refreshBootEntries completed");
 }
 
 - (void)updateBootEntriesDisplay
 {
-    NSLog(@"StartupDiskController: updateBootEntriesDisplay called");
-    NSLog(@"StartupDiskController: bootEntries count = %lu", (unsigned long)[bootEntries count]);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: updateBootEntriesDisplay called");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: bootEntries count = %lu", (unsigned long)[bootEntries count]);
     
     if (!tableView) {
-        NSLog(@"StartupDiskController: ERROR - tableView is nil!");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: ERROR - tableView is nil!");
         return;
     }
     
@@ -553,12 +553,12 @@ NSDate *bootOrderChangedTime = nil;
         [instructionLabel setStringValue:@"No boot entries found"];
     }
     
-    NSLog(@"StartupDiskController: updateBootEntriesDisplay completed");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: updateBootEntriesDisplay completed");
 }
 
 - (void)applyBootOrder:(id)sender
 {
-    NSLog(@"StartupDiskController: applyBootOrder called");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: applyBootOrder called");
     
     if ([bootEntries count] == 0) {
         NSAlert *alert = [[NSAlert alloc] init];
@@ -595,7 +595,7 @@ NSDate *bootOrderChangedTime = nil;
     NSString *bootOrderString = [bootOrder componentsJoinedByString:@","];
     NSString *command = [NSString stringWithFormat:@"set_boot_order %@", bootOrderString];
     
-    NSLog(@"StartupDiskController: Setting boot order: %@", bootOrderString);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Setting boot order: %@", bootOrderString);
     
     // Run in background thread
     [NSThread detachNewThreadSelector:@selector(applyBootOrderInBackground:) 
@@ -609,7 +609,7 @@ NSDate *bootOrderChangedTime = nil;
     
     // Start the helper process if not already running
     if (![self startHelperProcess]) {
-        NSLog(@"StartupDiskController: Failed to start helper process for boot order");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Failed to start helper process for boot order");
         [self performSelectorOnMainThread:@selector(handleApplyBootOrderResult:) 
                                withObject:[NSDictionary dictionaryWithObjectsAndKeys:
                                           [NSNumber numberWithBool:NO], @"success",
@@ -620,7 +620,7 @@ NSDate *bootOrderChangedTime = nil;
         return;
     }
     
-    NSLog(@"StartupDiskController: Sending boot order command to helper: %@", command);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Sending boot order command to helper: %@", command);
     NSString *response = nil;
     NSString *error = nil;
     BOOL success = [self sendHelperCommand:command withResponse:&response withError:&error];
@@ -643,7 +643,7 @@ NSDate *bootOrderChangedTime = nil;
     NSString *errorOutput = [resultDict objectForKey:@"error"];
     
     if (success) {
-        NSLog(@"StartupDiskController: Boot order applied successfully");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Boot order applied successfully");
         bootOrderChanged = NO;
         
         NSAlert *alert = [[NSAlert alloc] init];
@@ -654,7 +654,7 @@ NSDate *bootOrderChangedTime = nil;
         [alert runModal];
         [alert release];
     } else {
-        NSLog(@"StartupDiskController: Failed to apply boot order: %@", errorOutput);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Failed to apply boot order: %@", errorOutput);
         
         NSAlert *alert = [[NSAlert alloc] init];
         [alert setMessageText:@"Failed to Apply Boot Order"];
@@ -748,7 +748,7 @@ NSDate *bootOrderChangedTime = nil;
                 BOOL restartSuccess = [self sendHelperCommand:@"restart" withResponse:&restartResponse withError:&restartError];
                 
                 if (!restartSuccess) {
-                    NSLog(@"Error restarting system: %@", restartError);
+                    NSDebugLLog(@"gwcomp", @"Error restarting system: %@", restartError);
                     NSAlert *errorAlert = [[NSAlert alloc] init];
                     [errorAlert setMessageText:@"Restart Failed"];
                     [errorAlert setInformativeText:[NSString stringWithFormat:@"Boot entry was set successfully, but failed to restart the system.\n\nError: %@\n\nPlease restart manually.", restartError ? restartError : @"Unknown error"]];
@@ -781,21 +781,21 @@ NSDate *bootOrderChangedTime = nil;
 - (BOOL)startHelperProcess
 {
     if (helperTask && [helperTask isRunning]) {
-        NSLog(@"StartupDiskController: Helper process already running");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Helper process already running");
         return YES;
     }
     
-    NSLog(@"StartupDiskController: Starting helper process with sudo");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Starting helper process with sudo");
     
     // Get the helper path from our bundle
     NSBundle *bundle = [NSBundle bundleForClass:[self class]];
-    NSLog(@"StartupDiskController: Bundle path = %@", [bundle bundlePath]);
-    NSLog(@"StartupDiskController: Bundle resources path = %@", [bundle resourcePath]);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Bundle path = %@", [bundle bundlePath]);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Bundle resources path = %@", [bundle resourcePath]);
     
     NSString *helperPath = [bundle pathForResource:@"efiboot-helper" ofType:nil];
     
     if (!helperPath) {
-        NSLog(@"StartupDiskController: Could not find efiboot-helper in bundle resources");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Could not find efiboot-helper in bundle resources");
         // Also try looking in the bundle's main directory
         NSString *bundlePath = [bundle bundlePath];
         helperPath = [bundlePath stringByAppendingPathComponent:@"efiboot-helper"];
@@ -805,17 +805,17 @@ NSDate *bootOrderChangedTime = nil;
             // Try Resources subdirectory
             helperPath = [[bundle resourcePath] stringByAppendingPathComponent:@"efiboot-helper"];
             if (![[NSFileManager defaultManager] fileExistsAtPath:helperPath]) {
-                NSLog(@"StartupDiskController: Could not find efiboot-helper at any location");
-                NSLog(@"StartupDiskController: Tried locations:");
-                NSLog(@"  - %@", [bundle pathForResource:@"efiboot-helper" ofType:nil]);
-                NSLog(@"  - %@", [bundlePath stringByAppendingPathComponent:@"efiboot-helper"]);
-                NSLog(@"  - %@", [[bundle resourcePath] stringByAppendingPathComponent:@"efiboot-helper"]);
+                NSDebugLLog(@"gwcomp", @"StartupDiskController: Could not find efiboot-helper at any location");
+                NSDebugLLog(@"gwcomp", @"StartupDiskController: Tried locations:");
+                NSDebugLLog(@"gwcomp", @"  - %@", [bundle pathForResource:@"efiboot-helper" ofType:nil]);
+                NSDebugLLog(@"gwcomp", @"  - %@", [bundlePath stringByAppendingPathComponent:@"efiboot-helper"]);
+                NSDebugLLog(@"gwcomp", @"  - %@", [[bundle resourcePath] stringByAppendingPathComponent:@"efiboot-helper"]);
                 return NO;
             }
         }
-        NSLog(@"StartupDiskController: Found efiboot-helper at %@", helperPath);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Found efiboot-helper at %@", helperPath);
     } else {
-        NSLog(@"StartupDiskController: Found efiboot-helper in bundle resources at %@", helperPath);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Found efiboot-helper in bundle resources at %@", helperPath);
     }
     
     helperTask = [[NSTask alloc] init];
@@ -848,7 +848,7 @@ NSDate *bootOrderChangedTime = nil;
         askpassValid = [[NSFileManager defaultManager] isExecutableFileAtPath:sudoAskPass];
     }
     if (!askpassValid) {
-        NSLog(@"StartupDiskController: SUDO_ASKPASS is not set or does not point to an executable: %@", sudoAskPass);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: SUDO_ASKPASS is not set or does not point to an executable: %@", sudoAskPass);
         NSAlert *alert = [[NSAlert alloc] init];
         [alert setMessageText:@"SUDO_ASKPASS Not Set or Invalid"];
         [alert setInformativeText:@"The SUDO_ASKPASS environment variable must be set and point to an existing executable binary.\n\nPlease set SUDO_ASKPASS to a valid askpass helper and try again."];
@@ -876,13 +876,13 @@ NSDate *bootOrderChangedTime = nil;
             readyMessage = [[NSString alloc] initWithData:readyData encoding:NSUTF8StringEncoding];
         }
         
-        NSLog(@"StartupDiskController: Helper process started, ready message: %@", readyMessage);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Helper process started, ready message: %@", readyMessage);
         [readyMessage release];
         
         return YES;
     }
     @catch (NSException *exception) {
-        NSLog(@"StartupDiskController: Failed to start helper process: %@", exception);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Failed to start helper process: %@", exception);
         [self stopHelperProcess];
         return NO;
     }
@@ -897,7 +897,7 @@ NSDate *bootOrderChangedTime = nil;
             [helperInputHandle writeData:quitData];
         }
         @catch (NSException *exception) {
-            NSLog(@"StartupDiskController: Exception sending quit command: %@", exception);
+            NSDebugLLog(@"gwcomp", @"StartupDiskController: Exception sending quit command: %@", exception);
         }
     }
     
@@ -923,7 +923,7 @@ NSDate *bootOrderChangedTime = nil;
         return NO;
     }
     
-    NSLog(@"StartupDiskController: Sending command to helper: %@", command);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Sending command to helper: %@", command);
     
     @try {
         // Send command
@@ -949,7 +949,7 @@ NSDate *bootOrderChangedTime = nil;
                 NSArray *lines = [output componentsSeparatedByString:@"\n"];
                 
                 for (NSString *line in lines) {
-                    NSLog(@"StartupDiskController: Helper output line: %@", line);
+                    NSDebugLLog(@"gwcomp", @"StartupDiskController: Helper output line: %@", line);
                     if ([line hasPrefix:@"RESULT:"]) {
                         result = [[line substringFromIndex:7] intValue];
                     } else if ([line isEqualToString:@"OUTPUT_START"]) {
@@ -983,7 +983,7 @@ NSDate *bootOrderChangedTime = nil;
         
         // Check if we timed out
         if (!commandComplete) {
-            NSLog(@"StartupDiskController: Command timed out after 30 seconds");
+            NSDebugLLog(@"gwcomp", @"StartupDiskController: Command timed out after 30 seconds");
             if (error) {
                 *error = @"Command timed out after 30 seconds";
             }
@@ -997,17 +997,17 @@ NSDate *bootOrderChangedTime = nil;
             *error = [NSString stringWithString:errorBuffer];
         }
         
-        NSLog(@"StartupDiskController: Command completed with result: %d", result);
-        NSLog(@"StartupDiskController: Response buffer length: %lu", (unsigned long)[responseBuffer length]);
-        NSLog(@"StartupDiskController: Error buffer length: %lu", (unsigned long)[errorBuffer length]);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Command completed with result: %d", result);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Response buffer length: %lu", (unsigned long)[responseBuffer length]);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Error buffer length: %lu", (unsigned long)[errorBuffer length]);
         if ([errorBuffer length] > 0) {
-            NSLog(@"StartupDiskController: Error buffer content: %@", errorBuffer);
+            NSDebugLLog(@"gwcomp", @"StartupDiskController: Error buffer content: %@", errorBuffer);
         }
         
         return (result == 0);
     }
     @catch (NSException *exception) {
-        NSLog(@"StartupDiskController: Exception sending command to helper: %@", exception);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Exception sending command to helper: %@", exception);
         if (error) {
             *error = [exception reason];
         }
@@ -1017,7 +1017,7 @@ NSDate *bootOrderChangedTime = nil;
 
 - (BOOL)runSudoCommand:(NSArray *)arguments withOutput:(NSString **)output withError:(NSString **)error interactive:(BOOL)allowInteractive
 {
-    NSLog(@"StartupDiskController: runSudoCommand called with arguments: %@ (interactive: %@)", arguments, allowInteractive ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: runSudoCommand called with arguments: %@ (interactive: %@)", arguments, allowInteractive ? @"YES" : @"NO");
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"/usr/local/bin/sudo"];  // Use full path for FreeBSD
@@ -1048,7 +1048,7 @@ NSDate *bootOrderChangedTime = nil;
     BOOL success = NO;
     
     @try {
-        NSLog(@"StartupDiskController: Launching sudo with arguments: %@", finalArgs);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Launching sudo with arguments: %@", finalArgs);
         [task launch];
         [task waitUntilExit];
         
@@ -1063,16 +1063,16 @@ NSDate *bootOrderChangedTime = nil;
         }
         
         int exitStatus = [task terminationStatus];
-        NSLog(@"StartupDiskController: sudo command completed with exit status: %d", exitStatus);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: sudo command completed with exit status: %d", exitStatus);
         
         success = (exitStatus == 0);
         
         if (!success && error && *error) {
-            NSLog(@"StartupDiskController: sudo command failed with error: %@", *error);
+            NSDebugLLog(@"gwcomp", @"StartupDiskController: sudo command failed with error: %@", *error);
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"StartupDiskController: Exception running sudo command: %@", exception);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Exception running sudo command: %@", exception);
         if (error) {
             *error = [exception reason];
         }
@@ -1088,7 +1088,7 @@ NSDate *bootOrderChangedTime = nil;
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)aTableView
 {
     if (bootEntries == nil) {
-        NSLog(@"StartupDiskController: numberOfRowsInTableView called with nil bootEntries");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: numberOfRowsInTableView called with nil bootEntries");
         return 0;
     }
     return [bootEntries count];
@@ -1113,7 +1113,7 @@ NSDate *bootOrderChangedTime = nil;
 - (NSImage *)iconForBootEntry:(NSDictionary *)entry
 {
     if (entry == nil) {
-        NSLog(@"StartupDiskController: iconForBootEntry called with nil entry");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: iconForBootEntry called with nil entry");
         return [NSImage imageNamed:@"NSFolder"];
     }
     
@@ -1145,29 +1145,29 @@ NSDate *bootOrderChangedTime = nil;
 
 - (void)tableView:(NSTableView *)aTableView willDisplayCell:(id)aCell forTableColumn:(NSTableColumn *)aTableColumn row:(NSInteger)rowIndex
 {
-    NSLog(@"StartupDiskController: willDisplayCell called for row %ld, cell class: %@", (long)rowIndex, [aCell class]);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: willDisplayCell called for row %ld, cell class: %@", (long)rowIndex, [aCell class]);
     
     if (bootEntries == nil || rowIndex < 0 || rowIndex >= [bootEntries count]) {
-        NSLog(@"StartupDiskController: Invalid row index or nil bootEntries in willDisplayCell");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Invalid row index or nil bootEntries in willDisplayCell");
         return;
     }
     
     NSDictionary *entry = [bootEntries objectAtIndex:rowIndex];
     if (entry == nil) {
-        NSLog(@"StartupDiskController: Nil entry at row %ld", (long)rowIndex);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Nil entry at row %ld", (long)rowIndex);
         return;
     }
     
     NSImage *icon = [self iconForBootEntry:entry];
     
-    NSLog(@"StartupDiskController: Setting icon for entry: %@, icon: %@", [entry objectForKey:@"description"], icon);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Setting icon for entry: %@, icon: %@", [entry objectForKey:@"description"], icon);
     
     if ([aCell isKindOfClass:[BootEntryCell class]]) {
         BootEntryCell *bootCell = (BootEntryCell *)aCell;
         [bootCell setImage:icon];
-        NSLog(@"StartupDiskController: Icon set on BootEntryCell successfully");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Icon set on BootEntryCell successfully");
     } else {
-        NSLog(@"StartupDiskController: WARNING - Cell is not BootEntryCell, it's %@", [aCell class]);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: WARNING - Cell is not BootEntryCell, it's %@", [aCell class]);
     }
 }
 
@@ -1177,7 +1177,7 @@ NSDate *bootOrderChangedTime = nil;
 
 - (BOOL)tableView:(NSTableView *)tv writeRowsWithIndexes:(NSIndexSet *)rowIndexes toPasteboard:(NSPasteboard *)pboard
 {
-    NSLog(@"StartupDiskController: Starting drag operation for rows: %@", rowIndexes);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Starting drag operation for rows: %@", rowIndexes);
     
     // Copy the row index to the pasteboard
     NSData *data = [NSKeyedArchiver archivedDataWithRootObject:rowIndexes];
@@ -1199,7 +1199,7 @@ NSDate *bootOrderChangedTime = nil;
 
 - (BOOL)tableView:(NSTableView *)tv acceptDrop:(id <NSDraggingInfo>)info row:(NSInteger)row dropOperation:(NSTableViewDropOperation)op
 {
-    NSLog(@"StartupDiskController: Accepting drop at row %ld", (long)row);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Accepting drop at row %ld", (long)row);
     
     NSPasteboard *pboard = [info draggingPasteboard];
     NSData *rowData = [pboard dataForType:@"BootEntryType"];
@@ -1244,17 +1244,17 @@ NSDate *bootOrderChangedTime = nil;
         [instructionLabel setStringValue:[NSString stringWithFormat:@"Default startup disk: %@", description]];
     }
     
-    NSLog(@"StartupDiskController: Boot order changed and applied automatically");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Boot order changed and applied automatically");
     
     return YES;
 }
 
 - (void)applyBootOrderSynchronously
 {
-    NSLog(@"StartupDiskController: applyBootOrderSynchronously called");
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: applyBootOrderSynchronously called");
     
     if ([bootEntries count] == 0) {
-        NSLog(@"StartupDiskController: No boot entries to apply");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: No boot entries to apply");
         bootOrderChanged = NO;
         return;
     }
@@ -1269,7 +1269,7 @@ NSDate *bootOrderChangedTime = nil;
     }
     
     if ([bootOrder count] == 0) {
-        NSLog(@"StartupDiskController: No valid boot numbers found");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: No valid boot numbers found");
         bootOrderChanged = NO;
         return;
     }
@@ -1278,11 +1278,11 @@ NSDate *bootOrderChangedTime = nil;
     NSString *bootOrderString = [bootOrder componentsJoinedByString:@","];
     NSString *command = [NSString stringWithFormat:@"set_boot_order %@", bootOrderString];
     
-    NSLog(@"StartupDiskController: Setting boot order synchronously: %@", bootOrderString);
+    NSDebugLLog(@"gwcomp", @"StartupDiskController: Setting boot order synchronously: %@", bootOrderString);
     
     // Start the helper process if not already running
     if (![self startHelperProcess]) {
-        NSLog(@"StartupDiskController: Failed to start helper process for boot order");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Failed to start helper process for boot order");
         bootOrderChanged = NO;
         
         // Show error alert on main thread
@@ -1298,10 +1298,10 @@ NSDate *bootOrderChangedTime = nil;
     BOOL success = [self sendHelperCommand:command withResponse:&response withError:&error];
     
     if (success) {
-        NSLog(@"StartupDiskController: Boot order applied successfully and synchronously");
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Boot order applied successfully and synchronously");
         bootOrderChanged = NO;  // Reset flag to allow refreshes
     } else {
-        NSLog(@"StartupDiskController: Failed to apply boot order synchronously: %@", error);
+        NSDebugLLog(@"gwcomp", @"StartupDiskController: Failed to apply boot order synchronously: %@", error);
         bootOrderChanged = NO;  // Reset flag even on failure to prevent permanent blocking
         
         // Show error alert on main thread

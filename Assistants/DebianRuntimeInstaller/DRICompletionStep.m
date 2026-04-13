@@ -22,7 +22,7 @@
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"DRICompletionStep: init");
+        NSDebugLLog(@"gwcomp", @"DRICompletionStep: init");
         _installationSuccessful = YES; // Default to success
         _completionMessage = @"Installation completed successfully.";
     }
@@ -59,7 +59,7 @@
         return _contentView;
     }
     
-    NSLog(@"DRICompletionStep: creating stepView");
+    NSDebugLLog(@"gwcomp", @"DRICompletionStep: creating stepView");
     
     // Size within installer card (354x204)
     _contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
@@ -119,18 +119,18 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"DRICompletionStep: stepWillAppear (success: %@)", _installationSuccessful ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"DRICompletionStep: stepWillAppear (success: %@)", _installationSuccessful ? @"YES" : @"NO");
     [self updateUI];
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"DRICompletionStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"DRICompletionStep: stepDidAppear");
 }
 
 - (void)setInstallationSuccessful:(BOOL)successful withMessage:(NSString *)message
 {
-    NSLog(@"DRICompletionStep: setInstallationSuccessful: %@ message: %@", successful ? @"YES" : @"NO", message);
+    NSDebugLLog(@"gwcomp", @"DRICompletionStep: setInstallationSuccessful: %@ message: %@", successful ? @"YES" : @"NO", message);
     _installationSuccessful = successful;
     _completionMessage = [message ? message : (_installationSuccessful ? @"Installation completed successfully." : @"Installation failed.") copy];
     [self updateUI];

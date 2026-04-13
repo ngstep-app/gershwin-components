@@ -97,7 +97,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"BACompletionStep: Step will appear");
+    NSDebugLLog(@"gwcomp", @"BACompletionStep: Step will appear");
     
     // Update the completion view based on operation result
     [self updateCompletionContent];
@@ -105,7 +105,7 @@
 
 - (void)updateCompletionContent
 {
-    NSLog(@"BACompletionStep: Updating completion content");
+    NSDebugLLog(@"gwcomp", @"BACompletionStep: Updating completion content");
     
     NSView *view = self.view;
     NSImageView *iconView = [[view subviews] objectAtIndex:0];

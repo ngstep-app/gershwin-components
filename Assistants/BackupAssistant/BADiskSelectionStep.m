@@ -53,20 +53,20 @@ static id g_timerOwner = nil;
 
 - (void)dealloc
 {
-    NSLog(@"BADiskSelectionStep: dealloc called");
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: dealloc called");
     
     // Remove notification observer
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     
     if (_refreshTimer) {
-        NSLog(@"BADiskSelectionStep: Cleaning up timer in dealloc");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Cleaning up timer in dealloc");
         [_refreshTimer invalidate];
         _refreshTimer = nil;
     }
     
     // Clear global tracking if we own it
     if (g_activeDiskTimer && g_timerOwner == self) {
-        NSLog(@"BADiskSelectionStep: Clearing global timer in dealloc");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Clearing global timer in dealloc");
         g_activeDiskTimer = nil;
         g_timerOwner = nil;
     }
@@ -146,11 +146,11 @@ static id g_timerOwner = nil;
 
 - (void)stepWillAppear
 {
-    NSLog(@"BADiskSelectionStep: Step will appear, starting disk refresh timer");
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Step will appear, starting disk refresh timer");
     
     // Stop any existing global timer first
     if (g_activeDiskTimer) {
-        NSLog(@"BADiskSelectionStep: Stopping existing global timer owned by %@", g_timerOwner);
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Stopping existing global timer owned by %@", g_timerOwner);
         [g_activeDiskTimer invalidate];
         g_activeDiskTimer = nil;
         g_timerOwner = nil;
@@ -158,7 +158,7 @@ static id g_timerOwner = nil;
     
     // Make sure our instance timer is also stopped
     if (_refreshTimer) {
-        NSLog(@"BADiskSelectionStep: Stopping existing instance timer");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Stopping existing instance timer");
         [_refreshTimer invalidate];
         _refreshTimer = nil;
     }
@@ -176,49 +176,49 @@ static id g_timerOwner = nil;
     g_activeDiskTimer = _refreshTimer;
     g_timerOwner = self;
     
-    NSLog(@"BADiskSelectionStep: Created new timer: %@ (global tracking active)", _refreshTimer);
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Created new timer: %@ (global tracking active)", _refreshTimer);
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"BADiskSelectionStep: === STEP WILL DISAPPEAR ===");
-    NSLog(@"BADiskSelectionStep: Step will disappear, stopping refresh timer");
-    NSLog(@"BADiskSelectionStep: Current _refreshTimer: %@", _refreshTimer);
-    NSLog(@"BADiskSelectionStep: Current g_activeDiskTimer: %@", g_activeDiskTimer);
-    NSLog(@"BADiskSelectionStep: Current g_timerOwner: %@", g_timerOwner);
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: === STEP WILL DISAPPEAR ===");
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Step will disappear, stopping refresh timer");
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Current _refreshTimer: %@", _refreshTimer);
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Current g_activeDiskTimer: %@", g_activeDiskTimer);
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Current g_timerOwner: %@", g_timerOwner);
     
     if (_refreshTimer) {
-        NSLog(@"BADiskSelectionStep: Invalidating instance timer");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Invalidating instance timer");
         [_refreshTimer invalidate];
         _refreshTimer = nil;
     } else {
-        NSLog(@"BADiskSelectionStep: No instance timer to invalidate");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: No instance timer to invalidate");
     }
     
     // Clear global timer if we own it
     if (g_activeDiskTimer && g_timerOwner == self) {
-        NSLog(@"BADiskSelectionStep: Clearing global timer tracking");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Clearing global timer tracking");
         [g_activeDiskTimer invalidate];  // Actually invalidate the global timer too
         g_activeDiskTimer = nil;
         g_timerOwner = nil;
     }
     
-    NSLog(@"BADiskSelectionStep: === STEP WILL DISAPPEAR COMPLETE ===");
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: === STEP WILL DISAPPEAR COMPLETE ===");
 }
 
 - (void)stepDidDisappear
 {
-    NSLog(@"BADiskSelectionStep: Step did disappear");
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Step did disappear");
     // Additional cleanup if needed
     if (_refreshTimer) {
-        NSLog(@"BADiskSelectionStep: Timer still exists in stepDidDisappear, cleaning up");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Timer still exists in stepDidDisappear, cleaning up");
         [_refreshTimer invalidate];
         _refreshTimer = nil;
     }
     
     // Emergency cleanup of global timer
     if (g_activeDiskTimer) {
-        NSLog(@"BADiskSelectionStep: EMERGENCY: Global timer still active in stepDidDisappear, force stopping");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: EMERGENCY: Global timer still active in stepDidDisappear, force stopping");
         [g_activeDiskTimer invalidate];
         g_activeDiskTimer = nil;
         g_timerOwner = nil;
@@ -227,15 +227,15 @@ static id g_timerOwner = nil;
 
 - (void)refreshDiskList
 {
-    NSLog(@"BADiskSelectionStep: Refreshing disk list (instance timer: %@, global timer: %@, owner: %@)", 
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Refreshing disk list (instance timer: %@, global timer: %@, owner: %@)", 
           _refreshTimer, g_activeDiskTimer, g_timerOwner);
     
     // Safety check: if timer is nil, we shouldn't be running this
     if (!_refreshTimer) {
-        NSLog(@"BADiskSelectionStep: WARNING - refreshDiskList called but instance timer is nil!");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: WARNING - refreshDiskList called but instance timer is nil!");
         // Check if we're being called by a rogue global timer
         if (g_activeDiskTimer && g_timerOwner != self) {
-            NSLog(@"BADiskSelectionStep: ERROR - Called by timer owned by different instance %@, stopping it!", g_timerOwner);
+            NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: ERROR - Called by timer owned by different instance %@, stopping it!", g_timerOwner);
             [g_activeDiskTimer invalidate];
             g_activeDiskTimer = nil;
             g_timerOwner = nil;
@@ -263,7 +263,7 @@ static id g_timerOwner = nil;
     }
     
     if (disksChanged) {
-        NSLog(@"BADiskSelectionStep: Disk list changed, updating UI");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Disk list changed, updating UI");
         [_availableDisks removeAllObjects];
         [_availableDisks addObjectsFromArray:removableDisks];
         
@@ -278,13 +278,13 @@ static id g_timerOwner = nil;
             [_statusLabel setStringValue:[NSString stringWithFormat:NSLocalizedString(@"Found %lu removable disk(s)", @"Disks found message"), (unsigned long)[_availableDisks count]]];
         }
     } else {
-        NSLog(@"BADiskSelectionStep: No disk changes detected, skipping UI update");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: No disk changes detected, skipping UI update");
     }
 }
 
 - (void)analyzeDisk:(NSString *)diskDevice
 {
-    NSLog(@"BADiskSelectionStep: Analyzing disk %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Analyzing disk %@", diskDevice);
     
     [_selectedDiskInfo setStringValue:NSLocalizedString(@"Analyzing disk...", @"Analyzing disk message")];
     
@@ -315,12 +315,12 @@ static id g_timerOwner = nil;
     BADiskAnalysisResult result = [[resultInfo objectForKey:@"result"] integerValue];
     NSString *diskDevice = [resultInfo objectForKey:@"diskDevice"];
     
-    NSLog(@"BADiskSelectionStep: Updating analysis result for disk: '%@', result: %ld", diskDevice, (long)result);
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Updating analysis result for disk: '%@', result: %ld", diskDevice, (long)result);
     
     _controller.diskAnalysisResult = result;
     _controller.selectedDiskDevice = diskDevice;
     
-    NSLog(@"BADiskSelectionStep: Set controller.selectedDiskDevice to: '%@'", _controller.selectedDiskDevice);
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Set controller.selectedDiskDevice to: '%@'", _controller.selectedDiskDevice);
     
     NSString *statusMessage = @"";
     switch (result) {
@@ -399,7 +399,7 @@ static id g_timerOwner = nil;
     
     if (selectedRow >= 0 && (NSUInteger)selectedRow < [_availableDisks count]) {
         GSDisk *selectedDisk = [_availableDisks objectAtIndex:selectedRow];
-        NSLog(@"BADiskSelectionStep: Selected disk %@ (device: %@, size: %lld)", 
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Selected disk %@ (device: %@, size: %lld)", 
               selectedDisk.description, selectedDisk.deviceName, selectedDisk.size);
         
         [self analyzeDisk:selectedDisk.deviceName];
@@ -420,32 +420,32 @@ static id g_timerOwner = nil;
 
 - (void)stopTimerNotification:(NSNotification *)notification
 {
-    NSLog(@"BADiskSelectionStep: === RECEIVED TIMER STOP NOTIFICATION ===");
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: === RECEIVED TIMER STOP NOTIFICATION ===");
     [self forceStopTimer];
 }
 
 - (void)forceStopTimer
 {
-    NSLog(@"BADiskSelectionStep: Force stopping timer");
-    NSLog(@"BADiskSelectionStep: Current _refreshTimer: %@", _refreshTimer);
-    NSLog(@"BADiskSelectionStep: Current g_activeDiskTimer: %@", g_activeDiskTimer);
-    NSLog(@"BADiskSelectionStep: Current g_timerOwner: %@", g_timerOwner);
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Force stopping timer");
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Current _refreshTimer: %@", _refreshTimer);
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Current g_activeDiskTimer: %@", g_activeDiskTimer);
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Current g_timerOwner: %@", g_timerOwner);
     
     if (_refreshTimer) {
-        NSLog(@"BADiskSelectionStep: Force invalidating instance timer");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Force invalidating instance timer");
         [_refreshTimer invalidate];
         _refreshTimer = nil;
     }
     
     // Clear global timer if we own it
     if (g_activeDiskTimer && g_timerOwner == self) {
-        NSLog(@"BADiskSelectionStep: Force clearing global timer tracking");
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Force clearing global timer tracking");
         [g_activeDiskTimer invalidate];
         g_activeDiskTimer = nil;
         g_timerOwner = nil;
     }
     
-    NSLog(@"BADiskSelectionStep: === FORCE STOP TIMER COMPLETE ===");
+    NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: === FORCE STOP TIMER COMPLETE ===");
 }
 
 - (void)calculateDiskSpaceAsync:(NSString *)diskDevice
@@ -461,7 +461,7 @@ static id g_timerOwner = nil;
         }
         
         if (!diskStillExists) {
-            NSLog(@"BADiskSelectionStep: Disk %@ no longer in list, skipping space calculation", diskDevice);
+            NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Disk %@ no longer in list, skipping space calculation", diskDevice);
             return;
         }
         
@@ -522,7 +522,7 @@ static id g_timerOwner = nil;
         }
     }
     if (!found) {
-        NSLog(@"BADiskSelectionStep: Disk %@ not found in current list, skipping UI update", diskDevice);
+        NSDebugLLog(@"gwcomp", @"BADiskSelectionStep: Disk %@ not found in current list, skipping UI update", diskDevice);
     }
 }
 @end

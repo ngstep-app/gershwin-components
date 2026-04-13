@@ -10,7 +10,7 @@
 
 int main() {
     @autoreleasepool {
-        NSLog(@"Creating test ListNames reply message...");
+        NSDebugLLog(@"gwcomp", @"Creating test ListNames reply message...");
         
         // Create the same message that minibus would send for ListNames
         MBMessage *message = [MBMessage methodReturnWithReplySerial:19
@@ -20,7 +20,7 @@ int main() {
         message.sender = @"org.freedesktop.DBus";
         
         NSData *serialized = [message serialize];
-        NSLog(@"Serialized %lu bytes", (unsigned long)[serialized length]);
+        NSDebugLLog(@"gwcomp", @"Serialized %lu bytes", (unsigned long)[serialized length]);
         
         // Print hex dump
         const uint8_t *bytes = [serialized bytes];
@@ -29,22 +29,22 @@ int main() {
             if (i % 16 == 0) [hexStr appendFormat:@"\n%04lx: ", (unsigned long)i];
             [hexStr appendFormat:@"%02x ", bytes[i]];
         }
-        NSLog(@"Hex dump: %@", hexStr);
+        NSDebugLLog(@"gwcomp", @"Hex dump: %@", hexStr);
         
         // Also show the structure breakdown
-        NSLog(@"\nMessage structure:");
-        NSLog(@"Fixed header (16 bytes):");
+        NSDebugLLog(@"gwcomp", @"\nMessage structure:");
+        NSDebugLLog(@"gwcomp", @"Fixed header (16 bytes):");
         if ([serialized length] >= 16) {
-            NSLog(@"  Endian: %02x ('%c')", bytes[0], bytes[0]);
-            NSLog(@"  Type: %02x", bytes[1]);
-            NSLog(@"  Flags: %02x", bytes[2]);
-            NSLog(@"  Version: %02x", bytes[3]);
+            NSDebugLLog(@"gwcomp", @"  Endian: %02x ('%c')", bytes[0], bytes[0]);
+            NSDebugLLog(@"gwcomp", @"  Type: %02x", bytes[1]);
+            NSDebugLLog(@"gwcomp", @"  Flags: %02x", bytes[2]);
+            NSDebugLLog(@"gwcomp", @"  Version: %02x", bytes[3]);
             uint32_t bodyLen = *(uint32_t*)(bytes + 4);
             uint32_t serial = *(uint32_t*)(bytes + 8);
             uint32_t fieldsLen = *(uint32_t*)(bytes + 12);
-            NSLog(@"  Body length: %u", bodyLen);
-            NSLog(@"  Serial: %u", serial);
-            NSLog(@"  Header fields length: %u", fieldsLen);
+            NSDebugLLog(@"gwcomp", @"  Body length: %u", bodyLen);
+            NSDebugLLog(@"gwcomp", @"  Serial: %u", serial);
+            NSDebugLLog(@"gwcomp", @"  Header fields length: %u", fieldsLen);
         }
     }
     return 0;

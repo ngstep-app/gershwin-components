@@ -91,7 +91,7 @@
     _serviceManager = [[MBServiceManager alloc] initWithServicePaths:servicePaths];
     [_serviceManager loadServices];
     
-    NSLog(@"Service activation initialized with %lu available services", 
+    NSDebugLLog(@"gwcomp", @"Service activation initialized with %lu available services", 
           (unsigned long)[[_serviceManager availableServiceNames] count]);
 }
 
@@ -103,12 +103,12 @@
     
     _serverSocket = [MBTransport createUnixServerSocket:_socketPath];
     if (_serverSocket < 0) {
-        NSLog(@"Failed to create server socket");
+        NSDebugLLog(@"gwcomp", @"Failed to create server socket");
         return NO;
     }
     
     _running = YES;
-    NSLog(@"MiniBus daemon started on %@", _socketPath);
+    NSDebugLLog(@"gwcomp", @"MiniBus daemon started on %@", _socketPath);
     return YES;
 }
 
@@ -144,17 +144,17 @@
         unlink([_socketPath UTF8String]);
     }
     
-    NSLog(@"MiniBus daemon stopped");
+    NSDebugLLog(@"gwcomp", @"MiniBus daemon stopped");
 }
 
 - (void)run
 {
     if (!_running) {
-        NSLog(@"Daemon not started");
+        NSDebugLLog(@"gwcomp", @"Daemon not started");
         return;
     }
     
-    NSLog(@"MiniBus daemon running, waiting for connections...");
+    NSDebugLLog(@"gwcomp", @"MiniBus daemon running, waiting for connections...");
     
     while (_running) {
         fd_set readfds;
@@ -194,7 +194,7 @@
             if (errno == EINTR) {
                 continue; // Interrupted by signal
             }
-            NSLog(@"select() failed: %s", strerror(errno));
+            NSDebugLLog(@"gwcomp", @"select() failed: %s", strerror(errno));
             break;
         }
         
@@ -256,7 +256,7 @@
                 
                 // Monitor connections shouldn't send messages, but if they do, ignore them
                 if ([messages count] > 0) {
-                    NSLog(@"Monitor connection attempted to send message - ignoring");
+                    NSDebugLLog(@"gwcomp", @"Monitor connection attempted to send message - ignoring");
                 }
             }
         }
@@ -264,7 +264,7 @@
         // Remove closed monitor connections
         for (MBConnection *connection in monitorConnectionsToRemove) {
             [_monitorConnections removeObject:connection];
-            NSLog(@"Monitor connection removed: %@", connection);
+            NSDebugLLog(@"gwcomp", @"Monitor connection removed: %@", connection);
         }
     }
 }
@@ -273,7 +273,7 @@
 {
     // Set client socket to non-blocking mode
     if (![MBTransport setSocketNonBlocking:clientSocket]) {
-        NSLog(@"Failed to set client socket to non-blocking mode");
+        NSDebugLLog(@"gwcomp", @"Failed to set client socket to non-blocking mode");
         close(clientSocket);
         return;
     }
@@ -281,7 +281,7 @@
     MBConnection *connection = [[MBConnection alloc] initWithSocket:clientSocket daemon:self];
     [_connections addObject:connection];
     
-    NSLog(@"New connection added: %@", connection);
+    NSDebugLLog(@"gwcomp", @"New connection added: %@", connection);
 }
 
 - (void)removeConnection:(MBConnection *)connection
@@ -304,7 +304,7 @@
     [_connectionNames removeObjectForKey:@(connection.socket)];
     [_connections removeObject:connection];
     
-    NSLog(@"Connection removed: %@", connection);
+    NSDebugLLog(@"gwcomp", @"Connection removed: %@", connection);
 }
 
 // Helper method for debugging message types
@@ -322,25 +322,25 @@
 - (void)processMessage:(MBMessage *)message fromConnection:(MBConnection *)connection
 {
     // DEBUG: Log all incoming messages to debug handshake issues
-    NSLog(@">>> INCOMING MESSAGE <<<");
-    NSLog(@"    Type: %u (%@)", message.type, [self messageTypeString:message.type]);
-    NSLog(@"    Serial: %lu", (unsigned long)message.serial);
-    NSLog(@"    Destination: '%@'", message.destination ?: @"(null)");
-    NSLog(@"    Interface: '%@'", message.interface ?: @"(null)");
-    NSLog(@"    Member: '%@'", message.member ?: @"(null)");
-    NSLog(@"    Path: '%@'", message.path ?: @"(null)");
-    NSLog(@"    Signature: '%@'", message.signature ?: @"(null)");
-    NSLog(@"    Connection state: %lu", (unsigned long)connection.state);
-    NSLog(@"    Connection unique name: '%@'", connection.uniqueName ?: @"(null)");
+    NSDebugLLog(@"gwcomp", @">>> INCOMING MESSAGE <<<");
+    NSDebugLLog(@"gwcomp", @"    Type: %u (%@)", message.type, [self messageTypeString:message.type]);
+    NSDebugLLog(@"gwcomp", @"    Serial: %lu", (unsigned long)message.serial);
+    NSDebugLLog(@"gwcomp", @"    Destination: '%@'", message.destination ?: @"(null)");
+    NSDebugLLog(@"gwcomp", @"    Interface: '%@'", message.interface ?: @"(null)");
+    NSDebugLLog(@"gwcomp", @"    Member: '%@'", message.member ?: @"(null)");
+    NSDebugLLog(@"gwcomp", @"    Path: '%@'", message.path ?: @"(null)");
+    NSDebugLLog(@"gwcomp", @"    Signature: '%@'", message.signature ?: @"(null)");
+    NSDebugLLog(@"gwcomp", @"    Connection state: %lu", (unsigned long)connection.state);
+    NSDebugLLog(@"gwcomp", @"    Connection unique name: '%@'", connection.uniqueName ?: @"(null)");
     
     // CRITICAL FIX: Only drop messages with truly malformed signatures
     // Allow valid 'v' signatures for method returns and other legitimate cases
     if (message.signature) {
         // Check for empty signature with non-empty body (signature/body mismatch)
         if ([message.signature isEqualToString:@""] && message.arguments && [message.arguments count] > 0) {
-            NSLog(@"ERROR: Dropping message with empty signature but non-empty arguments");
-            NSLog(@"       Type=%u, Serial=%lu, Arguments count=%lu", message.type, (unsigned long)message.serial, (unsigned long)[message.arguments count]);
-            NSLog(@"       This indicates signature/body corruption");
+            NSDebugLLog(@"gwcomp", @"ERROR: Dropping message with empty signature but non-empty arguments");
+            NSDebugLLog(@"gwcomp", @"       Type=%u, Serial=%lu, Arguments count=%lu", message.type, (unsigned long)message.serial, (unsigned long)[message.arguments count]);
+            NSDebugLLog(@"gwcomp", @"       This indicates signature/body corruption");
             return; // Drop the message entirely
         }
     }
@@ -352,20 +352,20 @@
     
     // Add debugging for problematic messages and drop invalid ones
     if (!message.destination || !message.interface || !message.member) {
-        NSLog(@"DEBUG: Problematic message - type=%u serial=%lu", message.type, (unsigned long)message.serial);
-        NSLog(@"       destination='%@' interface='%@' member='%@' path='%@'", 
+        NSDebugLLog(@"gwcomp", @"DEBUG: Problematic message - type=%u serial=%lu", message.type, (unsigned long)message.serial);
+        NSDebugLLog(@"gwcomp", @"       destination='%@' interface='%@' member='%@' path='%@'", 
               message.destination, message.interface, message.member, message.path);
         if (message.arguments && [message.arguments count] > 0) {
-            NSLog(@"       arguments: %@", message.arguments);
+            NSDebugLLog(@"gwcomp", @"       arguments: %@", message.arguments);
         }
         if (message.signature) {
-            NSLog(@"       signature: '%@'", message.signature);
+            NSDebugLLog(@"gwcomp", @"       signature: '%@'", message.signature);
         }
         
         // CRITICAL FIX: Drop messages with missing interface/member for signals
         // These are likely malformed messages that will cause client errors
         if (message.type == MBMessageTypeSignal && (!message.interface || !message.member)) {
-            NSLog(@"WARNING: Dropping signal message with missing interface/member - would cause client errors");
+            NSDebugLLog(@"gwcomp", @"WARNING: Dropping signal message with missing interface/member - would cause client errors");
             return; // Drop the message entirely
         }
         
@@ -376,7 +376,7 @@
         // No destination means this message is addressed to the message bus itself
         // According to D-Bus spec: "when the DESTINATION field is absent, the call is taken to be
         // a standard one-to-one message and interpreted by the message bus itself"
-        NSLog(@"Message has no destination, treating as message bus call - interface: '%@', member: '%@', path: '%@'", 
+        NSDebugLLog(@"gwcomp", @"Message has no destination, treating as message bus call - interface: '%@', member: '%@', path: '%@'", 
               message.interface, message.member, message.path);
         
         // Set destination to the message bus itself for internal handling
@@ -386,14 +386,14 @@
     // Handle Hello message
     if ([message.interface isEqualToString:@"org.freedesktop.DBus"] &&
         [message.member isEqualToString:@"Hello"]) {
-        NSLog(@"Recognized Hello message!");
+        NSDebugLLog(@"gwcomp", @"Recognized Hello message!");
         [self handleHelloMessage:message fromConnection:connection];
         return;
     }
     
     // All other messages require the client to be registered (have sent Hello)
     if (connection.state != MBConnectionStateActive) {
-        NSLog(@"Rejecting message from unregistered client: %@", message);
+        NSDebugLLog(@"gwcomp", @"Rejecting message from unregistered client: %@", message);
         MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.AccessDenied"
                                         replySerial:message.serial
                                             message:@"Client tried to send a message other than Hello without being registered"];
@@ -404,7 +404,7 @@
     
     // Handle name service methods
     if ([message.interface isEqualToString:@"org.freedesktop.DBus"]) {
-        NSLog(@"Received D-Bus method call: member='%@', args=%@", message.member, message.arguments);
+        NSDebugLLog(@"gwcomp", @"Received D-Bus method call: member='%@', args=%@", message.member, message.arguments);
         if ([message.member isEqualToString:@"RequestName"]) {
             [self handleRequestName:message fromConnection:connection];
             return;
@@ -542,7 +542,7 @@
     // Broadcast Hello reply to monitors
     [self broadcastToMonitors:reply];
     
-    NSLog(@"Hello processed for connection %@, assigned name %@", connection, uniqueName);
+    NSDebugLLog(@"gwcomp", @"Hello processed for connection %@, assigned name %@", connection, uniqueName);
 }
 
 - (void)handleRequestName:(MBMessage *)message fromConnection:(MBConnection *)connection
@@ -595,7 +595,7 @@
         [self broadcastToMonitors:signal];
         [signal release];
         
-        NSLog(@"Sent NameAcquired signal for %@ to %@", name, connection.uniqueName);
+        NSDebugLLog(@"gwcomp", @"Sent NameAcquired signal for %@ to %@", name, connection.uniqueName);
         
         // Notify service manager that this service has connected (activation completed)
         if ([_serviceManager isActivatingService:name]) {
@@ -606,22 +606,22 @@
         [self deliverQueuedMessagesForService:name];
     }
     
-    NSLog(@"RequestName %@ for connection %@ with flags 0x%lx: result %lu", 
+    NSDebugLLog(@"gwcomp", @"RequestName %@ for connection %@ with flags 0x%lx: result %lu", 
           name, connection.uniqueName, (unsigned long)flags, (unsigned long)result);
 }
 
 - (void)handleStartServiceByName:(MBMessage *)message fromConnection:(MBConnection *)connection
 {
-    NSLog(@"DEBUG StartServiceByName: signature='%@', args count=%lu", 
+    NSDebugLLog(@"gwcomp", @"DEBUG StartServiceByName: signature='%@', args count=%lu", 
           message.signature ?: @"(null)", [message.arguments count]);
     
     for (NSUInteger i = 0; i < [message.arguments count]; i++) {
-        NSLog(@"DEBUG StartServiceByName: arg[%lu] = '%@' (class: %@)", 
+        NSDebugLLog(@"gwcomp", @"DEBUG StartServiceByName: arg[%lu] = '%@' (class: %@)", 
               i, message.arguments[i], [message.arguments[i] class]);
     }
     
     if ([message.arguments count] < 2) {
-        NSLog(@"ERROR StartServiceByName: insufficient arguments (need 2, got %lu)", [message.arguments count]);
+        NSDebugLLog(@"gwcomp", @"ERROR StartServiceByName: insufficient arguments (need 2, got %lu)", [message.arguments count]);
         MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.InvalidArgs"
                                         replySerial:message.serial
                                             message:@"Missing name or flags argument"];
@@ -634,12 +634,12 @@
     NSString *serviceName = message.arguments[0];
     NSUInteger flags = [message.arguments[1] unsignedIntegerValue];
     
-    NSLog(@"StartServiceByName request for service '%@' with flags %lu from %@", 
+    NSDebugLLog(@"gwcomp", @"StartServiceByName request for service '%@' with flags %lu from %@", 
           serviceName, (unsigned long)flags, connection.uniqueName);
     
     // Special case: org.freedesktop.DBus is always "already running" since WE are the bus daemon
     if ([serviceName isEqualToString:@"org.freedesktop.DBus"]) {
-        NSLog(@"StartServiceByName: org.freedesktop.DBus is always running (we are the bus daemon)");
+        NSDebugLLog(@"gwcomp", @"StartServiceByName: org.freedesktop.DBus is always running (we are the bus daemon)");
         
         MBMessage *reply = [MBMessage methodReturnWithReplySerial:message.serial
                                                         arguments:@[[NSNumber numberWithUnsignedInt:1]]]; // DBUS_START_REPLY_ALREADY_RUNNING = 1
@@ -654,7 +654,7 @@
     MBConnection *owner = [self ownerOfName:serviceName];
     if (owner && owner.uniqueName) {
         // Service already running
-        NSLog(@"StartServiceByName: service '%@' already running as %@", serviceName, owner.uniqueName);
+        NSDebugLLog(@"gwcomp", @"StartServiceByName: service '%@' already running as %@", serviceName, owner.uniqueName);
         
         MBMessage *reply = [MBMessage methodReturnWithReplySerial:message.serial
                                                         arguments:@[[NSNumber numberWithUnsignedInt:1]]]; // DBUS_START_REPLY_ALREADY_RUNNING = 1
@@ -667,7 +667,7 @@
     
     // Check if service is currently being activated
     if ([_serviceManager isActivatingService:serviceName]) {
-        NSLog(@"StartServiceByName: service '%@' is already being activated", serviceName);
+        NSDebugLLog(@"gwcomp", @"StartServiceByName: service '%@' is already being activated", serviceName);
         
         MBMessage *reply = [MBMessage methodReturnWithReplySerial:message.serial
                                                         arguments:@[[NSNumber numberWithUnsignedInt:2]]]; // DBUS_START_REPLY_SUCCESS = 2 (activation started)
@@ -687,7 +687,7 @@
                                   busAddress:busAddress 
                                      busType:@"session" 
                                        error:&error]) {
-            NSLog(@"StartServiceByName: successfully started activation for service '%@'", serviceName);
+            NSDebugLLog(@"gwcomp", @"StartServiceByName: successfully started activation for service '%@'", serviceName);
             
             MBMessage *reply = [MBMessage methodReturnWithReplySerial:message.serial
                                                             arguments:@[[NSNumber numberWithUnsignedInt:2]]]; // DBUS_START_REPLY_SUCCESS = 2
@@ -696,7 +696,7 @@
             reply.destination = connection.uniqueName;
             [connection sendMessage:reply];
         } else {
-            NSLog(@"StartServiceByName: failed to activate service '%@': %@", serviceName, error.localizedDescription);
+            NSDebugLLog(@"gwcomp", @"StartServiceByName: failed to activate service '%@': %@", serviceName, error.localizedDescription);
             
             MBMessage *errorMsg = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.Spawn.Failed"
                                                replySerial:message.serial
@@ -708,7 +708,7 @@
         }
     } else {
         // Service not found
-        NSLog(@"StartServiceByName: service '%@' not found in service files", serviceName);
+        NSDebugLLog(@"gwcomp", @"StartServiceByName: service '%@' not found in service files", serviceName);
         
         MBMessage *errorMsg = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.ServiceUnknown"
                                            replySerial:message.serial
@@ -762,7 +762,7 @@
         [self broadcastToMonitors:signal];
         [signal release];
         
-        NSLog(@"Sent NameLost signal for %@ to %@", name, connection.uniqueName);
+        NSDebugLLog(@"gwcomp", @"Sent NameLost signal for %@ to %@", name, connection.uniqueName);
     }
 }
 
@@ -788,7 +788,7 @@
         }
     }
 
-    NSLog(@"ListNames: returning %lu names: %@", (unsigned long)[names count], names);
+    NSDebugLLog(@"gwcomp", @"ListNames: returning %lu names: %@", (unsigned long)[names count], names);
     
     MBMessage *reply = [MBMessage methodReturnWithReplySerial:message.serial
                                                     arguments:@[names]];
@@ -796,9 +796,9 @@
     reply.sender = @"org.freedesktop.DBus";
     reply.destination = connection.uniqueName;  // Reply is addressed to the client
     
-    NSLog(@"ListNames: sending reply to %@", connection.uniqueName);
+    NSDebugLLog(@"gwcomp", @"ListNames: sending reply to %@", connection.uniqueName);
     BOOL success = [connection sendMessage:reply];
-    NSLog(@"ListNames: send result: %@", success ? @"SUCCESS" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"ListNames: send result: %@", success ? @"SUCCESS" : @"FAILED");
 }
 
 - (void)handleGetNameOwner:(MBMessage *)message fromConnection:(MBConnection *)connection
@@ -832,7 +832,7 @@
 - (void)handleAddMatch:(MBMessage *)message fromConnection:(MBConnection *)connection
 {
     if ([message.arguments count] < 1) {
-        NSLog(@"AddMatch: Missing arguments");
+        NSDebugLLog(@"gwcomp", @"AddMatch: Missing arguments");
         MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.InvalidArgs"
                                         replySerial:message.serial
                                             message:@"Missing match rule argument"];
@@ -843,11 +843,11 @@
     }
     
     NSString *matchRule = message.arguments[0];
-    NSLog(@"AddMatch request from %@: '%@'", connection.uniqueName, matchRule);
+    NSDebugLLog(@"gwcomp", @"AddMatch request from %@: '%@'", connection.uniqueName, matchRule);
     
     // Parse and validate the match rule (basic validation)
     if (![self isValidMatchRule:matchRule]) {
-        NSLog(@"AddMatch: Invalid match rule: '%@'", matchRule);
+        NSDebugLLog(@"gwcomp", @"AddMatch: Invalid match rule: '%@'", matchRule);
         MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.MatchRuleInvalid"
                                         replySerial:message.serial
                                             message:@"Invalid match rule"];
@@ -869,7 +869,7 @@
         [connectionRules addObject:matchRule];
     }
     
-    NSLog(@"AddMatch: Successfully added rule '%@' for %@", matchRule, connection.uniqueName);
+    NSDebugLLog(@"gwcomp", @"AddMatch: Successfully added rule '%@' for %@", matchRule, connection.uniqueName);
     
     // Send success response
     MBMessage *reply = [MBMessage methodReturnWithReplySerial:message.serial
@@ -892,7 +892,7 @@
     }
     
     NSString *matchRule = message.arguments[0];
-    NSLog(@"RemoveMatch request from %@: %@", connection.uniqueName, matchRule);
+    NSDebugLLog(@"gwcomp", @"RemoveMatch request from %@: %@", connection.uniqueName, matchRule);
     
     // Find and remove the match rule for this connection
     NSMutableArray *connectionRules = self.matchRules[connection.uniqueName];
@@ -934,14 +934,14 @@
     
     // Add debugging for problematic messages
     if (!message.destination || !message.interface || !message.member) {
-        NSLog(@"DEBUG: Problematic message - type=%u serial=%lu", message.type, (unsigned long)message.serial);
-        NSLog(@"       destination='%@' interface='%@' member='%@' path='%@'", 
+        NSDebugLLog(@"gwcomp", @"DEBUG: Problematic message - type=%u serial=%lu", message.type, (unsigned long)message.serial);
+        NSDebugLLog(@"gwcomp", @"       destination='%@' interface='%@' member='%@' path='%@'", 
               message.destination, message.interface, message.member, message.path);
         if (message.arguments && [message.arguments count] > 0) {
-            NSLog(@"       arguments: %@", message.arguments);
+            NSDebugLLog(@"gwcomp", @"       arguments: %@", message.arguments);
         }
         if (message.signature) {
-            NSLog(@"       signature: '%@'", message.signature);
+            NSDebugLLog(@"gwcomp", @"       signature: '%@'", message.signature);
         }
     }
 
@@ -949,7 +949,7 @@
         // No destination means this message is addressed to the message bus itself
         // According to D-Bus spec: "when the DESTINATION field is absent, the call is taken to be
         // a standard one-to-one message and interpreted by the message bus itself"
-        NSLog(@"Message has no destination, treating as message bus call - interface: '%@', member: '%@', path: '%@'", 
+        NSDebugLLog(@"gwcomp", @"Message has no destination, treating as message bus call - interface: '%@', member: '%@', path: '%@'", 
               message.interface, message.member, message.path);
         
         // Set destination to the message bus itself for internal handling
@@ -974,24 +974,24 @@
     
     if (destConnection) {
         [destConnection sendMessage:message];
-        NSLog(@"Routed message to %@", destConnection);
+        NSDebugLLog(@"gwcomp", @"Routed message to %@", destConnection);
         
         // If this generates a reply, monitors should see that too
         // (this will be handled when the reply is processed)
         
     } else {
-        NSLog(@"No destination found for %@", message.destination);
+        NSDebugLLog(@"gwcomp", @"No destination found for %@", message.destination);
         
         // Try auto-activation for method calls to well-known names
         if (message.type == MBMessageTypeMethodCall && 
             message.destination && ![message.destination hasPrefix:@":"]) {
             
             // Add extensive logging for auto-activation attempts
-            NSLog(@"Attempting auto-activation for service '%@' (interface: %@, member: %@)", 
+            NSDebugLLog(@"gwcomp", @"Attempting auto-activation for service '%@' (interface: %@, member: %@)", 
                   message.destination, message.interface, message.member);
             
             if ([self autoActivateServiceForMessage:message fromConnection:connection]) {
-                NSLog(@"Auto-activation started for %@, queueing message", message.destination);
+                NSDebugLLog(@"gwcomp", @"Auto-activation started for %@, queueing message", message.destination);
                 
                 // Queue the message to be delivered when the service connects
                 [self queueMessage:message fromConnection:connection forService:message.destination];
@@ -1001,7 +1001,7 @@
                 return;
             } else {
                 // Auto-activation definitively failed - send immediate error
-                NSLog(@"Auto-activation failed for service '%@' - sending immediate error", message.destination);
+                NSDebugLLog(@"gwcomp", @"Auto-activation failed for service '%@' - sending immediate error", message.destination);
                 
                 MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.ServiceUnknown"
                                                 replySerial:message.serial
@@ -1086,7 +1086,7 @@
         [self broadcastToMonitors:signal];
         [signal release];
         
-        NSLog(@"Sent NameAcquired signal for %@ to new owner %@", name, nextOwner.uniqueName);
+        NSDebugLLog(@"gwcomp", @"Sent NameAcquired signal for %@ to new owner %@", name, nextOwner.uniqueName);
     } else {
         // No one in queue, remove the ownership entirely
         [self.nameOwnerships removeObjectForKey:name];
@@ -1111,7 +1111,7 @@
     [self broadcastToMonitors:ownerChangedSignal];
     [ownerChangedSignal release];
     
-    NSLog(@"Released name %@ from %@, new owner: %@", name, oldOwner, newOwner.length > 0 ? newOwner : @"(none)");
+    NSDebugLLog(@"gwcomp", @"Released name %@ from %@, new owner: %@", name, oldOwner, newOwner.length > 0 ? newOwner : @"(none)");
     return YES;
 }
 
@@ -1124,7 +1124,7 @@
 
 - (void)handleBecomeMonitor:(MBMessage *)message fromConnection:(MBConnection *)connection
 {
-    NSLog(@"BecomeMonitor request from connection %@", connection);
+    NSDebugLLog(@"gwcomp", @"BecomeMonitor request from connection %@", connection);
     
     // Allow any connection to become a monitor without checking whether the client is privileged
     
@@ -1158,7 +1158,7 @@
     
     [connection sendMessage:reply];
     
-    NSLog(@"Connection %@ converted to monitor", connection);
+    NSDebugLLog(@"gwcomp", @"Connection %@ converted to monitor", connection);
 }
 
 - (void)broadcastToMonitors:(MBMessage *)message
@@ -1194,7 +1194,7 @@
     reply.sender = @"org.freedesktop.DBus";
     [connection sendMessage:reply];
     
-    NSLog(@"Ping handled for connection %@", connection);
+    NSDebugLLog(@"gwcomp", @"Ping handled for connection %@", connection);
 }
 
 - (void)handleGetMachineId:(MBMessage *)message fromConnection:(MBConnection *)connection
@@ -1209,7 +1209,7 @@
     reply.sender = @"org.freedesktop.DBus";
     [connection sendMessage:reply];
     
-    NSLog(@"GetMachineId handled for connection %@ - returned %@", connection, machineId);
+    NSDebugLLog(@"gwcomp", @"GetMachineId handled for connection %@ - returned %@", connection, machineId);
 }
 
 - (void)handleIntrospect:(MBMessage *)message fromConnection:(MBConnection *)connection
@@ -1377,7 +1377,7 @@
     
     [introspectionXML appendString:@"</node>\n"];
     
-    NSLog(@"DEBUG: Generated introspection XML (%lu chars) for connection %@", 
+    NSDebugLLog(@"gwcomp", @"DEBUG: Generated introspection XML (%lu chars) for connection %@", 
           [introspectionXML length], connection.uniqueName);
     
     MBMessage *reply = [MBMessage methodReturnWithReplySerial:message.serial
@@ -1386,7 +1386,7 @@
     reply.sender = @"org.freedesktop.DBus";
     [connection sendMessage:reply];
     
-    NSLog(@"Enhanced Introspect handled for connection %@", connection);
+    NSDebugLLog(@"gwcomp", @"Enhanced Introspect handled for connection %@", connection);
 }
 
 #pragma mark - Additional org.freedesktop.DBus Method Implementations
@@ -1414,7 +1414,7 @@
     reply.destination = connection.uniqueName;
     [connection sendMessage:reply];
     
-    NSLog(@"NameHasOwner %@ for connection %@: %@", name, connection.uniqueName, hasOwner ? @"true" : @"false");
+    NSDebugLLog(@"gwcomp", @"NameHasOwner %@ for connection %@: %@", name, connection.uniqueName, hasOwner ? @"true" : @"false");
 }
 
 - (void)handleListActivatableNames:(MBMessage *)message fromConnection:(MBConnection *)connection
@@ -1429,7 +1429,7 @@
     reply.destination = connection.uniqueName;
     [connection sendMessage:reply];
     
-    NSLog(@"ListActivatableNames for connection %@: returning %lu names", 
+    NSDebugLLog(@"gwcomp", @"ListActivatableNames for connection %@: returning %lu names", 
           connection.uniqueName, (unsigned long)[activatableNames count]);
 }
 
@@ -1462,7 +1462,7 @@
     reply.destination = connection.uniqueName;
     [connection sendMessage:reply];
     
-    NSLog(@"ListQueuedOwners %@ for connection %@: %lu owners", 
+    NSDebugLLog(@"gwcomp", @"ListQueuedOwners %@ for connection %@: %lu owners", 
           name, connection.uniqueName, (unsigned long)[queuedOwners count]);
 }
 
@@ -1477,7 +1477,7 @@
     reply.destination = connection.uniqueName;
     [connection sendMessage:reply];
     
-    NSLog(@"GetId handled for connection %@ - returned %@", connection.uniqueName, busId);
+    NSDebugLLog(@"gwcomp", @"GetId handled for connection %@ - returned %@", connection.uniqueName, busId);
 }
 
 - (void)handleReloadConfig:(MBMessage *)message fromConnection:(MBConnection *)connection
@@ -1490,14 +1490,14 @@
     reply.destination = connection.uniqueName;
     [connection sendMessage:reply];
     
-    NSLog(@"ReloadConfig handled for connection %@ - no-op success", connection.uniqueName);
+    NSDebugLLog(@"gwcomp", @"ReloadConfig handled for connection %@ - no-op success", connection.uniqueName);
 }
 
 #pragma mark - Complex org.freedesktop.DBus Method Stubs
 
 - (void)handleUpdateActivationEnvironment:(MBMessage *)message fromConnection:(MBConnection *)connection
 {
-    NSLog(@"Unimplemented: UpdateActivationEnvironment - requires activation service support and environment management");
+    NSDebugLLog(@"gwcomp", @"Unimplemented: UpdateActivationEnvironment - requires activation service support and environment management");
     
     MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.NotSupported"
                                     replySerial:message.serial
@@ -1509,7 +1509,7 @@
 
 - (void)handleGetConnectionUnixUser:(MBMessage *)message fromConnection:(MBConnection *)connection
 {
-    NSLog(@"Unimplemented: GetConnectionUnixUser - requires credential tracking and socket credential extraction");
+    NSDebugLLog(@"gwcomp", @"Unimplemented: GetConnectionUnixUser - requires credential tracking and socket credential extraction");
     
     MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.NotSupported"
                                     replySerial:message.serial
@@ -1521,7 +1521,7 @@
 
 - (void)handleGetConnectionUnixProcessID:(MBMessage *)message fromConnection:(MBConnection *)connection
 {
-    NSLog(@"Unimplemented: GetConnectionUnixProcessID - requires process ID tracking and socket credential extraction");
+    NSDebugLLog(@"gwcomp", @"Unimplemented: GetConnectionUnixProcessID - requires process ID tracking and socket credential extraction");
     
     MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.NotSupported"
                                     replySerial:message.serial
@@ -1533,7 +1533,7 @@
 
 - (void)handleGetAdtAuditSessionData:(MBMessage *)message fromConnection:(MBConnection *)connection
 {
-    NSLog(@"Unimplemented: GetAdtAuditSessionData - requires ADT audit support (Solaris-specific)");
+    NSDebugLLog(@"gwcomp", @"Unimplemented: GetAdtAuditSessionData - requires ADT audit support (Solaris-specific)");
     
     MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.NotSupported"
                                     replySerial:message.serial
@@ -1545,7 +1545,7 @@
 
 - (void)handleGetConnectionSELinuxSecurityContext:(MBMessage *)message fromConnection:(MBConnection *)connection
 {
-    NSLog(@"Unimplemented: GetConnectionSELinuxSecurityContext - requires SELinux integration and credential tracking");
+    NSDebugLLog(@"gwcomp", @"Unimplemented: GetConnectionSELinuxSecurityContext - requires SELinux integration and credential tracking");
     
     MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.NotSupported"
                                     replySerial:message.serial
@@ -1557,7 +1557,7 @@
 
 - (void)handleGetConnectionCredentials:(MBMessage *)message fromConnection:(MBConnection *)connection
 {
-    NSLog(@"Unimplemented: GetConnectionCredentials - requires comprehensive credential tracking (UID, PID, SELinux, etc.)");
+    NSDebugLLog(@"gwcomp", @"Unimplemented: GetConnectionCredentials - requires comprehensive credential tracking (UID, PID, SELinux, etc.)");
     
     MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.NotSupported"
                                     replySerial:message.serial
@@ -1596,7 +1596,7 @@
                 @"org.freedesktop.DBus.Properties"
             ];
         } else {
-            NSLog(@"Unknown property: %@.%@", interfaceName, propertyName);
+            NSDebugLLog(@"gwcomp", @"Unknown property: %@.%@", interfaceName, propertyName);
             MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.UnknownProperty"
                                         replySerial:message.serial
                                             message:[NSString stringWithFormat:@"Property %@ not found", propertyName]];
@@ -1612,9 +1612,9 @@
         reply.destination = connection.uniqueName;
         [connection sendMessage:reply];
         
-        NSLog(@"Properties.Get for interface '%@' property '%@' - returned value", interfaceName, propertyName);
+        NSDebugLLog(@"gwcomp", @"Properties.Get for interface '%@' property '%@' - returned value", interfaceName, propertyName);
     } else {
-        NSLog(@"Unimplemented: Properties.Get for interface '%@' property '%@' - requires property introspection", 
+        NSDebugLLog(@"gwcomp", @"Unimplemented: Properties.Get for interface '%@' property '%@' - requires property introspection", 
               interfaceName, propertyName);
         
         MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.UnknownInterface"
@@ -1652,9 +1652,9 @@
         reply.destination = connection.uniqueName;
         [connection sendMessage:reply];
         
-        NSLog(@"Properties.GetAll for interface '%@' - returned empty dictionary (serialization limitation)", interfaceName);
+        NSDebugLLog(@"gwcomp", @"Properties.GetAll for interface '%@' - returned empty dictionary (serialization limitation)", interfaceName);
     } else {
-        NSLog(@"Unimplemented: Properties.GetAll for interface '%@' - interface not supported", interfaceName);
+        NSDebugLLog(@"gwcomp", @"Unimplemented: Properties.GetAll for interface '%@' - interface not supported", interfaceName);
         
         MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.UnknownInterface"
                                     replySerial:message.serial
@@ -1681,7 +1681,7 @@
     NSString *propertyName = message.arguments[1];
     // NSString *value = message.arguments[2]; // Value to set
     
-    NSLog(@"Unimplemented: Properties.Set for interface '%@' property '%@' - properties are read-only in MiniBus", 
+    NSDebugLLog(@"gwcomp", @"Unimplemented: Properties.Set for interface '%@' property '%@' - properties are read-only in MiniBus", 
           interfaceName, propertyName);
     
     MBMessage *error = [MBMessage errorWithName:@"org.freedesktop.DBus.Error.PropertyReadOnly"
@@ -1835,7 +1835,7 @@
     [self broadcastToMonitors:signal];
     [signal release];
     
-    NSLog(@"Sent NameOwnerChanged signal: %@ from '%@' to '%@'", name, oldOwner, newOwner);
+    NSDebugLLog(@"gwcomp", @"Sent NameOwnerChanged signal: %@ from '%@' to '%@'", name, oldOwner, newOwner);
 }
 
 // Helper method to clean up match rules when connection closes
@@ -1861,7 +1861,7 @@
     // Release the name properly using the existing releaseName logic
     [self releaseName:name fromConnection:connection];
     
-    NSLog(@"Unregistered name %@ from connection %@", name, connection);
+    NSDebugLLog(@"gwcomp", @"Unregistered name %@ from connection %@", name, connection);
 }
 
 - (NSString *)generateUniqueNameForConnection:(MBConnection *)connection
@@ -1875,13 +1875,13 @@
 {
     // Only try auto-activation for method calls to well-known names
     if (message.type != MBMessageTypeMethodCall) {
-        NSLog(@"Auto-activation skipped - not a method call (type: %u)", message.type);
+        NSDebugLLog(@"gwcomp", @"Auto-activation skipped - not a method call (type: %u)", message.type);
         return NO;
     }
     
     if (!message.destination || [message.destination hasPrefix:@":"]) {
         // Don't auto-activate for unique names or missing destinations
-        NSLog(@"Auto-activation skipped - unique name or missing destination: %@", message.destination);
+        NSDebugLLog(@"gwcomp", @"Auto-activation skipped - unique name or missing destination: %@", message.destination);
         return NO;
     }
     
@@ -1891,17 +1891,17 @@
     
     // Check if we have a service file for this destination
     if (![_serviceManager hasService:message.destination]) {
-        NSLog(@"Auto-activation failed - no service file for '%@'", message.destination);
+        NSDebugLLog(@"gwcomp", @"Auto-activation failed - no service file for '%@'", message.destination);
         return NO;
     }
     
     // Check if the service is already being activated
     if ([_serviceManager isActivatingService:message.destination]) {
-        NSLog(@"Auto-activation: service '%@' is already being activated", message.destination);
+        NSDebugLLog(@"gwcomp", @"Auto-activation: service '%@' is already being activated", message.destination);
         return YES; // Consider this success - activation in progress
     }
     
-    NSLog(@"Auto-activating service '%@' for message to %@.%@", 
+    NSDebugLLog(@"gwcomp", @"Auto-activating service '%@' for message to %@.%@", 
           message.destination, message.interface, message.member);
     
     // Try to activate the service
@@ -1912,10 +1912,10 @@
                               busAddress:busAddress 
                                  busType:@"session" 
                                    error:&error]) {
-        NSLog(@"Auto-activation: successfully started activation for service '%@'", message.destination);
+        NSDebugLLog(@"gwcomp", @"Auto-activation: successfully started activation for service '%@'", message.destination);
         return YES;
     } else {
-        NSLog(@"Auto-activation: failed to activate service '%@': %@", 
+        NSDebugLLog(@"gwcomp", @"Auto-activation: failed to activate service '%@': %@", 
               message.destination, error.localizedDescription);
         return NO;
     }
@@ -1936,7 +1936,7 @@
     };
     
     [messageQueue addObject:queuedItem];
-    NSLog(@"Queued message for service %@, queue size: %lu", serviceName, (unsigned long)[messageQueue count]);
+    NSDebugLLog(@"gwcomp", @"Queued message for service %@, queue size: %lu", serviceName, (unsigned long)[messageQueue count]);
 }
 
 - (void)deliverQueuedMessagesForService:(NSString *)serviceName
@@ -1946,7 +1946,7 @@
         return;
     }
     
-    NSLog(@"Delivering %lu queued messages for service %@", (unsigned long)[messageQueue count], serviceName);
+    NSDebugLLog(@"gwcomp", @"Delivering %lu queued messages for service %@", (unsigned long)[messageQueue count], serviceName);
     
     // Cancel timeout since service successfully started
     [_serviceTimeouts removeObjectForKey:serviceName];
@@ -1958,10 +1958,10 @@
         
         // Check if the connection is still valid
         if ([_connections containsObject:connection]) {
-            NSLog(@"Re-routing queued message: %@.%@", message.interface, message.member);
+            NSDebugLLog(@"gwcomp", @"Re-routing queued message: %@.%@", message.interface, message.member);
             [self routeMessage:message fromConnection:connection];
         } else {
-            NSLog(@"Dropping queued message from disconnected client");
+            NSDebugLLog(@"gwcomp", @"Dropping queued message from disconnected client");
         }
     }
     
@@ -1976,7 +1976,7 @@
     NSTimeInterval timeoutTime = [[NSDate date] timeIntervalSince1970] + 5.0;
     [_serviceTimeouts setObject:@(timeoutTime) forKey:serviceName];
     
-    NSLog(@"Scheduled 5-second timeout for service '%@'", serviceName);
+    NSDebugLLog(@"gwcomp", @"Scheduled 5-second timeout for service '%@'", serviceName);
 }
 
 - (void)checkServiceTimeouts
@@ -1994,7 +1994,7 @@
     
     // Handle timed out services
     for (NSString *serviceName in timedOutServices) {
-        NSLog(@"Service '%@' activation timed out - sending errors for queued messages", serviceName);
+        NSDebugLLog(@"gwcomp", @"Service '%@' activation timed out - sending errors for queued messages", serviceName);
         [self sendErrorsForQueuedService:serviceName reason:@"Service activation timed out"];
         
         // Remove from timeouts and pending messages
@@ -2010,7 +2010,7 @@
         return;
     }
     
-    NSLog(@"Sending error responses for %lu queued messages for service %@: %@", 
+    NSDebugLLog(@"gwcomp", @"Sending error responses for %lu queued messages for service %@: %@", 
           (unsigned long)[messageQueue count], serviceName, reason);
     
     // Send error responses for all queued messages
@@ -2026,7 +2026,7 @@
             error.sender = @"org.freedesktop.DBus";
             error.destination = connection.uniqueName;
             
-            NSLog(@"Sending timeout error for %@.%@ (serial %lu) to %@", 
+            NSDebugLLog(@"gwcomp", @"Sending timeout error for %@.%@ (serial %lu) to %@", 
                   message.interface, message.member, (unsigned long)message.serial, connection.uniqueName);
             
             // Broadcast error to monitors too
@@ -2034,7 +2034,7 @@
             
             [connection sendMessage:error];
         } else {
-            NSLog(@"Dropping queued message from disconnected client");
+            NSDebugLLog(@"gwcomp", @"Dropping queued message from disconnected client");
         }
     }
 }

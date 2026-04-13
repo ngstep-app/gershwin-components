@@ -90,16 +90,16 @@ enum {
         
         if (nmcliPath) {
             nmAvailable = YES;
-            NSLog(@"[Network] NMBackend initialized with nmcli at: %@", nmcliPath);
+            NSDebugLLog(@"gwcomp", @"[Network] NMBackend initialized with nmcli at: %@", nmcliPath);
         } else {
-            NSLog(@"[Network] NMBackend: nmcli not found, backend unavailable");
+            NSDebugLLog(@"gwcomp", @"[Network] NMBackend: nmcli not found, backend unavailable");
         }
         
         if (helperPath) {
-            NSLog(@"[Network] Network helper found at: %@", helperPath);
+            NSDebugLLog(@"gwcomp", @"[Network] Network helper found at: %@", helperPath);
         }
         if (sudoPath) {
-            NSLog(@"[Network] sudo found at: %@", sudoPath);
+            NSDebugLLog(@"gwcomp", @"[Network] sudo found at: %@", sudoPath);
         }
     }
     return self;
@@ -160,7 +160,7 @@ enum {
             }
         }
     } @catch (NSException *e) {
-        NSLog(@"[Network] Exception finding nmcli: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception finding nmcli: %@", e);
     }
     
     [task release];
@@ -228,7 +228,7 @@ enum {
             }
         }
     } @catch (NSException *e) {
-        NSLog(@"[Network] Exception finding sudo: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception finding sudo: %@", e);
     }
     
     [task release];
@@ -237,10 +237,10 @@ enum {
 
 - (BOOL)runPrivilegedHelper:(NSArray *)arguments error:(NSError **)error
 {
-    NSLog(@"[Network] runPrivilegedHelper: called");
+    NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: called");
     
     if (!arguments || [arguments count] == 0) {
-        NSLog(@"[Network] runPrivilegedHelper: no arguments provided");
+        NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: no arguments provided");
         if (error) {
             *error = [NSError errorWithDomain:@"NetworkBackendError"
                                         code:1
@@ -260,10 +260,10 @@ enum {
             [logArgs addObject:arg];
         }
     }
-    NSLog(@"[Network] runPrivilegedHelper: helper args = %@", logArgs);
+    NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: helper args = %@", logArgs);
     
     if (!helperPath) {
-        NSLog(@"[Network] runPrivilegedHelper: helperPath is nil");
+        NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: helperPath is nil");
         if (error) {
             *error = [NSError errorWithDomain:@"NetworkBackendError"
                                         code:1
@@ -273,7 +273,7 @@ enum {
     }
 
     if (!sudoPath) {
-        NSLog(@"[Network] runPrivilegedHelper: sudoPath is nil");
+        NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: sudoPath is nil");
         if (error) {
             *error = [NSError errorWithDomain:@"NetworkBackendError"
                                         code:1
@@ -282,12 +282,12 @@ enum {
         return NO;
     }
     
-    NSLog(@"[Network] runPrivilegedHelper: using helper at '%@'", helperPath);
+    NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: using helper at '%@'", helperPath);
     
     // Build command: sudo -A -E network-helper <arguments>
     NSMutableArray *sudoArgs = [NSMutableArray arrayWithObjects:@"-A", @"-E", helperPath, nil];
     if (!sudoArgs) {
-        NSLog(@"[Network] runPrivilegedHelper: failed to create sudoArgs array");
+        NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: failed to create sudoArgs array");
         if (error) {
             *error = [NSError errorWithDomain:@"NetworkBackendError"
                                         code:1
@@ -297,11 +297,11 @@ enum {
     }
     [sudoArgs addObjectsFromArray:arguments];
     
-    NSLog(@"[Network] runPrivilegedHelper: sudo command = %@ -A -E %@ %@", sudoPath, helperPath, [logArgs componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: sudo command = %@ -A -E %@ %@", sudoPath, helperPath, [logArgs componentsJoinedByString:@" "]);
     
     NSTask *task = [[NSTask alloc] init];
     if (!task) {
-        NSLog(@"[Network] runPrivilegedHelper: failed to create NSTask");
+        NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: failed to create NSTask");
         if (error) {
             *error = [NSError errorWithDomain:@"NetworkBackendError"
                                         code:1
@@ -316,7 +316,7 @@ enum {
     NSPipe *errPipe = [NSPipe pipe];
     NSPipe *outPipe = [NSPipe pipe];
     if (!errPipe || !outPipe) {
-        NSLog(@"[Network] runPrivilegedHelper: failed to create pipes");
+        NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: failed to create pipes");
         [task release];
         if (error) {
             *error = [NSError errorWithDomain:@"NetworkBackendError"
@@ -329,11 +329,11 @@ enum {
     [task setStandardError:errPipe];
     [task setStandardOutput:outPipe];
     
-    NSLog(@"[Network] runPrivilegedHelper: launching sudo...");
+    NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: launching sudo...");
     
     @try {
         [task launch];
-        NSLog(@"[Network] runPrivilegedHelper: sudo launched, will wait in background thread...");
+        NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: sudo launched, will wait in background thread...");
         
         // Create a dictionary to pass task and pipes to background thread
         NSDictionary *taskInfo = [NSDictionary dictionaryWithObjectsAndKeys:
@@ -349,11 +349,11 @@ enum {
         
         // Return immediately - don't block UI
         // The background thread will log the result when task completes
-        NSLog(@"[Network] runPrivilegedHelper: returning (async operation in progress)");
+        NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: returning (async operation in progress)");
         return YES;
     }
     @catch (NSException *e) {
-        NSLog(@"[Network] runPrivilegedHelper: EXCEPTION: %@ - %@", [e name], [e reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] runPrivilegedHelper: EXCEPTION: %@ - %@", [e name], [e reason]);
         if (task) {
             [task release];
         }
@@ -376,7 +376,7 @@ enum {
         NSPipe *outPipe = [taskInfo objectForKey:@"outPipe"];
         
         if (!task) {
-            NSLog(@"[Network] waitForTaskCompletion: task is nil");
+            NSDebugLLog(@"gwcomp", @"[Network] waitForTaskCompletion: task is nil");
             [pool release];
             return;
         }
@@ -385,7 +385,7 @@ enum {
         [task waitUntilExit];
         
         int status = [task terminationStatus];
-        NSLog(@"[Network] waitForTaskCompletion: sudo exited with status %d", status);
+        NSDebugLLog(@"gwcomp", @"[Network] waitForTaskCompletion: sudo exited with status %d", status);
         
         // Read stderr
         NSData *errData = [[errPipe fileHandleForReading] readDataToEndOfFile];
@@ -393,21 +393,21 @@ enum {
         if (errData && [errData length] > 0) {
             errStr = [[[NSString alloc] initWithData:errData encoding:NSUTF8StringEncoding] autorelease];
             errStr = [errStr stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            NSLog(@"[Network] waitForTaskCompletion: stderr = '%@'", errStr);
+            NSDebugLLog(@"gwcomp", @"[Network] waitForTaskCompletion: stderr = '%@'", errStr);
         }
         
         // Read stdout
         NSData *outData = [[outPipe fileHandleForReading] readDataToEndOfFile];
         if (outData && [outData length] > 0) {
             NSString *outStr = [[[NSString alloc] initWithData:outData encoding:NSUTF8StringEncoding] autorelease];
-            NSLog(@"[Network] waitForTaskCompletion: stdout = '%@'", outStr);
+            NSDebugLLog(@"gwcomp", @"[Network] waitForTaskCompletion: stdout = '%@'", outStr);
         }
         
         if (status == 0) {
-            NSLog(@"[Network] waitForTaskCompletion: success");
+            NSDebugLLog(@"gwcomp", @"[Network] waitForTaskCompletion: success");
         } else {
             NSString *errorMsg = (errStr && [errStr length] > 0) ? errStr : @"Operation failed";
-            NSLog(@"[Network] waitForTaskCompletion: command failed: %@", errorMsg);
+            NSDebugLLog(@"gwcomp", @"[Network] waitForTaskCompletion: command failed: %@", errorMsg);
             
             // Parse error message to provide user-friendly feedback
             NSString *userMsg = [self parseErrorMessage:errorMsg];
@@ -419,7 +419,7 @@ enum {
         }
     }
     @catch (NSException *e) {
-        NSLog(@"[Network] waitForTaskCompletion: EXCEPTION: %@ - %@", [e name], [e reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] waitForTaskCompletion: EXCEPTION: %@ - %@", [e name], [e reason]);
         [self performSelectorOnMainThread:@selector(reportErrorWithMessage:)
                                withObject:@"An unexpected error occurred"
                             waitUntilDone:NO];
@@ -473,7 +473,7 @@ enum {
 - (void)reportErrorWithMessage:(NSString *)message
 {
     if (message && [message length] > 0) {
-        NSLog(@"[Network] Error: %@", message);
+        NSDebugLLog(@"gwcomp", @"[Network] Error: %@", message);
         if (delegate && [delegate respondsToSelector:@selector(networkBackend:didEncounterError:)]) {
             NSError *error = [NSError errorWithDomain:@"NetworkBackendError"
                                                  code:1
@@ -504,13 +504,13 @@ enum {
     for (NSString *path in libPaths) {
         nmLibHandle = dlopen([path UTF8String], RTLD_LAZY | RTLD_GLOBAL);
         if (nmLibHandle) {
-            NSLog(@"[Network] Loaded libnm from: %@", path);
+            NSDebugLLog(@"gwcomp", @"[Network] Loaded libnm from: %@", path);
             break;
         }
     }
     
     if (!nmLibHandle) {
-        NSLog(@"[Network] Could not load libnm: %s", dlerror());
+        NSDebugLLog(@"gwcomp", @"[Network] Could not load libnm: %s", dlerror());
         return NO;
     }
     
@@ -679,7 +679,7 @@ enum {
             [iface release];
         }
     } @catch (NSException *e) {
-        NSLog(@"[Network] Exception getting interfaces: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception getting interfaces: %@", e);
     }
     
     [task release];
@@ -757,7 +757,7 @@ enum {
         [ipv4 release];
         
     } @catch (NSException *e) {
-        NSLog(@"[Network] Exception getting device details: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception getting device details: %@", e);
     }
     
     [task release];
@@ -813,14 +813,14 @@ enum {
         task = nil;
         
         if (!success) {
-            NSLog(@"[Network] enableInterface: nmcli failed with: %@", errStr);
+            NSDebugLLog(@"gwcomp", @"[Network] enableInterface: nmcli failed with: %@", errStr);
             
             // Check if authorization issue - try privileged helper
             if (errStr && ([errStr rangeOfString:@"not authorized" options:NSCaseInsensitiveSearch].location != NSNotFound ||
                           [errStr rangeOfString:@"permission denied" options:NSCaseInsensitiveSearch].location != NSNotFound ||
                           [errStr rangeOfString:@"Not authorized" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
                 
-                NSLog(@"[Network] enableInterface: trying privileged helper...");
+                NSDebugLLog(@"gwcomp", @"[Network] enableInterface: trying privileged helper...");
                 NSError *helperError = nil;
                 success = [self runPrivilegedHelper:@[@"interface-enable", ifaceName] error:&helperError];
                 
@@ -831,7 +831,7 @@ enum {
                     return NO;
                 }
                 
-                NSLog(@"[Network] enableInterface: privileged helper succeeded");
+                NSDebugLLog(@"gwcomp", @"[Network] enableInterface: privileged helper succeeded");
                 // Do NOT call refresh here - let caller handle it
                 return YES;
             }
@@ -841,14 +841,14 @@ enum {
             return NO;
         }
         
-        NSLog(@"[Network] enableInterface: success");
+        NSDebugLLog(@"gwcomp", @"[Network] enableInterface: success");
         
         // If interface has DHCP configured, ensure DHCP is requested
         // This is especially important for WiFi interfaces not managed by NetworkManager
         if ([interface type] == NetworkInterfaceTypeWLAN || [interface type] == NetworkInterfaceTypeEthernet) {
             IPConfiguration *ipv4 = [interface ipv4Config];
             if (ipv4 && [ipv4 method] == IPConfigMethodDHCP) {
-                NSLog(@"[Network] enableInterface: interface configured for DHCP, requesting lease...");
+                NSDebugLLog(@"gwcomp", @"[Network] enableInterface: interface configured for DHCP, requesting lease...");
                 
                 // Try to request DHCP via helper in background
                 // We use NSThread instead of GCD to avoid dispatch dependencies
@@ -861,7 +861,7 @@ enum {
         // Do NOT call refresh here - let caller handle it
         return YES;
     } @catch (NSException *e) {
-        NSLog(@"[Network] enableInterface: EXCEPTION: %@ - %@", [e name], [e reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] enableInterface: EXCEPTION: %@ - %@", [e name], [e reason]);
         if (task) {
             [task release];
         }
@@ -877,9 +877,9 @@ enum {
         NSError *dhcpError = nil;
         [self runPrivilegedHelper:@[@"dhcp-renew", ifaceName] error:&dhcpError];
         if (dhcpError) {
-            NSLog(@"[Network] DHCP renewal for %@ failed: %@", ifaceName, dhcpError);
+            NSDebugLLog(@"gwcomp", @"[Network] DHCP renewal for %@ failed: %@", ifaceName, dhcpError);
         } else {
-            NSLog(@"[Network] DHCP renewal for %@ initiated", ifaceName);
+            NSDebugLLog(@"gwcomp", @"[Network] DHCP renewal for %@ initiated", ifaceName);
         }
     }
 }
@@ -924,14 +924,14 @@ enum {
         task = nil;
         
         if (!success) {
-            NSLog(@"[Network] disableInterface: nmcli failed with: %@", errStr);
+            NSDebugLLog(@"gwcomp", @"[Network] disableInterface: nmcli failed with: %@", errStr);
             
             // Check if authorization issue - try privileged helper
             if (errStr && ([errStr rangeOfString:@"not authorized" options:NSCaseInsensitiveSearch].location != NSNotFound ||
                           [errStr rangeOfString:@"permission denied" options:NSCaseInsensitiveSearch].location != NSNotFound ||
                           [errStr rangeOfString:@"Not authorized" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
                 
-                NSLog(@"[Network] disableInterface: trying privileged helper...");
+                NSDebugLLog(@"gwcomp", @"[Network] disableInterface: trying privileged helper...");
                 NSError *helperError = nil;
                 success = [self runPrivilegedHelper:@[@"interface-disable", ifaceName] error:&helperError];
                 
@@ -942,7 +942,7 @@ enum {
                     return NO;
                 }
                 
-                NSLog(@"[Network] disableInterface: privileged helper succeeded");
+                NSDebugLLog(@"gwcomp", @"[Network] disableInterface: privileged helper succeeded");
                 // Do NOT call refresh here - let caller handle it
                 return YES;
             }
@@ -952,11 +952,11 @@ enum {
             return NO;
         }
         
-        NSLog(@"[Network] disableInterface: success");
+        NSDebugLLog(@"gwcomp", @"[Network] disableInterface: success");
         // Do NOT call refresh here - let caller handle it
         return YES;
     } @catch (NSException *e) {
-        NSLog(@"[Network] disableInterface: EXCEPTION: %@ - %@", [e name], [e reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] disableInterface: EXCEPTION: %@ - %@", [e name], [e reason]);
         if (task) {
             [task release];
         }
@@ -1031,7 +1031,7 @@ enum {
             [conn release];
         }
     } @catch (NSException *e) {
-        NSLog(@"[Network] Exception getting connections: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception getting connections: %@", e);
     }
     
     [task release];
@@ -1221,7 +1221,7 @@ enum {
         wifiEnabled = [output isEqualToString:@"enabled"];
         return wifiEnabled;
     } @catch (NSException *e) {
-        NSLog(@"[Network] Exception checking WLAN state: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception checking WLAN state: %@", e);
         [task release];
         return NO;
     }
@@ -1438,7 +1438,7 @@ enum {
         }];
         
     } @catch (NSException *e) {
-        NSLog(@"[Network] Exception getting WiFi networks: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception getting WiFi networks: %@", e);
     }
     
     [task release];
@@ -1455,23 +1455,23 @@ enum {
 
 - (BOOL)connectToWLAN:(WLAN *)network withPassword:(NSString *)password
 {
-    NSLog(@"[Network] connectToWLAN: called");
+    NSDebugLLog(@"gwcomp", @"[Network] connectToWLAN: called");
     
     if (!network) {
-        NSLog(@"[Network] connectToWLAN: network is nil");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWLAN: network is nil");
         [self reportErrorWithMessage:@"Cannot connect: no network specified"];
         return NO;
     }
     
     NSString *ssid = [network ssid];
     if (!ssid || [ssid length] == 0) {
-        NSLog(@"[Network] connectToWLAN: SSID is nil or empty");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWLAN: SSID is nil or empty");
         [self reportErrorWithMessage:@"Cannot connect: network has no SSID"];
         return NO;
     }
     
     WLANSecurityType security = [network security];
-    NSLog(@"[Network] connectToWLAN: connecting to SSID '%@', security=%d (password: %@)",
+    NSDebugLLog(@"gwcomp", @"[Network] connectToWLAN: connecting to SSID '%@', security=%d (password: %@)",
           ssid, (int)security, (password && [password length] > 0) ? @"<provided>" : @"<none>");
     
     return [self connectToWiFiViaNmcli:ssid password:password security:security];
@@ -1479,22 +1479,22 @@ enum {
 
 - (BOOL)connectToWiFiViaNmcli:(NSString *)ssid password:(NSString *)password security:(WLANSecurityType)security
 {
-    NSLog(@"[Network] connectToWiFiViaNmcli: starting connection to '%@' (security=%d)", ssid, (int)security);
+    NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: starting connection to '%@' (security=%d)", ssid, (int)security);
     
     if (!nmAvailable) {
-        NSLog(@"[Network] connectToWiFiViaNmcli: nmcli not available");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: nmcli not available");
         [self reportErrorWithMessage:@"Cannot connect: NetworkManager not available"];
         return NO;
     }
     
     if (!ssid || [ssid length] == 0) {
-        NSLog(@"[Network] connectToWiFiViaNmcli: SSID is nil or empty");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: SSID is nil or empty");
         [self reportErrorWithMessage:@"Cannot connect: no SSID specified"];
         return NO;
     }
     
     if (!nmcliPath) {
-        NSLog(@"[Network] connectToWiFiViaNmcli: nmcliPath is nil");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: nmcliPath is nil");
         [self reportErrorWithMessage:@"Cannot connect: nmcli path not set"];
         return NO;
     }
@@ -1502,16 +1502,16 @@ enum {
     // For secured networks, use 'nmcli connection add' with explicit security settings
     // This is more reliable than 'nmcli device wifi connect'
     if (security != WLANSecurityNone && password && [password length] > 0) {
-        NSLog(@"[Network] connectToWiFiViaNmcli: using connection add method for secured network");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: using connection add method for secured network");
         return [self connectToSecuredWLAN:ssid password:password security:security];
     }
     
     // For open networks or when no password provided, use simple connect
-    NSLog(@"[Network] connectToWiFiViaNmcli: using device wifi connect for open network");
+    NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: using device wifi connect for open network");
     
     NSTask *task = [[NSTask alloc] init];
     if (!task) {
-        NSLog(@"[Network] connectToWiFiViaNmcli: failed to create NSTask");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: failed to create NSTask");
         [self reportErrorWithMessage:@"Cannot connect: failed to create task"];
         return NO;
     }
@@ -1520,19 +1520,19 @@ enum {
     
     NSMutableArray *args = [NSMutableArray arrayWithObjects:@"device", @"wifi", @"connect", ssid, nil];
     if (!args) {
-        NSLog(@"[Network] connectToWiFiViaNmcli: failed to create args array");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: failed to create args array");
         [task release];
         [self reportErrorWithMessage:@"Cannot connect: failed to create arguments"];
         return NO;
     }
     
-    NSLog(@"[Network] connectToWiFiViaNmcli: command = nmcli device wifi connect '%@'", ssid);
+    NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: command = nmcli device wifi connect '%@'", ssid);
     [task setArguments:args];
     
     NSPipe *errPipe = [NSPipe pipe];
     NSPipe *outPipe = [NSPipe pipe];
     if (!errPipe || !outPipe) {
-        NSLog(@"[Network] connectToWiFiViaNmcli: failed to create pipes");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: failed to create pipes");
         [task release];
         [self reportErrorWithMessage:@"Cannot connect: failed to create pipes"];
         return NO;
@@ -1541,15 +1541,15 @@ enum {
     [task setStandardOutput:outPipe];
     [task setStandardError:errPipe];
     
-    NSLog(@"[Network] connectToWiFiViaNmcli: launching task...");
+    NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: launching task...");
     
     @try {
         [task launch];
-        NSLog(@"[Network] connectToWiFiViaNmcli: task launched, waiting for exit...");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: task launched, waiting for exit...");
         [task waitUntilExit];
         
         int exitStatus = [task terminationStatus];
-        NSLog(@"[Network] connectToWiFiViaNmcli: task exited with status %d", exitStatus);
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: task exited with status %d", exitStatus);
         
         BOOL success = (exitStatus == 0);
         
@@ -1559,26 +1559,26 @@ enum {
         if (errData && [errData length] > 0) {
             errStr = [[[NSString alloc] initWithData:errData encoding:NSUTF8StringEncoding] autorelease];
             errStr = [errStr stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            NSLog(@"[Network] connectToWiFiViaNmcli: stderr = '%@'", errStr);
+            NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: stderr = '%@'", errStr);
         }
         
         [task release];
         task = nil;
         
         if (success) {
-            NSLog(@"[Network] connectToWiFiViaNmcli: connection successful");
+            NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: connection successful");
             // Do NOT call refresh here - let the caller schedule a safe refresh on main thread
             return YES;
         }
         
         // Report the error
         NSString *errorMsg = (errStr && [errStr length] > 0) ? errStr : @"Connection failed (unknown error)";
-        NSLog(@"[Network] connectToWiFiViaNmcli: reporting error: %@", errorMsg);
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: reporting error: %@", errorMsg);
         [self reportErrorWithMessage:[NSString stringWithFormat:@"Failed to connect to '%@': %@", ssid, errorMsg]];
         
         return NO;
     } @catch (NSException *e) {
-        NSLog(@"[Network] connectToWiFiViaNmcli: EXCEPTION: %@ - %@", [e name], [e reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] connectToWiFiViaNmcli: EXCEPTION: %@ - %@", [e name], [e reason]);
         if (task) {
             [task release];
         }
@@ -1590,10 +1590,10 @@ enum {
 // Connect to a secured WiFi network by creating a connection profile
 - (BOOL)connectToSecuredWLAN:(NSString *)ssid password:(NSString *)password security:(WLANSecurityType)security
 {
-    NSLog(@"[Network] connectToSecuredWLAN: ssid='%@' security=%d", ssid, (int)security);
+    NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: ssid='%@' security=%d", ssid, (int)security);
     
     if (!ssid || !password) {
-        NSLog(@"[Network] connectToSecuredWLAN: ssid or password is nil");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: ssid or password is nil");
         [self reportErrorWithMessage:@"Cannot connect: SSID or password missing"];
         return NO;
     }
@@ -1613,22 +1613,22 @@ enum {
             keyMgmt = @"wpa-eap";
             break;
         default:
-            NSLog(@"[Network] connectToSecuredWLAN: unsupported security type");
+            NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: unsupported security type");
             [self reportErrorWithMessage:@"Unsupported security type"];
             return NO;
     }
     
-    NSLog(@"[Network] connectToSecuredWLAN: key-mgmt = %@", keyMgmt);
+    NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: key-mgmt = %@", keyMgmt);
     
     // First, delete any existing connection with this SSID to avoid duplicates
-    NSLog(@"[Network] connectToSecuredWLAN: checking for existing connection...");
+    NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: checking for existing connection...");
     [self deleteConnectionBySSID:ssid];
     
     // Create new connection using nmcli connection add
     // nmcli connection add type wifi con-name "SSID" ssid "SSID" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "password"
     NSTask *task = [[NSTask alloc] init];
     if (!task) {
-        NSLog(@"[Network] connectToSecuredWLAN: failed to create task");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: failed to create task");
         [self reportErrorWithMessage:@"Cannot connect: failed to create task"];
         return NO;
     }
@@ -1655,7 +1655,7 @@ enum {
         [args addObject:password];
     }
     
-    NSLog(@"[Network] connectToSecuredWLAN: command = nmcli connection add type wifi con-name '%@' ssid '%@' wifi-sec.key-mgmt %@ wifi-sec.psk <hidden>",
+    NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: command = nmcli connection add type wifi con-name '%@' ssid '%@' wifi-sec.key-mgmt %@ wifi-sec.psk <hidden>",
           ssid, ssid, keyMgmt);
     
     [task setArguments:args];
@@ -1670,7 +1670,7 @@ enum {
         [task waitUntilExit];
         
         int exitStatus = [task terminationStatus];
-        NSLog(@"[Network] connectToSecuredWLAN: connection add exited with status %d", exitStatus);
+        NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: connection add exited with status %d", exitStatus);
         
         NSData *errData = [[errPipe fileHandleForReading] readDataToEndOfFile];
         NSString *errStr = nil;
@@ -1678,14 +1678,14 @@ enum {
             errStr = [[[NSString alloc] initWithData:errData encoding:NSUTF8StringEncoding] autorelease];
             errStr = [errStr stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
             if ([errStr length] > 0) {
-                NSLog(@"[Network] connectToSecuredWLAN: add stderr = '%@'", errStr);
+                NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: add stderr = '%@'", errStr);
             }
         }
         
         NSData *outData = [[outPipe fileHandleForReading] readDataToEndOfFile];
         if (outData && [outData length] > 0) {
             NSString *outStr = [[[NSString alloc] initWithData:outData encoding:NSUTF8StringEncoding] autorelease];
-            NSLog(@"[Network] connectToSecuredWLAN: add stdout = '%@'", outStr);
+            NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: add stdout = '%@'", outStr);
         }
         
         [task release];
@@ -1693,10 +1693,10 @@ enum {
         
         if (exitStatus != 0) {
             NSString *errorMsg = (errStr && [errStr length] > 0) ? errStr : @"Failed to create connection profile";
-            NSLog(@"[Network] connectToSecuredWLAN: connection add failed: %@", errorMsg);
+            NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: connection add failed: %@", errorMsg);
             
             // Try with privileged helper
-            NSLog(@"[Network] connectToSecuredWLAN: trying privileged helper...");
+            NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: trying privileged helper...");
             NSError *helperError = nil;
             NSMutableArray *helperArgs = [NSMutableArray arrayWithObjects:@"wlan-connect", ssid, password, nil];
             
@@ -1707,13 +1707,13 @@ enum {
                 return NO;
             }
             
-            NSLog(@"[Network] connectToSecuredWLAN: privileged helper succeeded");
+            NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: privileged helper succeeded");
             // Do NOT call refresh here - let the caller schedule a safe refresh on main thread
             return YES;
         }
         
         // Now activate the connection
-        NSLog(@"[Network] connectToSecuredWLAN: activating connection '%@'...", ssid);
+        NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: activating connection '%@'...", ssid);
         
         NSTask *upTask = [[NSTask alloc] init];
         [upTask setLaunchPath:nmcliPath];
@@ -1728,7 +1728,7 @@ enum {
         [upTask waitUntilExit];
         
         int upExitStatus = [upTask terminationStatus];
-        NSLog(@"[Network] connectToSecuredWLAN: connection up exited with status %d", upExitStatus);
+        NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: connection up exited with status %d", upExitStatus);
         
         NSData *upErrData = [[upErrPipe fileHandleForReading] readDataToEndOfFile];
         NSString *upErrStr = nil;
@@ -1736,7 +1736,7 @@ enum {
             upErrStr = [[[NSString alloc] initWithData:upErrData encoding:NSUTF8StringEncoding] autorelease];
             upErrStr = [upErrStr stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
             if ([upErrStr length] > 0) {
-                NSLog(@"[Network] connectToSecuredWLAN: up stderr = '%@'", upErrStr);
+                NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: up stderr = '%@'", upErrStr);
             }
         }
         
@@ -1744,7 +1744,7 @@ enum {
         
         if (upExitStatus != 0) {
             NSString *upErrorMsg = (upErrStr && [upErrStr length] > 0) ? upErrStr : @"Failed to activate connection";
-            NSLog(@"[Network] connectToSecuredWLAN: connection up failed: %@", upErrorMsg);
+            NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: connection up failed: %@", upErrorMsg);
             
             // Check if it's an auth error (wrong password)
             if (upErrStr && ([upErrStr rangeOfString:@"Secrets were required" options:NSCaseInsensitiveSearch].location != NSNotFound ||
@@ -1760,12 +1760,12 @@ enum {
             return NO;
         }
         
-        NSLog(@"[Network] connectToSecuredWLAN: connection successful");
+        NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: connection successful");
         // Do NOT call refresh here - let the caller schedule a safe refresh on main thread
         return YES;
         
     } @catch (NSException *e) {
-        NSLog(@"[Network] connectToSecuredWLAN: EXCEPTION: %@ - %@", [e name], [e reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] connectToSecuredWLAN: EXCEPTION: %@ - %@", [e name], [e reason]);
         if (task) {
             [task release];
         }
@@ -1779,7 +1779,7 @@ enum {
 {
     if (!ssid || !nmcliPath) return;
     
-    NSLog(@"[Network] deleteConnectionBySSID: deleting any existing connection for '%@'", ssid);
+    NSDebugLLog(@"gwcomp", @"[Network] deleteConnectionBySSID: deleting any existing connection for '%@'", ssid);
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:nmcliPath];
@@ -1791,9 +1791,9 @@ enum {
         [task launch];
         [task waitUntilExit];
         int status = [task terminationStatus];
-        NSLog(@"[Network] deleteConnectionBySSID: delete exited with status %d", status);
+        NSDebugLLog(@"gwcomp", @"[Network] deleteConnectionBySSID: delete exited with status %d", status);
     } @catch (NSException *e) {
-        NSLog(@"[Network] deleteConnectionBySSID: exception (ignored): %@", [e reason]);
+        NSDebugLLog(@"gwcomp", @"[Network] deleteConnectionBySSID: exception (ignored): %@", [e reason]);
     }
     
     [task release];
@@ -1801,22 +1801,22 @@ enum {
 
 - (BOOL)disconnectFromWLAN
 {
-    NSLog(@"[Network] disconnectFromWLAN: called");
+    NSDebugLLog(@"gwcomp", @"[Network] disconnectFromWLAN: called");
     
     if (!nmAvailable) {
-        NSLog(@"[Network] disconnectFromWLAN: backend not available");
+        NSDebugLLog(@"gwcomp", @"[Network] disconnectFromWLAN: backend not available");
         return NO;
     }
     
     // Find WiFi device and disconnect it
     for (NetworkInterface *iface in cachedInterfaces) {
         if ([iface type] == NetworkInterfaceTypeWLAN && [iface isActive]) {
-            NSLog(@"[Network] disconnectFromWLAN: disconnecting interface '%@'", [iface name]);
+            NSDebugLLog(@"gwcomp", @"[Network] disconnectFromWLAN: disconnecting interface '%@'", [iface name]);
             return [self disableInterface:iface];
         }
     }
     
-    NSLog(@"[Network] disconnectFromWLAN: no active WiFi interface found");
+    NSDebugLLog(@"gwcomp", @"[Network] disconnectFromWLAN: no active WiFi interface found");
     return NO;
 }
 
@@ -1868,7 +1868,7 @@ enum {
             return NetworkConnectionStateUnknown;
         }
     } @catch (NSException *e) {
-        NSLog(@"[Network] Exception getting global state: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Network] Exception getting global state: %@", e);
         [task release];
         return NetworkConnectionStateUnknown;
     }
@@ -1900,12 +1900,12 @@ enum {
 {
     // Ensure all delegate callbacks happen on main thread
     if (![NSThread isMainThread]) {
-        NSLog(@"[Network] refresh: redirecting to main thread");
+        NSDebugLLog(@"gwcomp", @"[Network] refresh: redirecting to main thread");
         [self performSelectorOnMainThread:@selector(refresh) withObject:nil waitUntilDone:NO];
         return;
     }
     
-    NSLog(@"[Network] refresh: refreshing interfaces and connections...");
+    NSDebugLLog(@"gwcomp", @"[Network] refresh: refreshing interfaces and connections...");
     
     [self getInterfacesViaNmcli];
     [self getConnectionsViaNmcli];
@@ -1923,7 +1923,7 @@ enum {
         [delegate networkBackend:self didUpdateConnections:connectionsCopy];
     }
     
-    NSLog(@"[Network] refresh: complete");
+    NSDebugLLog(@"gwcomp", @"[Network] refresh: complete");
 }
 
 #pragma mark - Type Conversion Helpers

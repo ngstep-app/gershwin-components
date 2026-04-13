@@ -17,11 +17,11 @@
 
 int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) argv[])
 {
-    NSLog(@"DebianRuntimeInstaller: main() starting");
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstaller: main() starting");
     
     // Check if running as root
     if (getuid() != 0) {
-        NSLog(@"DebianRuntimeInstaller: Not running as root, re-executing with sudo -A -E");
+        NSDebugLLog(@"gwcomp", @"DebianRuntimeInstaller: Not running as root, re-executing with sudo -A -E");
         
         @autoreleasepool {
             // Build the sudo command with current executable path
@@ -45,7 +45,7 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
                 [task release];
                 return exitStatus;
             } @catch (NSException *exception) {
-                NSLog(@"ERROR: Failed to re-execute with sudo: %@", [exception reason]);
+                NSDebugLLog(@"gwcomp", @"ERROR: Failed to re-execute with sudo: %@", [exception reason]);
                 [task release];
                 
                 // Fall back to showing error
@@ -71,6 +71,6 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
         [controller release];
     }
     
-    NSLog(@"DebianRuntimeInstaller: main() exiting");
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstaller: main() exiting");
     return 0;
 }

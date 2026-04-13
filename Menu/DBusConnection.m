@@ -50,13 +50,13 @@ typedef struct DBusConnection DBusConnectionStruct;
     
     self.connection = dbus_bus_get(DBUS_BUS_SESSION, &error);
     if (dbus_error_is_set(&error)) {
-        NSLog(@"DBusConnection: Failed to connect to session bus: %s", error.message);
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Failed to connect to session bus: %s", error.message);
         dbus_error_free(&error);
         return NO;
     }
     
     if (!self.connection) {
-        NSLog(@"DBusConnection: Failed to get session bus connection");
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Failed to get session bus connection");
         return NO;
     }
     
@@ -94,7 +94,7 @@ typedef struct DBusConnection DBusConnectionStruct;
                                       &error);
     
     if (dbus_error_is_set(&error)) {
-        NSLog(@"DBusConnection: Failed to register service %@: %s", serviceName, error.message);
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Failed to register service %@: %s", serviceName, error.message);
         dbus_error_free(&error);
         return NO;
     }
@@ -115,9 +115,9 @@ typedef struct DBusConnection DBusConnectionStruct;
                 break;
         }
         
-        NSLog(@"DBusConnection: Failed to become owner of service %@ (result: %d - %s)", serviceName, result, resultStr);
-        NSLog(@"DBusConnection: Another application may already be providing the AppMenu.Registrar service");
-        NSLog(@"DBusConnection: This is normal if multiple menu applications are running");
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Failed to become owner of service %@ (result: %d - %s)", serviceName, result, resultStr);
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Another application may already be providing the AppMenu.Registrar service");
+        NSDebugLLog(@"gwcomp", @"DBusConnection: This is normal if multiple menu applications are running");
         return NO;
     }
     
@@ -152,13 +152,13 @@ typedef struct DBusConnection DBusConnectionStruct;
      arguments:(NSArray *)arguments
 {
     if (!self.connected || !self.connection) {
-        NSLog(@"DBusConnection: Cannot call method - not connected");
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Cannot call method - not connected");
         return nil;
     }
     
     // Validate inputs
     if (!method || !serviceName || !objectPath || !interfaceName) {
-        NSLog(@"DBusConnection: Cannot call method - invalid parameters");
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Cannot call method - invalid parameters");
         return nil;
     }
     
@@ -171,7 +171,7 @@ typedef struct DBusConnection DBusConnectionStruct;
                                                        [interfaceName UTF8String],
                                                        [method UTF8String]);
     if (!message) {
-        NSLog(@"DBusConnection: Failed to create method call message");
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Failed to create method call message");
         return nil;
     }
     
@@ -325,14 +325,14 @@ typedef struct DBusConnection DBusConnectionStruct;
     
     if (dbus_error_is_set(&error)) {
         NSString *errorMsg = [NSString stringWithUTF8String:error.message ? error.message : "Unknown error"];
-        NSLog(@"DBusConnection: Method call failed for %@.%@ on %@%@: %@", 
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Method call failed for %@.%@ on %@%@: %@", 
               interfaceName, method, serviceName, objectPath, errorMsg);
         dbus_error_free(&error);
         return nil;
     }
     
     if (!reply) {
-        NSLog(@"DBusConnection: No reply received");
+        NSDebugLLog(@"gwcomp", @"DBusConnection: No reply received");
         return nil;
     }
     
@@ -386,11 +386,11 @@ typedef struct DBusConnection DBusConnectionStruct;
             }
         }
         
-        NSLog(@"DBusConnection: Method call %@.%@ returned error '%@': %@", 
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Method call %@.%@ returned error '%@': %@", 
               interfaceName, method, errorNameStr, errorMessage);
         result = nil;
     } else {
-        NSLog(@"DBusConnection: Unexpected message type %d for method call %@.%@", 
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Unexpected message type %d for method call %@.%@", 
               messageType, interfaceName, method);
         result = nil;
     }
@@ -418,7 +418,7 @@ typedef struct DBusConnection DBusConnectionStruct;
                                                        "org.gtk.Actions",
                                                        "Activate");
     if (!message) {
-        NSLog(@"DBusConnection: Failed to create GTK Activate method call");
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Failed to create GTK Activate method call");
         return nil;
     }
     
@@ -507,14 +507,14 @@ typedef struct DBusConnection DBusConnectionStruct;
     dbus_message_unref(message);
     
     if (dbus_error_is_set(&error)) {
-        NSLog(@"DBusConnection: GTK Activate call failed for %@ on %@%@: %s", 
+        NSDebugLLog(@"gwcomp", @"DBusConnection: GTK Activate call failed for %@ on %@%@: %s", 
               actionName, serviceName, objectPath, error.message);
         dbus_error_free(&error);
         return nil;
     }
     
     if (!reply) {
-        NSLog(@"DBusConnection: No reply received for GTK Activate call");
+        NSDebugLLog(@"gwcomp", @"DBusConnection: No reply received for GTK Activate call");
         return nil;
     }
     
@@ -529,7 +529,7 @@ typedef struct DBusConnection DBusConnectionStruct;
     
     switch (argType) {
         case DBUS_TYPE_INVALID:
-            NSLog(@"DBusConnection: Invalid DBus type encountered");
+            NSDebugLLog(@"gwcomp", @"DBusConnection: Invalid DBus type encountered");
             return nil;
             
         case DBUS_TYPE_BYTE: {
@@ -692,7 +692,7 @@ typedef struct DBusConnection DBusConnectionStruct;
                 // NSLog(@"DBusConnection: Parsed dict entry: %@ -> %@", key, value);
                 return result;
             } else {
-                NSLog(@"DBusConnection: Invalid dict entry (missing key or value)");
+                NSDebugLLog(@"gwcomp", @"DBusConnection: Invalid dict entry (missing key or value)");
                 return nil;
             }
         }
@@ -736,7 +736,7 @@ typedef struct DBusConnection DBusConnectionStruct;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"DBusConnection: Exception during message processing: %@", exception);
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Exception during message processing: %@", exception);
     }
 }
 
@@ -758,7 +758,7 @@ typedef struct DBusConnection DBusConnectionStruct;
         // If there are messages to dispatch, status will be DBUS_DISPATCH_DATA_REMAINS
         return (status == DBUS_DISPATCH_DATA_REMAINS);
     } @catch (NSException *exception) {
-        NSLog(@"DBusConnection: Exception checking pending messages: %@", exception);
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Exception checking pending messages: %@", exception);
         return NO;
     }
 }
@@ -771,7 +771,7 @@ typedef struct DBusConnection DBusConnectionStruct;
 - (int)getFileDescriptor
 {
     if (!self.connected || !self.connection) {
-        NSLog(@"DBusConnection: Cannot get file descriptor - not connected");
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Cannot get file descriptor - not connected");
         return -1;
     }
     
@@ -782,16 +782,16 @@ typedef struct DBusConnection DBusConnectionStruct;
             // NSLog(@"DBusConnection: Got file descriptor: %d", fd);
             // Validate file descriptor
             if (fd < 0) {
-                NSLog(@"DBusConnection: Invalid file descriptor: %d", fd);
+                NSDebugLLog(@"gwcomp", @"DBusConnection: Invalid file descriptor: %d", fd);
                 return -1;
             }
             return fd;
         } else {
-            NSLog(@"DBusConnection: Failed to get file descriptor");
+            NSDebugLLog(@"gwcomp", @"DBusConnection: Failed to get file descriptor");
             return -1;
         }
     } @catch (NSException *exception) {
-        NSLog(@"DBusConnection: Exception getting file descriptor: %@", exception);
+        NSDebugLLog(@"gwcomp", @"DBusConnection: Exception getting file descriptor: %@", exception);
         return -1;
     }
 }
@@ -844,7 +844,7 @@ typedef struct DBusConnection DBusConnectionStruct;
         };
         [handler performSelector:@selector(handleDBusMethodCall:) withObject:callInfo];
     } else {
-        NSLog(@"DBusConnection: No handler found for %@.%@ on %@", interfaceStr, methodStr, pathStr);
+        NSDebugLLog(@"gwcomp", @"DBusConnection: No handler found for %@.%@ on %@", interfaceStr, methodStr, pathStr);
     }
 }
 

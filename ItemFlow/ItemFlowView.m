@@ -49,7 +49,7 @@ static dispatch_once_t onceTokenMissingLogged;
     };
     NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
     if (!pf) {
-        NSLog(@"Failed to create pixel format");
+        NSDebugLLog(@"gwcomp", @"Failed to create pixel format");
     }
     
     self = [super initWithFrame:frame pixelFormat:pf];
@@ -417,11 +417,11 @@ static dispatch_once_t onceTokenMissingLogged;
         NSData *tiff = [image TIFFRepresentation];
         if (tiff) {
             bitmap = [NSBitmapImageRep imageRepWithData:tiff];
-            NSLog(@"[ItemFlow] createTextureFromImage: created bitmap rep from TIFF (bytes=%tu)", tiff ? tiff.length : 0);
+            NSDebugLLog(@"gwcomp", @"[ItemFlow] createTextureFromImage: created bitmap rep from TIFF (bytes=%tu)", tiff ? tiff.length : 0);
         }
     }
     if (!bitmap) {
-        NSLog(@"[ItemFlow] createTextureFromImage: failed to obtain NSBitmapImageRep for image size=%@", NSStringFromSize([image size]));
+        NSDebugLLog(@"gwcomp", @"[ItemFlow] createTextureFromImage: failed to obtain NSBitmapImageRep for image size=%@", NSStringFromSize([image size]));
         return 0;
     }
 
@@ -439,7 +439,7 @@ static dispatch_once_t onceTokenMissingLogged;
 
     unsigned char *data = [bitmap bitmapData];
     if (!data) {
-        NSLog(@"[ItemFlow] createTextureFromImage: bitmap has no raw data, attempting to use TIFFRepresentation fallback");
+        NSDebugLLog(@"gwcomp", @"[ItemFlow] createTextureFromImage: bitmap has no raw data, attempting to use TIFFRepresentation fallback");
         NSData *tiff = [image TIFFRepresentation];
         if (tiff) {
             NSBitmapImageRep *b2 = [NSBitmapImageRep imageRepWithData:tiff];
@@ -451,14 +451,14 @@ static dispatch_once_t onceTokenMissingLogged;
         GLenum format = [bitmap hasAlpha] ? GL_RGBA : GL_RGB;
         NSInteger w = [bitmap pixelsWide];
         NSInteger h = [bitmap pixelsHigh];
-        NSLog(@"[ItemFlow] createTextureFromImage: uploading texture w=%ld h=%ld alpha=%d", (long)w, (long)h, [bitmap hasAlpha]);
+        NSDebugLLog(@"gwcomp", @"[ItemFlow] createTextureFromImage: uploading texture w=%ld h=%ld alpha=%d", (long)w, (long)h, [bitmap hasAlpha]);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)w, (GLsizei)h,
                     0, format, GL_UNSIGNED_BYTE, data);
     } else {
-        NSLog(@"[ItemFlow] createTextureFromImage: no pixel data available for image size=%@", NSStringFromSize([image size]));
+        NSDebugLLog(@"gwcomp", @"[ItemFlow] createTextureFromImage: no pixel data available for image size=%@", NSStringFromSize([image size]));
     }
 
-    NSLog(@"[ItemFlow] createTextureFromImage: created texID=%u", (unsigned)texID);
+    NSDebugLLog(@"gwcomp", @"[ItemFlow] createTextureFromImage: created texID=%u", (unsigned)texID);
     return texID;
 }
 
@@ -472,7 +472,7 @@ static dispatch_once_t onceTokenMissingLogged;
     
     if (dataSource) {
         NSUInteger count = [dataSource numberOfItemsInItemFlowView:self];
-        NSLog(@"[ItemFlow] reloadData: count=%tu (fast path)", count);
+        NSDebugLLog(@"gwcomp", @"[ItemFlow] reloadData: count=%tu (fast path)", count);
         for (NSUInteger i = 0; i < count; i++) {
             [_textures addObject:@(0)];
         }
@@ -539,7 +539,7 @@ static dispatch_once_t onceTokenMissingLogged;
         if (t != 0) {
             _textures[idx] = @(t);
             uploadsThisTick++;
-            NSLog(@"[ItemFlow] updateTexturesForIndices: assigned texture=%u for index=%tu", (unsigned)t, idx);
+            NSDebugLLog(@"gwcomp", @"[ItemFlow] updateTexturesForIndices: assigned texture=%u for index=%tu", (unsigned)t, idx);
         }
     }];
 

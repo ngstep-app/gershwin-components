@@ -17,7 +17,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"CLMCompletionStep: init");
+        NSDebugLLog(@"gwcomp", @"CLMCompletionStep: init");
         [self setupView];
     }
     return self;
@@ -25,7 +25,7 @@
 
 - (void)setupView
 {
-    NSLog(@"CLMCompletionStep: setupView");
+    NSDebugLLog(@"gwcomp", @"CLMCompletionStep: setupView");
     
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
     
@@ -104,7 +104,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"CLMCompletionStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"CLMCompletionStep: stepWillAppear");
     
     // Play success sound if available
     NSString *soundPath = [[NSBundle mainBundle] pathForResource:@"success" ofType:@"mp3"];
@@ -118,19 +118,19 @@
             // Don't wait for completion
         }
         @catch (NSException *exception) {
-            NSLog(@"CLMCompletionStep: Could not play success sound: %@", [exception reason]);
+            NSDebugLLog(@"gwcomp", @"CLMCompletionStep: Could not play success sound: %@", [exception reason]);
         }
     }
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"CLMCompletionStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"CLMCompletionStep: stepDidAppear");
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"CLMCompletionStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"CLMCompletionStep: stepWillDisappear");
 }
 
 @end

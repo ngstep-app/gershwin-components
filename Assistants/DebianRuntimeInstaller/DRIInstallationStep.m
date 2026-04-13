@@ -17,7 +17,7 @@
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"DRIInstallationStep: init");
+        NSDebugLLog(@"gwcomp", @"DRIInstallationStep: init");
         _downloader = [[DRIDownloader alloc] init];
         _downloader.delegate = self;
         _installer = [[DRIInstaller alloc] init];
@@ -35,7 +35,7 @@
 #pragma clang diagnostic ignored "-Wobjc-missing-super-calls"
 - (void)dealloc
 {
-    NSLog(@"DRIInstallationStep: dealloc");
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: dealloc");
     [_downloader cancelDownload];
     [_installer cancelInstallation];
     _downloader = nil;
@@ -45,7 +45,7 @@
 
 - (void)cancel
 {
-    NSLog(@"DRIInstallationStep: cancel");
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: cancel");
     [_downloader cancelDownload];
     [_installer cancelInstallation];
 }
@@ -143,7 +143,7 @@
 
 - (void)updateProgress:(CGFloat)progress withTask:(NSString *)task
 {
-    NSLog(@"[DRIInstallationStep] *** updateProgress called: %.1f%% task: %@", progress * 100.0, task);
+    NSDebugLLog(@"gwcomp", @"[DRIInstallationStep] *** updateProgress called: %.1f%% task: %@", progress * 100.0, task);
     
     _currentProgress = progress;
     if (task) {
@@ -155,7 +155,7 @@
         [_progressBar setDoubleValue:progress * 100.0];
         [_progressBar setNeedsDisplay:YES]; // Force redraw
     } else {
-        NSLog(@"[DRIInstallationStep] *** ERROR: _progressBar is nil!");
+        NSDebugLLog(@"gwcomp", @"[DRIInstallationStep] *** ERROR: _progressBar is nil!");
     }
     
     // Update status label
@@ -163,19 +163,19 @@
         [_statusLabel setStringValue:task];
         [_statusLabel setNeedsDisplay:YES]; // Force redraw
     } else if (!_statusLabel) {
-        NSLog(@"[DRIInstallationStep] *** ERROR: _statusLabel is nil!");
+        NSDebugLLog(@"gwcomp", @"[DRIInstallationStep] *** ERROR: _statusLabel is nil!");
     }
 }
 
 - (void)stepWillAppear
 {
-    NSLog(@"DRIInstallationStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: stepWillAppear");
     _installationCompleted = NO;
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"DRIInstallationStep: stepDidAppear - starting installation");
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: stepDidAppear - starting installation");
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self startInstallation];
     });
@@ -184,18 +184,18 @@
 - (void)setSelectedImageURL:(NSString *)url
 {
     _selectedImageURL = [url copy];
-    NSLog(@"DRIInstallationStep: set selected image URL: %@", url);
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: set selected image URL: %@", url);
 }
 
 - (void)setController:(DRIController *)controller
 {
     _controller = controller; // weak ref, owned by app
-    NSLog(@"DRIInstallationStep: set controller reference");
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: set controller reference");
 }
 
 - (void)startInstallation
 {
-    NSLog(@"DRIInstallationStep: startInstallation");
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: startInstallation");
     
     if (!_selectedImageURL || [_selectedImageURL length] == 0) {
         [self logMessage:@"✗ Error: No image URL provided"]; 
@@ -221,7 +221,7 @@
 
 - (void)downloader:(id)downloader didStartDownloadWithExpectedSize:(long long)expectedSize
 {
-    NSLog(@"DRIInstallationStep: download started, expected size: %lld", expectedSize);
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: download started, expected size: %lld", expectedSize);
     [self logMessage:[NSString stringWithFormat:@"Download started, expected size: %@", [self formatFileSize:expectedSize]]];
     [self updateProgress:0.0 withTask:@"Downloading runtime image..."];
 }
@@ -243,7 +243,7 @@
 
 - (void)downloader:(id)downloader didCompleteWithFilePath:(NSString *)filePath
 {
-    NSLog(@"DRIInstallationStep: download completed: %@", filePath);
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: download completed: %@", filePath);
     [self logMessage:@"✓ Download completed successfully"]; 
     if (_statusLabel) { [_statusLabel setStringValue:NSLocalizedString(@"Download completed, starting installation...", @"")]; }
     if (_progressBar) { [_progressBar setDoubleValue:80.0]; }
@@ -254,14 +254,14 @@
 
 - (void)downloader:(id)downloader didFailWithError:(NSError *)error
 {
-    NSLog(@"DRIInstallationStep: download failed: %@", error.localizedDescription);
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: download failed: %@", error.localizedDescription);
     [self logMessage:[NSString stringWithFormat:@"✗ Download failed: %@", error.localizedDescription]]; 
     [self installationFailed:[NSString stringWithFormat:@"Download failed: %@", error.localizedDescription]];
 }
 
 - (void)startSystemInstallation
 {
-    NSLog(@"DRIInstallationStep: startSystemInstallation");
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: startSystemInstallation");
     [self logMessage:@"Starting system installation..."]; 
     [_installer installRuntimeFromImagePath:_downloadPath];
 }
@@ -270,7 +270,7 @@
 
 - (void)installer:(id)installer didStartInstallationWithMessage:(NSString *)message
 {
-    NSLog(@"DRIInstallationStep: installer started: %@", message);
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: installer started: %@", message);
     [self logMessage:message]; 
     if (_statusLabel) { [_statusLabel setStringValue:message]; }
     if (_progressBar) { [_progressBar setDoubleValue:85.0]; }
@@ -278,7 +278,7 @@
 
 - (void)installer:(id)installer didUpdateProgress:(NSString *)message
 {
-    NSLog(@"DRIInstallationStep: installer progress: %@", message);
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: installer progress: %@", message);
     [self logMessage:message]; 
     if (_statusLabel) { [_statusLabel setStringValue:message]; }
     
@@ -293,7 +293,7 @@
 
 - (void)installer:(id)installer didCompleteSuccessfully:(BOOL)success withMessage:(NSString *)message
 {
-    NSLog(@"DRIInstallationStep: installer completed: %@ - %@", success ? @"SUCCESS" : @"FAILED", message);
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: installer completed: %@ - %@", success ? @"SUCCESS" : @"FAILED", message);
     
     if (success) {
         [self logMessage:[NSString stringWithFormat:@"✓ %@", message]]; 
@@ -321,7 +321,7 @@
 
 - (void)installationFailed:(NSString *)error
 {
-    NSLog(@"DRIInstallationStep: installation failed: %@", error);
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: installation failed: %@", error);
     [self logMessage:[NSString stringWithFormat:@"\n=== INSTALLATION FAILED ===\nError: %@", error]]; 
     if (_statusLabel) { [_statusLabel setStringValue:NSLocalizedString(@"Installation failed", @"")]; }
     
@@ -333,27 +333,27 @@
     
     // Show error page via controller
     if (_controller) {
-        NSLog(@"DRIInstallationStep: calling controller showInstallationError");
+        NSDebugLLog(@"gwcomp", @"DRIInstallationStep: calling controller showInstallationError");
         [_controller showInstallationError:error];
     } else {
-        NSLog(@"DRIInstallationStep: ERROR - no controller reference to show error page");
+        NSDebugLLog(@"gwcomp", @"DRIInstallationStep: ERROR - no controller reference to show error page");
     }
 }
 
 - (void)cancelInstallation
 {
-    NSLog(@"DRIInstallationStep: cancelInstallation called");
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: cancelInstallation called");
     
     // Cancel ongoing download
     if (_downloader && _downloader.isDownloading) {
-        NSLog(@"DRIInstallationStep: canceling download");
+        NSDebugLLog(@"gwcomp", @"DRIInstallationStep: canceling download");
         [_downloader cancelDownload];
         [self logMessage:@"Download canceled by user"]; 
     }
     
     // Cancel ongoing installation 
     if (_installer) {
-        NSLog(@"DRIInstallationStep: canceling installation");
+        NSDebugLLog(@"gwcomp", @"DRIInstallationStep: canceling installation");
         [_installer cancelInstallation];
         [self logMessage:@"Installation canceled by user"]; 
     }
@@ -362,19 +362,19 @@
     if (_downloadPath && [[NSFileManager defaultManager] fileExistsAtPath:_downloadPath]) {
         NSError *error;
         if ([[NSFileManager defaultManager] removeItemAtPath:_downloadPath error:&error]) {
-            NSLog(@"DRIInstallationStep: cleaned up temporary file: %@", _downloadPath);
+            NSDebugLLog(@"gwcomp", @"DRIInstallationStep: cleaned up temporary file: %@", _downloadPath);
             [self logMessage:@"Temporary files cleaned up"]; 
         } else {
-            NSLog(@"DRIInstallationStep: failed to cleanup temporary file %@: %@", _downloadPath, error.localizedDescription);
+            NSDebugLLog(@"gwcomp", @"DRIInstallationStep: failed to cleanup temporary file %@: %@", _downloadPath, error.localizedDescription);
         }
     }
     
-    NSLog(@"DRIInstallationStep: cancellation complete");
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: cancellation complete");
 }
 
 - (void)notifyCompletion
 {
-    NSLog(@"DRIInstallationStep: notifyCompletion - user can proceed to next step");
+    NSDebugLLog(@"gwcomp", @"DRIInstallationStep: notifyCompletion - user can proceed to next step");
     // The GSAssistantFramework will automatically detect canContinue change
 }
 

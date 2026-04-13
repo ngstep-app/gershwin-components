@@ -100,11 +100,11 @@ static void test_start_service_by_name(void)
 int main(int argc, char *argv[])
 {
     @autoreleasepool {
-        NSLog(@"Starting StartServiceByName test with MiniBus");
+        NSDebugLLog(@"gwcomp", @"Starting StartServiceByName test with MiniBus");
         
         test_start_service_by_name();
         
-        NSLog(@"StartServiceByName test completed");
+        NSDebugLLog(@"gwcomp", @"StartServiceByName test completed");
     }
     
     return 0;

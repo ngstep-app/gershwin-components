@@ -138,11 +138,11 @@ static void test_gdbus_proxy_creation(void)
 int main(int argc, char *argv[])
 {
     @autoreleasepool {
-        NSLog(@"Starting GDBus proxy test with MiniBus");
+        NSDebugLLog(@"gwcomp", @"Starting GDBus proxy test with MiniBus");
         
         test_gdbus_proxy_creation();
         
-        NSLog(@"GDBus proxy test completed");
+        NSDebugLLog(@"gwcomp", @"GDBus proxy test completed");
     }
     
     return 0;

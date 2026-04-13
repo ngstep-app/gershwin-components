@@ -175,9 +175,9 @@
         });
         return;
     }
-    NSLog(@"PreferencesController: showWindow called (before) - window instance: %@", self.window);
+    NSDebugLLog(@"gwcomp", @"PreferencesController: showWindow called (before) - window instance: %@", self.window);
     if (self.window) {
-        NSLog(@"PreferencesController: current frame before show: %@, visible: %d", NSStringFromRect(self.window.frame), self.window.isVisible);
+        NSDebugLLog(@"gwcomp", @"PreferencesController: current frame before show: %@, visible: %d", NSStringFromRect(self.window.frame), self.window.isVisible);
     }
     // Load Defaults every time we show
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
@@ -207,7 +207,7 @@
 
     // Fallback for environments where makeKeyAndOrderFront may not be sufficient
     if (!self.window.isVisible) {
-        NSLog(@"PreferencesController: window not visible after makeKeyAndOrderFront - applying fallback orderFront");
+        NSDebugLLog(@"gwcomp", @"PreferencesController: window not visible after makeKeyAndOrderFront - applying fallback orderFront");
         [self.window orderFront:nil];
         [self.window makeKeyAndOrderFront:nil];
     }
@@ -217,7 +217,7 @@
         [self.window setReleasedWhenClosed:NO];
     }
 
-    NSLog(@"PreferencesController: showWindow called (after) - frame: %@, visible: %d", NSStringFromRect(self.window.frame), self.window.isVisible);
+    NSDebugLLog(@"gwcomp", @"PreferencesController: showWindow called (after) - frame: %@, visible: %d", NSStringFromRect(self.window.frame), self.window.isVisible);
 }
 
 - (void)cancel:(id)sender {

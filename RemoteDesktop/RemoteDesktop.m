@@ -112,7 +112,7 @@
     
     // Skip creating browser window in CLI mode
     if (_cliMode) {
-        NSLog(@"RemoteDesktop: Running in CLI mode, skipping browser window");
+        NSDebugLLog(@"gwcomp", @"RemoteDesktop: Running in CLI mode, skipping browser window");
         return;
     }
     
@@ -385,12 +385,12 @@
 
 - (void)startServiceDiscovery
 {
-    NSLog(@"RemoteDesktop: Starting service discovery...");
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Starting service discovery...");
     
     // Check if mDNS-SD support is available
     Class netServiceBrowserClass = NSClassFromString(@"NSNetServiceBrowser");
     if (!netServiceBrowserClass) {
-        NSLog(@"RemoteDesktop: WARNING - mDNS-SD support is not available. Network service discovery will not work.");
+        NSDebugLLog(@"gwcomp", @"RemoteDesktop: WARNING - mDNS-SD support is not available. Network service discovery will not work.");
         return;
     }
     
@@ -404,7 +404,7 @@
     [rdpBrowser setDelegate:self];
     [rdpBrowser searchForServicesOfType:@"_rdp._tcp" inDomain:@"local"];
     
-    NSLog(@"RemoteDesktop: Service discovery started for VNC and RDP");
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Service discovery started for VNC and RDP");
 }
 
 - (void)stopServiceDiscovery
@@ -478,7 +478,7 @@
 
 - (void)connectToService:(RemoteService *)service
 {
-    NSLog(@"RemoteDesktop: Connecting to service: %@ (%@:%ld)", 
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Connecting to service: %@ (%@:%ld)", 
           [service name], [service hostname], (long)[service port]);
     
     if ([service type] == RemoteServiceTypeVNC) {
@@ -505,11 +505,11 @@
 
 - (void)connectToVNCHost:(NSString *)hostname port:(NSInteger)port username:(NSString *)username password:(NSString *)password headless:(BOOL)headless serviceName:(NSString *)serviceName
 {
-    NSLog(@"RemoteDesktop: Opening VNC connection to %@:%ld%@", hostname, (long)port, headless ? @" [headless]" : @"");
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Opening VNC connection to %@:%ld%@", hostname, (long)port, headless ? @" [headless]" : @"");
     
     if (![VNCClient isLibVNCClientAvailable]) {
         if (headless) {
-            NSLog(@"RemoteDesktop: ERROR - libvncclient is not installed");
+            NSDebugLLog(@"gwcomp", @"RemoteDesktop: ERROR - libvncclient is not installed");
             [NSApp terminate:nil];
             return;
         }
@@ -550,7 +550,7 @@
 - (void)connectToRDPHost:(NSString *)hostname port:(NSInteger)port 
                 username:(NSString *)username password:(NSString *)password serviceName:(NSString *)serviceName
 {
-    NSLog(@"RemoteDesktop: Opening RDP connection to %@:%ld", hostname, (long)port);
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Opening RDP connection to %@:%ld", hostname, (long)port);
     
     if (![RDPClient isFreeRDPAvailable]) {
         NSAlert *alert = [[NSAlert alloc] init];
@@ -582,7 +582,7 @@
 
 - (void)connectFromCommandLine:(NSString *)hostname protocol:(NSString *)protocol username:(NSString *)username password:(NSString *)password
 {
-    NSLog(@"RemoteDesktop: Command line auto-connect to %@ via %@ (username: %@, password: %@)", 
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Command line auto-connect to %@ via %@ (username: %@, password: %@)", 
           hostname,
           [protocol uppercaseString],
           username ? username : @"(none)",
@@ -674,15 +674,15 @@
 - (void)netServiceBrowserWillSearch:(NSNetServiceBrowser *)aNetServiceBrowser
 {
     if (aNetServiceBrowser == vncBrowser) {
-        NSLog(@"RemoteDesktop: Starting VNC service discovery...");
+        NSDebugLLog(@"gwcomp", @"RemoteDesktop: Starting VNC service discovery...");
     } else if (aNetServiceBrowser == rdpBrowser) {
-        NSLog(@"RemoteDesktop: Starting RDP service discovery...");
+        NSDebugLLog(@"gwcomp", @"RemoteDesktop: Starting RDP service discovery...");
     }
 }
 
 - (void)netServiceBrowserDidStopSearch:(NSNetServiceBrowser *)aNetServiceBrowser
 {
-    NSLog(@"RemoteDesktop: Service browser stopped");
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Service browser stopped");
 }
 
 - (BOOL)serviceAlreadyExists:(NSNetService *)aNetService withType:(RemoteServiceType)serviceType
@@ -702,23 +702,23 @@
                moreComing:(BOOL)moreComing
 {
     NSString *type = [aNetService type];
-    NSLog(@"RemoteDesktop: Found service: %@ (type: %@)", [aNetService name], type);
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Found service: %@ (type: %@)", [aNetService name], type);
     
     // Determine service type
     RemoteServiceType serviceType = RemoteServiceTypeUnknown;
     if ([type hasPrefix:@"_rfb."]) {
         serviceType = RemoteServiceTypeVNC;
-        NSLog(@"RemoteDesktop: Detected VNC service");
+        NSDebugLLog(@"gwcomp", @"RemoteDesktop: Detected VNC service");
     } else if ([type hasPrefix:@"_rdp."]) {
         serviceType = RemoteServiceTypeRDP;
-        NSLog(@"RemoteDesktop: Detected RDP service (Windows Remote Desktop or compatible)");
+        NSDebugLLog(@"gwcomp", @"RemoteDesktop: Detected RDP service (Windows Remote Desktop or compatible)");
     } else {
-        NSLog(@"RemoteDesktop: Warning - Unknown service type: %@", type);
+        NSDebugLLog(@"gwcomp", @"RemoteDesktop: Warning - Unknown service type: %@", type);
     }
     
     // Check for duplicates by NetService object
     if ([self serviceAlreadyExists:aNetService withType:serviceType]) {
-        NSLog(@"RemoteDesktop: Service already in list, skipping: %@", [aNetService name]);
+        NSDebugLLog(@"gwcomp", @"RemoteDesktop: Service already in list, skipping: %@", [aNetService name]);
         return;
     }
     
@@ -746,7 +746,7 @@
     [aNetService resolveWithTimeout:10.0];
     
     [discoveredServices addObject:service];
-    NSLog(@"RemoteDesktop: Added service to list (total: %lu)", (unsigned long)[discoveredServices count]);
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Added service to list (total: %lu)", (unsigned long)[discoveredServices count]);
     RELEASE(service);
     
     [servicesTable reloadData];
@@ -756,26 +756,26 @@
          didRemoveService:(NSNetService *)aNetService
                moreComing:(BOOL)moreComing
 {
-    NSLog(@"RemoteDesktop: Service removed: %@ (type: %@)", [aNetService name], [aNetService type]);
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Service removed: %@ (type: %@)", [aNetService name], [aNetService type]);
     
     // Use a copy of the array to safely remove items during iteration
     NSArray *servicesCopy = [NSArray arrayWithArray:discoveredServices];
     for (RemoteService *service in servicesCopy) {
         if ([service netService] == aNetService) {
-            NSLog(@"RemoteDesktop: Removing %@ from service list", [service name]);
+            NSDebugLLog(@"gwcomp", @"RemoteDesktop: Removing %@ from service list", [service name]);
             [discoveredServices removeObject:service];
             break;
         }
     }
     
-    NSLog(@"RemoteDesktop: Services remaining: %lu", (unsigned long)[discoveredServices count]);
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Services remaining: %lu", (unsigned long)[discoveredServices count]);
     [servicesTable reloadData];
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)aNetServiceBrowser
              didNotSearch:(NSDictionary *)errorDict
 {
-    NSLog(@"RemoteDesktop: Service discovery error: %@", errorDict);
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Service discovery error: %@", errorDict);
 }
 
 #pragma mark - NSNetServiceDelegate
@@ -784,7 +784,7 @@
 {
     NSString *hostname = [sender hostName];
     NSInteger port = [sender port];
-    NSLog(@"RemoteDesktop: Service resolved: %@ -> %@:%ld", 
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Service resolved: %@ -> %@:%ld", 
           [sender name], hostname, (long)port);
     
     // Update the RemoteService with resolved information
@@ -794,7 +794,7 @@
             [service setHostname:hostname];
             [service setPort:port];
             resolvedService = service;
-            NSLog(@"RemoteDesktop: Updated %@ (%@) - %@:%ld", 
+            NSDebugLLog(@"gwcomp", @"RemoteDesktop: Updated %@ (%@) - %@:%ld", 
                   [service name], [service typeString], hostname, (long)port);
             break;
         }
@@ -812,7 +812,7 @@
                 [[service hostname] isEqual:[resolvedService hostname]] &&
                 [service port] == [resolvedService port] &&
                 [service type] == [resolvedService type]) {
-                NSLog(@"RemoteDesktop: Found duplicate service: %@ (same as %@)", 
+                NSDebugLLog(@"gwcomp", @"RemoteDesktop: Found duplicate service: %@ (same as %@)", 
                       [service name], [resolvedService name]);
                 [toRemove addObject:service];
             }
@@ -820,7 +820,7 @@
         
         // Remove duplicates
         if ([toRemove count] > 0) {
-            NSLog(@"RemoteDesktop: Removing %lu duplicate services", (unsigned long)[toRemove count]);
+            NSDebugLLog(@"gwcomp", @"RemoteDesktop: Removing %lu duplicate services", (unsigned long)[toRemove count]);
             [discoveredServices removeObjectsInArray:toRemove];
         }
         [toRemove release];
@@ -840,14 +840,14 @@
 
 - (void)netService:(NSNetService *)sender didNotResolve:(NSDictionary *)errorDict
 {
-    NSLog(@"RemoteDesktop: Failed to resolve service %@: %@", [sender name], errorDict);
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: Failed to resolve service %@: %@", [sender name], errorDict);
 }
 
 #pragma mark - VNCWindowDelegate
 
 - (void)vncWindowWillClose:(VNCWindow *)vncWindow
 {
-    NSLog(@"RemoteDesktop: VNC window closing");
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: VNC window closing");
     [vncWindows removeObject:vncWindow];
 }
 
@@ -855,7 +855,7 @@
 
 - (void)rdpWindowWillClose:(RDPWindow *)rdpWindow
 {
-    NSLog(@"RemoteDesktop: RDP window closing");
+    NSDebugLLog(@"gwcomp", @"RemoteDesktop: RDP window closing");
     [rdpWindows removeObject:rdpWindow];
 }
 

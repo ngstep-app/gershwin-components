@@ -22,7 +22,7 @@
         _updateTimers = [NSMutableDictionary dictionary];
         _itemViews = [NSMutableDictionary dictionary];
 
-        NSLog(@"StatusItemManager: Initialized with screen width %.0f, height %.0f",
+        NSDebugLLog(@"gwcomp", @"StatusItemManager: Initialized with screen width %.0f, height %.0f",
               width, height);
     }
     return self;
@@ -37,7 +37,7 @@
 
 - (void)loadStatusItems
 {
-    NSLog(@"StatusItemManager: Loading status item bundles...");
+    NSDebugLLog(@"gwcomp", @"StatusItemManager: Loading status item bundles...");
 
     NSMutableArray *searchPaths = [NSMutableArray array];
 
@@ -66,17 +66,17 @@
     NSMutableSet *loadedIdentifiers = [NSMutableSet set];
 
     for (NSString *searchPath in searchPaths) {
-        NSLog(@"StatusItemManager: Searching for bundles in: %@", searchPath);
+        NSDebugLLog(@"gwcomp", @"StatusItemManager: Searching for bundles in: %@", searchPath);
 
         if (![fm fileExistsAtPath:searchPath]) {
-            NSLog(@"StatusItemManager: Path does not exist: %@", searchPath);
+            NSDebugLLog(@"gwcomp", @"StatusItemManager: Path does not exist: %@", searchPath);
             continue;
         }
 
         NSError *error = nil;
         NSArray *contents = [fm contentsOfDirectoryAtPath:searchPath error:&error];
         if (error) {
-            NSLog(@"StatusItemManager: Error reading directory %@: %@", searchPath, error);
+            NSDebugLLog(@"gwcomp", @"StatusItemManager: Error reading directory %@: %@", searchPath, error);
             continue;
         }
 
@@ -116,7 +116,7 @@
             return NSOrderedSame;
         }];
 
-    NSLog(@"StatusItemManager: Loaded %lu status items",
+    NSDebugLLog(@"gwcomp", @"StatusItemManager: Loaded %lu status items",
           (unsigned long)[_statusItems count]);
 }
 
@@ -124,17 +124,17 @@
                loadedIdentifiers:(NSMutableSet *)loadedIdentifiers
 {
     if (!bundle) {
-        NSLog(@"StatusItemManager: Bundle is nil");
+        NSDebugLLog(@"gwcomp", @"StatusItemManager: Bundle is nil");
         return NO;
     }
 
-    NSLog(@"StatusItemManager: Loading bundle: %@", [bundle bundlePath]);
+    NSDebugLLog(@"gwcomp", @"StatusItemManager: Loading bundle: %@", [bundle bundlePath]);
 
     Class principalClass = [bundle principalClass];
     if (!principalClass) {
         NSError *error = nil;
         if (![bundle loadAndReturnError:&error]) {
-            NSLog(@"StatusItemManager: Failed to load bundle: %@",
+            NSDebugLLog(@"gwcomp", @"StatusItemManager: Failed to load bundle: %@",
                   error ? (id)error : @"unknown error");
             return NO;
         }
@@ -142,19 +142,19 @@
     }
 
     if (!principalClass) {
-        NSLog(@"StatusItemManager: No principal class in bundle: %@",
+        NSDebugLLog(@"gwcomp", @"StatusItemManager: No principal class in bundle: %@",
               [bundle bundlePath]);
         return NO;
     }
 
     id instance = [[principalClass alloc] init];
     if (!instance) {
-        NSLog(@"StatusItemManager: Failed to instantiate: %@", principalClass);
+        NSDebugLLog(@"gwcomp", @"StatusItemManager: Failed to instantiate: %@", principalClass);
         return NO;
     }
 
     if (![instance conformsToProtocol:@protocol(StatusItemProvider)]) {
-        NSLog(@"StatusItemManager: %@ does not conform to StatusItemProvider",
+        NSDebugLLog(@"gwcomp", @"StatusItemManager: %@ does not conform to StatusItemProvider",
               instance);
         return NO;
     }
@@ -170,7 +170,7 @@
     [provider loadWithManager:self];
     [_statusItems addObject:provider];
 
-    NSLog(@"StatusItemManager: Loaded provider '%@' (priority %ld, width %.0f)",
+    NSDebugLLog(@"gwcomp", @"StatusItemManager: Loaded provider '%@' (priority %ld, width %.0f)",
           identifier,
           (long)([provider respondsToSelector:@selector(displayPriority)]
                      ? [provider displayPriority] : 100),
@@ -206,7 +206,7 @@
 
     _statusItemsView = container;
 
-    NSLog(@"StatusItemManager: Created StatusItemsView (%.0f x %.0f) with %lu items",
+    NSDebugLLog(@"gwcomp", @"StatusItemManager: Created StatusItemsView (%.0f x %.0f) with %lu items",
           totalWidth, _menuBarHeight, (unsigned long)[_statusItems count]);
 
     return container;
@@ -270,7 +270,7 @@
             }
         }
         @catch (NSException *exception) {
-            NSLog(@"StatusItemManager: Exception updating %@: %@",
+            NSDebugLLog(@"gwcomp", @"StatusItemManager: Exception updating %@: %@",
                   [item identifier], exception);
         }
     }
@@ -278,7 +278,7 @@
 
 - (void)stopUpdateTimers
 {
-    NSLog(@"StatusItemManager: Stopping all update timers");
+    NSDebugLLog(@"gwcomp", @"StatusItemManager: Stopping all update timers");
     for (NSTimer *timer in [_updateTimers allValues]) {
         [timer invalidate];
     }
@@ -289,7 +289,7 @@
 
 - (void)unloadAllStatusItems
 {
-    NSLog(@"StatusItemManager: Unloading all status items");
+    NSDebugLLog(@"gwcomp", @"StatusItemManager: Unloading all status items");
 
     [self stopUpdateTimers];
 
@@ -300,7 +300,7 @@
             }
         }
         @catch (NSException *exception) {
-            NSLog(@"StatusItemManager: Exception unloading %@: %@",
+            NSDebugLLog(@"gwcomp", @"StatusItemManager: Exception unloading %@: %@",
                   [item identifier], exception);
         }
     }

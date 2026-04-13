@@ -21,7 +21,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"CLMDiskSelectionStep: init");
+        NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: init");
         _availableDisks = [[NSMutableArray alloc] init];
         [self setupView];
     }
@@ -30,13 +30,13 @@
 
 - (void)dealloc
 {
-    NSLog(@"CLMDiskSelectionStep: dealloc");
+    NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: dealloc");
     [self stopRefreshTimer];
 }
 
 - (void)setupView
 {
-    NSLog(@"CLMDiskSelectionStep: setupView");
+    NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: setupView");
     
     // Fit step view to installer card inner area
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
@@ -112,7 +112,7 @@
 
 - (void)startRefreshTimer
 {
-    NSLog(@"CLMDiskSelectionStep: startRefreshTimer");
+    NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: startRefreshTimer");
     [self refreshDiskList];
     
     _refreshTimer = [NSTimer scheduledTimerWithTimeInterval:3.0
@@ -124,20 +124,20 @@
 
 - (void)stopRefreshTimer
 {
-    NSLog(@"CLMDiskSelectionStep: stopRefreshTimer - timer=%@", _refreshTimer);
+    NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: stopRefreshTimer - timer=%@", _refreshTimer);
     if (_refreshTimer) {
-        NSLog(@"CLMDiskSelectionStep: Invalidating and releasing refresh timer");
+        NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: Invalidating and releasing refresh timer");
         [_refreshTimer invalidate];
         _refreshTimer = nil;
-        NSLog(@"CLMDiskSelectionStep: Refresh timer stopped successfully");
+        NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: Refresh timer stopped successfully");
     } else {
-        NSLog(@"CLMDiskSelectionStep: No refresh timer to stop");
+        NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: No refresh timer to stop");
     }
 }
 
 - (void)refreshDiskList
 {
-    NSLog(@"CLMDiskSelectionStep: refreshDiskList");
+    NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: refreshDiskList");
     
     NSArray *newDisks = [GSDiskUtilities getAvailableDisks];
     NSMutableArray *filteredDisks = [NSMutableArray array];
@@ -176,7 +176,7 @@
 
 - (void)tableSelectionChanged:(NSNotification *)notification
 {
-    NSLog(@"CLMDiskSelectionStep: tableSelectionChanged");
+    NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: tableSelectionChanged");
     
     NSInteger selectedRow = [_diskTableView selectedRow];
     
@@ -203,7 +203,7 @@
             _controller.selectedDiskDevice = deviceName;
             _controller.userAgreedToErase = YES;
             
-            NSLog(@"CLMDiskSelectionStep: User agreed to erase disk %@", deviceName);
+            NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: User agreed to erase disk %@", deviceName);
             
             // Update navigation buttons to enable Continue
             [self requestNavigationUpdate];
@@ -256,28 +256,28 @@
     }
     NSWindowController *wc = [window windowController];
     if ([wc isKindOfClass:[GSAssistantWindow class]]) {
-        NSLog(@"CLMDiskSelectionStep: requesting navigation button update");
+        NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: requesting navigation button update");
         GSAssistantWindow *assistantWindow = (GSAssistantWindow *)wc;
         [assistantWindow updateNavigationButtons];
     } else {
-        NSLog(@"CLMDiskSelectionStep: could not find GSAssistantWindow to update navigation (wc=%@)", wc);
+        NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: could not find GSAssistantWindow to update navigation (wc=%@)", wc);
     }
 }
 
 - (void)stepWillAppear
 {
-    NSLog(@"CLMDiskSelectionStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: stepWillAppear");
     [self startRefreshTimer];
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"CLMDiskSelectionStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: stepDidAppear");
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"CLMDiskSelectionStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"CLMDiskSelectionStep: stepWillDisappear");
     [self stopRefreshTimer];
 }
 

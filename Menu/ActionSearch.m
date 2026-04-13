@@ -164,7 +164,7 @@ static const CGFloat kMaxResultsShown = 15;
                    name:NSApplicationDidResignActiveNotification
                  object:nil];
     
-    NSLog(@"ActionSearchController: Created search panel");
+    NSDebugLLog(@"gwcomp", @"ActionSearchController: Created search panel");
 }
 
 - (void)createResultsMenu
@@ -185,7 +185,7 @@ static const CGFloat kMaxResultsShown = 15;
                    name:NSMenuDidEndTrackingNotification
                  object:self.resultsMenu];
     
-    NSLog(@"ActionSearchController: Created results menu");
+    NSDebugLLog(@"gwcomp", @"ActionSearchController: Created results menu");
 }
 
 - (void)setAppMenuWidget:(AppMenuWidget *)widget
@@ -254,7 +254,7 @@ static const CGFloat kMaxResultsShown = 15;
     // We rely on MenuApplication.sendEvent: to detect outside clicks and hide the search popup
     self.resultsMenuTracking = NO;
 
-    NSLog(@"ActionSearchController: Showing search popup at left edge x=%.0f, y=%.0f", panelFrame.origin.x, panelFrame.origin.y);
+    NSDebugLLog(@"gwcomp", @"ActionSearchController: Showing search popup at left edge x=%.0f, y=%.0f", panelFrame.origin.x, panelFrame.origin.y);
 }
 
 - (void)hideSearchPopup
@@ -274,7 +274,7 @@ static const CGFloat kMaxResultsShown = 15;
 
     [self.searchPanel orderOut:nil];
     [[X11ShortcutManager sharedManager] resumeKeyGrabs];
-    NSLog(@"ActionSearchController: Hiding search popup");
+    NSDebugLLog(@"gwcomp", @"ActionSearchController: Hiding search popup");
 }
 
 - (void)toggleSearchPopupAtPoint:(NSPoint)point
@@ -314,19 +314,19 @@ static const CGFloat kMaxResultsShown = 15;
     [self.allMenuItems removeAllObjects];
     
     if (!self.appMenuWidget) {
-        NSLog(@"ActionSearchController: No appMenuWidget set");
+        NSDebugLLog(@"gwcomp", @"ActionSearchController: No appMenuWidget set");
         return;
     }
     
     NSMenu *currentMenu = [self.appMenuWidget currentMenu];
     if (!currentMenu) {
-        NSLog(@"ActionSearchController: No current menu available");
+        NSDebugLLog(@"gwcomp", @"ActionSearchController: No current menu available");
         return;
     }
     
-    NSLog(@"ActionSearchController: Collecting items from: %@", [currentMenu title]);
+    NSDebugLLog(@"gwcomp", @"ActionSearchController: Collecting items from: %@", [currentMenu title]);
     [self collectItemsFromMenu:currentMenu withPath:@""];
-    NSLog(@"ActionSearchController: Collected %lu menu items", (unsigned long)[self.allMenuItems count]);
+    NSDebugLLog(@"gwcomp", @"ActionSearchController: Collected %lu menu items", (unsigned long)[self.allMenuItems count]);
 }
 
 - (void)collectItemsFromMenu:(NSMenu *)menu withPath:(NSString *)path
@@ -389,7 +389,7 @@ static const CGFloat kMaxResultsShown = 15;
         }
     }
     
-    NSLog(@"ActionSearchController: Search '%@' found %lu results", 
+    NSDebugLLog(@"gwcomp", @"ActionSearchController: Search '%@' found %lu results", 
           searchString, (unsigned long)[self.filteredResults count]);
     
     [self showResultsMenu];
@@ -399,7 +399,7 @@ static const CGFloat kMaxResultsShown = 15;
 {
     // Don't show results unless the search panel is visible and there is a query
     if (![self.searchPanel isVisible]) {
-        NSLog(@"ActionSearchController: Not showing results menu because search panel is not visible");
+        NSDebugLLog(@"gwcomp", @"ActionSearchController: Not showing results menu because search panel is not visible");
         return;
     }
 
@@ -483,7 +483,7 @@ static const CGFloat kMaxResultsShown = 15;
 {
     ActionSearchResult *result = [sender representedObject];
     if (result) {
-        NSLog(@"ActionSearchController: Selected: %@", [result path]);
+        NSDebugLLog(@"gwcomp", @"ActionSearchController: Selected: %@", [result path]);
         [self hideSearchPopup];
         [self executeActionForResult:result];
     }
@@ -494,13 +494,13 @@ static const CGFloat kMaxResultsShown = 15;
 - (void)executeActionForResult:(ActionSearchResult *)result
 {
     if (!result || !result.menuItem) {
-        NSLog(@"ActionSearchController: Cannot execute - no result or menu item");
+        NSDebugLLog(@"gwcomp", @"ActionSearchController: Cannot execute - no result or menu item");
         return;
     }
     
     NSMenuItem *originalItem = result.menuItem;
     
-    NSLog(@"ActionSearchController: Executing action for: %@", [result path]);
+    NSDebugLLog(@"gwcomp", @"ActionSearchController: Executing action for: %@", [result path]);
     
     // Try to invoke the menu item's action
     if ([originalItem target] && [originalItem action]) {
@@ -510,7 +510,7 @@ static const CGFloat kMaxResultsShown = 15;
             [[originalItem target] performSelector:[originalItem action] withObject:originalItem];
             #pragma clang diagnostic pop
         } @catch (NSException *exception) {
-            NSLog(@"ActionSearchController: Exception executing action: %@", exception);
+            NSDebugLLog(@"gwcomp", @"ActionSearchController: Exception executing action: %@", exception);
         }
     } else if ([originalItem action]) {
         // No target - try first responder chain
@@ -538,7 +538,7 @@ static const CGFloat kMaxResultsShown = 15;
             // Order out the menu window to ensure it disappears
             @try {
                 [win orderOut:nil];
-                NSLog(@"ActionSearchController: Closed menu window of class %@", cls);
+                NSDebugLLog(@"gwcomp", @"ActionSearchController: Closed menu window of class %@", cls);
             } @catch (NSException *e) {
                 (void)e;
             }
@@ -588,7 +588,7 @@ static const CGFloat kMaxResultsShown = 15;
     if (menu == self.resultsMenu) {
         // Prevent the results menu from opening unless the search panel is visible
         if (![self.searchPanel isVisible]) {
-            NSLog(@"ActionSearchController: Preventing results menu open because search panel is hidden");
+            NSDebugLLog(@"gwcomp", @"ActionSearchController: Preventing results menu open because search panel is hidden");
             // Explicitly close any menu windows to ensure no stray menu remains
             [self closeAllMenuWindows];
             self.resultsMenuTracking = NO;

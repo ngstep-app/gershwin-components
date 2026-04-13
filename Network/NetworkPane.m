@@ -78,19 +78,19 @@
 
 - (void)willUnselect
 {
-    NSLog(@"NetworkPane: willUnselect called");
+    NSDebugLLog(@"gwcomp", @"NetworkPane: willUnselect called");
 }
 
 - (void)didUnselect
 {
     [super didUnselect];
     [self stopRefreshTimer];
-    NSLog(@"NetworkPane: didUnselect called");
+    NSDebugLLog(@"gwcomp", @"NetworkPane: didUnselect called");
 }
 
 - (NSPreferencePaneUnselectReply)shouldUnselect
 {
-    NSLog(@"NetworkPane: shouldUnselect called, allowing unselect");
+    NSDebugLLog(@"gwcomp", @"NetworkPane: shouldUnselect called, allowing unselect");
     return NSUnselectNow;
 }
 

@@ -22,8 +22,8 @@ int main(int argc, char *argv[]) {
         NSData *headerFields = [reply serializeHeaderFields];
         NSData *body = [reply serializeBody];
         
-        NSLog(@"Header fields length: %lu bytes", (unsigned long)[headerFields length]);
-        NSLog(@"Body length: %lu bytes", (unsigned long)[body length]);
+        NSDebugLLog(@"gwcomp", @"Header fields length: %lu bytes", (unsigned long)[headerFields length]);
+        NSDebugLLog(@"gwcomp", @"Body length: %lu bytes", (unsigned long)[body length]);
         
         // Calculate alignment
         NSUInteger fixedHeaderLen = 16;
@@ -31,12 +31,12 @@ int main(int argc, char *argv[]) {
         NSUInteger alignedLength = alignTo(currentLength, 8);
         NSUInteger padding = alignedLength - currentLength;
         
-        NSLog(@"Current length after header fields: %lu", currentLength);
-        NSLog(@"Aligned length: %lu", alignedLength);
-        NSLog(@"Padding needed: %lu bytes", padding);
+        NSDebugLLog(@"gwcomp", @"Current length after header fields: %lu", currentLength);
+        NSDebugLLog(@"gwcomp", @"Aligned length: %lu", alignedLength);
+        NSDebugLLog(@"gwcomp", @"Padding needed: %lu bytes", padding);
         
         NSData *fullMessage = [reply serialize];
-        NSLog(@"Full message length: %lu bytes", (unsigned long)[fullMessage length]);
+        NSDebugLLog(@"gwcomp", @"Full message length: %lu bytes", (unsigned long)[fullMessage length]);
         
         // Print the header fields raw bytes
         printf("Header fields raw (%lu bytes):\n", (unsigned long)[headerFields length]);

@@ -13,7 +13,7 @@ static MBDaemon *mbDaemon = nil;
 
 void signal_handler(int sig)
 {
-    NSLog(@"Received signal %d, shutting down...", sig);
+    NSDebugLLog(@"gwcomp", @"Received signal %d, shutting down...", sig);
     if (mbDaemon) {
         [mbDaemon stop];
     }
@@ -22,7 +22,7 @@ void signal_handler(int sig)
 int main(int argc, const char * argv[])
 {
     @autoreleasepool {
-        NSLog(@"MiniBus D-Bus daemon starting...");
+        NSDebugLLog(@"gwcomp", @"MiniBus D-Bus daemon starting...");
         
         // Set up signal handlers
         signal(SIGINT, signal_handler);
@@ -42,20 +42,20 @@ int main(int argc, const char * argv[])
             }
         }
         
-        NSLog(@"Using socket path: %@", socketPath);
+        NSDebugLLog(@"gwcomp", @"Using socket path: %@", socketPath);
         
         // Create and start daemon
         mbDaemon = [[MBDaemon alloc] initWithSocketPath:socketPath];
         
         if (![mbDaemon start]) {
-            NSLog(@"Failed to start daemon");
+            NSDebugLLog(@"gwcomp", @"Failed to start daemon");
             return 1;
         }
         
         // Run daemon
         [mbDaemon run];
         
-        NSLog(@"MiniBus daemon exiting");
+        NSDebugLLog(@"gwcomp", @"MiniBus daemon exiting");
     }
     
     return 0;

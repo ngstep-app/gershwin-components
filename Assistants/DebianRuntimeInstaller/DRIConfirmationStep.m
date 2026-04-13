@@ -23,7 +23,7 @@
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"DRIConfirmationStep: init");
+        NSDebugLLog(@"gwcomp", @"DRIConfirmationStep: init");
         _selectedImageURL = @"";
         _selectedImageName = @"Unknown";
         _selectedImageSize = 0;
@@ -47,7 +47,7 @@
         return _contentView;
     }
 
-    NSLog(@"DRIConfirmationStep: creating stepView");
+    NSDebugLLog(@"gwcomp", @"DRIConfirmationStep: creating stepView");
 
     _contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
 
@@ -80,13 +80,13 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"DRIConfirmationStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"DRIConfirmationStep: stepWillAppear");
     [self updateSummary];
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"DRIConfirmationStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"DRIConfirmationStep: stepDidAppear");
 }
 
 - (BOOL)canContinue
@@ -107,21 +107,21 @@
 - (void)setSelectedImageURL:(NSString *)url
 {
     _selectedImageURL = url ?: @"";
-    NSLog(@"DRIConfirmationStep: set image URL: %@", _selectedImageURL);
+    NSDebugLLog(@"gwcomp", @"DRIConfirmationStep: set image URL: %@", _selectedImageURL);
     [self updateSummary];
 }
 
 - (void)setSelectedImageName:(NSString *)name
 {
     _selectedImageName = name ?: @"Unknown";
-    NSLog(@"DRIConfirmationStep: set image name: %@", _selectedImageName);
+    NSDebugLLog(@"gwcomp", @"DRIConfirmationStep: set image name: %@", _selectedImageName);
     [self updateSummary];
 }
 
 - (void)setSelectedImageSize:(long long)size
 {
     _selectedImageSize = size;
-    NSLog(@"DRIConfirmationStep: set image size: %lld", size);
+    NSDebugLLog(@"gwcomp", @"DRIConfirmationStep: set image size: %lld", size);
     [self updateSummary];
 }
 
@@ -131,7 +131,7 @@
         return; // UI not ready yet
     }
 
-    NSLog(@"DRIConfirmationStep: updateSummary");
+    NSDebugLLog(@"gwcomp", @"DRIConfirmationStep: updateSummary");
 
     NSMutableString *summary = [[NSMutableString alloc] init];
 

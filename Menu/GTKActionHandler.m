@@ -33,7 +33,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
         gtkMenuItemToActionPathMap = [[NSMutableDictionary alloc] init];
         gtkMenuItemToConnectionMap = [[NSMutableDictionary alloc] init];
         
-        NSLog(@"GTKActionHandler: Initialized GTK action handler");
+        NSDebugLLog(@"gwcomp", @"GTKActionHandler: Initialized GTK action handler");
     }
 }
 
@@ -44,7 +44,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
                 dbusConnection:(GNUDBusConnection *)dbusConnection
 {
     if (!menuItem || !actionName || !serviceName || !actionPath || !dbusConnection) {
-        NSLog(@"GTKActionHandler: ERROR: Missing required parameters for GTK action setup");
+        NSDebugLLog(@"gwcomp", @"GTKActionHandler: ERROR: Missing required parameters for GTK action setup");
         return;
     }
     
@@ -146,7 +146,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
 // Legacy method for compatibility with old code
 + (void)setupActionForMenuItem:(NSMenuItem *)menuItem
 {
-    NSLog(@"GTKActionHandler: Set up GTK action for menu item '%@' (action=unity.-Quit, service=:1.63, path=/org/appmenu/gtk/window/0)", 
+    NSDebugLLog(@"gwcomp", @"GTKActionHandler: Set up GTK action for menu item '%@' (action=unity.-Quit, service=:1.63, path=/org/appmenu/gtk/window/0)", 
           [menuItem title]);
     
     // This method is called by old code that doesn't pass all parameters
@@ -160,7 +160,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
 {
     NSMenuItem *menuItem = (NSMenuItem *)sender;
     
-    NSLog(@"GTKActionHandler: Menu item action triggered for '%@'", [menuItem title]);
+    NSDebugLLog(@"gwcomp", @"GTKActionHandler: Menu item action triggered for '%@'", [menuItem title]);
     
     // Try to find the action by searching through stored actions
     NSString *actionName = nil;
@@ -183,23 +183,23 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
                 serviceName = [gtkMenuItemToServiceMap objectForKey:key];
                 actionPath = [gtkMenuItemToActionPathMap objectForKey:key];
                 dbusConnection = [gtkMenuItemToConnectionMap objectForKey:key];
-                NSLog(@"GTKActionHandler: Found matching action '%@' for menu item '%@'", actionName, [menuItem title]);
+                NSDebugLLog(@"gwcomp", @"GTKActionHandler: Found matching action '%@' for menu item '%@'", actionName, [menuItem title]);
                 break;
             }
         }
     }
     
     if (!actionName || !serviceName || !actionPath || !dbusConnection) {
-        NSLog(@"GTKActionHandler: ERROR: Missing GTK action info for menu item '%@'", [menuItem title]);
-        NSLog(@"GTKActionHandler: actionName=%@, serviceName=%@, actionPath=%@, dbusConnection=%@", 
+        NSDebugLLog(@"gwcomp", @"GTKActionHandler: ERROR: Missing GTK action info for menu item '%@'", [menuItem title]);
+        NSDebugLLog(@"gwcomp", @"GTKActionHandler: actionName=%@, serviceName=%@, actionPath=%@, dbusConnection=%@", 
               actionName, serviceName, actionPath, dbusConnection);
         
         // Debug: show all stored keys
-        NSLog(@"GTKActionHandler: Available stored keys: %@", [gtkMenuItemToActionMap allKeys]);
+        NSDebugLLog(@"gwcomp", @"GTKActionHandler: Available stored keys: %@", [gtkMenuItemToActionMap allKeys]);
         return;
     }
     
-    NSLog(@"GTKActionHandler: Triggering GTK action '%@' for menu item '%@' (service=%@, path=%@)", 
+    NSDebugLLog(@"gwcomp", @"GTKActionHandler: Triggering GTK action '%@' for menu item '%@' (service=%@, path=%@)", 
           actionName, [menuItem title], serviceName, actionPath);
     
         // Refresh the bus name and action path from the current window's X11 properties.
@@ -215,7 +215,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
                                                          atomName:@"_GTK_UNIQUE_BUS_NAME"];
             if (freshBusName && [freshBusName length] > 0) {
                 if (![freshBusName isEqualToString:serviceName]) {
-                    NSLog(@"GTKActionHandler: Bus name refreshed from %@ to %@", serviceName, freshBusName);
+                    NSDebugLLog(@"gwcomp", @"GTKActionHandler: Bus name refreshed from %@ to %@", serviceName, freshBusName);
                 }
                 serviceName = freshBusName;
             }
@@ -225,7 +225,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
                                                    atomName:@"_GTK_APPLICATION_OBJECT_PATH"];
             if (appPath && [appPath length] > 0) {
                 if (![appPath isEqualToString:actionPath]) {
-                    NSLog(@"GTKActionHandler: Action path refreshed from %@ to %@ (_GTK_APPLICATION_OBJECT_PATH)",
+                    NSDebugLLog(@"gwcomp", @"GTKActionHandler: Action path refreshed from %@ to %@ (_GTK_APPLICATION_OBJECT_PATH)",
                           actionPath, appPath);
                 }
                 actionPath = appPath;
@@ -237,7 +237,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
     NSString *actualActionName = actionName;
     if ([actionName hasPrefix:@"unity."]) {
         actualActionName = [actionName substringFromIndex:6]; // Remove "unity." prefix
-        NSLog(@"GTKActionHandler: Stripped unity prefix: '%@' -> '%@'", actionName, actualActionName);
+        NSDebugLLog(@"gwcomp", @"GTKActionHandler: Stripped unity prefix: '%@' -> '%@'", actionName, actualActionName);
     }
     
     // Check if this is Unity protocol (protocol 0) vs GTK protocol (protocol 1)
@@ -247,7 +247,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
     
     if (isUnityProtocol) {
         // True Unity protocol - use Event method on com.canonical.dbusmenu
-        NSLog(@"GTKActionHandler: Calling Unity Event method for action: %@", actualActionName);
+        NSDebugLLog(@"gwcomp", @"GTKActionHandler: Calling Unity Event method for action: %@", actualActionName);
         
         // Unity actions are triggered by sending "clicked" events to menu items
         // The actualActionName should be the menu item ID (negative integer)
@@ -263,9 +263,9 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
                                                @((NSUInteger)time(NULL))]]; // timestamp
         
         if (result) {
-            NSLog(@"GTKActionHandler: Unity Event activation succeeded, result: %@", result);
+            NSDebugLLog(@"gwcomp", @"GTKActionHandler: Unity Event activation succeeded, result: %@", result);
         } else {
-            NSLog(@"GTKActionHandler: Unity Event activation failed");
+            NSDebugLLog(@"gwcomp", @"GTKActionHandler: Unity Event activation failed");
         }
         return;
     }
@@ -283,17 +283,17 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
             actualActionPath = @"/org/gnome/gedit";
             // Strip the "app." prefix since gedit registers actions without prefixes
             actualActionName = [actualActionName substringFromIndex:4]; // Remove "app." prefix
-            NSLog(@"GTKActionHandler: Using gedit application path for app action: %@ (stripped to: %@)", actualActionPath, actualActionName);
+            NSDebugLLog(@"gwcomp", @"GTKActionHandler: Using gedit application path for app action: %@ (stripped to: %@)", actualActionPath, actualActionName);
         } else if ([actualActionName hasPrefix:@"win."]) {
             // Window-scoped actions go to the window path
             actualActionPath = @"/org/gnome/gedit/window/1";
             // Strip the "win." prefix since gedit registers actions without prefixes
             actualActionName = [actualActionName substringFromIndex:4]; // Remove "win." prefix
-            NSLog(@"GTKActionHandler: Using gedit window path for win action: %@ (stripped to: %@)", actualActionPath, actualActionName);
+            NSDebugLLog(@"gwcomp", @"GTKActionHandler: Using gedit window path for win action: %@ (stripped to: %@)", actualActionPath, actualActionName);
         } else {
             // Other actions, try the window path first
             actualActionPath = @"/org/gnome/gedit/window/1";
-            NSLog(@"GTKActionHandler: Using gedit window path for other action: %@", actualActionPath);
+            NSDebugLLog(@"gwcomp", @"GTKActionHandler: Using gedit window path for other action: %@", actualActionPath);
         }
     }
     
@@ -311,13 +311,13 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
         // This is a stateful action - toggle the state
         BOOL newState = ([menuItem state] == NSOffState);
         parameter = @[@(newState)]; // Variant array with boolean
-        NSLog(@"GTKActionHandler: Toggling stateful action to %@", @(newState));
+        NSDebugLLog(@"gwcomp", @"GTKActionHandler: Toggling stateful action to %@", @(newState));
     }
     
     // Call Activate method on org.gtk.Actions interface
     // Signature: Activate(s action_name, av parameter, a{sv} platform_data)
     // Use a special method call to ensure correct DBus type conversion
-    NSLog(@"GTKActionHandler: Calling GTK Activate method for action: %@ on path: %@", actualActionName, actualActionPath);
+    NSDebugLLog(@"gwcomp", @"GTKActionHandler: Calling GTK Activate method for action: %@ on path: %@", actualActionName, actualActionPath);
     
     id result = [dbusConnection callGTKActivateMethod:actualActionName
                                             parameter:parameter
@@ -326,7 +326,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
                                            objectPath:actualActionPath];
     
     if (result) {
-        NSLog(@"GTKActionHandler: GTK action activation succeeded, result: %@", result);
+        NSDebugLLog(@"gwcomp", @"GTKActionHandler: GTK action activation succeeded, result: %@", result);
         
         // Update menu item state if this was a stateful action
         if ([parameter count] > 0) {
@@ -334,7 +334,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
             [menuItem setState:newState ? NSOnState : NSOffState];
         }
     } else {
-        NSLog(@"GTKActionHandler: GTK action activation failed");
+        NSDebugLLog(@"gwcomp", @"GTKActionHandler: GTK action activation failed");
     }
 }
 
@@ -429,7 +429,7 @@ static NSMutableSet *_servicesWithoutDescribeAction = nil;
 
 + (void)cleanup
 {
-    NSLog(@"GTKActionHandler: Cleaning up GTK action handler...");
+    NSDebugLLog(@"gwcomp", @"GTKActionHandler: Cleaning up GTK action handler...");
     
     [gtkMenuItemToActionMap removeAllObjects];
     [gtkMenuItemToServiceMap removeAllObjects];

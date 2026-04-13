@@ -129,21 +129,21 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"BAConfigurationStep: Step will appear");
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Step will appear");
     [self updateConfigurationView];
     [self calculateSpaceRequirements];
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"BAConfigurationStep: Step will disappear");
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Step will disappear");
     // Reset the calculation flag in case we're navigating away
     _spaceCalculationInProgress = NO;
 }
 
 - (void)updateConfigurationView
 {
-    NSLog(@"BAConfigurationStep: Updating configuration view");
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Updating configuration view");
     
     BAOperationType operation = _controller.selectedOperation;
     
@@ -195,11 +195,11 @@
 - (void)calculateSpaceRequirements
 {
     if (_spaceCalculationInProgress) {
-        NSLog(@"BAConfigurationStep: Space calculation already in progress, skipping");
+        NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Space calculation already in progress, skipping");
         return;
     }
     
-    NSLog(@"BAConfigurationStep: Calculating space requirements");
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Calculating space requirements");
     _spaceCalculationInProgress = YES;
     
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
@@ -211,25 +211,25 @@
 {
     @autoreleasepool {
     
-    NSLog(@"BAConfigurationStep: === Starting space calculation ===");
-    NSLog(@"BAConfigurationStep: Selected disk device: '%@'", _controller.selectedDiskDevice);
-    NSLog(@"BAConfigurationStep: Selected operation: %ld", (long)_controller.selectedOperation);
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: === Starting space calculation ===");
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Selected disk device: '%@'", _controller.selectedDiskDevice);
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Selected operation: %ld", (long)_controller.selectedOperation);
     
     long long requiredSpace = 0;
     long long availableSpace = [_controller getDiskAvailableSpace:_controller.selectedDiskDevice];
     
-    NSLog(@"BAConfigurationStep: Space calculation - Disk: %@, Available space: %lld bytes", _controller.selectedDiskDevice, availableSpace);
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Space calculation - Disk: %@, Available space: %lld bytes", _controller.selectedDiskDevice, availableSpace);
     
     if (_controller.selectedOperation == BAOperationTypeNewBackup || _controller.selectedOperation == BAOperationTypeDestroyAndRecreate) {
         requiredSpace = [_controller calculateBackupSize];
-        NSLog(@"BAConfigurationStep: New/Destroy and recreate backup - Required space: %lld bytes", requiredSpace);
+        NSDebugLLog(@"gwcomp", @"BAConfigurationStep: New/Destroy and recreate backup - Required space: %lld bytes", requiredSpace);
     } else if (_controller.selectedOperation == BAOperationTypeUpdateBackup) {
         // For incremental backup, estimate 10% of home directory size as new changes
         requiredSpace = [_controller calculateBackupSize] / 10;
-        NSLog(@"BAConfigurationStep: Incremental backup - Required space: %lld bytes", requiredSpace);
+        NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Incremental backup - Required space: %lld bytes", requiredSpace);
     }
     
-    NSLog(@"BAConfigurationStep: === Space calculation complete ===");
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: === Space calculation complete ===");
     
     NSDictionary *spaceInfo = @{
         @"requiredSpace": @(requiredSpace),
@@ -248,13 +248,13 @@
     long long requiredSpace = [[spaceInfo objectForKey:@"requiredSpace"] longLongValue];
     long long availableSpace = [[spaceInfo objectForKey:@"availableSpace"] longLongValue];
     
-    NSLog(@"BAConfigurationStep: updateSpaceInfo - Required: %lld bytes, Available: %lld bytes", requiredSpace, availableSpace);
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: updateSpaceInfo - Required: %lld bytes, Available: %lld bytes", requiredSpace, availableSpace);
     
     // IMPORTANT: Set the controller values here
     _controller.requiredSpace = requiredSpace;
     _controller.availableSpace = availableSpace;
     
-    NSLog(@"BAConfigurationStep: After setting controller - requiredSpace: %lld, availableSpace: %lld", 
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: After setting controller - requiredSpace: %lld, availableSpace: %lld", 
           _controller.requiredSpace, _controller.availableSpace);
     
     // Clear the in-progress flag
@@ -265,33 +265,33 @@
         NSString *requiredStr = [_controller formatDiskSize:requiredSpace];
         NSString *availableStr = [_controller formatDiskSize:availableSpace];
         
-        NSLog(@"BAConfigurationStep: Formatted - Required: %@, Available: %@", requiredStr, availableStr);
+        NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Formatted - Required: %@, Available: %@", requiredStr, availableStr);
         
         if (requiredSpace <= availableSpace) {
             spaceInfoStr = [NSString stringWithFormat:NSLocalizedString(@"Required: %@, Available: %@ ✓", @"Space requirements met"), requiredStr, availableStr];
             [_spaceInfoLabel setTextColor:[NSColor blueColor]]; // Use blueColor instead of systemGreenColor
-            NSLog(@"BAConfigurationStep: Space check PASSED");
+            NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Space check PASSED");
         } else {
             spaceInfoStr = [NSString stringWithFormat:NSLocalizedString(@"Required: %@, Available: %@ ⚠️ Insufficient space!", @"Space requirements not met"), requiredStr, availableStr];
             [_spaceInfoLabel setTextColor:[NSColor redColor]]; // Use redColor instead of systemRedColor
-            NSLog(@"BAConfigurationStep: Space check FAILED - need %lld more bytes", requiredSpace - availableSpace);
+            NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Space check FAILED - need %lld more bytes", requiredSpace - availableSpace);
         }
     } else {
         spaceInfoStr = NSLocalizedString(@"Calculating space requirements...", @"Space calculation in progress");
         [_spaceInfoLabel setTextColor:[NSColor secondaryLabelColor]];
-        NSLog(@"BAConfigurationStep: Still calculating space requirements");
+        NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Still calculating space requirements");
     }
     
     [_spaceInfoLabel setStringValue:spaceInfoStr];
     
     // After updating space info, re-check the confirmation state
-    NSLog(@"BAConfigurationStep: Space calculation complete, re-checking confirmation state");
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Space calculation complete, re-checking confirmation state");
     [self confirmationChanged:nil];
 }
 
 - (void)loadAvailableSnapshots
 {
-    NSLog(@"BAConfigurationStep: Loading available snapshots");
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Loading available snapshots");
     
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         [self performSnapshotLoad];
@@ -320,7 +320,7 @@
 
 - (void)loadSelectableItems
 {
-    NSLog(@"BAConfigurationStep: Loading selectable items");
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Loading selectable items");
     
     // For now, provide common directories that users might want to restore
     [_selectableItems removeAllObjects];
@@ -352,14 +352,14 @@
 {
     BOOL confirmed = ([_confirmCheckbox state] == NSOnState);
     
-    NSLog(@"BAConfigurationStep: confirmationChanged - confirmed: %@, spaceCalculationInProgress: %@", 
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: confirmationChanged - confirmed: %@, spaceCalculationInProgress: %@", 
           confirmed ? @"YES" : @"NO", _spaceCalculationInProgress ? @"YES" : @"NO");
-    NSLog(@"BAConfigurationStep: confirmationChanged - controller.requiredSpace: %lld", _controller.requiredSpace);
-    NSLog(@"BAConfigurationStep: confirmationChanged - controller.availableSpace: %lld", _controller.availableSpace);
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: confirmationChanged - controller.requiredSpace: %lld", _controller.requiredSpace);
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: confirmationChanged - controller.availableSpace: %lld", _controller.availableSpace);
     
     // Don't make decisions if space calculation is still in progress
     if (_spaceCalculationInProgress) {
-        NSLog(@"BAConfigurationStep: Space calculation still in progress, deferring confirmation check");
+        NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Space calculation still in progress, deferring confirmation check");
         return;
     }
     
@@ -367,22 +367,22 @@
     if (_controller.selectedOperation == BAOperationTypeRestoreBackup) {
         BOOL hasSelectedSnapshot = (_controller.selectedSnapshot != nil);
         self.canProceed = confirmed && hasSelectedSnapshot;
-        NSLog(@"BAConfigurationStep: Restore operation - hasSelectedSnapshot: %@", hasSelectedSnapshot ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Restore operation - hasSelectedSnapshot: %@", hasSelectedSnapshot ? @"YES" : @"NO");
     } else {
         self.canProceed = confirmed;
     }
     
     // Check space requirements
     if (_controller.requiredSpace > _controller.availableSpace && _controller.requiredSpace > 0) {
-        NSLog(@"BAConfigurationStep: BLOCKING due to insufficient space: required %lld > available %lld", 
+        NSDebugLLog(@"gwcomp", @"BAConfigurationStep: BLOCKING due to insufficient space: required %lld > available %lld", 
               _controller.requiredSpace, _controller.availableSpace);
         self.canProceed = NO;
     } else {
-        NSLog(@"BAConfigurationStep: Space check OK: required %lld <= available %lld", 
+        NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Space check OK: required %lld <= available %lld", 
               _controller.requiredSpace, _controller.availableSpace);
     }
     
-    NSLog(@"BAConfigurationStep: Final canProceed: %@", self.canProceed ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Final canProceed: %@", self.canProceed ? @"YES" : @"NO");
     
     if (self.assistantWindow) {
         [self.assistantWindow updateNavigationButtons];
@@ -465,7 +465,7 @@
         if (selectedRow >= 0 && (NSUInteger)selectedRow < [_availableSnapshots count]) {
             NSDictionary *selectedSnapshot = [_availableSnapshots objectAtIndex:selectedRow];
             _controller.selectedSnapshot = [selectedSnapshot objectForKey:@"name"];
-            NSLog(@"BAConfigurationStep: Selected snapshot: %@", _controller.selectedSnapshot);
+            NSDebugLLog(@"gwcomp", @"BAConfigurationStep: Selected snapshot: %@", _controller.selectedSnapshot);
         } else {
             _controller.selectedSnapshot = nil;
         }

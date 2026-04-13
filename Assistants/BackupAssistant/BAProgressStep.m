@@ -102,7 +102,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"BAProgressStep: Step will appear");
+    NSDebugLLog(@"gwcomp", @"BAProgressStep: Step will appear");
     
     // Update operation description based on selected operation
     NSString *operationDesc = @"";
@@ -136,12 +136,12 @@
 - (void)startOperation
 {
     if (_operationInProgress) {
-        NSLog(@"BAProgressStep: Operation already in progress, ignoring duplicate start request");
+        NSDebugLLog(@"gwcomp", @"BAProgressStep: Operation already in progress, ignoring duplicate start request");
         return;
     }
     
     _operationInProgress = YES;
-    NSLog(@"BAProgressStep: Starting operation: %ld", (long)_controller.selectedOperation);
+    NSDebugLLog(@"gwcomp", @"BAProgressStep: Starting operation: %ld", (long)_controller.selectedOperation);
     
     // Perform operation in background thread
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
@@ -223,7 +223,7 @@
                 break;
         }
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Operation failed with exception: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Operation failed with exception: %@", [exception reason]);
         errorMessage = [NSString stringWithFormat:NSLocalizedString(@"Operation failed: %@", @"Operation exception error"), [exception reason]];
     }
     
@@ -255,7 +255,7 @@
     _operationInProgress = NO;
     
     if (success) {
-        NSLog(@"BAProgressStep: Operation completed successfully");
+        NSDebugLLog(@"gwcomp", @"BAProgressStep: Operation completed successfully");
         [self updateProgress:1.0 withTask:NSLocalizedString(@"Operation completed successfully", @"Success task message")];
         
         NSString *successMessage = @"";
@@ -283,9 +283,9 @@
         [_controller showOperationSuccess:successMessage];
         
         // Don't auto-advance - let the user see the success page
-        NSLog(@"BAProgressStep: Operation completed successfully, staying on success page");
+        NSDebugLLog(@"gwcomp", @"BAProgressStep: Operation completed successfully, staying on success page");
     } else {
-        NSLog(@"BAProgressStep: Operation failed: %@", errorMessage);
+        NSDebugLLog(@"gwcomp", @"BAProgressStep: Operation failed: %@", errorMessage);
         
         if (!errorMessage || [errorMessage length] == 0) {
             errorMessage = NSLocalizedString(@"The operation failed for an unknown reason.", @"Generic error message");
@@ -309,7 +309,7 @@
     // Update the step's progress property for the framework
     self.progress = progress;
     
-    NSLog(@"BAProgressStep: Progress update: %.1f%% - %@", percentage, currentTask);
+    NSDebugLLog(@"gwcomp", @"BAProgressStep: Progress update: %.1f%% - %@", percentage, currentTask);
 }
 
 - (BOOL)showsProgress

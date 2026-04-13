@@ -17,7 +17,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"BhyveIntroStep: init");
+        NSDebugLLog(@"gwcomp", @"BhyveIntroStep: init");
         [self setupView];
     }
     return self;
@@ -25,7 +25,7 @@
 
 - (void)setupView
 {
-    NSLog(@"BhyveIntroStep: setupView");
+    NSDebugLLog(@"gwcomp", @"BhyveIntroStep: setupView");
     
     // Match installer card inner area (approx 354x204)
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
@@ -90,17 +90,17 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"BhyveIntroStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"BhyveIntroStep: stepWillAppear");
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"BhyveIntroStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"BhyveIntroStep: stepDidAppear");
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"BhyveIntroStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"BhyveIntroStep: stepWillDisappear");
 }
 
 @end

@@ -37,7 +37,7 @@
     if ([characters length] > 0) {
         unichar character = [characters characterAtIndex:0];
         if (character == 27) { // ESC key
-            NSLog(@"ESC key pressed - canceling dialog");
+            NSDebugLLog(@"gwcomp", @"ESC key pressed - canceling dialog");
             if (dialogData && controller) {
                 [controller handleDialogCancel:self];
                 return;
@@ -172,22 +172,22 @@
 
 - (void)loadBootConfigurations {
     // Load existing boot environments from FreeBSD boot environments
-    NSLog(@"=== Starting Boot Environment Load ===");
+    NSDebugLLog(@"gwcomp", @"=== Starting Boot Environment Load ===");
     
     [self loadFromBootEnvironments];
     [self loadFromLoaderConf];
     
-    NSLog(@"Reloading table view with %lu boot environments", (unsigned long)[bootConfigurations count]);
+    NSDebugLLog(@"gwcomp", @"Reloading table view with %lu boot environments", (unsigned long)[bootConfigurations count]);
     [configTableView reloadData];
-    NSLog(@"=== Boot Environment Load Complete ===");
+    NSDebugLLog(@"gwcomp", @"=== Boot Environment Load Complete ===");
 }
 
 - (void)loadFromBootEnvironments {
     // Load ZFS boot environments using 'bectl list'
-    NSLog(@"=== Loading ZFS Boot Environments ===");
+    NSDebugLLog(@"gwcomp", @"=== Loading ZFS Boot Environments ===");
     
     NSString *bectlPath = @"/sbin/bectl";
-    NSLog(@"Attempting to run command: %@ list -H", bectlPath);
+    NSDebugLLog(@"gwcomp", @"Attempting to run command: %@ list -H", bectlPath);
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:bectlPath];
@@ -198,55 +198,55 @@
     [task setStandardError:pipe];
     
     @try {
-        NSLog(@"Launching bectl task...");
+        NSDebugLLog(@"gwcomp", @"Launching bectl task...");
         [task launch];
         [task waitUntilExit];
         
-        NSLog(@"bectl task completed with exit status: %d", [task terminationStatus]);
+        NSDebugLLog(@"gwcomp", @"bectl task completed with exit status: %d", [task terminationStatus]);
         
         NSFileHandle *file = [pipe fileHandleForReading];
         NSData *data = [file readDataToEndOfFile];
         NSString *output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
         
-        NSLog(@"bectl raw output length: %lu", (unsigned long)[output length]);
-        NSLog(@"bectl raw output:\n%@", output);
+        NSDebugLLog(@"gwcomp", @"bectl raw output length: %lu", (unsigned long)[output length]);
+        NSDebugLLog(@"gwcomp", @"bectl raw output:\n%@", output);
         
         if ([task terminationStatus] == 0 && [output length] > 0) {
-            NSLog(@"bectl command successful, parsing output...");
+            NSDebugLLog(@"gwcomp", @"bectl command successful, parsing output...");
             [self parseBectlOutput:output];
         } else {
-            NSLog(@"bectl command failed or returned empty output");
+            NSDebugLLog(@"gwcomp", @"bectl command failed or returned empty output");
         }
         
         [output release];
     }
     @catch (NSException *exception) {
-        NSLog(@"Exception running bectl: %@", [exception description]);
+        NSDebugLLog(@"gwcomp", @"Exception running bectl: %@", [exception description]);
     }
     
     [task release];
-    NSLog(@"=== End Loading ZFS Boot Environments ===");
+    NSDebugLLog(@"gwcomp", @"=== End Loading ZFS Boot Environments ===");
 }
 
 - (void)parseBectlOutput:(NSString *)output {
-    NSLog(@"=== Parsing bectl Output ===");
+    NSDebugLLog(@"gwcomp", @"=== Parsing bectl Output ===");
     NSArray *lines = [output componentsSeparatedByString:@"\n"];
-    NSLog(@"Total lines to parse: %lu", (unsigned long)[lines count]);
+    NSDebugLLog(@"gwcomp", @"Total lines to parse: %lu", (unsigned long)[lines count]);
     
     for (int i = 0; i < [lines count]; i++) {
         NSString *line = [lines objectAtIndex:i];
-        NSLog(@"Line %d: '%@'", i, line);
+        NSDebugLLog(@"gwcomp", @"Line %d: '%@'", i, line);
         
         if ([line length] == 0) {
-            NSLog(@"Skipping empty line %d", i);
+            NSDebugLLog(@"gwcomp", @"Skipping empty line %d", i);
             continue;
         }
         
         NSArray *columns = [line componentsSeparatedByString:@"\t"];
-        NSLog(@"Line %d has %lu columns", i, (unsigned long)[columns count]);
+        NSDebugLLog(@"gwcomp", @"Line %d has %lu columns", i, (unsigned long)[columns count]);
         
         for (int j = 0; j < [columns count]; j++) {
-            NSLog(@"  Column %d: '%@'", j, [columns objectAtIndex:j]);
+            NSDebugLLog(@"gwcomp", @"  Column %d: '%@'", j, [columns objectAtIndex:j]);
         }
         
         if ([columns count] >= 5) {
@@ -256,28 +256,28 @@
             NSString *space = [columns objectAtIndex:3];
             NSString *created = [columns objectAtIndex:4];
             
-            NSLog(@"Parsing BE: name='%@', active='%@', mountpoint='%@', space='%@', created='%@'", 
+            NSDebugLLog(@"gwcomp", @"Parsing BE: name='%@', active='%@', mountpoint='%@', space='%@', created='%@'", 
                   beName, activeFlag, mountpoint, space, created);
             
             // Check if this boot environment is active
             // N = currently booted, R = on reboot, NR = both
             BOOL isActive = [activeFlag containsString:@"N"] || [activeFlag containsString:@"R"];
-            NSLog(@"Boot environment '%@' is active: %@", beName, isActive ? @"YES" : @"NO");
+            NSDebugLLog(@"gwcomp", @"Boot environment '%@' is active: %@", beName, isActive ? @"YES" : @"NO");
             
             // Determine kernel path based on BE name
             NSString *kernelPath = @"/boot/kernel/kernel";
             if ([beName containsString:@"13."]) {
                 kernelPath = @"/boot/kernel.old/kernel";
             }
-            NSLog(@"Kernel path for '%@': %@", beName, kernelPath);
+            NSDebugLLog(@"gwcomp", @"Kernel path for '%@': %@", beName, kernelPath);
             
             // Determine root filesystem - use ZFS dataset name
             NSString *rootfs = [NSString stringWithFormat:@"zfs:%@", beName];
-            NSLog(@"Root filesystem for '%@': %@", beName, rootfs);
+            NSDebugLLog(@"gwcomp", @"Root filesystem for '%@': %@", beName, rootfs);
             
             // Add creation date to options for informational purposes
             NSString *options = [NSString stringWithFormat:@"created=%@", created];
-            NSLog(@"Options for '%@': %@", beName, options);
+            NSDebugLLog(@"gwcomp", @"Options for '%@': %@", beName, options);
             
             BootConfiguration *config = [[BootConfiguration alloc] 
                 initWithName:beName
@@ -291,19 +291,19 @@
             [bootConfigurations addObject:config];
             [config release];
             
-            NSLog(@"Added boot environment: %@", beName);
+            NSDebugLLog(@"gwcomp", @"Added boot environment: %@", beName);
         } else {
-            NSLog(@"Skipping line %d - insufficient columns (%lu)", i, (unsigned long)[columns count]);
+            NSDebugLLog(@"gwcomp", @"Skipping line %d - insufficient columns (%lu)", i, (unsigned long)[columns count]);
         }
     }
     
-    NSLog(@"=== End Parsing bectl Output ===");
-    NSLog(@"Total boot environments loaded: %lu", (unsigned long)[bootConfigurations count]);
+    NSDebugLLog(@"gwcomp", @"=== End Parsing bectl Output ===");
+    NSDebugLLog(@"gwcomp", @"Total boot environments loaded: %lu", (unsigned long)[bootConfigurations count]);
 }
 
 - (void)loadFromLoaderConf {
     // Load additional boot environments from /boot/loader.conf
-    NSLog(@"Loading boot environments from /boot/loader.conf...");
+    NSDebugLLog(@"gwcomp", @"Loading boot environments from /boot/loader.conf...");
     
     NSString *loaderConfPath = @"/boot/loader.conf";
     NSString *content = [NSString stringWithContentsOfFile:loaderConfPath
@@ -313,7 +313,7 @@
     if (content) {
         [self parseLoaderConf:content];
     } else {
-        NSLog(@"Could not read /boot/loader.conf");
+        NSDebugLLog(@"gwcomp", @"Could not read /boot/loader.conf");
     }
     
     // Also check for loader.conf.local
@@ -323,7 +323,7 @@
                                                           error:nil];
     
     if (localContent) {
-        NSLog(@"Loading boot environments from /boot/loader.conf.local...");
+        NSDebugLLog(@"gwcomp", @"Loading boot environments from /boot/loader.conf.local...");
         [self parseLoaderConf:localContent];
     }
 }
@@ -399,7 +399,7 @@
         [bootConfigurations addObject:config];
         [config release];
         
-        NSLog(@"Loaded system default boot environment: %@", kernelPath);
+        NSDebugLLog(@"gwcomp", @"Loaded system default boot environment: %@", kernelPath);
         [optionStrings release];
     }
     
@@ -407,30 +407,30 @@
 }
 
 - (void)refreshConfigurations:(id)sender {
-    NSLog(@"Refreshing boot environments...");
+    NSDebugLLog(@"gwcomp", @"Refreshing boot environments...");
     
-    NSLog(@"=== Refreshing Boot Environments ===");
-    NSLog(@"Current boot environment count before refresh: %lu", (unsigned long)[bootConfigurations count]);
+    NSDebugLLog(@"gwcomp", @"=== Refreshing Boot Environments ===");
+    NSDebugLLog(@"gwcomp", @"Current boot environment count before refresh: %lu", (unsigned long)[bootConfigurations count]);
     
     // Clear existing boot environments
     [bootConfigurations removeAllObjects];
-    NSLog(@"Cleared existing boot environments from memory");
+    NSDebugLLog(@"gwcomp", @"Cleared existing boot environments from memory");
     
     // Reload boot environments
     [self loadBootConfigurations];
-    NSLog(@"Reloaded boot environments from system");
-    NSLog(@"Boot environment count after refresh: %lu", (unsigned long)[bootConfigurations count]);
+    NSDebugLLog(@"gwcomp", @"Reloaded boot environments from system");
+    NSDebugLLog(@"gwcomp", @"Boot environment count after refresh: %lu", (unsigned long)[bootConfigurations count]);
     
     [configTableView reloadData];
-    NSLog(@"Table view reloaded");
-    NSLog(@"=== Boot Environment Refresh Complete ===");
+    NSDebugLLog(@"gwcomp", @"Table view reloaded");
+    NSDebugLLog(@"gwcomp", @"=== Boot Environment Refresh Complete ===");
 }
 
 - (void)createConfiguration:(id)sender {
     if (![self checkPrivilegesForAction:@"creating boot environments"]) {
         return;
     }
-    NSLog(@"Opening dialog to create new boot environment...");
+    NSDebugLLog(@"gwcomp", @"Opening dialog to create new boot environment...");
     [self showBootEnvironmentDialog:nil isEdit:NO];
 }
 
@@ -446,7 +446,7 @@
     }
     
     BootConfiguration *config = [bootConfigurations objectAtIndex:selectedRow];
-    NSLog(@"Opening dialog to edit boot environment: %@", [config name]);
+    NSDebugLLog(@"gwcomp", @"Opening dialog to edit boot environment: %@", [config name]);
     [self showBootEnvironmentDialog:config isEdit:YES];
 }
 
@@ -632,7 +632,7 @@
         BOOL bectlSuccess = [self createBootEnvironmentWithBectl:name];
         
         if (bectlSuccess) {
-            NSLog(@"Successfully created ZFS boot environment '%@' with bectl", name);
+            NSDebugLLog(@"gwcomp", @"Successfully created ZFS boot environment '%@' with bectl", name);
             
             BootConfiguration *newConfig = [[BootConfiguration alloc] 
                 initWithName:name 
@@ -648,7 +648,7 @@
             
             [self showSuccessDialog:@"Boot Environment Created" message:[NSString stringWithFormat:@"Boot environment '%@' has been created successfully with bectl.", name]];
         } else {
-            NSLog(@"Failed to create ZFS boot environment '%@' with bectl", name);
+            NSDebugLLog(@"gwcomp", @"Failed to create ZFS boot environment '%@' with bectl", name);
             [self showErrorDialog:@"Creation Failed" message:[NSString stringWithFormat:@"Failed to create boot environment '%@'. Check console for details.", name]];
             return;
         }
@@ -671,7 +671,7 @@
         KeyHandlingView *view = (KeyHandlingView *)sender;
         dialogData = view->dialogData;
     } else {
-        NSLog(@"handleDialogCancel called from unknown sender type");
+        NSDebugLLog(@"gwcomp", @"handleDialogCancel called from unknown sender type");
         return;
     }
     
@@ -706,12 +706,12 @@
         BOOL bectlSuccess = [self deleteBootEnvironmentWithBectl:configName];
         
         if (bectlSuccess) {
-            NSLog(@"Successfully deleted ZFS boot environment '%@' with bectl", configName);
+            NSDebugLLog(@"gwcomp", @"Successfully deleted ZFS boot environment '%@' with bectl", configName);
             [bootConfigurations removeObjectAtIndex:selectedRow];
             [configTableView reloadData];
             [self showSuccessDialog:@"Boot Environment Deleted" message:[NSString stringWithFormat:@"Boot environment '%@' has been deleted successfully.", configName]];
         } else {
-            NSLog(@"Failed to delete ZFS boot environment '%@' with bectl", configName);
+            NSDebugLLog(@"gwcomp", @"Failed to delete ZFS boot environment '%@' with bectl", configName);
             [self showErrorDialog:@"Delete Failed" message:[NSString stringWithFormat:@"Failed to delete boot environment '%@'. Check the console for details.", configName]];
         }
     }
@@ -741,18 +741,18 @@
         // Activate selected boot environment in UI
         [selectedConfig setActive:YES];
         [configTableView reloadData];
-        NSLog(@"Boot environment '%@' set as active via bectl.", beName);
+        NSDebugLLog(@"gwcomp", @"Boot environment '%@' set as active via bectl.", beName);
         [self showSuccessDialog:@"Active Boot Environment Set" message:[NSString stringWithFormat:@"Boot environment '%@' has been set as active using bectl.", beName]];
     } else {
-        NSLog(@"Failed to activate boot environment '%@' with bectl", beName);
+        NSDebugLLog(@"gwcomp", @"Failed to activate boot environment '%@' with bectl", beName);
         [self showErrorDialog:@"Activation Failed" message:[NSString stringWithFormat:@"Failed to activate boot environment '%@'. Check the console for details.", beName]];
     }
 }
 
 // Activate a boot environment using bectl activate
 - (BOOL)activateBootEnvironmentWithBectl:(NSString *)beName {
-    NSLog(@"=== Activating ZFS Boot Environment with bectl ===");
-    NSLog(@"Boot environment name: %@", beName);
+    NSDebugLLog(@"gwcomp", @"=== Activating ZFS Boot Environment with bectl ===");
+    NSDebugLLog(@"gwcomp", @"Boot environment name: %@", beName);
     if (getuid() != 0) {
         char *askpass = getenv("SUDO_ASKPASS");
         BOOL askpassValid = NO;
@@ -763,7 +763,7 @@
             [self showErrorDialog:@"SUDO_ASKPASS Not Set" message:@"SUDO_ASKPASS is not set or does not point to a valid executable. Cannot run sudo -A. Please set SUDO_ASKPASS to a valid askpass binary."];
             return NO;
         }
-        NSLog(@"WARNING: Not running as root (uid=%d). Using sudo -A for bectl activate.", getuid());
+        NSDebugLLog(@"gwcomp", @"WARNING: Not running as root (uid=%d). Using sudo -A for bectl activate.", getuid());
     }
     NSString *bectlPath = @"/sbin/bectl";
     NSArray *arguments;
@@ -774,7 +774,7 @@
         arguments = @[@"activate", beName];
     }
     
-    NSLog(@"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:bectlPath];
     [task setArguments:arguments];
@@ -785,32 +785,32 @@
     NSFileHandle *outputHandle = [outputPipe fileHandleForReading];
     NSFileHandle *errorHandle = [errorPipe fileHandleForReading];
     @try {
-        NSLog(@"Launching bectl activate task...");
+        NSDebugLLog(@"gwcomp", @"Launching bectl activate task...");
         [task launch];
         [task waitUntilExit];
         int exitStatus = [task terminationStatus];
-        NSLog(@"bectl activate task completed with exit status: %d", exitStatus);
+        NSDebugLLog(@"gwcomp", @"bectl activate task completed with exit status: %d", exitStatus);
         NSData *outputData = [outputHandle readDataToEndOfFile];
         NSData *errorData = [errorHandle readDataToEndOfFile];
         NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
         NSString *error = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         if (output && [output length] > 0) {
-            NSLog(@"bectl activate output: %@", output);
+            NSDebugLLog(@"gwcomp", @"bectl activate output: %@", output);
         }
         if (error && [error length] > 0) {
-            NSLog(@"bectl activate error: %@", error);
+            NSDebugLLog(@"gwcomp", @"bectl activate error: %@", error);
         }
         [output release];
         [error release];
         if (exitStatus == 0) {
-            NSLog(@"Successfully activated boot environment '%@'", beName);
+            NSDebugLLog(@"gwcomp", @"Successfully activated boot environment '%@'", beName);
             return YES;
         } else {
-            NSLog(@"Failed to activate boot environment '%@' (exit status: %d)", beName, exitStatus);
+            NSDebugLLog(@"gwcomp", @"Failed to activate boot environment '%@' (exit status: %d)", beName, exitStatus);
             return NO;
         }
     } @catch (NSException *exception) {
-        NSLog(@"Exception while activating boot environment: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"Exception while activating boot environment: %@", [exception reason]);
         return NO;
     } @finally {
         [task release];
@@ -818,8 +818,8 @@
 }
 
 - (BOOL)createBootEnvironmentWithBectl:(NSString *)beName {
-    NSLog(@"=== Creating ZFS Boot Environment with bectl ===");
-    NSLog(@"Boot environment name: %@", beName);
+    NSDebugLLog(@"gwcomp", @"=== Creating ZFS Boot Environment with bectl ===");
+    NSDebugLLog(@"gwcomp", @"Boot environment name: %@", beName);
     
     // Check if we're running as root
     if (getuid() != 0) {
@@ -832,7 +832,7 @@
             [self showErrorDialog:@"SUDO_ASKPASS Not Set" message:@"SUDO_ASKPASS is not set or does not point to a valid executable. Cannot run sudo -A. Please set SUDO_ASKPASS to a valid askpass binary."];
             return NO;
         }
-        NSLog(@"WARNING: Not running as root (uid=%d). Using sudo -A for bectl create.", getuid());
+        NSDebugLLog(@"gwcomp", @"WARNING: Not running as root (uid=%d). Using sudo -A for bectl create.", getuid());
     }
     
     // Create bectl create command with sudo if needed
@@ -845,7 +845,7 @@
         arguments = @[@"create", beName];
     }
     
-    NSLog(@"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:bectlPath];
@@ -860,12 +860,12 @@
     NSFileHandle *errorHandle = [errorPipe fileHandleForReading];
     
     @try {
-        NSLog(@"Launching bectl create task...");
+        NSDebugLLog(@"gwcomp", @"Launching bectl create task...");
         [task launch];
         [task waitUntilExit];
         
         int exitStatus = [task terminationStatus];
-        NSLog(@"bectl create task completed with exit status: %d", exitStatus);
+        NSDebugLLog(@"gwcomp", @"bectl create task completed with exit status: %d", exitStatus);
         
         // Read output and error
         NSData *outputData = [outputHandle readDataToEndOfFile];
@@ -875,25 +875,25 @@
         NSString *error = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
         if (output && [output length] > 0) {
-            NSLog(@"bectl create output: %@", output);
+            NSDebugLLog(@"gwcomp", @"bectl create output: %@", output);
         }
         
         if (error && [error length] > 0) {
-            NSLog(@"bectl create error: %@", error);
+            NSDebugLLog(@"gwcomp", @"bectl create error: %@", error);
         }
         
         [output release];
         [error release];
         
         if (exitStatus == 0) {
-            NSLog(@"Successfully created boot environment '%@'", beName);
+            NSDebugLLog(@"gwcomp", @"Successfully created boot environment '%@'", beName);
             return YES;
         } else {
-            NSLog(@"Failed to create boot environment '%@' (exit status: %d)", beName, exitStatus);
+            NSDebugLLog(@"gwcomp", @"Failed to create boot environment '%@' (exit status: %d)", beName, exitStatus);
             return NO;
         }
     } @catch (NSException *exception) {
-        NSLog(@"Exception while creating boot environment: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"Exception while creating boot environment: %@", [exception reason]);
         return NO;
     } @finally {
         [task release];
@@ -901,8 +901,8 @@
 }
 
 - (BOOL)deleteBootEnvironmentWithBectl:(NSString *)beName {
-    NSLog(@"=== Deleting ZFS Boot Environment with bectl ===");
-    NSLog(@"Boot environment name: %@", beName);
+    NSDebugLLog(@"gwcomp", @"=== Deleting ZFS Boot Environment with bectl ===");
+    NSDebugLLog(@"gwcomp", @"Boot environment name: %@", beName);
     
     // Check if we're running as root
     if (getuid() != 0) {
@@ -915,7 +915,7 @@
             [self showErrorDialog:@"SUDO_ASKPASS Not Set" message:@"SUDO_ASKPASS is not set or does not point to a valid executable. Cannot run sudo -A. Please set SUDO_ASKPASS to a valid askpass binary."];
             return NO;
         }
-        NSLog(@"WARNING: Not running as root (uid=%d). Using sudo -A for bectl destroy.", getuid());
+        NSDebugLLog(@"gwcomp", @"WARNING: Not running as root (uid=%d). Using sudo -A for bectl destroy.", getuid());
     }
     
     // Create bectl destroy command with sudo if needed
@@ -928,7 +928,7 @@
         arguments = @[@"destroy", @"-F", beName];  // -F flag to force destruction
     }
     
-    NSLog(@"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:bectlPath];
@@ -943,12 +943,12 @@
     NSFileHandle *errorHandle = [errorPipe fileHandleForReading];
     
     @try {
-        NSLog(@"Launching bectl destroy task...");
+        NSDebugLLog(@"gwcomp", @"Launching bectl destroy task...");
         [task launch];
         [task waitUntilExit];
         
         int exitStatus = [task terminationStatus];
-        NSLog(@"bectl destroy task completed with exit status: %d", exitStatus);
+        NSDebugLLog(@"gwcomp", @"bectl destroy task completed with exit status: %d", exitStatus);
         
         // Read output and error
         NSData *outputData = [outputHandle readDataToEndOfFile];
@@ -958,25 +958,25 @@
         NSString *error = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
         if (output && [output length] > 0) {
-            NSLog(@"bectl destroy output: %@", output);
+            NSDebugLLog(@"gwcomp", @"bectl destroy output: %@", output);
         }
         
         if (error && [error length] > 0) {
-            NSLog(@"bectl destroy error: %@", error);
+            NSDebugLLog(@"gwcomp", @"bectl destroy error: %@", error);
         }
         
         [output release];
         [error release];
         
         if (exitStatus == 0) {
-            NSLog(@"Successfully deleted boot environment '%@'", beName);
+            NSDebugLLog(@"gwcomp", @"Successfully deleted boot environment '%@'", beName);
             return YES;
         } else {
-            NSLog(@"Failed to delete boot environment '%@' (exit status: %d)", beName, exitStatus);
+            NSDebugLLog(@"gwcomp", @"Failed to delete boot environment '%@' (exit status: %d)", beName, exitStatus);
             return NO;
         }
     } @catch (NSException *exception) {
-        NSLog(@"Exception while deleting boot environment: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"Exception while deleting boot environment: %@", [exception reason]);
         return NO;
     } @finally {
         [task release];
@@ -989,8 +989,8 @@
         // No rename needed
         return YES;
     }
-    NSLog(@"=== Renaming ZFS Boot Environment with bectl ===");
-    NSLog(@"Old name: %@, New name: %@", oldName, newName);
+    NSDebugLLog(@"gwcomp", @"=== Renaming ZFS Boot Environment with bectl ===");
+    NSDebugLLog(@"gwcomp", @"Old name: %@, New name: %@", oldName, newName);
     if (getuid() != 0) {
         char *askpass = getenv("SUDO_ASKPASS");
         BOOL askpassValid = NO;
@@ -1001,7 +1001,7 @@
             [self showErrorDialog:@"SUDO_ASKPASS Not Set" message:@"SUDO_ASKPASS is not set or does not point to a valid executable. Cannot run sudo -A. Please set SUDO_ASKPASS to a valid askpass binary."];
             return NO;
         }
-        NSLog(@"WARNING: Not running as root (uid=%d). Using sudo -A for bectl rename.", getuid());
+        NSDebugLLog(@"gwcomp", @"WARNING: Not running as root (uid=%d). Using sudo -A for bectl rename.", getuid());
     }
     NSString *bectlPath = @"/sbin/bectl";
     NSArray *arguments;
@@ -1011,7 +1011,7 @@
     } else {
         arguments = @[@"rename", oldName, newName];
     }
-    NSLog(@"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:bectlPath];
     [task setArguments:arguments];
@@ -1022,32 +1022,32 @@
     NSFileHandle *outputHandle = [outputPipe fileHandleForReading];
     NSFileHandle *errorHandle = [errorPipe fileHandleForReading];
     @try {
-        NSLog(@"Launching bectl rename task...");
+        NSDebugLLog(@"gwcomp", @"Launching bectl rename task...");
         [task launch];
         [task waitUntilExit];
         int exitStatus = [task terminationStatus];
-        NSLog(@"bectl rename task completed with exit status: %d", exitStatus);
+        NSDebugLLog(@"gwcomp", @"bectl rename task completed with exit status: %d", exitStatus);
         NSData *outputData = [outputHandle readDataToEndOfFile];
         NSData *errorData = [errorHandle readDataToEndOfFile];
         NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
         NSString *error = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         if (output && [output length] > 0) {
-            NSLog(@"bectl rename output: %@", output);
+            NSDebugLLog(@"gwcomp", @"bectl rename output: %@", output);
         }
         if (error && [error length] > 0) {
-            NSLog(@"bectl rename error: %@", error);
+            NSDebugLLog(@"gwcomp", @"bectl rename error: %@", error);
         }
         [output release];
         [error release];
         if (exitStatus == 0) {
-            NSLog(@"Successfully renamed boot environment '%@' to '%@'", oldName, newName);
+            NSDebugLLog(@"gwcomp", @"Successfully renamed boot environment '%@' to '%@'", oldName, newName);
             return YES;
         } else {
-            NSLog(@"Failed to rename boot environment '%@' to '%@' (exit status: %d)", oldName, newName, exitStatus);
+            NSDebugLLog(@"gwcomp", @"Failed to rename boot environment '%@' to '%@' (exit status: %d)", oldName, newName, exitStatus);
             return NO;
         }
     } @catch (NSException *exception) {
-        NSLog(@"Exception while renaming boot environment: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"Exception while renaming boot environment: %@", [exception reason]);
         return NO;
     } @finally {
         [task release];
@@ -1086,10 +1086,10 @@
     
     // Warn if not root but continue
     if (getuid() != 0) {
-        NSLog(@"WARNING: Application is not running as root (uid=%d) for %@", getuid(), action);
-        NSLog(@"Using sudo -A for privileged operations.");
+        NSDebugLLog(@"gwcomp", @"WARNING: Application is not running as root (uid=%d) for %@", getuid(), action);
+        NSDebugLLog(@"gwcomp", @"Using sudo -A for privileged operations.");
     } else {
-        NSLog(@"Application is running as root - %@ available", action);
+        NSDebugLLog(@"gwcomp", @"Application is running as root - %@ available", action);
     }
     
     return YES;
@@ -1123,7 +1123,7 @@
     NSInteger selectedRow = [configTableView selectedRow];
     if (selectedRow >= 0) {
         BootConfiguration *config = [bootConfigurations objectAtIndex:selectedRow];
-        NSLog(@"Selected boot environment: %@", [config name]);
+        NSDebugLLog(@"gwcomp", @"Selected boot environment: %@", [config name]);
     }
 }
 
@@ -1131,7 +1131,7 @@
     // Handle double-click to edit
     NSEvent *event = [NSApp currentEvent];
     if ([event clickCount] == 2 && row >= 0) {
-        NSLog(@"Double-clicked row %ld - editing boot environment", (long)row);
+        NSDebugLLog(@"gwcomp", @"Double-clicked row %ld - editing boot environment", (long)row);
         BootConfiguration *config = [bootConfigurations objectAtIndex:row];
         [self showBootEnvironmentDialog:config isEdit:YES];
     }
@@ -1219,8 +1219,8 @@
 
 // Mount a boot environment using bectl mount
 - (BOOL)mountBootEnvironmentWithBectl:(NSString *)beName mountPoint:(NSString *)mountPoint {
-    NSLog(@"=== Mounting ZFS Boot Environment with bectl ===");
-    NSLog(@"Boot environment name: %@, Mount point: %@", beName, mountPoint);
+    NSDebugLLog(@"gwcomp", @"=== Mounting ZFS Boot Environment with bectl ===");
+    NSDebugLLog(@"gwcomp", @"Boot environment name: %@, Mount point: %@", beName, mountPoint);
     
     if (getuid() != 0) {
         char *askpass = getenv("SUDO_ASKPASS");
@@ -1232,7 +1232,7 @@
             [self showErrorDialog:@"SUDO_ASKPASS Not Set" message:@"SUDO_ASKPASS is not set or does not point to a valid executable. Cannot run sudo -A. Please set SUDO_ASKPASS to a valid askpass binary."];
             return NO;
         }
-        NSLog(@"WARNING: Not running as root (uid=%d). Using sudo -A for bectl mount.", getuid());
+        NSDebugLLog(@"gwcomp", @"WARNING: Not running as root (uid=%d). Using sudo -A for bectl mount.", getuid());
     }
     
     NSString *bectlPath = @"/sbin/bectl";
@@ -1244,7 +1244,7 @@
         arguments = @[@"mount", beName, mountPoint];
     }
     
-    NSLog(@"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:bectlPath];
     [task setArguments:arguments];
@@ -1258,12 +1258,12 @@
     NSFileHandle *errorHandle = [errorPipe fileHandleForReading];
     
     @try {
-        NSLog(@"Launching bectl mount task...");
+        NSDebugLLog(@"gwcomp", @"Launching bectl mount task...");
         [task launch];
         [task waitUntilExit];
         
         int exitStatus = [task terminationStatus];
-        NSLog(@"bectl mount task completed with exit status: %d", exitStatus);
+        NSDebugLLog(@"gwcomp", @"bectl mount task completed with exit status: %d", exitStatus);
         
         NSData *outputData = [outputHandle readDataToEndOfFile];
         NSData *errorData = [errorHandle readDataToEndOfFile];
@@ -1272,25 +1272,25 @@
         NSString *error = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
         if (output && [output length] > 0) {
-            NSLog(@"bectl mount output: %@", output);
+            NSDebugLLog(@"gwcomp", @"bectl mount output: %@", output);
         }
         
         if (error && [error length] > 0) {
-            NSLog(@"bectl mount error: %@", error);
+            NSDebugLLog(@"gwcomp", @"bectl mount error: %@", error);
         }
         
         [output release];
         [error release];
         
         if (exitStatus == 0) {
-            NSLog(@"Successfully mounted boot environment '%@' at '%@'", beName, mountPoint);
+            NSDebugLLog(@"gwcomp", @"Successfully mounted boot environment '%@' at '%@'", beName, mountPoint);
             return YES;
         } else {
-            NSLog(@"Failed to mount boot environment '%@' at '%@' (exit status: %d)", beName, mountPoint, exitStatus);
+            NSDebugLLog(@"gwcomp", @"Failed to mount boot environment '%@' at '%@' (exit status: %d)", beName, mountPoint, exitStatus);
             return NO;
         }
     } @catch (NSException *exception) {
-        NSLog(@"Exception while mounting boot environment: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"Exception while mounting boot environment: %@", [exception reason]);
         return NO;
     } @finally {
         [task release];
@@ -1299,8 +1299,8 @@
 
 // Unmount a boot environment using bectl unmount
 - (BOOL)unmountBootEnvironmentWithBectl:(NSString *)beName {
-    NSLog(@"=== Unmounting ZFS Boot Environment with bectl ===");
-    NSLog(@"Boot environment name: %@", beName);
+    NSDebugLLog(@"gwcomp", @"=== Unmounting ZFS Boot Environment with bectl ===");
+    NSDebugLLog(@"gwcomp", @"Boot environment name: %@", beName);
     
     if (getuid() != 0) {
         char *askpass = getenv("SUDO_ASKPASS");
@@ -1312,7 +1312,7 @@
             [self showErrorDialog:@"SUDO_ASKPASS Not Set" message:@"SUDO_ASKPASS is not set or does not point to a valid executable. Cannot run sudo -A. Please set SUDO_ASKPASS to a valid askpass binary."];
             return NO;
         }
-        NSLog(@"WARNING: Not running as root (uid=%d). Using sudo -A for bectl unmount.", getuid());
+        NSDebugLLog(@"gwcomp", @"WARNING: Not running as root (uid=%d). Using sudo -A for bectl unmount.", getuid());
     }
     
     NSString *bectlPath = @"/sbin/bectl";
@@ -1324,7 +1324,7 @@
         arguments = @[@"unmount", beName];
     }
     
-    NSLog(@"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"Executing command: %@ %@", bectlPath, [arguments componentsJoinedByString:@" "]);
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:bectlPath];
     [task setArguments:arguments];
@@ -1338,12 +1338,12 @@
     NSFileHandle *errorHandle = [errorPipe fileHandleForReading];
     
     @try {
-        NSLog(@"Launching bectl unmount task...");
+        NSDebugLLog(@"gwcomp", @"Launching bectl unmount task...");
         [task launch];
         [task waitUntilExit];
         
         int exitStatus = [task terminationStatus];
-        NSLog(@"bectl unmount task completed with exit status: %d", exitStatus);
+        NSDebugLLog(@"gwcomp", @"bectl unmount task completed with exit status: %d", exitStatus);
         
         NSData *outputData = [outputHandle readDataToEndOfFile];
         NSData *errorData = [errorHandle readDataToEndOfFile];
@@ -1352,25 +1352,25 @@
         NSString *error = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
         if (output && [output length] > 0) {
-            NSLog(@"bectl unmount output: %@", output);
+            NSDebugLLog(@"gwcomp", @"bectl unmount output: %@", output);
         }
         
         if (error && [error length] > 0) {
-            NSLog(@"bectl unmount error: %@", error);
+            NSDebugLLog(@"gwcomp", @"bectl unmount error: %@", error);
         }
         
         [output release];
         [error release];
         
         if (exitStatus == 0) {
-            NSLog(@"Successfully unmounted boot environment '%@'", beName);
+            NSDebugLLog(@"gwcomp", @"Successfully unmounted boot environment '%@'", beName);
             return YES;
         } else {
-            NSLog(@"Failed to unmount boot environment '%@' (exit status: %d)", beName, exitStatus);
+            NSDebugLLog(@"gwcomp", @"Failed to unmount boot environment '%@' (exit status: %d)", beName, exitStatus);
             return NO;
         }
     } @catch (NSException *exception) {
-        NSLog(@"Exception while unmounting boot environment: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"Exception while unmounting boot environment: %@", [exception reason]);
         return NO;
     } @finally {
         [task release];

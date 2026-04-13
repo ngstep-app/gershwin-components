@@ -10,7 +10,7 @@
 
 int main(int argc, char *argv[]) {
     @autoreleasepool {
-        NSLog(@"=== Hello Reply Length Analysis ===");
+        NSDebugLLog(@"gwcomp", @"=== Hello Reply Length Analysis ===");
         
         // Create Hello reply exactly as MBDaemon does
         MBMessage *reply = [MBMessage methodReturnWithReplySerial:1
@@ -18,31 +18,31 @@ int main(int argc, char *argv[]) {
         reply.destination = @":1.0";
         reply.sender = @"org.freedesktop.DBus";
         
-        NSLog(@"Hello Reply Properties:");
-        NSLog(@"  Type: %d", reply.type);
-        NSLog(@"  Reply Serial: %ld", reply.replySerial);
-        NSLog(@"  Destination: %@", reply.destination);
-        NSLog(@"  Sender: %@", reply.sender);
-        NSLog(@"  Signature: %@", reply.signature);
-        NSLog(@"  Arguments: %@", reply.arguments);
+        NSDebugLLog(@"gwcomp", @"Hello Reply Properties:");
+        NSDebugLLog(@"gwcomp", @"  Type: %d", reply.type);
+        NSDebugLLog(@"gwcomp", @"  Reply Serial: %ld", reply.replySerial);
+        NSDebugLLog(@"gwcomp", @"  Destination: %@", reply.destination);
+        NSDebugLLog(@"gwcomp", @"  Sender: %@", reply.sender);
+        NSDebugLLog(@"gwcomp", @"  Signature: %@", reply.signature);
+        NSDebugLLog(@"gwcomp", @"  Arguments: %@", reply.arguments);
         
         // Get individual components
         NSData *headerFields = [reply serializeHeaderFields];
         NSData *body = [reply serializeBody];
         NSData *fullMessage = [reply serialize];
         
-        NSLog(@"Component sizes:");
-        NSLog(@"  Fixed header: 16 bytes");
-        NSLog(@"  Header fields: %lu bytes", (unsigned long)[headerFields length]);
-        NSLog(@"  Body: %lu bytes", (unsigned long)[body length]);
-        NSLog(@"  Full message: %lu bytes", (unsigned long)[fullMessage length]);
+        NSDebugLLog(@"gwcomp", @"Component sizes:");
+        NSDebugLLog(@"gwcomp", @"  Fixed header: 16 bytes");
+        NSDebugLLog(@"gwcomp", @"  Header fields: %lu bytes", (unsigned long)[headerFields length]);
+        NSDebugLLog(@"gwcomp", @"  Body: %lu bytes", (unsigned long)[body length]);
+        NSDebugLLog(@"gwcomp", @"  Full message: %lu bytes", (unsigned long)[fullMessage length]);
         
         // Calculate expected vs actual
         NSUInteger expectedTotal = 16 + [headerFields length] + [body length];
         NSUInteger padding = [fullMessage length] - expectedTotal;
-        NSLog(@"  Expected total: %lu bytes", expectedTotal);
-        NSLog(@"  Actual total: %lu bytes", (unsigned long)[fullMessage length]);
-        NSLog(@"  Padding added: %lu bytes", padding);
+        NSDebugLLog(@"gwcomp", @"  Expected total: %lu bytes", expectedTotal);
+        NSDebugLLog(@"gwcomp", @"  Actual total: %lu bytes", (unsigned long)[fullMessage length]);
+        NSDebugLLog(@"gwcomp", @"  Padding added: %lu bytes", padding);
         
         // Print header fields breakdown
         printf("\\nHeader fields breakdown (%lu bytes):\\n", (unsigned long)[headerFields length]);

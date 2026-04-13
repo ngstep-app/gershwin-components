@@ -77,7 +77,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         _rapidDbusNotificationCount++;
         if (_rapidDbusNotificationCount > DBUS_RAPID_FIRE_THRESHOLD) {
             // Too many rapid fires - back off with a delayed re-arm instead of immediate
-            NSLog(@"MenuController: DBus fd rapid-fire detected (%lu in %.3fs) - backing off %.0fms",
+            NSDebugLLog(@"gwcomp", @"MenuController: DBus fd rapid-fire detected (%lu in %.3fs) - backing off %.0fms",
                   (unsigned long)_rapidDbusNotificationCount, elapsed, DBUS_BACKOFF_INTERVAL * 1000);
             _rapidDbusNotificationCount = 0;
             if (self.dbusFileHandle) {
@@ -103,7 +103,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         [[MenuProtocolManager sharedManager] processDBusMessages];
     }
     @catch (NSException *exception) {
-        NSLog(@"MenuController: Exception processing DBus messages: %@", exception);
+        NSDebugLLog(@"gwcomp", @"MenuController: Exception processing DBus messages: %@", exception);
     }
     @finally {
         // Re-enable window drawing and flush all pending updates at once
@@ -118,7 +118,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
             [self.dbusFileHandle waitForDataInBackgroundAndNotify];
         }
         @catch (NSException *exception) {
-            NSLog(@"MenuController: Exception re-arming DBus file handle: %@", exception);
+            NSDebugLLog(@"gwcomp", @"MenuController: Exception re-arming DBus file handle: %@", exception);
             self.dbusFileHandle = nil;
         }
     }
@@ -133,14 +133,14 @@ static NSUInteger _rapidDbusNotificationCount = 0;
             [[MenuProtocolManager sharedManager] processDBusMessages];
         }
         @catch (NSException *exception) {
-            NSLog(@"MenuController: Exception processing DBus messages during re-arm: %@", exception);
+            NSDebugLLog(@"gwcomp", @"MenuController: Exception processing DBus messages during re-arm: %@", exception);
         }
         // Now re-arm
         @try {
             [self.dbusFileHandle waitForDataInBackgroundAndNotify];
         }
         @catch (NSException *exception) {
-            NSLog(@"MenuController: Exception re-arming DBus file handle after backoff: %@", exception);
+            NSDebugLLog(@"gwcomp", @"MenuController: Exception re-arming DBus file handle after backoff: %@", exception);
             self.dbusFileHandle = nil;
         }
     }
@@ -161,13 +161,13 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         [[MenuProtocolManager sharedManager] processDBusMessages];
     }
     @catch (NSException *exception) {
-        NSLog(@"MenuController: Exception polling DBus messages: %@", exception);
+        NSDebugLLog(@"gwcomp", @"MenuController: Exception polling DBus messages: %@", exception);
     }
 }
 
 - (id)init
 {
-    NSLog(@"MenuController: Initializing controller...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Initializing controller...");
     self = [super init];
     if (self) {
         // Initialize trailing-edge debounce properties to prevent infinite loops
@@ -177,7 +177,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         self.windowMonitor = [WindowMonitor sharedMonitor];
         self.windowMonitor.delegate = (id<WindowMonitorDelegate>)self;
         
-        NSLog(@"MenuController: Controller initialized successfully. Active window: 0x%lx", (unsigned long)[self.windowMonitor currentActiveWindow]);
+        NSDebugLLog(@"gwcomp", @"MenuController: Controller initialized successfully. Active window: 0x%lx", (unsigned long)[self.windowMonitor currentActiveWindow]);
     }
     return self;
 }
@@ -196,14 +196,14 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
 - (void)createPersistentStrutWindow
 {
-    NSLog(@"MenuController: Creating persistent X11 strut window...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Creating persistent X11 strut window...");
     
     const CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight];
     
     // Open X11 display connection that will persist for the application lifetime
     self.strutDisplay = XOpenDisplay(NULL);
     if (!self.strutDisplay) {
-        NSLog(@"MenuController: Cannot open X11 display for strut window");
+        NSDebugLLog(@"gwcomp", @"MenuController: Cannot open X11 display for strut window");
         return;
     }
     
@@ -224,7 +224,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
                                    CWOverrideRedirect | CWBackPixel | CWBorderPixel, &attrs);
     
     if (self.strutWindow == None) {
-        NSLog(@"MenuController: Failed to create X11 strut window");
+        NSDebugLLog(@"gwcomp", @"MenuController: Failed to create X11 strut window");
         XCloseDisplay(self.strutDisplay);
         self.strutDisplay = NULL;
         return;
@@ -266,16 +266,16 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     XMapWindow(self.strutDisplay, self.strutWindow);
     XSync(self.strutDisplay, False);
     
-    NSLog(@"MenuController: Created persistent X11 strut window (XID: %lu) - invisible 1x1 window with full-width struts",
+    NSDebugLLog(@"gwcomp", @"MenuController: Created persistent X11 strut window (XID: %lu) - invisible 1x1 window with full-width struts",
           (unsigned long)self.strutWindow);
 }
 
 - (void)screenParametersChanged:(NSNotification *)notification
 {
-    NSLog(@"MenuController: Screen parameters changed, repositioning menu bar");
+    NSDebugLLog(@"gwcomp", @"MenuController: Screen parameters changed, repositioning menu bar");
 
     if (!self.menuBar) {
-        NSLog(@"MenuController: Menu bar not yet created, skipping reposition");
+        NSDebugLLog(@"gwcomp", @"MenuController: Menu bar not yet created, skipping reposition");
         return;
     }
 
@@ -283,7 +283,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // mainScreen may return the menu's own window screen which is circular)
     self.screenFrame = [[[NSScreen screens] objectAtIndex:0] frame];
     self.screenSize = self.screenFrame.size;
-    NSLog(@"MenuController: New screen frame: %.0f,%.0f %.0fx%.0f",
+    NSDebugLLog(@"gwcomp", @"MenuController: New screen frame: %.0f,%.0f %.0fx%.0f",
           self.screenFrame.origin.x, self.screenFrame.origin.y,
           self.screenSize.width, self.screenSize.height);
 
@@ -345,25 +345,25 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         XChangeProperty(self.strutDisplay, self.strutWindow, strutPartialAtom, XA_CARDINAL, 32,
                        PropModeReplace, (unsigned char *)strutPartial, 12);
         XSync(self.strutDisplay, False);
-        NSLog(@"MenuController: Updated strut properties for new screen width: %u", width);
+        NSDebugLLog(@"gwcomp", @"MenuController: Updated strut properties for new screen width: %u", width);
     }
 
     // Redraw
     [self.menuBar display];
-    NSLog(@"MenuController: Menu bar repositioned successfully");
+    NSDebugLLog(@"gwcomp", @"MenuController: Menu bar repositioned successfully");
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
-    NSLog(@"MenuController: Application did finish launching");
+    NSDebugLLog(@"gwcomp", @"MenuController: Application did finish launching");
     
     [self.menuBar orderFront:self];
     [self setupWindowMonitoring];
     
-    NSLog(@"MenuController: Application setup complete");
+    NSDebugLLog(@"gwcomp", @"MenuController: Application setup complete");
     
     // Register D-Bus service immediately - run loop is active
-    NSLog(@"MenuController: Registering D-Bus service now...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Registering D-Bus service now...");
     
     // Call directly instead of using dispatch_async - the main queue might not process async blocks reliably
     [self registerDBusServiceWhenReady];
@@ -371,7 +371,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
 - (void)registerDBusServiceWhenReady
 {
-    NSLog(@"MenuController: ===== Registering D-BUS SERVICE =====");
+    NSDebugLLog(@"gwcomp", @"MenuController: ===== Registering D-BUS SERVICE =====");
     
     // Get the canonical handler
     id<MenuProtocolHandler> canonicalHandler = [[MenuProtocolManager sharedManager] handlerForType:MenuProtocolTypeCanonical];
@@ -380,39 +380,39 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         BOOL result = [(id)canonicalHandler registerService];
         
         if (result) {
-            NSLog(@"MenuController: ===== Successfully registered D-Bus service - Menu is now VISIBLE =====");
+            NSDebugLLog(@"gwcomp", @"MenuController: ===== Successfully registered D-Bus service - Menu is now VISIBLE =====");
             // Advertise global menu support via X11 so applications know to register their menus
             BOOL advertised = [MenuUtils advertiseGlobalMenuSupport];
             if (advertised) {
-                NSLog(@"MenuController: Advertised global menu support on X11 root window");
+                NSDebugLLog(@"gwcomp", @"MenuController: Advertised global menu support on X11 root window");
             } else {
-                NSLog(@"MenuController: Failed to advertise global menu support on X11 root window");
+                NSDebugLLog(@"gwcomp", @"MenuController: Failed to advertise global menu support on X11 root window");
             }
         } else {
-            NSLog(@"MenuController: Warning - failed to register D-Bus service");
+            NSDebugLLog(@"gwcomp", @"MenuController: Warning - failed to register D-Bus service");
         }
     } else {
-        NSLog(@"MenuController: WARNING - canonical handler not available or doesn't have registerService");
+        NSDebugLLog(@"gwcomp", @"MenuController: WARNING - canonical handler not available or doesn't have registerService");
     }
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification
 {
-    NSLog(@"MenuController: Application will terminate");
+    NSDebugLLog(@"gwcomp", @"MenuController: Application will terminate");
     
     // Unload status items first
     if (self.statusItemManager) {
-        NSLog(@"MenuController: Unloading status items...");
+        NSDebugLLog(@"gwcomp", @"MenuController: Unloading status items...");
         [self.statusItemManager unloadAllStatusItems];
         self.statusItemManager = nil;
     }
     
     // Clean up global shortcuts
-    NSLog(@"MenuController: Cleaning up global shortcuts...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Cleaning up global shortcuts...");
     [[X11ShortcutManager sharedManager] cleanup];
     
     // Stop window monitoring
-    NSLog(@"MenuController: Stopping window monitoring...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Stopping window monitoring...");
     [self.windowMonitor stopMonitoring];
     self.windowMonitor = nil;
     
@@ -439,9 +439,9 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
 - (void)createMenuBar
 {
-    NSLog(@"MenuController: ===== CREATING MENU BAR =====");
+    NSDebugLLog(@"gwcomp", @"MenuController: ===== CREATING MENU BAR =====");
     const CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight];
-    NSLog(@"MenuController: Menu bar height: %.0f", menuBarHeight);
+    NSDebugLLog(@"gwcomp", @"MenuController: Menu bar height: %.0f", menuBarHeight);
     
     NSRect rect;
     NSColor *color;
@@ -453,11 +453,11 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     
     self.screenFrame = [[[NSScreen screens] objectAtIndex:0] frame];
     self.screenSize = self.screenFrame.size;
-    NSLog(@"MenuController: Screen frame: %.0f,%.0f %.0fx%.0f",
+    NSDebugLLog(@"gwcomp", @"MenuController: Screen frame: %.0f,%.0f %.0fx%.0f",
           self.screenFrame.origin.x, self.screenFrame.origin.y, self.screenSize.width, self.screenSize.height);
     
     color = [self backgroundColor];
-    NSLog(@"MenuController: Background color: %@", color);
+    NSDebugLLog(@"gwcomp", @"MenuController: Background color: %@", color);
         
     // Creation of the menuBar at the TOP of the screen (GNUstep coordinates: bottom-left origin)
     // Use screenFrame.origin to handle multi-monitor setups where the primary screen
@@ -465,14 +465,14 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     rect = NSMakeRect(self.screenFrame.origin.x,
                       self.screenFrame.origin.y + self.screenSize.height - menuBarHeight,
                       self.screenSize.width, menuBarHeight);
-    NSLog(@"MenuController: Menu bar rect: %.0f,%.0f %.0fx%.0f",
+    NSDebugLLog(@"gwcomp", @"MenuController: Menu bar rect: %.0f,%.0f %.0fx%.0f",
           rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
     
     self.menuBar = [[NSWindow alloc] initWithContentRect:rect
                                           styleMask:NSBorderlessWindowMask
                                             backing:NSBackingStoreBuffered
                                               defer:NO];
-    NSLog(@"MenuController: Created NSWindow: %@", self.menuBar);
+    NSDebugLLog(@"gwcomp", @"MenuController: Created NSWindow: %@", self.menuBar);
     
     [self.menuBar setTitle:@"MenuBar"];
     [self.menuBar setBackgroundColor:color];
@@ -483,7 +483,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     [self.menuBar setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
                                    NSWindowCollectionBehaviorStationary];
     
-    NSLog(@"MenuController: Configured window properties");
+    NSDebugLLog(@"gwcomp", @"MenuController: Configured window properties");
     
     // Create and maintain a persistent X11 window for struts
     [self createPersistentStrutWindow];
@@ -491,25 +491,25 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // Position the window one menu height above the screen for animation effect
     [self.menuBar setFrameTopLeftPoint:NSMakePoint(self.screenFrame.origin.x,
                                                     self.screenFrame.origin.y + self.screenSize.height + menuBarHeight)];
-    NSLog(@"MenuController: Window positioned above screen for animation slide-in");
+    NSDebugLLog(@"gwcomp", @"MenuController: Window positioned above screen for animation slide-in");
     
     // Create the main menu bar view that draws the background
     self.menuBarView = [[MenuBarView alloc] initWithFrame:NSMakeRect(0, 0, self.screenSize.width, menuBarHeight)];
-    NSLog(@"MenuController: Created MenuBarView: %@", self.menuBarView);
+    NSDebugLLog(@"gwcomp", @"MenuController: Created MenuBarView: %@", self.menuBarView);
     
     // Create app menu widget for displaying menus - leave space for status items on right
     // Status item width is computed dynamically from loaded providers below.
     // First, create and load the StatusItemManager to know the total width.
-    NSLog(@"MenuController: Creating StatusItemManager");
+    NSDebugLLog(@"gwcomp", @"MenuController: Creating StatusItemManager");
     self.statusItemManager = [[StatusItemManager alloc] initWithScreenWidth:self.screenSize.width
                                                              menuBarHeight:menuBarHeight];
     [self.statusItemManager loadStatusItems];
-    NSLog(@"MenuController: StatusItemManager items loaded");
+    NSDebugLLog(@"gwcomp", @"MenuController: StatusItemManager items loaded");
 
     // Create the status items view (fixed-width cells, laid out right-to-left)
     StatusItemsView *statusItemsView = [self.statusItemManager createStatusItemsView];
     CGFloat statusItemsWidth = [statusItemsView totalRequiredWidth];
-    NSLog(@"MenuController: StatusItemsView total width: %.0f", statusItemsWidth);
+    NSDebugLLog(@"gwcomp", @"MenuController: StatusItemsView total width: %.0f", statusItemsWidth);
 
     // Position status items at the right edge of the menu bar
     [statusItemsView setFrame:NSMakeRect(self.screenSize.width - statusItemsWidth, 0,
@@ -518,26 +518,26 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // Give the app menu widget the remaining space
     CGFloat menuWidgetWidth = self.screenSize.width - statusItemsWidth;
     self.appMenuWidget = [[AppMenuWidget alloc] initWithFrame:NSMakeRect(0, 0, menuWidgetWidth, menuBarHeight)];
-    NSLog(@"MenuController: AppMenuWidget created successfully");
+    NSDebugLLog(@"gwcomp", @"MenuController: AppMenuWidget created successfully");
     
-    NSLog(@"MenuController: Setting up protocol manager connection");
+    NSDebugLLog(@"gwcomp", @"MenuController: Setting up protocol manager connection");
     // Set up the AppMenuWidget with the protocol manager
     [self.appMenuWidget setProtocolManager:[MenuProtocolManager sharedManager]];
-    NSLog(@"MenuController: Protocol manager connected to AppMenuWidget");
+    NSDebugLLog(@"gwcomp", @"MenuController: Protocol manager connected to AppMenuWidget");
     
     // Update all protocol handlers with the AppMenuWidget reference
     [[MenuProtocolManager sharedManager] updateAllHandlersWithAppMenuWidget:self.appMenuWidget];
-    NSLog(@"MenuController: All protocol handlers notified of AppMenuWidget");
+    NSDebugLLog(@"gwcomp", @"MenuController: All protocol handlers notified of AppMenuWidget");
     
-    NSLog(@"MenuController: Checking appMenuWidget before NSLog...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Checking appMenuWidget before NSLog...");
     if (self.appMenuWidget) {
-        NSLog(@"MenuController: appMenuWidget is valid");
+        NSDebugLLog(@"gwcomp", @"MenuController: appMenuWidget is valid");
     } else {
-        NSLog(@"MenuController: appMenuWidget is nil!");
+        NSDebugLLog(@"gwcomp", @"MenuController: appMenuWidget is nil!");
     }
     
     // NSLog(@"MenuController: Created AppMenuWidget with width %.0f at address %p", menuWidgetWidth, self.appMenuWidget);
-    NSLog(@"MenuController: Skipping potentially problematic NSLog");
+    NSDebugLLog(@"gwcomp", @"MenuController: Skipping potentially problematic NSLog");
     
     // Remove the Action Search icon from the menu bar (search remains accessible via Command menu)
     
@@ -555,7 +555,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // Add the status items view and start update timers
     [self.menuBarView addSubview:statusItemsView];
     [self.statusItemManager startUpdateTimers];
-    NSLog(@"MenuController: Added StatusItemsView as child of MenuBarView");
+    NSDebugLLog(@"gwcomp", @"MenuController: Added StatusItemsView as child of MenuBarView");
     
     // Finally add rounded corners on top of everything
     [[self.menuBar contentView] addSubview:self.roundedCornersView];
@@ -578,9 +578,9 @@ static NSUInteger _rapidDbusNotificationCount = 0;
                                                      target:[ActionSearchController sharedController]
                                                      action:@selector(toggleSearch:)];
         if (regOK) {
-            NSLog(@"MenuController: Registered global shortcut Cmd-Space for Action Search");
+            NSDebugLLog(@"gwcomp", @"MenuController: Registered global shortcut Cmd-Space for Action Search");
         } else {
-            NSLog(@"MenuController: Failed to register Cmd-Space as global shortcut");
+            NSDebugLLog(@"gwcomp", @"MenuController: Failed to register Cmd-Space as global shortcut");
             // Notify user with alert so failure is visible
             NSAlert *alert = [[NSAlert alloc] init];
             [alert setMessageText:NSLocalizedString(@"Cannot register global shortcut", @"Alert title for shortcut failure")];
@@ -592,9 +592,9 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         }
     } else {
         if (!mgr) {
-            NSLog(@"MenuController: Warning - cannot register Cmd-Space because X11ShortcutManager is unavailable");
+            NSDebugLLog(@"gwcomp", @"MenuController: Warning - cannot register Cmd-Space because X11ShortcutManager is unavailable");
         } else {
-            NSLog(@"MenuController: Cmd-Space already taken - not registering global shortcut");
+            NSDebugLLog(@"gwcomp", @"MenuController: Cmd-Space already taken - not registering global shortcut");
         }
     }
 
@@ -605,7 +605,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
                                    selector:@selector(animateMenuSlideIn)
                                    userInfo:nil
                                     repeats:NO];
-    NSLog(@"MenuController: Window shown, menu will slide in immediately (using NSTimer for compatibility)");
+    NSDebugLLog(@"gwcomp", @"MenuController: Window shown, menu will slide in immediately (using NSTimer for compatibility)");
 
     // Observe screen resolution/layout changes so we can reposition the menu bar.
     // Registered here (after creation) rather than in init, to avoid interfering
@@ -618,12 +618,12 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
 - (void)setupMenuBar
 {
-    NSLog(@"MenuController: Setting up menu bar using createMenuBar method");
+    NSDebugLLog(@"gwcomp", @"MenuController: Setting up menu bar using createMenuBar method");
     [self createMenuBar];
-    NSLog(@"MenuController: Menu bar setup complete at %.0f,%.0f %.0fx%.0f", self.screenFrame.origin.x, self.screenFrame.origin.y, self.screenSize.width, [[GSTheme theme] menuBarHeight]);
-    NSLog(@"MenuController: Setting up X11 window monitoring");
+    NSDebugLLog(@"gwcomp", @"MenuController: Menu bar setup complete at %.0f,%.0f %.0fx%.0f", self.screenFrame.origin.x, self.screenFrame.origin.y, self.screenSize.width, [[GSTheme theme] menuBarHeight]);
+    NSDebugLLog(@"gwcomp", @"MenuController: Setting up X11 window monitoring");
     [self setupWindowMonitoring];
-    NSLog(@"MenuController: Initializing protocol scanning");
+    NSDebugLLog(@"gwcomp", @"MenuController: Initializing protocol scanning");
     [self initializeProtocols];
 }
 
@@ -633,25 +633,25 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     if (self.appMenuWidget) {
         [self.appMenuWidget updateForActiveWindow];
     } else {
-        NSLog(@"MenuController: self.appMenuWidget is nil");
+        NSDebugLLog(@"gwcomp", @"MenuController: self.appMenuWidget is nil");
     }
 }
 
 - (void)initializeProtocols
 {
-    NSLog(@"MenuController: Initializing all menu protocols...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Initializing all menu protocols...");
     
-    NSLog(@"MenuController: About to call initializeAllProtocols...");
+    NSDebugLLog(@"gwcomp", @"MenuController: About to call initializeAllProtocols...");
     if (![[MenuProtocolManager sharedManager] initializeAllProtocols]) {
-        NSLog(@"MenuController: Failed to initialize menu protocols - continuing anyway");
+        NSDebugLLog(@"gwcomp", @"MenuController: Failed to initialize menu protocols - continuing anyway");
         self.dbusFileDescriptor = -1;
     } else {
-        NSLog(@"MenuController: Menu protocols initialized successfully");
+        NSDebugLLog(@"gwcomp", @"MenuController: Menu protocols initialized successfully");
         
         // Get the DBus file descriptor for X11 event loop integration
         self.dbusFileDescriptor = [[MenuProtocolManager sharedManager] getDBusFileDescriptor];
         if (self.dbusFileDescriptor >= 0) {
-            NSLog(@"MenuController: Got DBus file descriptor %d for event loop integration", self.dbusFileDescriptor);
+            NSDebugLLog(@"gwcomp", @"MenuController: Got DBus file descriptor %d for event loop integration", self.dbusFileDescriptor);
             
             // Create NSFileHandle for DBus file descriptor monitoring
             self.dbusFileHandle = [[NSFileHandle alloc] initWithFileDescriptor:self.dbusFileDescriptor closeOnDealloc:NO];
@@ -662,14 +662,14 @@ static NSUInteger _rapidDbusNotificationCount = 0;
                                name:NSFileHandleDataAvailableNotification
                              object:self.dbusFileHandle];
                 [self.dbusFileHandle waitForDataInBackgroundAndNotify];
-                NSLog(@"MenuController: DBus file descriptor integrated into notification system");
+                NSDebugLLog(@"gwcomp", @"MenuController: DBus file descriptor integrated into notification system");
             } else {
-                NSLog(@"MenuController: Failed to create NSFileHandle for DBus file descriptor");
+                NSDebugLLog(@"gwcomp", @"MenuController: Failed to create NSFileHandle for DBus file descriptor");
             }
             
-            NSLog(@"MenuController: Event loop integration setup complete");
+            NSDebugLLog(@"gwcomp", @"MenuController: Event loop integration setup complete");
         } else {
-            NSLog(@"MenuController: Failed to get DBus file descriptor");
+            NSDebugLLog(@"gwcomp", @"MenuController: Failed to get DBus file descriptor");
         }
         
         // Set up timer-based D-Bus polling ONLY as fallback when fd monitoring is unavailable
@@ -679,28 +679,28 @@ static NSUInteger _rapidDbusNotificationCount = 0;
                                                                     selector:@selector(pollDBusMessages:)
                                                                     userInfo:nil
                                                                      repeats:YES];
-            NSLog(@"MenuController: D-Bus polling timer set up as fallback (500ms interval)");
+            NSDebugLLog(@"gwcomp", @"MenuController: D-Bus polling timer set up as fallback (500ms interval)");
         } else {
-            NSLog(@"MenuController: Using fd-based monitoring, no polling timer needed");
+            NSDebugLLog(@"gwcomp", @"MenuController: Using fd-based monitoring, no polling timer needed");
         }
     }
     
     // Set the app menu widget reference
     if (self.appMenuWidget) {
         [[MenuProtocolManager sharedManager] setAppMenuWidget:self.appMenuWidget];
-        NSLog(@"MenuController: Set up connection between MenuProtocolManager and AppMenuWidget");
+        NSDebugLLog(@"gwcomp", @"MenuController: Set up connection between MenuProtocolManager and AppMenuWidget");
     }
     
     // D-Bus will continue initializing via the file descriptor monitoring on the main thread
     // The run loop will handle D-Bus messages asynchronously without blocking the UI
     // This ensures thread safety - D-Bus is NOT thread-safe and must run on main thread only
-    NSLog(@"MenuController: D-Bus initialization will continue via main thread run loop");
-    NSLog(@"MenuController: File descriptor monitoring will handle D-Bus messages asynchronously");
+    NSDebugLLog(@"gwcomp", @"MenuController: D-Bus initialization will continue via main thread run loop");
+    NSDebugLLog(@"gwcomp", @"MenuController: File descriptor monitoring will handle D-Bus messages asynchronously");
 }
 
 - (void)createProtocolManager
 {
-    NSLog(@"MenuController: Creating MenuProtocolManager...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Creating MenuProtocolManager...");
     self.protocolManager = [MenuProtocolManager sharedManager];
     
     // Register both Canonical and GTK protocol handlers
@@ -712,19 +712,19 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     [self.protocolManager registerProtocolHandler:canonicalHandler forType:MenuProtocolTypeCanonical];
     [self.protocolManager registerProtocolHandler:gtkHandler forType:MenuProtocolTypeGTK];
     
-    NSLog(@"MenuController: Registered GNUstep, Canonical, and GTK protocol handlers");
-    NSLog(@"MenuController: createProtocolManager COMPLETED");
+    NSDebugLLog(@"gwcomp", @"MenuController: Registered GNUstep, Canonical, and GTK protocol handlers");
+    NSDebugLLog(@"gwcomp", @"MenuController: createProtocolManager COMPLETED");
 }
 
 - (void)setupWindowMonitoring
 {
-    NSLog(@"MenuController: Setting up window monitoring");
+    NSDebugLLog(@"gwcomp", @"MenuController: Setting up window monitoring");
     
     // Start GCD-based window monitoring (event-driven, zero-polling)
     if ([self.windowMonitor startMonitoring]) {
-        NSLog(@"MenuController: Window monitoring started successfully (GCD-based, event-driven)");
+        NSDebugLLog(@"gwcomp", @"MenuController: Window monitoring started successfully (GCD-based, event-driven)");
     } else {
-        NSLog(@"MenuController: ERROR - Failed to start window monitoring");
+        NSDebugLLog(@"gwcomp", @"MenuController: ERROR - Failed to start window monitoring");
         return;
     }
     
@@ -752,7 +752,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
                                                                 userInfo:nil
                                                                  repeats:YES];
     
-    NSLog(@"MenuController: Window monitoring setup complete");
+    NSDebugLLog(@"gwcomp", @"MenuController: Window monitoring setup complete");
 }
 
 - (void)activeWindowChangedNotification:(NSNotification *)notification
@@ -772,7 +772,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     if (lostIdNum) {
         unsigned long lostId = [lostIdNum unsignedLongValue];
         if (self.appMenuWidget && self.appMenuWidget.currentWindowId == lostId) {
-            NSLog(@"MenuController: Currently shown window 0x%lx was explicitly lost (destroyed/unmapped) - clearing menu", lostId);
+            NSDebugLLog(@"gwcomp", @"MenuController: Currently shown window 0x%lx was explicitly lost (destroyed/unmapped) - clearing menu", lostId);
             [self.appMenuWidget clearMenuAndHideView];
         }
     }
@@ -791,7 +791,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // Check if the focus changed to the Menu application itself.
     // If so, we ignore the change to keep the previous application's menu visible.
     if (windowId != 0 && [NSApp windowWithWindowNumber:windowId] != nil) {
-        NSLog(@"MenuController: Focus changed to Menu app window (0x%lx) - ignoring to preserve current menu", windowId);
+        NSDebugLLog(@"gwcomp", @"MenuController: Focus changed to Menu app window (0x%lx) - ignoring to preserve current menu", windowId);
         return;
     }
 
@@ -801,7 +801,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         pid_t oldPid = [MenuUtils getWindowPID:self.appMenuWidget.currentWindowId];
         pid_t newPid = [MenuUtils getWindowPID:windowId];
         if (oldPid != 0 && oldPid == newPid) {
-            NSLog(@"MenuController: Focus changed to another window (0x%lx) of the same process (PID %d) - ignoring to preserve current menu", windowId, (int)newPid);
+            NSDebugLLog(@"gwcomp", @"MenuController: Focus changed to another window (0x%lx) of the same process (PID %d) - ignoring to preserve current menu", windowId, (int)newPid);
              // We still update the window tracking in both Controller and Widget but skip the menu reload
              self.lastProcessedWindowId = windowId;
              self.lastProcessedTime = [[NSDate date] timeIntervalSince1970];
@@ -815,7 +815,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
     // Always use updateForActiveWindowId - it has proper anti-flicker handling
     // including grace periods for windowId == 0 (transient no-window states)
-    NSLog(@"MenuController: Active window changed (notification) to 0x%lx", windowId);
+    NSDebugLLog(@"gwcomp", @"MenuController: Active window changed (notification) to 0x%lx", windowId);
 
     if (self.appMenuWidget) {
         [self.appMenuWidget updateForActiveWindowId:windowId];
@@ -833,7 +833,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
                 activeWindow = [[WindowMonitor sharedMonitor] getActiveWindow];
             }
             @catch (NSException *ex) {
-                NSLog(@"MenuController: WindowMonitor getActiveWindow threw exception: %@ - treating as no active window", ex);
+                NSDebugLLog(@"gwcomp", @"MenuController: WindowMonitor getActiveWindow threw exception: %@ - treating as no active window", ex);
                 activeWindow = 0;
             }
         } else {
@@ -878,7 +878,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
         // If the system reports no active window, but we have a menu for one, hide it
         if (activeWindow == 0 && shownWindow != 0) {
-            NSLog(@"MenuController: Active window is 0 but menu shown for 0x%lx - clearing menu", shownWindow);
+            NSDebugLLog(@"gwcomp", @"MenuController: Active window is 0 but menu shown for 0x%lx - clearing menu", shownWindow);
             [self.appMenuWidget clearMenuAndHideView];
             self.lastClearedWindowId = shownWindow;
             self.lastClearedTime = now;
@@ -887,19 +887,19 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         }
     }
     @catch (NSException *ex) {
-        NSLog(@"MenuController: Exception in windowValidationTick: %@", ex);
+        NSDebugLLog(@"gwcomp", @"MenuController: Exception in windowValidationTick: %@", ex);
     }
 }
 
 - (void)announceGlobalMenuSupport
 {
-    NSLog(@"MenuController: Announcing global menu support via X11 properties");
+    NSDebugLLog(@"gwcomp", @"MenuController: Announcing global menu support via X11 properties");
     
     // Set X11 root window properties to announce that we support global menus
     // This is essential for applications to know they should export their menus
     Display *display = [MenuUtils sharedDisplay];
     if (!display) {
-        NSLog(@"MenuController: Cannot open X11 display to announce global menu support");
+        NSDebugLLog(@"gwcomp", @"MenuController: Cannot open X11 display to announce global menu support");
         return;
     }
     
@@ -920,7 +920,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         XChangeProperty(display, root, supportingWmAtom, windowAtom, 32,
                        PropModeReplace, (unsigned char*)&menuBarWindow, 1);
         
-        NSLog(@"MenuController: Set _NET_SUPPORTING_WM property");
+        NSDebugLLog(@"gwcomp", @"MenuController: Set _NET_SUPPORTING_WM property");
     }
     
     // Set _NET_SUPPORTED property to list supported features
@@ -944,7 +944,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
                    PropModeReplace, (unsigned char*)supportedAtoms, 
                    sizeof(supportedAtoms) / sizeof(Atom));
     
-    NSLog(@"MenuController: Set _NET_SUPPORTED property with %lu atoms", 
+    NSDebugLLog(@"gwcomp", @"MenuController: Set _NET_SUPPORTED property with %lu atoms", 
           sizeof(supportedAtoms) / sizeof(Atom));
     
     // Set Unity-specific properties that Chrome looks for
@@ -952,16 +952,16 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     XChangeProperty(display, root, unityGlobalMenuAtom, atomAtom, 32,
                    PropModeReplace, (unsigned char*)supportedAtoms, 1);
     
-    NSLog(@"MenuController: Set _UNITY_SUPPORTED property");
+    NSDebugLLog(@"gwcomp", @"MenuController: Set _UNITY_SUPPORTED property");
     
     XSync(display, False);
     
-    NSLog(@"MenuController: Global menu support announcement complete");
+    NSDebugLLog(@"gwcomp", @"MenuController: Global menu support announcement complete");
 }
 
 - (void)scanForNewMenus
 {
-    NSLog(@"MenuController: Scanning for new menu services");
+    NSDebugLLog(@"gwcomp", @"MenuController: Scanning for new menu services");
     
     [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
     
@@ -985,7 +985,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         // Applications may register menus after window activation
         NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
         if ((now - self.lastActiveWindowScanTime) > 3.0) { // Only scan once every 3 seconds max
-            NSLog(@"MenuController: Active window changed, triggering scan to discover new menus");
+            NSDebugLLog(@"gwcomp", @"MenuController: Active window changed, triggering scan to discover new menus");
             self.lastActiveWindowScanTime = now;
             [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
         }
@@ -994,30 +994,30 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
 - (void)createTimeMenu
 {
-    NSLog(@"MenuController: createTimeMenu - DISABLED (bundles only)");
+    NSDebugLLog(@"gwcomp", @"MenuController: createTimeMenu - DISABLED (bundles only)");
     return;
     
-    NSLog(@"MenuController: Creating time menu");
+    NSDebugLLog(@"gwcomp", @"MenuController: Creating time menu");
     
-    NSLog(@"MenuController: Creating time formatters...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Creating time formatters...");
     // Create formatters
     self.timeFormatter = [[NSDateFormatter alloc] init];
-    NSLog(@"MenuController: Created timeFormatter");
+    NSDebugLLog(@"gwcomp", @"MenuController: Created timeFormatter");
     [self.timeFormatter setDateFormat:@"HH:mm"];
-    NSLog(@"MenuController: Set time format");
+    NSDebugLLog(@"gwcomp", @"MenuController: Set time format");
     self.dateFormatter = [[NSDateFormatter alloc] init];
-    NSLog(@"MenuController: Created dateFormatter");
+    NSDebugLLog(@"gwcomp", @"MenuController: Created dateFormatter");
     [self.dateFormatter setDateFormat:@"EEEE, MMMM d, yyyy"];
-    NSLog(@"MenuController: Set date format");
+    NSDebugLLog(@"gwcomp", @"MenuController: Set date format");
 
-    NSLog(@"MenuController: Creating menu and items...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Creating menu and items...");
     // Create the menu and items
     self.timeMenu = [[NSMenu alloc] initWithTitle:@""];
-    NSLog(@"MenuController: Created timeMenu");
+    NSDebugLLog(@"gwcomp", @"MenuController: Created timeMenu");
     [self.timeMenu setAutoenablesItems:NO];
-    NSLog(@"MenuController: Set autoenablesItems");
+    NSDebugLLog(@"gwcomp", @"MenuController: Set autoenablesItems");
     self.timeMenuItem = [[NSMenuItem alloc] initWithTitle:@"00:00" action:nil keyEquivalent:@""];
-    NSLog(@"MenuController: Created timeMenuItem");
+    NSDebugLLog(@"gwcomp", @"MenuController: Created timeMenuItem");
     /*
     NSMenu *timeSubMenu = [[NSMenu alloc] initWithTitle:@"TimeSubMenu"];
     self.dateMenuItem = [[NSMenuItem alloc] initWithTitle:@"Loading..." action:nil keyEquivalent:@""];
@@ -1036,16 +1036,16 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     [self.timeMenuView setHorizontal:YES];
     [self.timeMenuView setAutoresizingMask:NSViewMinXMargin | NSViewMaxYMargin | NSViewMinYMargin];
 
-    NSLog(@"MenuController: About to schedule time update timer");
+    NSDebugLLog(@"gwcomp", @"MenuController: About to schedule time update timer");
     // Start timer to update time
     self.timeUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
                                                         target:self
                                                       selector:@selector(updateTimeMenu)
                                                       userInfo:nil
                                                        repeats:YES];
-    NSLog(@"MenuController: Timer scheduled successfully");
+    NSDebugLLog(@"gwcomp", @"MenuController: Timer scheduled successfully");
     [self updateTimeMenu];
-    NSLog(@"MenuController: Initial time update called");
+    NSDebugLLog(@"gwcomp", @"MenuController: Initial time update called");
 }
 
 - (void)updateTimeMenu
@@ -1071,7 +1071,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
                                                                 userInfo:nil
                                                                  repeats:YES];
     
-    NSLog(@"MenuController: Menu slide-in animation started");
+    NSDebugLLog(@"gwcomp", @"MenuController: Menu slide-in animation started");
 }
 
 - (void)updateSlideInAnimation
@@ -1089,7 +1089,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         [self.menuBar setFrameTopLeftPoint:NSMakePoint(self.screenFrame.origin.x,
                                                         self.screenFrame.origin.y + self.screenSize.height)];
         [self revealAppMenuWidget];
-        NSLog(@"MenuController: Menu slide-in animation completed");
+        NSDebugLLog(@"gwcomp", @"MenuController: Menu slide-in animation completed");
     } else {
         // Calculate progress (0.0 to 1.0) using ease-out cubic for smooth deceleration
         CGFloat progress = elapsed / duration;
@@ -1105,12 +1105,12 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 {
     [self.appMenuWidget setHidden:NO];
     [self.appMenuWidget setNeedsDisplay:YES];
-    NSLog(@"MenuController: AppMenuWidget revealed");
+    NSDebugLLog(@"gwcomp", @"MenuController: AppMenuWidget revealed");
 }
 
 - (void)loadDesktopMenuIfAvailable
 {
-    NSLog(@"MenuController: Checking for Desktop/Workspace window to load default menu...");
+    NSDebugLLog(@"gwcomp", @"MenuController: Checking for Desktop/Workspace window to load default menu...");
     
     // Get all windows
     NSArray *windows = [MenuUtils getAllWindows];
@@ -1121,25 +1121,25 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         unsigned long windowId = [windowNum unsignedLongValue];
         if ([MenuUtils isDesktopWindow:windowId]) {
             desktopWindowId = windowId;
-            NSLog(@"MenuController: Found Desktop/Workspace window: 0x%lx", desktopWindowId);
+            NSDebugLLog(@"gwcomp", @"MenuController: Found Desktop/Workspace window: 0x%lx", desktopWindowId);
             break;
         }
     }
     
     if (desktopWindowId == 0) {
-        NSLog(@"MenuController: No Desktop/Workspace window found yet - will load when it appears");
+        NSDebugLLog(@"gwcomp", @"MenuController: No Desktop/Workspace window found yet - will load when it appears");
         return;
     }
     
     // Check if this desktop window has a menu registered
     if ([[MenuProtocolManager sharedManager] hasMenuForWindow:desktopWindowId]) {
-        NSLog(@"MenuController: Desktop/Workspace window has menu - loading it as default");
+        NSDebugLLog(@"gwcomp", @"MenuController: Desktop/Workspace window has menu - loading it as default");
         // Load the desktop menu in the AppMenuWidget
         if (self.appMenuWidget) {
             [self.appMenuWidget displayMenuForWindow:desktopWindowId];
         }
     } else {
-        NSLog(@"MenuController: Desktop/Workspace window found but no menu registered yet");
+        NSDebugLLog(@"gwcomp", @"MenuController: Desktop/Workspace window found but no menu registered yet");
     }
 }
 

@@ -19,7 +19,7 @@
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"[NSNetworkConfigStep] init");
+        NSDebugLLog(@"gwcomp", @"[NSNetworkConfigStep] init");
         self.stepTitle = @"Network Configuration";
         self.stepDescription = @"Configure your network interface settings";
         [self setupView];
@@ -29,7 +29,7 @@
 
 - (void)dealloc
 {
-    NSLog(@"[NSNetworkConfigStep] dealloc");
+    NSDebugLLog(@"gwcomp", @"[NSNetworkConfigStep] dealloc");
     [_dnsField release];
     [_gatewayField release];
     [_subnetMaskField release];
@@ -45,7 +45,7 @@
 
 - (void)setupView
 {
-    NSLog(@"[NSNetworkConfigStep] setupView");
+    NSDebugLLog(@"gwcomp", @"[NSNetworkConfigStep] setupView");
     // Match installer card inner area (approx 354x204)
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
     CGFloat left = 24.0; // Standard left margin  
@@ -148,7 +148,7 @@
 
 - (void)configMethodChanged:(id)sender
 {
-    NSLog(@"[NSNetworkConfigStep] configMethodChanged: sender=%@", sender);
+    NSDebugLLog(@"gwcomp", @"[NSNetworkConfigStep] configMethodChanged: sender=%@", sender);
     BOOL manualConfig = ([_manualRadio state] == NSOnState);
 
     if (sender == _dhcpRadio && [_dhcpRadio state] == NSOnState) {
@@ -196,7 +196,7 @@
     NSString *subnetMask = [[_subnetMaskField stringValue] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
     BOOL ok = ([ipAddress length] > 0 && [subnetMask length] > 0);
-    NSLog(@"[NSNetworkConfigStep] canContinue (manual=%d) -> %@", ([_manualRadio state] == NSOnState), ok ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"[NSNetworkConfigStep] canContinue (manual=%d) -> %@", ([_manualRadio state] == NSOnState), ok ? @"YES" : @"NO");
     return ok;
 }
 
@@ -239,7 +239,7 @@
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"[NSAuthConfigStep] init");
+        NSDebugLLog(@"gwcomp", @"[NSAuthConfigStep] init");
         self.stepTitle = @"Authentication";
         self.stepDescription = @"Set up network authentication";
         [self setupView];
@@ -249,7 +249,7 @@
 
 - (void)dealloc
 {
-    NSLog(@"[NSAuthConfigStep] dealloc");
+    NSDebugLLog(@"gwcomp", @"[NSAuthConfigStep] dealloc");
     [_wpaPasswordField release];
     [_enableWPACheckbox release];
     [_domainField release];
@@ -263,7 +263,7 @@
 
 - (void)setupView
 {
-    NSLog(@"[NSAuthConfigStep] setupView");
+    NSDebugLLog(@"gwcomp", @"[NSAuthConfigStep] setupView");
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
 
     NSTextField *infoLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(16, 176, 322, 16)];
@@ -341,7 +341,7 @@
 - (void)wpaCheckboxChanged:(id)sender
 {
     BOOL enableWPA = ([_enableWPACheckbox state] == NSOnState);
-    NSLog(@"[NSAuthConfigStep] wpaCheckboxChanged -> %@", enableWPA ? @"ENABLED" : @"DISABLED");
+    NSDebugLLog(@"gwcomp", @"[NSAuthConfigStep] wpaCheckboxChanged -> %@", enableWPA ? @"ENABLED" : @"DISABLED");
     [_wpaPasswordField setEnabled:enableWPA];
     [self requestNavigationUpdate];
 }
@@ -370,7 +370,7 @@
     if ([_enableWPACheckbox state] == NSOnState) {
         NSString *wpaPassword = [[_wpaPasswordField stringValue] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         BOOL ok = ([wpaPassword length] > 0);
-        NSLog(@"[NSAuthConfigStep] canContinue (WPA) -> %@", ok ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"[NSAuthConfigStep] canContinue (WPA) -> %@", ok ? @"YES" : @"NO");
         return ok;
     }
 

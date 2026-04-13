@@ -77,8 +77,17 @@
         return nil;
     }
     
-    // First element is revision number (uint32)
-    NSNumber *revision = [resultArray objectAtIndex:0];
+    // First element is revision number (uint32). Guard against malformed
+    // payloads that send a non-number here — sending numeric messages to
+    // a string/variant below would dispatch via objc_msgSend_fpret and
+    // crash on a freed/mistyped object.
+    id revisionObj = [resultArray objectAtIndex:0];
+    if (![revisionObj isKindOfClass:[NSNumber class]]) {
+        NSDebugLog(@"DBusMenuParser: ERROR: revision is %@, not NSNumber",
+                   [revisionObj class]);
+        return nil;
+    }
+    NSNumber *revision = (NSNumber *)revisionObj;
     NSDebugLog(@"DBusMenuParser: Menu revision: %@ (class: %@)", revision, [revision class]);
     
     // Second element is the layout item structure: (ia{sv}av)
@@ -137,18 +146,25 @@
         return nil;
     }
     
-    // Extract the layout item components: (ia{sv}av)
-    NSNumber *itemId = [itemArray objectAtIndex:0];
+    // Extract the layout item components: (ia{sv}av). Reject non-number
+    // itemId to avoid objc_msgSend_fpret on the wrong object type later.
+    id itemIdObj = [itemArray objectAtIndex:0];
+    if (![itemIdObj isKindOfClass:[NSNumber class]]) {
+        NSDebugLog(@"DBusMenuParser: ERROR: itemId is %@, not NSNumber",
+                   [itemIdObj class]);
+        return nil;
+    }
+    NSNumber *itemId = (NSNumber *)itemIdObj;
     id propertiesObj = [itemArray objectAtIndex:1];
     id childrenObj = [itemArray objectAtIndex:2];
-    
+
     NSDebugLog(@"DBusMenuParser: Item ID: %@ (class: %@)", itemId, [itemId class]);
     NSDebugLog(@"DBusMenuParser: Properties object: %@ (class: %@)", propertiesObj, [propertiesObj class]);
     NSDebugLog(@"DBusMenuParser: Children object: %@ (class: %@)", childrenObj, [childrenObj class]);
-    
+
     // Convert properties to dictionary
     NSDictionary *properties = [self convertPropertiesToDictionary:propertiesObj];
-    
+
     // Convert children to array if needed
     NSArray *children = nil;
     if ([childrenObj isKindOfClass:[NSArray class]]) {
@@ -157,15 +173,15 @@
         NSDebugLog(@"DBusMenuParser: WARNING: Children is not an array, creating empty one");
         children = [NSArray array];
     }
-    
+
     NSDebugLog(@"DBusMenuParser: Properties dict has %lu entries:", (unsigned long)[properties count]);
     for (NSString *key in [properties allKeys]) {
         id value = [properties objectForKey:key];
         NSDebugLog(@"DBusMenuParser:   %@ = %@ (%@)", key, value, [value class]);
     }
-    
+
     NSDebugLog(@"DBusMenuParser: Children array has %lu elements", (unsigned long)[children count]);
-    
+
     // For root item, create the main menu
     NSMenu *menu = nil;
     if (isRoot) {
@@ -175,13 +191,13 @@
         }
         NSDebugLog(@"DBusMenuParser: Creating root menu with title: '%@'", menuTitle);
         menu = [[NSMenu alloc] initWithTitle:menuTitle];
-        
+
         // Process children of root item
         NSDebugLog(@"DBusMenuParser: Processing %lu children of root item", (unsigned long)[children count]);
         for (NSUInteger i = 0; i < [children count]; i++) {
             id childItem = [children objectAtIndex:i];
             NSDebugLog(@"DBusMenuParser: Processing child %lu: %@ (%@)", i, childItem, [childItem class]);
-            
+
             NSMenuItem *menuItem = [self createMenuItemFromLayoutItem:childItem];
             if (menuItem) {
                 [menu addItem:menuItem];
@@ -229,11 +245,18 @@
         return nil;
     }
     
-    // Extract the layout item components: (ia{sv}av)
-    NSNumber *itemId = [itemArray objectAtIndex:0];
+    // Extract the layout item components: (ia{sv}av). Reject non-number
+    // itemId to avoid objc_msgSend_fpret on the wrong object type later.
+    id itemIdObj = [itemArray objectAtIndex:0];
+    if (![itemIdObj isKindOfClass:[NSNumber class]]) {
+        NSDebugLog(@"DBusMenuParser: ERROR: itemId is %@, not NSNumber",
+                   [itemIdObj class]);
+        return nil;
+    }
+    NSNumber *itemId = (NSNumber *)itemIdObj;
     id propertiesObj = [itemArray objectAtIndex:1];
     id childrenObj = [itemArray objectAtIndex:2];
-    
+
     NSDebugLog(@"DBusMenuParser: Item ID: %@ (class: %@)", itemId, [itemId class]);
     NSDebugLog(@"DBusMenuParser: Properties object: %@ (class: %@)", propertiesObj, [propertiesObj class]);
     NSDebugLog(@"DBusMenuParser: Children object: %@ (class: %@)", childrenObj, [childrenObj class]);
@@ -318,10 +341,16 @@
         return nil;
     }
     
-    NSNumber *itemId = [itemArray objectAtIndex:0];
+    id itemIdObj = [itemArray objectAtIndex:0];
+    if (![itemIdObj isKindOfClass:[NSNumber class]]) {
+        NSDebugLLog(@"gwcomp", @"DBusMenuParser: ERROR: itemId is %@, not NSNumber",
+                    [itemIdObj class]);
+        return nil;
+    }
+    NSNumber *itemId = (NSNumber *)itemIdObj;
     id propertiesObj = [itemArray objectAtIndex:1];
     id childrenObj = [itemArray objectAtIndex:2];
-    
+
     // Convert properties to dictionary
     NSDictionary *properties = [self convertPropertiesToDictionary:propertiesObj];
     

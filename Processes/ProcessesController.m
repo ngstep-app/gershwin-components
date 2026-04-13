@@ -27,12 +27,12 @@
 #endif
 
 #ifndef PC_INFO
-#define PC_INFO(fmt, ...) NSLog((@"[Processes] " fmt), ##__VA_ARGS__)
+#define PC_INFO(fmt, ...) NSDebugLLog(@"gwcomp", (@"[Processes] " fmt), ##__VA_ARGS__)
 #endif
 
 #ifndef PC_DBG
 #if PROCESSES_DEBUG
-#define PC_DBG(fmt, ...) NSLog((@"[Processes] " fmt), ##__VA_ARGS__)
+#define PC_DBG(fmt, ...) NSDebugLLog(@"gwcomp", (@"[Processes] " fmt), ##__VA_ARGS__)
 #else
 #define PC_DBG(fmt, ...) ((void)0)
 #endif

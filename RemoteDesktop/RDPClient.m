@@ -109,7 +109,7 @@ typedef struct {
         return YES;
     }
     
-    NSLog(@"RDPClient: libfreerdp not found. Install freerdp2 package.");
+    NSDebugLLog(@"gwcomp", @"RDPClient: libfreerdp not found. Install freerdp2 package.");
     return NO;
 }
 
@@ -120,7 +120,7 @@ static BOOL rdp_pre_connect(freerdp *instance)
     RDPCustomContext *customContext = (RDPCustomContext *)instance->context;
     (void)customContext; // Unused but kept for consistency
     
-    NSLog(@"RDPClient: Pre-connect callback");
+    NSDebugLLog(@"gwcomp", @"RDPClient: Pre-connect callback");
     
     rdpSettings *settings = instance->context->settings;
     
@@ -144,12 +144,12 @@ static BOOL rdp_post_connect(freerdp *instance)
     RDPCustomContext *customContext = (RDPCustomContext *)instance->context;
     RDPClient *client = customContext->client;
     
-    NSLog(@"RDPClient: Post-connect callback");
+    NSDebugLLog(@"gwcomp", @"RDPClient: Post-connect callback");
     
     rdpGdi *gdi = instance->context->gdi;
     if (!gdi) {
         if (!gdi_init(instance, PIXEL_FORMAT_BGRA32)) {
-            NSLog(@"RDPClient: Failed to initialize GDI");
+            NSDebugLLog(@"gwcomp", @"RDPClient: Failed to initialize GDI");
             return FALSE;
         }
         gdi = instance->context->gdi;
@@ -168,11 +168,11 @@ static BOOL rdp_post_connect(freerdp *instance)
     client->_framebuffer = (unsigned char *)malloc(bufferSize);
     
     if (!client->_framebuffer) {
-        NSLog(@"RDPClient: Failed to allocate framebuffer");
+        NSDebugLLog(@"gwcomp", @"RDPClient: Failed to allocate framebuffer");
         return FALSE;
     }
     
-    NSLog(@"RDPClient: Connected with resolution %ldx%ld", (long)client->_width, (long)client->_height);
+    NSDebugLLog(@"gwcomp", @"RDPClient: Connected with resolution %ldx%ld", (long)client->_width, (long)client->_height);
     
     return TRUE;
 }
@@ -182,7 +182,7 @@ static void rdp_post_disconnect(freerdp *instance)
     RDPCustomContext *customContext = (RDPCustomContext *)instance->context;
     (void)customContext; // Unused but kept for consistency
     
-    NSLog(@"RDPClient: Post-disconnect callback");
+    NSDebugLLog(@"gwcomp", @"RDPClient: Post-disconnect callback");
     
     if (instance->context->gdi) {
         gdi_free(instance);
@@ -254,7 +254,7 @@ static BOOL rdp_authenticate(freerdp *instance, char **username, char **password
     RDPCustomContext *customContext = (RDPCustomContext *)instance->context;
     RDPClient *client = customContext->client;
     
-    NSLog(@"RDPClient: Authentication callback");
+    NSDebugLLog(@"gwcomp", @"RDPClient: Authentication callback");
     
     // Return credentials if available
     if (client->_username && [client->_username length] > 0) {
@@ -288,7 +288,7 @@ static BOOL rdp_authenticate(freerdp *instance, char **username, char **password
                domain:(NSString *)domain
 {
     if (_connecting || _connected) {
-        NSLog(@"RDPClient: Already connecting or connected");
+        NSDebugLLog(@"gwcomp", @"RDPClient: Already connecting or connected");
         return NO;
     }
     
@@ -323,7 +323,7 @@ static BOOL rdp_authenticate(freerdp *instance, char **username, char **password
 
 - (void)disconnect
 {
-    NSLog(@"RDPClient: Disconnecting...");
+    NSDebugLLog(@"gwcomp", @"RDPClient: Disconnecting...");
     
     _shouldStop = YES;
     _connecting = NO;
@@ -378,21 +378,21 @@ static BOOL rdp_authenticate(freerdp *instance, char **username, char **password
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     
-    NSLog(@"RDPClient: Starting connection to %@:%ld", _hostname, (long)_port);
+    NSDebugLLog(@"gwcomp", @"RDPClient: Starting connection to %@:%ld", _hostname, (long)_port);
     
     // Enable FreeRDP verbose logging
     wLog* root = WLog_GetRoot();
     if (root) {
         WLog_SetLogLevel(root, WLOG_TRACE);
-        NSLog(@"RDPClient: FreeRDP verbose logging enabled (TRACE level)");
+        NSDebugLLog(@"gwcomp", @"RDPClient: FreeRDP verbose logging enabled (TRACE level)");
     } else {
-        NSLog(@"RDPClient: WARNING - Could not get wLog root for verbose logging");
+        NSDebugLLog(@"gwcomp", @"RDPClient: WARNING - Could not get wLog root for verbose logging");
     }
     
     // Create FreeRDP instance
     freerdp *instance = freerdp_new();
     if (!instance) {
-        NSLog(@"RDPClient: Failed to create FreeRDP instance");
+        NSDebugLLog(@"gwcomp", @"RDPClient: Failed to create FreeRDP instance");
         [self notifyConnectionResult:NO error:@"Failed to create RDP client"];
         goto cleanup;
     }
@@ -401,7 +401,7 @@ static BOOL rdp_authenticate(freerdp *instance, char **username, char **password
     instance->ContextSize = sizeof(RDPCustomContext);
     
     if (!freerdp_context_new(instance)) {
-        NSLog(@"RDPClient: Failed to create RDP context");
+        NSDebugLLog(@"gwcomp", @"RDPClient: Failed to create RDP context");
         freerdp_free(instance);
         [self notifyConnectionResult:NO error:@"Failed to create RDP context"];
         goto cleanup;
@@ -444,17 +444,17 @@ static BOOL rdp_authenticate(freerdp *instance, char **username, char **password
     settings->SoftwareGdi = TRUE;
     settings->IgnoreCertificate = TRUE;
     
-    NSLog(@"RDPClient: Attempting to connect to %s:%u", settings->ServerHostname, settings->ServerPort);
+    NSDebugLLog(@"gwcomp", @"RDPClient: Attempting to connect to %s:%u", settings->ServerHostname, settings->ServerPort);
     
     // Connect
     if (!freerdp_connect(instance)) {
         UINT32 error = freerdp_get_last_error(instance->context);
-        NSLog(@"RDPClient: Connection failed with error: 0x%08X", error);
+        NSDebugLLog(@"gwcomp", @"RDPClient: Connection failed with error: 0x%08X", error);
         [self notifyConnectionResult:NO error:[NSString stringWithFormat:@"RDP connection failed (error: 0x%08X)", error]];
         goto cleanup;
     }
     
-    NSLog(@"RDPClient: Successfully connected to %@:%ld", _hostname, (long)_port);
+    NSDebugLLog(@"gwcomp", @"RDPClient: Successfully connected to %@:%ld", _hostname, (long)_port);
     _connected = YES;
     _connecting = NO;
     
@@ -465,7 +465,7 @@ static BOOL rdp_authenticate(freerdp *instance, char **username, char **password
         DWORD status = freerdp_check_fds(instance);
         if (!status) {
             if (freerdp_shall_disconnect(instance)) {
-                NSLog(@"RDPClient: Server disconnected");
+                NSDebugLLog(@"gwcomp", @"RDPClient: Server disconnected");
                 break;
             }
         }
@@ -474,7 +474,7 @@ static BOOL rdp_authenticate(freerdp *instance, char **username, char **password
     }
     
 cleanup:
-    NSLog(@"RDPClient: Connection thread ending");
+    NSDebugLLog(@"gwcomp", @"RDPClient: Connection thread ending");
     
     if (_rdpContext) {
         RDPCustomContext *customContext = (RDPCustomContext *)_rdpContext;

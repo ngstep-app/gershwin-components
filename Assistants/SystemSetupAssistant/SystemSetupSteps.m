@@ -19,7 +19,7 @@
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"[SSUserInfoStep] init");
+        NSDebugLLog(@"gwcomp", @"[SSUserInfoStep] init");
         self.stepTitle = @"User Information";
         self.stepDescription = @"Please provide your user information";
         [self setupView];
@@ -29,7 +29,7 @@
 
 - (void)dealloc
 {
-    NSLog(@"[SSUserInfoStep] dealloc");
+    NSDebugLLog(@"gwcomp", @"[SSUserInfoStep] dealloc");
     [_confirmPasswordField release];
     [_passwordField release];
     [_usernameField release];
@@ -111,7 +111,7 @@
 
 - (void)fieldChanged:(id)sender
 {
-    NSLog(@"[SSUserInfoStep] fieldChanged:%@", sender);
+    NSDebugLLog(@"gwcomp", @"[SSUserInfoStep] fieldChanged:%@", sender);
     // Request navigation button update when fields change
     [self requestNavigationUpdate];
 }
@@ -147,7 +147,7 @@
                [password length] > 0 &&
                [confirmPassword length] > 0 &&
                [password isEqualToString:confirmPassword]);
-    NSLog(@"[SSUserInfoStep] canContinue -> %@", ok ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"[SSUserInfoStep] canContinue -> %@", ok ? @"YES" : @"NO");
     return ok;
 }
 
@@ -175,7 +175,7 @@
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"[SSPreferencesStep] init");
+        NSDebugLLog(@"gwcomp", @"[SSPreferencesStep] init");
         self.stepTitle = @"System Preferences";
         self.stepDescription = @"Configure your system preferences";
         [self setupView];
@@ -185,7 +185,7 @@
 
 - (void)dealloc
 {
-    NSLog(@"[SSPreferencesStep] dealloc");
+    NSDebugLLog(@"gwcomp", @"[SSPreferencesStep] dealloc");
     [_timezonePopup release];
     [_enableLocationCheckbox release];
     [_enableUpdateCheckbox release];

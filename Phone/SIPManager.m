@@ -96,7 +96,7 @@ static void mqueue_handler(int id, void *data, void *arg) {
                     uag_enable_sip_trace(true);
                     sip_set_trace_handler(uag_sip(), sip_trace_handler_wr);
                 } else {
-                     NSLog(@"SIPManager: ua_init FATAL error (%d). Continuing anyway.", err);
+                     NSDebugLLog(@"gwcomp", @"SIPManager: ua_init FATAL error (%d). Continuing anyway.", err);
                 }
 
                 // Load essential modules (non-blocking within RE thread)
@@ -112,7 +112,7 @@ static void mqueue_handler(int id, void *data, void *arg) {
                 err |= module_load(modpath, "auresamp");
                 err |= module_load(modpath, "aufile"); 
                 if (err) {
-                    NSLog(@"SIPManager: some modules failed to load (path: %s)", modpath);
+                    NSDebugLLog(@"gwcomp", @"SIPManager: some modules failed to load (path: %s)", modpath);
                 }
 
                 // Register event handler
@@ -142,11 +142,11 @@ static void mqueue_handler(int id, void *data, void *arg) {
 
             int err2 = ua_alloc(&self->_ua, addr);
             if (err2) {
-                 NSLog(@"SIPManager: ua_alloc failed (%d) for addr: %s", err2, addr);
+                 NSDebugLLog(@"gwcomp", @"SIPManager: ua_alloc failed (%d) for addr: %s", err2, addr);
                  [self handleError:@"Initialization Error" message:@"Failed to allocate User Agent."];
             } else {
                  self->_current_call = NULL;
-                 NSLog(@"SIPManager: User agent allocated for %s, registering...", addr);
+                 NSDebugLLog(@"gwcomp", @"SIPManager: User agent allocated for %s, registering...", addr);
 
                  // Update UI that we are working on it
                  [self performSelectorOnMainThread:@selector(_notifyRegistrationStateChanged:) withObject:@"Registering..." waitUntilDone:NO];
@@ -246,7 +246,7 @@ static void baresip_log_handler(uint32_t level, const char *msg) {
     }
 
     // Also send to NSLog for consistency with existing logging
-    if (s) NSLog(@"Baresip: %@", s);
+    if (s) NSDebugLLog(@"gwcomp", @"Baresip: %@", s);
 } 
 
 static struct log baresip_log = {
@@ -285,7 +285,7 @@ static void re_dbg_handler(int level, const char *p, size_t len, void *arg) {
         free(out);
     }
 
-    if (s) NSLog(@"Libre: %@", s);
+    if (s) NSDebugLLog(@"gwcomp", @"Libre: %@", s);
 }
 
 // Custom SIP trace handler that writes the raw SIP packet to stderr immediately
@@ -329,7 +329,7 @@ static void sip_trace_handler_wr(bool tx, enum sip_transp tp, const struct sa *s
         // Initialize libre
         err = libre_init();
         if (err) {
-            NSLog(@"SIPManager: libre_init failed (%d)", err);
+            NSDebugLLog(@"gwcomp", @"SIPManager: libre_init failed (%d)", err);
             return nil;
         }
 
@@ -339,13 +339,13 @@ static void sip_trace_handler_wr(bool tx, enum sip_transp tp, const struct sa *s
         // Initialize mqueue for thread-safe operations
         err = mqueue_alloc(&_mq, mqueue_handler, (__bridge void *)self);
         if (err) {
-            NSLog(@"SIPManager: mqueue_alloc failed (%d)", err);
+            NSDebugLLog(@"gwcomp", @"SIPManager: mqueue_alloc failed (%d)", err);
         }
 
         // Load configuration
         err = conf_configure();
         if (err) {
-            NSLog(@"SIPManager: conf_configure failed (%d) - ignoring", err);
+            NSDebugLLog(@"gwcomp", @"SIPManager: conf_configure failed (%d) - ignoring", err);
         }
 
         // Configure SIP to use a non-privileged port to avoid EPERM
@@ -355,7 +355,7 @@ static void sip_trace_handler_wr(bool tx, enum sip_transp tp, const struct sa *s
         // Initialize baresip core
         err = baresip_init(cfg);
         if (err) {
-            NSLog(@"SIPManager: baresip_init failed (%d)", err);
+            NSDebugLLog(@"gwcomp", @"SIPManager: baresip_init failed (%d)", err);
         }
         
         // Register log handler to redirect baresip logs to NSLog
@@ -416,12 +416,12 @@ static void *re_main_thread_func(void *arg) {
     if (err == 0) {
         pthread_detach(re_thread);
     } else {
-        NSLog(@"SIPManager: Failed to create RE thread (%d)", err);
+        NSDebugLLog(@"gwcomp", @"SIPManager: Failed to create RE thread (%d)", err);
     }
 } 
 
 - (void)stop {
-    NSLog(@"SIPManager: Stopping...");
+    NSDebugLLog(@"gwcomp", @"SIPManager: Stopping...");
 
     if (self->_re_thread_ready) {
         re_thread_enter();
@@ -433,7 +433,7 @@ static void *re_main_thread_func(void *arg) {
             dispatch_semaphore_wait(self->_exitSem, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
         }
     }
-    NSLog(@"SIPManager: Stopped");
+    NSDebugLLog(@"gwcomp", @"SIPManager: Stopped");
 }
 
 - (void)dealloc {
@@ -446,7 +446,7 @@ static void *re_main_thread_func(void *arg) {
     NSString *password = [defaults stringForKey:@"SIPPassword"];
     NSString *server = [defaults stringForKey:@"SIPServer"];
     
-    NSLog(@"SIPManager: Updating settings: user=%@ server=%@", username, server);
+    NSDebugLLog(@"gwcomp", @"SIPManager: Updating settings: user=%@ server=%@", username, server);
     
     // Determine local address for the server
     NSString *laddr = nil;
@@ -493,7 +493,7 @@ static void *re_main_thread_func(void *arg) {
                 [self pushCommandWhenREReady:CMD_UPDATE_SETTINGS data:c_addr];
             } else {
                 mem_deref(c_addr);
-                NSLog(@"SIPManager: mqueue not available, cannot update settings");
+                NSDebugLLog(@"gwcomp", @"SIPManager: mqueue not available, cannot update settings");
                 [self handleError:@"Internal Error" message:@"SIP queue unavailable."];
             }
         }
@@ -534,7 +534,7 @@ static void *re_main_thread_func(void *arg) {
             [self pushCommandWhenREReady:CMD_CONNECT data:c_uri];
         } else {
             mem_deref(c_uri);
-            NSLog(@"SIPManager: mqueue not available, cannot make call");
+            NSDebugLLog(@"gwcomp", @"SIPManager: mqueue not available, cannot make call");
             [self handleError:@"Internal Error" message:@"SIP queue unavailable."];
         }
     }
@@ -549,7 +549,7 @@ static void *re_main_thread_func(void *arg) {
 
 - (void)callDidTimeout:(NSTimer *)timer {
     if (self.current_call && !self.isInCall) {
-        NSLog(@"SIPManager: Call timeout - hanging up");
+        NSDebugLLog(@"gwcomp", @"SIPManager: Call timeout - hanging up");
         [self hangup];
         [self handleError:@"Call Timeout" message:@"The call could not be established within 60 seconds."];
     }
@@ -559,7 +559,7 @@ static void *re_main_thread_func(void *arg) {
     if (_mq) {
         mqueue_push(_mq, CMD_VOLUME, (void *)(uintptr_t)(int)level);
     } else {
-        NSLog(@"SIPManager: mqueue not available, cannot set volume");
+        NSDebugLLog(@"gwcomp", @"SIPManager: mqueue not available, cannot set volume");
     }
 }  
 
@@ -567,15 +567,15 @@ static void *re_main_thread_func(void *arg) {
     if (_mq) {
         mqueue_push(_mq, CMD_MUTE, (void *)(uintptr_t)(muted ? 1 : 0));
     } else {
-        NSLog(@"SIPManager: mqueue not available, cannot set mute");
+        NSDebugLLog(@"gwcomp", @"SIPManager: mqueue not available, cannot set mute");
     }
 }  
 
 - (void)retryRegistration:(NSTimer *)timer {
     if (!self.isRegistered) {
-        NSLog(@"SIPManager: Retrying registration...");
+        NSDebugLLog(@"gwcomp", @"SIPManager: Retrying registration...");
         if (_mq) [self pushCommandWhenREReady:CMD_REGISTER data:NULL];
-        else NSLog(@"SIPManager: mqueue not available, cannot retry registration");
+        else NSDebugLLog(@"gwcomp", @"SIPManager: mqueue not available, cannot retry registration");
     }
 }
 
@@ -630,18 +630,18 @@ static void *re_main_thread_func(void *arg) {
 
 - (void)hangup {
     if (_mq) mqueue_push(_mq, CMD_HANGUP, NULL);
-    else NSLog(@"SIPManager: mqueue not available, cannot hangup");
+    else NSDebugLLog(@"gwcomp", @"SIPManager: mqueue not available, cannot hangup");
 }  
 
 - (void)answer {
     _wasAnswered = YES;
     if (_mq) mqueue_push(_mq, CMD_ANSWER, NULL);
-    else NSLog(@"SIPManager: mqueue not available, cannot answer");
+    else NSDebugLLog(@"gwcomp", @"SIPManager: mqueue not available, cannot answer");
 }
 
 - (void)sendDTMF:(char)digit {
     if (_mq) mqueue_push(_mq, CMD_DTMF, (void *)(uintptr_t)digit);
-    else NSLog(@"SIPManager: mqueue not available, cannot send DTMF");
+    else NSDebugLLog(@"gwcomp", @"SIPManager: mqueue not available, cannot send DTMF");
 }  
 
 - (NSArray *)availableAudioInputs {

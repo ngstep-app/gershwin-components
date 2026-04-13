@@ -26,26 +26,26 @@ static void SendJSON(id obj) {
         NSError *error = nil;
         NSData *data = [NSJSONSerialization dataWithJSONObject:obj options:0 error:&error];
         if (data) {
-            NSLog(@"[Server] Serialized JSON successfully, length: %lu", (unsigned long)[data length]);
+            NSDebugLLog(@"gwcomp", @"[Server] Serialized JSON successfully, length: %lu", (unsigned long)[data length]);
             // Log raw JSON for debugging (truncated to 16k to avoid noisy logs)
             NSString *jsonStr = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
             if (jsonStr) {
                 NSString *trunc = ([jsonStr length] > 16384) ? [jsonStr substringToIndex:16384] : jsonStr;
-                NSLog(@"[Server] RAW_JSON: %@", trunc);
+                NSDebugLLog(@"gwcomp", @"[Server] RAW_JSON: %@", trunc);
                 [jsonStr release];
             } else {
-                NSLog(@"[Server] RAW_JSON: <non-utf8 bytes, length=%lu>", (unsigned long)[data length]);
+                NSDebugLLog(@"gwcomp", @"[Server] RAW_JSON: <non-utf8 bytes, length=%lu>", (unsigned long)[data length]);
             }
             NSFileHandle *stdoutHandle = [NSFileHandle fileHandleWithStandardOutput];
             [stdoutHandle writeData:data];
             [stdoutHandle writeData:[@"\n" dataUsingEncoding:NSUTF8StringEncoding]];
             [stdoutHandle synchronizeFile];
-            NSLog(@"[Server] Sent JSON to stdout.");
+            NSDebugLLog(@"gwcomp", @"[Server] Sent JSON to stdout.");
         } else {
-            NSLog(@"[Server] JSON Serialization failed: %@", error);
+            NSDebugLLog(@"gwcomp", @"[Server] JSON Serialization failed: %@", error);
         }
     } @catch (NSException *e) {
-        NSLog(@"[Server] EXCEPTION in SendJSON: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Server] EXCEPTION in SendJSON: %@", e);
     }
 }
 // --- Static helper functions (must be at file scope) ---
@@ -58,7 +58,7 @@ static id<UIBridgeProtocol> ConnectToApp(int pid) {
     // This is the preferred method - works directly with Eau theme
     if (pid > 0) {
       NSString *themeServiceName = [NSString stringWithFormat:@"org.gershwin.Gershwin.Theme.UIBridge.%d", pid];
-      NSLog(@"[Server] Connecting to per-PID theme UIBridge service via DO: %@", themeServiceName);
+      NSDebugLLog(@"gwcomp", @"[Server] Connecting to per-PID theme UIBridge service via DO: %@", themeServiceName);
       proxy = [NSConnection rootProxyForConnectionWithRegisteredName:themeServiceName host:nil];
       if (proxy) {
         [(NSDistantObject *)proxy setProtocolForProxy:@protocol(UIBridgeProtocol)];
@@ -66,17 +66,17 @@ static id<UIBridgeProtocol> ConnectToApp(int pid) {
         [conn setRequestTimeout:2.0];
         [conn setReplyTimeout:2.0];
         [conn enableMultipleThreads];
-        NSLog(@"[Server] Successfully connected to theme service via DO: %@", themeServiceName);
+        NSDebugLLog(@"gwcomp", @"[Server] Successfully connected to theme service via DO: %@", themeServiceName);
         return proxy;
       } else {
-        NSLog(@"[Server] Theme service not available via DO: %@", themeServiceName);
+        NSDebugLLog(@"gwcomp", @"[Server] Theme service not available via DO: %@", themeServiceName);
       }
     }
 
     // Fallback: scan running PIDs for any running theme DO services
     // Note: NSFileManager contentsOfDirectoryAtPath doesn't work reliably on /proc (esp. on FreeBSD)
     // Use ps command to get PID list portably
-    NSLog(@"[Server] Scanning PIDs via ps for theme services via DO as fallback");
+    NSDebugLLog(@"gwcomp", @"[Server] Scanning PIDs via ps for theme services via DO as fallback");
     
     NSTask *psTask = [[NSTask alloc] init];
     [psTask setLaunchPath:@"/bin/ps"];
@@ -89,7 +89,7 @@ static id<UIBridgeProtocol> ConnectToApp(int pid) {
         [psTask launch];
         [psTask waitUntilExit];
     } @catch (NSException *e) {
-        NSLog(@"[Server] Failed to run ps: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Server] Failed to run ps: %@", e);
         [psTask release];
         return nil;
     }
@@ -113,7 +113,7 @@ static id<UIBridgeProtocol> ConnectToApp(int pid) {
       NSString *themeServiceName = [NSString stringWithFormat:@"org.gershwin.Gershwin.Theme.UIBridge.%@", entry];
       proxy = [NSConnection rootProxyForConnectionWithRegisteredName:themeServiceName host:nil];
       if (proxy) {
-        NSLog(@"[Server] Found per-PID theme service via fallback: %@", themeServiceName);
+        NSDebugLLog(@"gwcomp", @"[Server] Found per-PID theme service via fallback: %@", themeServiceName);
         [(NSDistantObject *)proxy setProtocolForProxy:@protocol(UIBridgeProtocol)];
         NSConnection *conn = [proxy connectionForProxy];
         [conn setRequestTimeout:2.0];
@@ -143,7 +143,7 @@ static int LaunchApp(NSString *appPath) {
     NSString *appNameLower = [appName lowercaseString];
     if ([appNameLower isEqualToString:@"createlivemediaassistant"]) {
         env[@"CLM_SKIP_SUDO"] = @"1";
-        NSLog(@"[Server] Setting CLM_SKIP_SUDO=1 for CreateLiveMediaAssistant");
+        NSDebugLLog(@"gwcomp", @"[Server] Setting CLM_SKIP_SUDO=1 for CreateLiveMediaAssistant");
     }
 
     [task setEnvironment:env];
@@ -157,7 +157,7 @@ static int LaunchApp(NSString *appPath) {
     if (logHandle) {
         [task setStandardOutput:logHandle];
         [task setStandardError:logHandle];
-        NSLog(@"[Server] App output redirected to %@", logPath);
+        NSDebugLLog(@"gwcomp", @"[Server] App output redirected to %@", logPath);
     } else {
         [task setStandardOutput:[NSFileHandle fileHandleWithNullDevice]];
         [task setStandardError:[NSFileHandle fileHandleWithNullDevice]];
@@ -166,8 +166,8 @@ static int LaunchApp(NSString *appPath) {
     [task launch];
 
     int pid = [task processIdentifier];
-    NSLog(@"[Server] Launched app '%@' with PID %d", appName, pid);
-    NSLog(@"[Server] App should register its UIBridge service via Distributed Objects (DO) if it uses Eau theme");
+    NSDebugLLog(@"gwcomp", @"[Server] Launched app '%@' with PID %d", appName, pid);
+    NSDebugLLog(@"gwcomp", @"[Server] App should register its UIBridge service via Distributed Objects (DO) if it uses Eau theme");
 
     [task release];
     return pid;
@@ -176,7 +176,7 @@ static int LaunchApp(NSString *appPath) {
 static void RedirectLogs(void) {
     const char *logPath = "/tmp/uibridge.log";
     freopen(logPath, "a", stderr);
-    NSLog(@"[Server] --- UIBridge Server Session Start ---");
+    NSDebugLLog(@"gwcomp", @"[Server] --- UIBridge Server Session Start ---");
 }
 
 
@@ -201,22 +201,22 @@ static void RedirectLogs(void) {
 - (void)watchLoop:(NSTimer *)timer {
     if (!self.isWatching || self.currentPID == 0) return;
     
-    NSLog(@"[Server] watchLoop firing for PID %d", self.currentPID);
+    NSDebugLLog(@"gwcomp", @"[Server] watchLoop firing for PID %d", self.currentPID);
     id<UIBridgeProtocol> app = ConnectToApp(self.currentPID);
     if (!app) {
-        NSLog(@"[Server] watchLoop: failed to connect to app via DO");
+        NSDebugLLog(@"gwcomp", @"[Server] watchLoop: failed to connect to app via DO");
         return;
     }
     
     @try {
         NSString *treeJSON = [app fullTreeForObjectJSON:nil];
         if (!treeJSON) {
-            NSLog(@"[Server] watchLoop: app returned nil tree");
+            NSDebugLLog(@"gwcomp", @"[Server] watchLoop: app returned nil tree");
             return;
         }
         NSDictionary *newTree = ParseJSON(treeJSON);
         if (!newTree) {
-            NSLog(@"[Server] watchLoop: failed to parse tree JSON (len: %lu)", (unsigned long)[treeJSON length]);
+            NSDebugLLog(@"gwcomp", @"[Server] watchLoop: failed to parse tree JSON (len: %lu)", (unsigned long)[treeJSON length]);
             return;
         }
         
@@ -224,7 +224,7 @@ static void RedirectLogs(void) {
             NSMutableArray *changes = [NSMutableArray array];
             [self diffNode:self.lastFullTree withNode:newTree path:@"" results:changes];
             
-            NSLog(@"[Server] watchLoop: found %lu changes", (unsigned long)[changes count]);
+            NSDebugLLog(@"gwcomp", @"[Server] watchLoop: found %lu changes", (unsigned long)[changes count]);
             if ([changes count] > 0) {
                  NSDictionary *notification = @{
                      @"jsonrpc": @"2.0",
@@ -240,7 +240,7 @@ static void RedirectLogs(void) {
         self.lastFullTree = newTree;
 
     } @catch (NSException *e) {
-        NSLog(@"[Server] Exception in watchLoop: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Server] Exception in watchLoop: %@", e);
     }
 }
 
@@ -441,7 +441,7 @@ static void RedirectLogs(void) {
         if ([data length] > 0) {
             hadData = YES;
             NSString *chunk = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-            NSLog(@"[Server] Read chunk: %@", chunk);
+            NSDebugLLog(@"gwcomp", @"[Server] Read chunk: %@", chunk);
             NSArray *lines = [chunk componentsSeparatedByString:@"\n"];
             
             for (NSString *line in lines) {
@@ -455,7 +455,7 @@ static void RedirectLogs(void) {
             }
             [chunk release];
         } else if (hadData) {
-            NSLog(@"[Server] EOF reached on stdin after data; continuing to run.");
+            NSDebugLLog(@"gwcomp", @"[Server] EOF reached on stdin after data; continuing to run.");
             hadData = NO;
         }
     }
@@ -466,7 +466,7 @@ static void RedirectLogs(void) {
     NSString *method = json[@"method"];
     NSDictionary *params = json[@"params"];
 
-    NSLog(@"[Server] Processing request: method=%@, id=%@", method, reqID);
+    NSDebugLLog(@"gwcomp", @"[Server] Processing request: method=%@, id=%@", method, reqID);
 
     id result = nil;
     NSString *errorMsg = nil;
@@ -665,7 +665,7 @@ static void RedirectLogs(void) {
                 }
             }
 
-            NSLog(@"[Server] Searching for apps in: %@", paths);
+            NSDebugLLog(@"gwcomp", @"[Server] Searching for apps in: %@", paths);
             NSMutableArray *apps = [NSMutableArray array];
             for (NSString *path in paths) {
                 NSError *error = nil;
@@ -682,7 +682,7 @@ static void RedirectLogs(void) {
                                 [apps addObject:@{@"name": item, @"path": fullPath, @"executable": execPath}];
                             } else {
                                 // Try looking inside (maybe it's a newer layout or something)
-                                NSLog(@"[Server] App candidate has no top-level executable: %@", fullPath);
+                                NSDebugLLog(@"gwcomp", @"[Server] App candidate has no top-level executable: %@", fullPath);
                             }
                         }
                     }
@@ -701,7 +701,7 @@ static void RedirectLogs(void) {
                 [psTask launch];
                 [psTask waitUntilExit];
             } @catch (NSException *e) {
-                NSLog(@"[Server] Failed to run ps for list_running_apps: %@", e);
+                NSDebugLLog(@"gwcomp", @"[Server] Failed to run ps for list_running_apps: %@", e);
                 [psTask release];
                 result = @{@"apps": found};
             }
@@ -901,7 +901,7 @@ static void RedirectLogs(void) {
                 @try {
                     id jsonResult = nil; // may be NSString, NSData, NSDictionary, or NSArray
                     if ([toolName isEqualToString:@"get_root"]) {
-                        NSLog(@"[Server] Requesting app root objects via DO...");
+                        NSDebugLLog(@"gwcomp", @"[Server] Requesting app root objects via DO...");
                         jsonResult = [app rootObjectsJSON];
                         if (!jsonResult) jsonResult = [app rootObjects];
                     } else if ([toolName isEqualToString:@"get_object_details"]) {
@@ -935,7 +935,7 @@ static void RedirectLogs(void) {
                                     break;
                                 }
                             } @catch (NSException *e) {
-                                NSLog(@"[Server] Exception during wait_for_object poll: %@", e);
+                                NSDebugLLog(@"gwcomp", @"[Server] Exception during wait_for_object poll: %@", e);
                             }
                             [NSThread sleepForTimeInterval:0.5];
                         }
@@ -995,16 +995,16 @@ static void RedirectLogs(void) {
                     if (jsonResult) {
                         // Defensive: app may return NSString (JSON), NSData (raw bytes),
                         // or even already-parsed NSDictionary/NSArray in some DO implementations.
-                        NSLog(@"[Server] App returned object of class: %@", NSStringFromClass([jsonResult class]));
+                        NSDebugLLog(@"gwcomp", @"[Server] App returned object of class: %@", NSStringFromClass([jsonResult class]));
                         if ([jsonResult isKindOfClass:[NSString class]]) {
                             result = ParseJSON(jsonResult);
                         } else if ([jsonResult isKindOfClass:[NSData class]]) {
-                            NSLog(@"[Server] App returned NSData — attempting to decode as UTF-8 JSON string");
+                            NSDebugLLog(@"gwcomp", @"[Server] App returned NSData — attempting to decode as UTF-8 JSON string");
                             NSString *s = [[NSString alloc] initWithData:jsonResult encoding:NSUTF8StringEncoding];
                             if (s) {
                                 result = ParseJSON(s);
                             } else {
-                                NSLog(@"[Server] Failed to decode app NSData as UTF-8");
+                                NSDebugLLog(@"gwcomp", @"[Server] Failed to decode app NSData as UTF-8");
                                 result = @{ @"error": @"Service returned non-UTF8 NSData" };
                             }
                             [s release];
@@ -1014,7 +1014,7 @@ static void RedirectLogs(void) {
                             result = nil;
                         } else {
                             // Fallback: try to stringify and parse
-                            NSLog(@"[Server] App returned unexpected type — using description() as fallback");
+                            NSDebugLLog(@"gwcomp", @"[Server] App returned unexpected type — using description() as fallback");
                             NSString *desc = [jsonResult description];
                             result = ParseJSON(desc);
                         }
@@ -1031,7 +1031,7 @@ static void RedirectLogs(void) {
         errorCode = -32603;
     }
 
-    NSLog(@"[Server] Constructing response...");
+    NSDebugLLog(@"gwcomp", @"[Server] Constructing response...");
     NSMutableDictionary *resp = [NSMutableDictionary dictionary];
     resp[@"jsonrpc"] = @"2.0";
     resp[@"id"] = reqID ?: [NSNull null];
@@ -1059,7 +1059,7 @@ static void RedirectLogs(void) {
             // VS Code / MCP expectation: wrap in content array
             id contentItem = nil;
             if (result && ([result isKindOfClass:[NSDictionary class]] || [result isKindOfClass:[NSArray class]])) {
-                NSLog(@"[Server] result is collection (class: %@), serializing content for MCP", NSStringFromClass([result class]));
+                NSDebugLLog(@"gwcomp", @"[Server] result is collection (class: %@), serializing content for MCP", NSStringFromClass([result class]));
                 NSError *error = nil;
                 NSData *jsonData = [NSJSONSerialization dataWithJSONObject:result 
                                                                    options:NSJSONWritingPrettyPrinted 
@@ -1069,7 +1069,7 @@ static void RedirectLogs(void) {
                     contentItem = @{ @"type": @"text", @"text": jsonStr ?: [result description] };
                     [jsonStr release];
                 } else {
-                    NSLog(@"[Server] NSJSONSerialization failed for result: %@", error);
+                    NSDebugLLog(@"gwcomp", @"[Server] NSJSONSerialization failed for result: %@", error);
                     contentItem = @{ @"type": @"text", @"text": [result description] };
                 }
             } else if (result) {
@@ -1085,9 +1085,9 @@ static void RedirectLogs(void) {
             resp[@"result"] = result ?: @{};
         }
     }
-    NSLog(@"[Server] Final response dictionary constructed. Calling SendJSON...");
+    NSDebugLLog(@"gwcomp", @"[Server] Final response dictionary constructed. Calling SendJSON...");
     SendJSON(resp);
-    NSLog(@"[Server] processRequest finished.");
+    NSDebugLLog(@"gwcomp", @"[Server] processRequest finished.");
 }
 
 @end
@@ -1136,7 +1136,7 @@ int main(int argc, const char *argv[]) {
     // Watch timer for background observation
     [NSTimer scheduledTimerWithTimeInterval:1.0 target:server selector:@selector(watchLoop:) userInfo:nil repeats:YES];
 
-    NSLog(@"[Server] Starting RunLoop...");
+    NSDebugLLog(@"gwcomp", @"[Server] Starting RunLoop...");
     [[NSRunLoop currentRunLoop] run];
     
     [pool release];

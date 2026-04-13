@@ -42,21 +42,21 @@ static void mb_hexdump(NSData *data, NSString *prefix) {
 
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
-        NSLog(@"Starting D-Bus message parsing debug tool");
+        NSDebugLLog(@"gwcomp", @"Starting D-Bus message parsing debug tool");
         
         // Connect to D-Bus using GDBus
         GError *error = NULL;
         GDBusConnection *connection = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
         if (!connection) {
-            NSLog(@"Failed to connect to session bus: %s", error->message);
+            NSDebugLLog(@"gwcomp", @"Failed to connect to session bus: %s", error->message);
             g_error_free(error);
             return 1;
         }
         
-        NSLog(@"Connected to D-Bus session bus");
+        NSDebugLLog(@"gwcomp", @"Connected to D-Bus session bus");
         
         // Try calling StartServiceByName with debugging
-        NSLog(@"Calling StartServiceByName for 'org.xfce.Session.Manager'...");
+        NSDebugLLog(@"gwcomp", @"Calling StartServiceByName for 'org.xfce.Session.Manager'...");
         
         GVariant *result = g_dbus_connection_call_sync(
             connection,
@@ -75,15 +75,15 @@ int main(int argc, const char * argv[]) {
         if (result) {
             guint32 reply_code;
             g_variant_get(result, "(u)", &reply_code);
-            NSLog(@"StartServiceByName returned: %u", reply_code);
+            NSDebugLLog(@"gwcomp", @"StartServiceByName returned: %u", reply_code);
             g_variant_unref(result);
         } else {
-            NSLog(@"StartServiceByName failed: %s", error ? error->message : "Unknown error");
+            NSDebugLLog(@"gwcomp", @"StartServiceByName failed: %s", error ? error->message : "Unknown error");
             if (error) g_error_free(error);
         }
         
         // Try creating a proxy for org.freedesktop.DBus (should work)
-        NSLog(@"Creating proxy for org.freedesktop.DBus...");
+        NSDebugLLog(@"gwcomp", @"Creating proxy for org.freedesktop.DBus...");
         
         GDBusProxy *bus_proxy = g_dbus_proxy_new_sync(
             connection,
@@ -97,7 +97,7 @@ int main(int argc, const char * argv[]) {
         );
         
         if (bus_proxy) {
-            NSLog(@"Successfully created proxy for org.freedesktop.DBus");
+            NSDebugLLog(@"gwcomp", @"Successfully created proxy for org.freedesktop.DBus");
             
             // Test ListNames
             GVariant *names_result = g_dbus_proxy_call_sync(
@@ -111,21 +111,21 @@ int main(int argc, const char * argv[]) {
             );
             
             if (names_result) {
-                NSLog(@"ListNames succeeded");
+                NSDebugLLog(@"gwcomp", @"ListNames succeeded");
                 g_variant_unref(names_result);
             } else {
-                NSLog(@"ListNames failed: %s", error ? error->message : "Unknown error");
+                NSDebugLLog(@"gwcomp", @"ListNames failed: %s", error ? error->message : "Unknown error");
                 if (error) g_error_free(error);
             }
             
             g_object_unref(bus_proxy);
         } else {
-            NSLog(@"Failed to create proxy for org.freedesktop.DBus: %s", error ? error->message : "Unknown error");
+            NSDebugLLog(@"gwcomp", @"Failed to create proxy for org.freedesktop.DBus: %s", error ? error->message : "Unknown error");
             if (error) g_error_free(error);
         }
         
         // Now try a non-existent service
-        NSLog(@"Creating proxy for org.xfce.Session.Manager...");
+        NSDebugLLog(@"gwcomp", @"Creating proxy for org.xfce.Session.Manager...");
         
         GDBusProxy *session_proxy = g_dbus_proxy_new_sync(
             connection,
@@ -139,12 +139,12 @@ int main(int argc, const char * argv[]) {
         );
         
         if (session_proxy) {
-            NSLog(@"Successfully created proxy for org.xfce.Session.Manager");
+            NSDebugLLog(@"gwcomp", @"Successfully created proxy for org.xfce.Session.Manager");
             g_object_unref(session_proxy);
         } else {
-            NSLog(@"Failed to create proxy for org.xfce.Session.Manager: %s", error ? error->message : "Unknown error");
+            NSDebugLLog(@"gwcomp", @"Failed to create proxy for org.xfce.Session.Manager: %s", error ? error->message : "Unknown error");
             if (error) {
-                NSLog(@"Error domain: %s, code: %d", g_quark_to_string(error->domain), error->code);
+                NSDebugLLog(@"gwcomp", @"Error domain: %s, code: %d", g_quark_to_string(error->domain), error->code);
                 g_error_free(error);
             }
         }

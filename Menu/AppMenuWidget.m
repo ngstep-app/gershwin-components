@@ -55,14 +55,14 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     x11_error_code = event->error_code;
     
     if (event->error_code == BadWindow) {
-        NSLog(@"AppMenuWidget: X11 BadWindow error (window disappeared) - error_code=%d, request_code=%d", 
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: X11 BadWindow error (window disappeared) - error_code=%d, request_code=%d", 
               event->error_code, event->request_code);
         
         // Track this window as invalid to prevent future access
         if (event->resourceid != 0) {
             NSNumber *windowKey = [NSNumber numberWithUnsignedLong:event->resourceid];
             [invalidWindows addObject:windowKey];
-            NSLog(@"AppMenuWidget: Marked window %lu as invalid to prevent future access", event->resourceid);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Marked window %lu as invalid to prevent future access", event->resourceid);
         }
               
         // If we have a current widget and the error is for our tracked window, clean up immediately
@@ -70,7 +70,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             [currentWidget handleWindowDisappeared:event->resourceid];
         }
     } else if (event->error_code == BadDrawable) {
-        NSLog(@"AppMenuWidget: X11 BadDrawable error - error_code=%d, request_code=%d", 
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: X11 BadDrawable error - error_code=%d, request_code=%d", 
               event->error_code, event->request_code);
         
         // Also track bad drawables as invalid
@@ -79,7 +79,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             [invalidWindows addObject:windowKey];
         }
     } else {
-        NSLog(@"AppMenuWidget: X11 error - error_code=%d, request_code=%d", 
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: X11 error - error_code=%d, request_code=%d", 
               event->error_code, event->request_code);
     }
     
@@ -100,7 +100,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     XSetErrorHandler(oldHandler); \
     \
     if (x11_error_occurred) { \
-        NSLog(@"AppMenuWidget: X11 error occurred during call, executing cleanup"); \
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: X11 error occurred during call, executing cleanup"); \
         cleanup_code; \
     } \
 } while(0)
@@ -146,7 +146,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     NSMenu *menu = (NSMenu *)[note object];
     if (menu != self.systemMenu) return;
 
-    NSLog(@"AppMenuWidget: systemMenuDidBeginTracking - populating apps");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: systemMenuDidBeginTracking - populating apps");
     // Reuse our menuNeedsUpdate implementation for population
     [self menuNeedsUpdate:self.systemMenu];
 }
@@ -170,7 +170,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     BOOL isInvalid = [invalidWindows containsObject:windowKey];
     
     if (isInvalid) {
-        NSLog(@"AppMenuWidget: Skipping X11 operation on invalid window %lu", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Skipping X11 operation on invalid window %lu", windowId);
     }
     
     return !isInvalid;
@@ -198,7 +198,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // Register this widget for X11 error handling
         [AppMenuWidget setCurrentWidget:self];
         
-        NSLog(@"AppMenuWidget: Initialized with frame %.0f,%.0f %.0fx%.0f", 
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Initialized with frame %.0f,%.0f %.0fx%.0f", 
               frameRect.origin.x, frameRect.origin.y, frameRect.size.width, frameRect.size.height);
         
         // Disable "waiting" state - we clear everything immediately
@@ -220,13 +220,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         return;
     }
     
-    NSLog(@"AppMenuWidget: Setting up initial system-only menu");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Setting up initial system-only menu");
     @try {
         [self displaySystemOnlyMenu];
-        NSLog(@"AppMenuWidget: Successfully set up initial system-only menu");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Successfully set up initial system-only menu");
     }
     @catch (NSException *exception) {
-        NSLog(@"AppMenuWidget: Exception during initial menu setup: %@", exception);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Exception during initial menu setup: %@", exception);
         self.menuView = nil;
     }
 }
@@ -249,13 +249,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 {
     
     if (!self.protocolManager) {
-        NSLog(@"AppMenuWidget: No protocol manager available");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: No protocol manager available");
         return;
     }
 
     // Defensive validation: if our current tracked window is gone, clear the menu immediately
     if (self.currentWindowId != 0 && ![AppMenuWidget isWindowStillValid:self.currentWindowId]) {
-        NSLog(@"AppMenuWidget: Current tracked window %lu is no longer valid - clearing menu and re-evaluating active window", self.currentWindowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Current tracked window %lu is no longer valid - clearing menu and re-evaluating active window", self.currentWindowId);
         [self clearMenuAndHideView];
         self.currentWindowId = 0;
         self.currentApplicationName = nil;
@@ -265,7 +265,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // Get the active window using X11
     Display *display = [MenuUtils sharedDisplay];
     if (!display) {
-        NSLog(@"AppMenuWidget: Cannot open X11 display");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Cannot open X11 display");
         return;
     }
     
@@ -292,7 +292,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             XFree(prop);
             prop = NULL;
         }
-        NSLog(@"AppMenuWidget: Failed to get active window due to X11 error");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Failed to get active window due to X11 error");
     });
 
     [self updateForActiveWindowId:activeWindow];
@@ -301,7 +301,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 - (void)updateForActiveWindowId:(unsigned long)windowId
 {
     if (!self.protocolManager) {
-        NSLog(@"AppMenuWidget: No protocol manager available (updateForActiveWindowId)");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: No protocol manager available (updateForActiveWindowId)");
         return;
     }
 
@@ -320,14 +320,14 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
     // Validate active window; if invalid, treat as no focused window
     if (activeWindow != 0 && ![AppMenuWidget isWindowStillValid:activeWindow]) {
-        NSLog(@"AppMenuWidget: Active window %lu is invalid - treating as no focused window", activeWindow);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Active window %lu is invalid - treating as no focused window", activeWindow);
         activeWindow = 0;
     }
 
     // Exclude the Menu application itself from triggering updates.
     // If we focus on the menu bar or its components, we want to keep the current app menu.
     if (activeWindow != 0 && [NSApp windowWithWindowNumber:activeWindow] != nil) {
-        NSLog(@"AppMenuWidget: Focus is on Menu app itself (0x%lx) - ignoring update to preserve current menu", activeWindow);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Focus is on Menu app itself (0x%lx) - ignoring update to preserve current menu", activeWindow);
         return;
     }
 
@@ -337,7 +337,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         pid_t oldPid = [MenuUtils getWindowPID:self.currentWindowId];
         pid_t newPid = [MenuUtils getWindowPID:activeWindow];
         if (oldPid != 0 && oldPid == newPid) {
-            NSLog(@"AppMenuWidget: Focus changed within same PID %d (0x%lx -> 0x%lx) - preserving current menu", (int)newPid, self.currentWindowId, activeWindow);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Focus changed within same PID %d (0x%lx -> 0x%lx) - preserving current menu", (int)newPid, self.currentWindowId, activeWindow);
             self.currentWindowId = activeWindow;
             return;
         }
@@ -355,7 +355,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // 2. Transient X11 "no active window" states during window manager operations
         // 3. Window manager delays in reporting the actual active window
         if (timeSinceLastSwitch < 0.2 && self.lastWindowPID != 0) {
-            NSLog(@"AppMenuWidget: Active window is 0 but within 0.2s grace period (%.3fs) - preserving menu for PID %d", 
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Active window is 0 but within 0.2s grace period (%.3fs) - preserving menu for PID %d", 
                   timeSinceLastSwitch, (int)self.lastWindowPID);
             return;
         }
@@ -363,14 +363,14 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // If we have a menu and this is the first time seeing window==0, preserve it briefly
         // This handles cases where lastWindowSwitchTime is very old or zero
         if (self.currentMenu != nil && self.currentWindowId != 0) {
-            NSLog(@"AppMenuWidget: Active window is 0, have current menu from window %lu - preserving briefly", self.currentWindowId);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Active window is 0, have current menu from window %lu - preserving briefly", self.currentWindowId);
             // Update timestamp so subsequent calls within 0.2s will use the grace period above
             self.lastWindowSwitchTime = currentTime;
             return;
         }
         
         // Otherwise, clear the menu (past grace period and no current menu to preserve)
-        NSLog(@"AppMenuWidget: Active window is 0 and past grace period (%.3fs) - clearing menu", timeSinceLastSwitch);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Active window is 0 and past grace period (%.3fs) - clearing menu", timeSinceLastSwitch);
         [self clearMenuAndHideView];
         self.lastWindowPID = 0;
         self.lastWindowSwitchTime = currentTime;
@@ -381,7 +381,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     if (!shouldUpdate && activeWindow != 0) {
         // Force a refresh if menu is missing or we don't have a current menu
         if (!self.currentMenu || ![self.protocolManager hasMenuForWindow:activeWindow]) {
-            NSLog(@"AppMenuWidget: Active window unchanged (%lu) but menu missing - forcing refresh", activeWindow);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Active window unchanged (%lu) but menu missing - forcing refresh", activeWindow);
             shouldUpdate = YES;
         }
     }
@@ -425,7 +425,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // Log detection only when the window ID actually changes to reduce log spam during retries
         static unsigned long lastDetectedWindowId = 0;
         if (activeWindow != lastDetectedWindowId) {
-            NSLog(@"AppMenuWidget: Detected new active window: %lu (App: %@)", activeWindow, newAppName ?: @"Unknown");
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Detected new active window: %lu (App: %@)", activeWindow, newAppName ?: @"Unknown");
             lastDetectedWindowId = activeWindow;
         }
 
@@ -447,7 +447,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             [self displayMenuForWindow:activeWindow isDifferentApp:isDifferentApp];
         }
         @catch (NSException *exception) {
-            NSLog(@"AppMenuWidget: Exception displaying menu for window %lu: %@", activeWindow, exception);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Exception displaying menu for window %lu: %@", activeWindow, exception);
             // Clear menu on exception to prevent further issues
             [self clearMenuAndHideView];
         }
@@ -473,7 +473,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
     // CRITICAL: Ignore the timer if we have already moved on to a different window.
     if (self.currentWindowId != windowId) {
-        NSLog(@"AppMenuWidget: Window changed to %lu - discarding stale grace-period timer for %lu",
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window changed to %lu - discarding stale grace-period timer for %lu",
               self.currentWindowId, windowId);
         self.gracePeriodStartTime = 0;
         return;
@@ -481,7 +481,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
     // Check if the window has registered its menu since the last poll.
     if ([self.protocolManager hasMenuForWindow:windowId]) {
-        NSLog(@"AppMenuWidget: Window %lu registered its menu - loading immediately", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window %lu registered its menu - loading immediately", windowId);
         self.gracePeriodStartTime = 0;
         // Reset optimisation guard so the load is not skipped.
         self.lastLoadedMenuWindowId = 0;
@@ -495,7 +495,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         : MENU_WAIT_GRACE_PERIOD_MAX_SECS; // safety: if start wasn't recorded, don't loop
 
     if (elapsed < MENU_WAIT_GRACE_PERIOD_MAX_SECS && self.currentMenu != nil) {
-        NSLog(@"AppMenuWidget: Window %lu still waiting for menu (%.2fs / %.0fs) - rescheduling poll",
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window %lu still waiting for menu (%.2fs / %.0fs) - rescheduling poll",
               windowId, elapsed, MENU_WAIT_GRACE_PERIOD_MAX_SECS);
         self.pendingClearWindowId = windowId;
         self.noMenuGracePeriodTimer =
@@ -508,7 +508,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     }
 
     // Grace period exhausted without the new window registering a menu.
-    NSLog(@"AppMenuWidget: Window %lu has no menu after %.2fs grace period - clearing",
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window %lu has no menu after %.2fs grace period - clearing",
           windowId, elapsed);
     self.gracePeriodStartTime = 0;
     [self clearMenuAndHideView];
@@ -576,7 +576,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 // Always display a menu with at least the system ⌘ item, even when no application menu is available.
 - (void)displaySystemOnlyMenu
 {
-    NSLog(@"AppMenuWidget: No application menu - showing system-only ⌘ menu");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: No application menu - showing system-only ⌘ menu");
     // An empty menu is enough; setupMenuViewWithMenu: will prepend the ⌘ system item automatically.
     NSMenu *emptyMenu = [[NSMenu alloc] initWithTitle:@""];
     [self setupMenuViewWithMenu:emptyMenu];
@@ -612,7 +612,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     
     // Clear waiting state
     self.isWaitingForMenu = NO;
-    NSLog(@"AppMenuWidget: Clearing menu state");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Clearing menu state");
     
     self.currentApplicationName = nil;
     
@@ -647,7 +647,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 {
     // TIGHT-LOOP GUARD: Prevent re-entrance (e.g. displayMenuForWindow -> desktopFallback -> displayMenuForWindow)
     if (self.isInsideDisplayMenuForWindow) {
-        NSLog(@"AppMenuWidget: Re-entrant displayMenuForWindow blocked for window %lu", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Re-entrant displayMenuForWindow blocked for window %lu", windowId);
         return;
     }
     self.isInsideDisplayMenuForWindow = YES;
@@ -666,7 +666,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
     // Defensive check: ensure we're initialized
     if (!self.protocolManager) {
-        NSLog(@"AppMenuWidget: Protocol manager not initialized, cannot display menu for window %lu", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Protocol manager not initialized, cannot display menu for window %lu", windowId);
         return;
     }
     
@@ -674,7 +674,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // We'll clear it after successfully loading the new menu
     
     if (windowId == 0) {
-        NSLog(@"AppMenuWidget: displayMenuForWindow called with 0 - hiding menu");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: displayMenuForWindow called with 0 - hiding menu");
         [self clearMenuAndHideView];
         return;
     }
@@ -682,11 +682,11 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // Defensive check: ensure the window still exists (it may have been closed since the event)
     BOOL windowValid = [AppMenuWidget isWindowStillValid:windowId];
     if (!windowValid) {
-        NSLog(@"AppMenuWidget: Window %lu validity check failed - may be closing or not yet mapped", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window %lu validity check failed - may be closing or not yet mapped", windowId);
 
         // If a menu is registered for this window despite validation failure, attempt to load it
         if ([self.protocolManager hasMenuForWindow:windowId]) {
-            NSLog(@"AppMenuWidget: Menu is registered for window %lu - attempting to load despite validation failure", windowId);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Menu is registered for window %lu - attempting to load despite validation failure", windowId);
         } else {
             [self clearMenuAndHideView];
             return;
@@ -699,7 +699,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         appName = [MenuUtils getApplicationNameForWindow:windowId];
     }
     @catch (NSException *exception) {
-        NSLog(@"AppMenuWidget: Exception getting app name for window %lu in displayMenuForWindow: %@", windowId, exception);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Exception getting app name for window %lu in displayMenuForWindow: %@", windowId, exception);
         appName = nil;
     }
 
@@ -715,23 +715,23 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         }
 
         if (!appHasWindows) {
-            NSLog(@"AppMenuWidget: Application %@ has no visible windows - not displaying its menu", appName);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Application %@ has no visible windows - not displaying its menu", appName);
             [self clearMenuAndHideView];
             return;
         }
 
         self.currentApplicationName = appName;
-        NSLog(@"AppMenuWidget: Window %lu belongs to application: %@", windowId, appName);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window %lu belongs to application: %@", windowId, appName);
     }
     
-    NSLog(@"AppMenuWidget: Displaying menu for window %lu", windowId);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Displaying menu for window %lu", windowId);
     
     // Check if this window has a DBus menu registered
     @try {
         if (![self.protocolManager hasMenuForWindow:windowId]) {
             static unsigned long lastMissingMenuWindowId = 0;
             if (lastMissingMenuWindowId != windowId) {
-                NSLog(@"AppMenuWidget: No registered menu for window %lu yet", windowId);
+                NSDebugLLog(@"gwcomp", @"AppMenuWidget: No registered menu for window %lu yet", windowId);
                 lastMissingMenuWindowId = windowId;
             }
 
@@ -740,7 +740,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
             // If it's the Desktop window and it has no menu, clear immediately
             if ([MenuUtils isDesktopWindow:windowId]) {
-                NSLog(@"AppMenuWidget: Desktop window %lu has no menu registered yet", windowId);
+                NSDebugLLog(@"gwcomp", @"AppMenuWidget: Desktop window %lu has no menu registered yet", windowId);
                 [self clearMenuAndHideView];
                 return;
             }
@@ -749,7 +749,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             // live AppMenu endpoint, keep the old menu visible for up to 2 seconds while
             // registration catches up.  If no live endpoint is detectable, skip waiting.
             if (self.currentMenu != nil && [self windowLikelyWillRegisterMenuSoon:windowId]) {
-                NSLog(@"AppMenuWidget: Window %lu has a live AppMenu endpoint but is not registered yet - preserving old menu for up to 2s", windowId);
+                NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window %lu has a live AppMenu endpoint but is not registered yet - preserving old menu for up to 2s", windowId);
 
                 // Cancel any existing grace period timer
                 if (self.noMenuGracePeriodTimer) {
@@ -777,7 +777,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             
             // Cancel grace period timer if this is the window we were waiting for
             if (self.noMenuGracePeriodTimer && self.pendingClearWindowId == windowId) {
-                NSLog(@"AppMenuWidget: Window %lu now has a menu - canceling grace period timer", windowId);
+                NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window %lu now has a menu - canceling grace period timer", windowId);
                 [self.noMenuGracePeriodTimer invalidate];
                 self.noMenuGracePeriodTimer = nil;
                 self.pendingClearWindowId = 0;
@@ -785,10 +785,10 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"AppMenuWidget: Exception during menu protocol check for window %lu: %@", windowId, exception);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Exception during menu protocol check for window %lu: %@", windowId, exception);
         // Prevent fallback menu for desktop windows
         if ([MenuUtils isDesktopWindow:windowId]) {
-            NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu on exception", windowId);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Suppressing fallback menu for desktop window %lu on exception", windowId);
             [self clearMenuAndHideView];
             return;
         }
@@ -798,14 +798,14 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
         [self loadMenu:fallbackMenu forWindow:windowId];
 #else
-        NSLog(@"AppMenuWidget: Exception occurred but fallback menus disabled at compile time");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Exception occurred but fallback menus disabled at compile time");
         [self clearMenuAndHideView];
 #endif
         return;
     }
     
-    NSLog(@"AppMenuWidget: ===== LOADING MENU FROM PROTOCOL MANAGER =====");
-    NSLog(@"AppMenuWidget: This is where AboutToShow events should be triggered for submenus");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: ===== LOADING MENU FROM PROTOCOL MANAGER =====");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: This is where AboutToShow events should be triggered for submenus");
 
     // Get the menu from protocol manager for registered windows
     NSMenu *menu = nil;
@@ -813,34 +813,34 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         menu = [self.protocolManager getMenuForWindow:windowId];
     }
     @catch (NSException *exception) {
-        NSLog(@"AppMenuWidget: Exception getting menu from protocol manager for window %lu: %@", windowId, exception);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Exception getting menu from protocol manager for window %lu: %@", windowId, exception);
         menu = nil;
     }
 
     if (!menu) {
-        NSLog(@"AppMenuWidget: Failed to get menu for window %lu (protocol manager)", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Failed to get menu for window %lu (protocol manager)", windowId);
         [self clearMenuAndHideView];
         return;
     }
     
     // Debug: Log menu details for placeholder detection
-    NSLog(@"AppMenuWidget: Menu has %lu items", (unsigned long)[[menu itemArray] count]);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Menu has %lu items", (unsigned long)[[menu itemArray] count]);
     if ([[menu itemArray] count] > 0) {
         NSMenuItem *firstItem = [[menu itemArray] objectAtIndex:0];
-        NSLog(@"AppMenuWidget: First menu item: '%@' (enabled: %@)", [firstItem title], [firstItem isEnabled] ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: First menu item: '%@' (enabled: %@)", [firstItem title], [firstItem isEnabled] ? @"YES" : @"NO");
     }
     
     BOOL isPlaceholder = [self isPlaceholderMenu:menu];
-    NSLog(@"AppMenuWidget: isPlaceholderMenu: %@", isPlaceholder ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: isPlaceholderMenu: %@", isPlaceholder ? @"YES" : @"NO");
     
     if (isPlaceholder) {
-        NSLog(@"AppMenuWidget: Placeholder menu - clearing");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Placeholder menu - clearing");
         [self clearMenuAndHideView];
         return;
     }
     
     [self loadMenu:menu forWindow:windowId];
-    NSLog(@"AppMenuWidget: Imported %lu menu items for window %lu", (unsigned long)[[menu itemArray] count], windowId);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Imported %lu menu items for window %lu", (unsigned long)[[menu itemArray] count], windowId);
 
     } // @try
     @finally {
@@ -851,11 +851,11 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 - (void)setupMenuViewWithMenu:(NSMenu *)menu
 {
     if (!menu) {
-        NSLog(@"AppMenuWidget: Cannot setup menu view with nil menu");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Cannot setup menu view with nil menu");
         return;
     }
 
-    NSLog(@"AppMenuWidget: Setting up menu view with menu: %@", [menu title]);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Setting up menu view with menu: %@", [menu title]);
     
     // Set the current menu so drawRect knows we have menu content
     self.currentMenu = menu;
@@ -871,7 +871,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         if (self.menuView) {
             [self.menuView removeFromSuperview];
             self.menuView = nil;
-            NSLog(@"AppMenuWidget: Removed existing menu view before creating new one");
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Removed existing menu view before creating new one");
         }
 
         // Calculate text width for positioning
@@ -896,7 +896,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
                 (void)stop;
                 [menu removeItemAtIndex:idx];
             }];
-            NSLog(@"AppMenuWidget: Removed %lu duplicate Command menu item(s)", (unsigned long)[commandItemIndexes count]);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Removed %lu duplicate Command menu item(s)", (unsigned long)[commandItemIndexes count]);
         }
 
         // Add the "Command" system menu item at the beginning
@@ -949,7 +949,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         self.menuView = [[AppMenuView alloc] initWithFrame:menuViewFrame];
 
         if (!self.menuView) {
-            NSLog(@"AppMenuWidget: Failed to create menu view - aborting setup");
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Failed to create menu view - aborting setup");
             return;
         }
 
@@ -962,7 +962,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         
         // Set ourselves as the delegate of the main menu to catch AboutToShow events
         [menu setDelegate:self];
-        NSLog(@"AppMenuWidget: Set AppMenuWidget as delegate for main menu: %@", [menu title]);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Set AppMenuWidget as delegate for main menu: %@", [menu title]);
         
         // Check if this is a GNUStep menu by looking at menu items' representedObject
         BOOL isGNUStepMenu = NO;
@@ -977,7 +977,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
                         [repObject objectForKey:@"clientName"] && 
                         [repObject objectForKey:@"windowId"]) {
                         isGNUStepMenu = YES;
-                        NSLog(@"AppMenuWidget: Detected GNUStep menu via representedObject - preserving original target/action");
+                        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Detected GNUStep menu via representedObject - preserving original target/action");
                         break;
                     }
                 }
@@ -999,13 +999,13 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             if (!isGNUStepMenu && ![item hasSubmenu]) {
                 if (![item target]) {
                     // This item doesn't have an action - set our placeholder
-                    NSLog(@"AppMenuWidget: Item '%@' has NO target - setting placeholder action", [item title]);
+                    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Item '%@' has NO target - setting placeholder action", [item title]);
                     [item setTarget:self];
                     [item setAction:@selector(menuItemClicked:)];
-                    NSLog(@"AppMenuWidget: Set placeholder action for item without handler: '%@'", [item title]);
+                    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Set placeholder action for item without handler: '%@'", [item title]);
                 } else {
                     // Item already has a target - preserve it
-                    NSLog(@"AppMenuWidget: Item '%@' already has target '%@' with action '%@' - PRESERVING", 
+                    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Item '%@' already has target '%@' with action '%@' - PRESERVING", 
                           [item title], [item target], NSStringFromSelector([item action]));
                 }
             }
@@ -1016,7 +1016,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         
         [self setNeedsDisplay:YES];
         
-        NSLog(@"AppMenuWidget: Menu view setup complete with %lu menu items", 
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Menu view setup complete with %lu menu items", 
               (unsigned long)[[menu itemArray] count]);
     }
     @finally {
@@ -1069,7 +1069,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // Get the currently active window using X11
     Display *display = [MenuUtils sharedDisplay];
     if (!display) {
-        NSLog(@"AppMenuWidget: Cannot open X11 display for checking active window");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Cannot open X11 display for checking active window");
         return;
     }
     
@@ -1096,12 +1096,12 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             XFree(prop);
             prop = NULL;
         }
-        NSLog(@"AppMenuWidget: Failed to get active window for newly registered window check due to X11 error");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Failed to get active window for newly registered window check due to X11 error");
     });
     
     // If the newly registered window is the currently active window, display its menu immediately
     if (activeWindow == windowId) {
-        NSLog(@"AppMenuWidget: Newly registered window %lu is currently active, forcing menu load", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Newly registered window %lu is currently active, forcing menu load", windowId);
         @try {
             // Reset the optimisation guard so the new menu is loaded even if we
             // previously attempted (and failed/skipped) this window.
@@ -1113,10 +1113,10 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             [self displayMenuForWindow:windowId isDifferentApp:YES];
         }
         @catch (NSException *exception) {
-            NSLog(@"AppMenuWidget: Exception updating menu for newly registered window %lu: %@", windowId, exception);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Exception updating menu for newly registered window %lu: %@", windowId, exception);
         }
     } else {
-        NSLog(@"AppMenuWidget: Newly registered window %lu is not currently active (active: %lu)", windowId, activeWindow);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Newly registered window %lu is not currently active (active: %lu)", windowId, activeWindow);
     }
 }
 
@@ -1383,24 +1383,24 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (void)debugLogCurrentMenuState
 {
-    NSLog(@"AppMenuWidget: ===== DEBUG MENU STATE =====");
-    NSLog(@"AppMenuWidget: Current window ID: %lu", self.currentWindowId);
-    NSLog(@"AppMenuWidget: Current application: %@", self.currentApplicationName ?: @"(none)");
-    NSLog(@"AppMenuWidget: Current menu: %@", self.currentMenu ? [self.currentMenu title] : @"(none)");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: ===== DEBUG MENU STATE =====");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Current window ID: %lu", self.currentWindowId);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Current application: %@", self.currentApplicationName ?: @"(none)");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Current menu: %@", self.currentMenu ? [self.currentMenu title] : @"(none)");
     
     if (self.currentMenu) {
-        NSLog(@"AppMenuWidget: Current menu has %lu items", (unsigned long)[[self.currentMenu itemArray] count]);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Current menu has %lu items", (unsigned long)[[self.currentMenu itemArray] count]);
         NSArray *items = [self.currentMenu itemArray];
         for (NSUInteger i = 0; i < [items count]; i++) {
             NSMenuItem *item = [items objectAtIndex:i];
-            NSLog(@"AppMenuWidget: Item %lu: '%@' (submenu: %@)", 
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Item %lu: '%@' (submenu: %@)", 
                   i, [item title], [item hasSubmenu] ? @"YES" : @"NO");
         }
     }
     
-    NSLog(@"AppMenuWidget: Menu view: %@", self.menuView);
-    NSLog(@"AppMenuWidget: Protocol manager: %@", self.protocolManager);
-    NSLog(@"AppMenuWidget: ===== END DEBUG MENU STATE =====");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Menu view: %@", self.menuView);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Protocol manager: %@", self.protocolManager);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: ===== END DEBUG MENU STATE =====");
 }
 
 - (BOOL)isPlaceholderMenu:(NSMenu *)menu
@@ -1497,11 +1497,11 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
     // Prevent fallback for desktop windows
     if ([MenuUtils isDesktopWindow:windowId]) {
-        NSLog(@"AppMenuWidget: Suppressing fallback menu for desktop window %lu (delayed)", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Suppressing fallback menu for desktop window %lu (delayed)", windowId);
         return;
     }
 
-    NSLog(@"AppMenuWidget: No menu received for window %lu after delay, providing fallback menu", windowId);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: No menu received for window %lu after delay, providing fallback menu", windowId);
     NSMenu *fallbackMenu = [self createFileMenuWithClose:windowId];
     [self loadMenu:fallbackMenu forWindow:windowId];
 #else
@@ -1514,12 +1514,12 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 #if ENABLE_FALLBACK_MENUS
     NSNumber *windowIdNumber = [sender representedObject];
     if (!windowIdNumber) {
-        NSLog(@"AppMenuWidget: closeWindow called but no window ID in representedObject");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: closeWindow called but no window ID in representedObject");
         return;
     }
     
     unsigned long windowId = [windowIdNumber unsignedLongValue];
-    NSLog(@"AppMenuWidget: Closing window %lu", windowId);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Closing window %lu", windowId);
     
     // Send Alt+F4 to close the window
     [self sendAltF4ToWindow:windowId];
@@ -1532,7 +1532,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 {
     Display *display = [MenuUtils sharedDisplay];
     if (!display) {
-        NSLog(@"AppMenuWidget: Failed to open X11 display for window close");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Failed to open X11 display for window close");
         return;
     }
     
@@ -1572,7 +1572,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     XSendEvent(display, window, True, KeyReleaseMask, &keyEvent);
     XSendEvent(display, root, False, KeyReleaseMask, &keyEvent);
     
-    NSLog(@"AppMenuWidget: Sent Alt+F4 key event to window %lu", windowId);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Sent Alt+F4 key event to window %lu", windowId);
     
     XFlush(display);
 }
@@ -1582,14 +1582,14 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 - (void)loadMenu:(NSMenu *)menu forWindow:(unsigned long)windowId
 {
     if (!menu) {
-        NSLog(@"AppMenuWidget: Cannot load nil menu for window %lu", windowId);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Cannot load nil menu for window %lu", windowId);
         return;
     }
     
     // Cancel any scheduled fallback for this window since we're loading a real menu
     [self cancelScheduledFallbackForWindow:windowId];
 
-    NSLog(@"AppMenuWidget: Loading menu for window %lu", windowId);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Loading menu for window %lu", windowId);
     
     // Clear the waiting flag - we have a new menu
     self.isWaitingForMenu = NO;
@@ -1597,8 +1597,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     self.lastLoadedMenuWindowId = windowId;  // Track which window we loaded for (used by same-window guard)
     self.needsRedraw = YES;  // Mark that we need to redraw with new menu
     
-    NSLog(@"AppMenuWidget: ===== MENU LOADED, SETTING UP VIEW =====");
-    NSLog(@"AppMenuWidget: Menu has %lu top-level items", (unsigned long)[[menu itemArray] count]);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: ===== MENU LOADED, SETTING UP VIEW =====");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Menu has %lu top-level items", (unsigned long)[[menu itemArray] count]);
     
     // Log each top-level menu item and whether it has submenus
     NSArray *items = [menu itemArray];
@@ -1617,27 +1617,27 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         BOOL switchingToDifferentApp = (oldPid == 0 || newPid == 0 || oldPid != newPid);
         
         if (switchingToDifferentApp) {
-            NSLog(@"AppMenuWidget: Switching to different app (PID %d -> %d) - clearing non-direct shortcuts", 
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Switching to different app (PID %d -> %d) - clearing non-direct shortcuts", 
                   (int)oldPid, (int)newPid);
             [[X11ShortcutManager sharedManager] unregisterNonDirectShortcuts];
         } else {
-            NSLog(@"AppMenuWidget: Same app (PID %d) - keeping shortcuts registered", (int)newPid);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Same app (PID %d) - keeping shortcuts registered", (int)newPid);
         }
     }
     
     @try {
         [self setupMenuViewWithMenu:menu];
-        NSLog(@"AppMenuWidget: setupMenuViewWithMenu completed successfully");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: setupMenuViewWithMenu completed successfully");
     }
     @catch (NSException *exception) {
-        NSLog(@"AppMenuWidget: EXCEPTION in setupMenuViewWithMenu: %@", exception);
-        NSLog(@"AppMenuWidget: Exception details - name: %@, reason: %@", [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: EXCEPTION in setupMenuViewWithMenu: %@", exception);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Exception details - name: %@, reason: %@", [exception name], [exception reason]);
     }
     
     // Re-register shortcuts for this menu since we may have cleared them above
     [self reregisterShortcutsForMenu:menu];
     
-    NSLog(@"AppMenuWidget: Successfully loaded fallback menu with %lu items", (unsigned long)[[menu itemArray] count]);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Successfully loaded fallback menu with %lu items", (unsigned long)[[menu itemArray] count]);
 } 
 
 
@@ -1691,7 +1691,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         NSArray *commonNames = @[@"System Preferences", @"SystemPreferences", @"System-Preferences"];
         for (NSString *name in commonNames) {
             if ([[NSWorkspace sharedWorkspace] launchApplication:name]) {
-                NSLog(@"AppMenuWidget: Launched System Preferences by name: %@", name);
+                NSDebugLLog(@"gwcomp", @"AppMenuWidget: Launched System Preferences by name: %@", name);
                 return;
             }
         }
@@ -1701,23 +1701,23 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // Try exact candidate paths first and log checks
         for (NSString *p in candidatePaths) {
             BOOL exists = [fm fileExistsAtPath:p];
-            NSLog(@"AppMenuWidget: Checking candidate path for prefs: %@ (exists=%@)", p, exists ? @"YES" : @"NO");
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Checking candidate path for prefs: %@ (exists=%@)", p, exists ? @"YES" : @"NO");
             if (exists) {
                 NSURL *url = [NSURL fileURLWithPath:p];
                 NSString *bundleName = [[p lastPathComponent] stringByDeletingPathExtension];
                 if (bundleName && [bundleName length] > 0) {
                     if ([[NSWorkspace sharedWorkspace] launchApplication:bundleName]) {
-                        NSLog(@"AppMenuWidget: Launched System Preferences using bundle name: %@", bundleName);
+                        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Launched System Preferences using bundle name: %@", bundleName);
                         return;
                     }
-                    NSLog(@"AppMenuWidget: launchApplication: failed for %@", bundleName);
+                    NSDebugLLog(@"gwcomp", @"AppMenuWidget: launchApplication: failed for %@", bundleName);
                 }
 
                 BOOL ok = [[NSWorkspace sharedWorkspace] openURL:url];
                 if (ok) {
-                    NSLog(@"AppMenuWidget: Opened System Preferences bundle at %@", p);
+                    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Opened System Preferences bundle at %@", p);
                 } else {
-                    NSLog(@"AppMenuWidget: Failed to open System Preferences at %@", p);
+                    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Failed to open System Preferences at %@", p);
                 }
                 return;
             }
@@ -1734,15 +1734,15 @@ static int handleX11Error(Display *display, XErrorEvent *event)
                         NSString *name = [[entry stringByDeletingPathExtension] lowercaseString];
                         if ([name containsString:@"system"] && ([name containsString:@"pref"] || [name containsString:@"setting"])) {
                             NSString *fullPath = [dir stringByAppendingPathComponent:entry];
-                            NSLog(@"AppMenuWidget: Found probable System Preferences at %@", fullPath);
+                            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Found probable System Preferences at %@", fullPath);
                             NSURL *url = [NSURL fileURLWithPath:fullPath];
                             NSString *bundleName = [entry stringByDeletingPathExtension];
                             if ([[NSWorkspace sharedWorkspace] launchApplication:bundleName]) {
-                                NSLog(@"AppMenuWidget: Launched System Preferences via bundle name: %@", bundleName);
+                                NSDebugLLog(@"gwcomp", @"AppMenuWidget: Launched System Preferences via bundle name: %@", bundleName);
                                 return;
                             }
                             if ([[NSWorkspace sharedWorkspace] openURL:url]) {
-                                NSLog(@"AppMenuWidget: Opened System Preferences bundle at %@", fullPath);
+                                NSDebugLLog(@"gwcomp", @"AppMenuWidget: Opened System Preferences bundle at %@", fullPath);
                                 return;
                             }
                         }
@@ -1751,7 +1751,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             }
         }
 
-        NSLog(@"AppMenuWidget: Could not find System Preferences to launch");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Could not find System Preferences to launch");
     }];
 }
 
@@ -1774,10 +1774,10 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         NSString *bundleName = [[path lastPathComponent] stringByDeletingPathExtension];
         if (bundleName && [bundleName length] > 0) {
             if ([ws launchApplication:bundleName]) {
-                NSLog(@"AppMenuWidget: Launched application by name: %@", bundleName);
+                NSDebugLLog(@"gwcomp", @"AppMenuWidget: Launched application by name: %@", bundleName);
                 return;
             }
-            NSLog(@"AppMenuWidget: launchApplication: failed for %@", bundleName);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: launchApplication: failed for %@", bundleName);
         }
 
         // Try reading Info.plist to find a bundle identifier or executable
@@ -1787,27 +1787,27 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             NSString *bundleID = info[@"CFBundleIdentifier"];
             if (bundleID && [bundleID length] > 0) {
                 if ([ws launchApplication:bundleID]) {
-                    NSLog(@"AppMenuWidget: Launched application using bundle identifier: %@", bundleID);
+                    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Launched application using bundle identifier: %@", bundleID);
                     return;
                 }
-                NSLog(@"AppMenuWidget: launchApplication: failed for bundle identifier %@", bundleID);
+                NSDebugLLog(@"gwcomp", @"AppMenuWidget: launchApplication: failed for bundle identifier %@", bundleID);
             }
         }
 
         // Fallback: open the bundle URL (best-effort)
         NSURL *url = [NSURL fileURLWithPath:path];
         if ([ws openURL:url]) {
-            NSLog(@"AppMenuWidget: Opened application bundle at %@", path);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Opened application bundle at %@", path);
             return;
         }
 
         // Final fallback: try openFile which some environments handle specially
         if ([ws openFile:path]) {
-            NSLog(@"AppMenuWidget: Opened application bundle via openFile: %@", path);
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Opened application bundle via openFile: %@", path);
             return;
         }
 
-        NSLog(@"AppMenuWidget: Failed to launch application at %@", path);
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Failed to launch application at %@", path);
     }];
 }
 
@@ -1816,7 +1816,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // Get the currently active window using X11
     Display *display = [MenuUtils sharedDisplay];
     if (!display) {
-        NSLog(@"AppMenuWidget: Cannot open X11 display for active window detection");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Cannot open X11 display for active window detection");
         return;
     }
     
@@ -1843,15 +1843,15 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             XFree(prop);
             prop = NULL;
         }
-        NSLog(@"AppMenuWidget: Failed to get active window for close operation due to X11 error");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Failed to get active window for close operation due to X11 error");
     });
     
     if (activeWindow == 0) {
-        NSLog(@"AppMenuWidget: Could not determine active window for Alt+W close");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Could not determine active window for Alt+W close");
         return;
     }
     
-    NSLog(@"AppMenuWidget: Alt+W triggered - closing currently active window %lu", activeWindow);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Alt+W triggered - closing currently active window %lu", activeWindow);
     
     // Send Alt+F4 to close the currently active window
     [self sendAltF4ToWindow:activeWindow];
@@ -1861,7 +1861,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 {
     // This method is now handled by the protocol managers when they return cached menus
     // GTKMenuImporter and DBusMenuImporter will re-register shortcuts automatically
-    NSLog(@"AppMenuWidget: Shortcut re-registration handled by protocol managers");
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Shortcut re-registration handled by protocol managers");
 }
 
 - (void)reregisterGTKShortcut:(NSMenuItem *)item
@@ -1869,7 +1869,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // For GTK shortcuts, we need to get the stored action data and re-register
     // We would need access to GTKActionHandler's static data, but for now
     // let's register it as a basic shortcut that will trigger the existing action
-    NSLog(@"AppMenuWidget: Re-registering GTK shortcut for item: %@", [item title]);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Re-registering GTK shortcut for item: %@", [item title]);
     
     [[X11ShortcutManager sharedManager] registerShortcutForMenuItem:item
                                                         serviceName:nil
@@ -1880,7 +1880,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 - (void)reregisterDBusShortcut:(NSMenuItem *)item
 {
     // For DBus shortcuts, similar approach
-    NSLog(@"AppMenuWidget: Re-registering DBus shortcut for item: %@", [item title]);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Re-registering DBus shortcut for item: %@", [item title]);
     
     [[X11ShortcutManager sharedManager] registerShortcutForMenuItem:item
                                                         serviceName:nil
@@ -1898,7 +1898,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     
     Display *display = [MenuUtils sharedDisplay];
     if (!display) {
-        NSLog(@"AppMenuWidget: Cannot open X11 display for window validation");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Cannot open X11 display for window validation");
         return NO;
     }
     
@@ -1946,11 +1946,11 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 - (void)handleWindowDisappeared:(Window)windowId
 {
-    NSLog(@"AppMenuWidget: Window %lu disappeared, performing emergency cleanup", windowId);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window %lu disappeared, performing emergency cleanup", windowId);
     
     // If this is our current window, clear everything immediately
     if (self.currentWindowId == windowId) {
-        NSLog(@"AppMenuWidget: Current window disappeared, clearing all state");
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Current window disappeared, clearing all state");
         
         // Clear all state immediately
         self.currentWindowId = 0;

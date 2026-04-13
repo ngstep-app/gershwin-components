@@ -30,20 +30,20 @@ static NSLock *connectionCacheLock = nil;
     
     // Test if connection is still valid
     if (connection && ![connection isValid]) {
-        NSLog(@"GNUStepMenuActionHandler: Cached connection for %@ is invalid, removing", clientName);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Cached connection for %@ is invalid, removing", clientName);
         [connectionCache removeObjectForKey:clientName];
         connection = nil;
     }
     
     if (!connection) {
-        NSLog(@"GNUStepMenuActionHandler: Creating new connection to client %@", clientName);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Creating new connection to client %@", clientName);
         connection = [NSConnection connectionWithRegisteredName:clientName host:nil];
         if (connection) {
             [connectionCache setObject:connection forKey:clientName];
-            NSLog(@"GNUStepMenuActionHandler: Cached connection for %@", clientName);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Cached connection for %@", clientName);
         }
     } else {
-        NSLog(@"GNUStepMenuActionHandler: Reusing cached connection for %@", clientName);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Reusing cached connection for %@", clientName);
     }
     
     [connectionCacheLock unlock];
@@ -52,20 +52,20 @@ static NSLock *connectionCacheLock = nil;
 
 + (void)performMenuAction:(id)sender
 {
-    NSLog(@"GNUStepMenuActionHandler: performMenuAction called with sender: %@", sender);
+    NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: performMenuAction called with sender: %@", sender);
     
     if (![sender isKindOfClass:[NSMenuItem class]]) {
-        NSLog(@"GNUStepMenuActionHandler: Sender is not an NSMenuItem");
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Sender is not an NSMenuItem");
         return;
     }
 
     NSMenuItem *menuItem = (NSMenuItem *)sender;
     NSDictionary *info = [menuItem representedObject];
     
-    NSLog(@"GNUStepMenuActionHandler: Menu item '%@' representedObject: %@", [menuItem title], info);
+    NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Menu item '%@' representedObject: %@", [menuItem title], info);
     
     if (![info isKindOfClass:[NSDictionary class]]) {
-        NSLog(@"GNUStepMenuActionHandler: Missing action metadata for item '%@'", [menuItem title]);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Missing action metadata for item '%@'", [menuItem title]);
         return;
     }
 
@@ -73,10 +73,10 @@ static NSLock *connectionCacheLock = nil;
     NSNumber *windowId = [info objectForKey:@"windowId"];
     NSArray *indexPath = [info objectForKey:@"indexPath"];
 
-    NSLog(@"GNUStepMenuActionHandler: Extracted - clientName: %@, windowId: %@, indexPath: %@", clientName, windowId, indexPath);
+    NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Extracted - clientName: %@, windowId: %@, indexPath: %@", clientName, windowId, indexPath);
 
     if (!clientName || !windowId || !indexPath) {
-        NSLog(@"GNUStepMenuActionHandler: Invalid action metadata for item '%@'", [menuItem title]);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Invalid action metadata for item '%@'", [menuItem title]);
         return;
     }
 
@@ -93,35 +93,35 @@ static NSLock *connectionCacheLock = nil;
     NSArray *indexPath = info[@"indexPath"];
     NSString *menuItemTitle = info[@"menuItemTitle"];
 
-    NSLog(@"GNUStepMenuActionHandler: Main thread - getting connection to client %@", clientName);
+    NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Main thread - getting connection to client %@", clientName);
 
     NSConnection *connection = [self _getCachedConnectionForClient:clientName];
     if (!connection) {
-        NSLog(@"GNUStepMenuActionHandler: Unable to connect to GNUstep menu client %@", clientName);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Unable to connect to GNUstep menu client %@", clientName);
         return;
     }
     
-    NSLog(@"GNUStepMenuActionHandler: Have connection to client %@", clientName);
+    NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Have connection to client %@", clientName);
 
     id proxy = [connection rootProxy];
     if (!proxy) {
-        NSLog(@"GNUStepMenuActionHandler: No root proxy for GNUstep menu client %@", clientName);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: No root proxy for GNUstep menu client %@", clientName);
         return;
     }
 
     [proxy setProtocolForProxy:@protocol(GSGNUstepMenuClient)];
     
-    NSLog(@"GNUStepMenuActionHandler: Proxy protocol set, about to call activateMenuItemAtPath");
-    NSLog(@"GNUStepMenuActionHandler: Proxy responds to selector: %d", [proxy respondsToSelector:@selector(activateMenuItemAtPath:forWindow:)]);
+    NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Proxy protocol set, about to call activateMenuItemAtPath");
+    NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Proxy responds to selector: %d", [proxy respondsToSelector:@selector(activateMenuItemAtPath:forWindow:)]);
 
     @try {
         // The oneway modifier ensures this doesn't block waiting for a response
-        NSLog(@"GNUStepMenuActionHandler: Calling activateMenuItemAtPath:forWindow: on proxy");
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Calling activateMenuItemAtPath:forWindow: on proxy");
         [(id<GSGNUstepMenuClient>)proxy activateMenuItemAtPath:indexPath forWindow:windowId];
-        NSLog(@"GNUStepMenuActionHandler: Call completed, dispatched action for menu item '%@'", menuItemTitle);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Call completed, dispatched action for menu item '%@'", menuItemTitle);
     }
     @catch (NSException *exception) {
-        NSLog(@"GNUStepMenuActionHandler: Exception activating menu item '%@': %@ - %@", menuItemTitle, [exception name], [exception reason]);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuActionHandler: Exception activating menu item '%@': %@ - %@", menuItemTitle, [exception name], [exception reason]);
     }
 }
 

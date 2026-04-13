@@ -50,7 +50,7 @@
 
 - (void)loadWithManager:(id)manager
 {
-    NSLog(@"TimeDisplayProvider: Loading time display");
+    NSDebugLLog(@"gwcomp", @"TimeDisplayProvider: Loading time display");
     self.manager = manager;
 
     /* Create time formatter */
@@ -66,7 +66,7 @@
     NSSize size = [@"00:00" sizeWithAttributes:attrs];
     self.cachedFixedWidth = ceil(size.width) + 16.0;
 
-    NSLog(@"TimeDisplayProvider: Computed fixed width: %.0f", self.cachedFixedWidth);
+    NSDebugLLog(@"gwcomp", @"TimeDisplayProvider: Computed fixed width: %.0f", self.cachedFixedWidth);
 
     /* Initial update */
     [self update];
@@ -89,7 +89,7 @@
 
 - (void)unload
 {
-    NSLog(@"TimeDisplayProvider: Unloading");
+    NSDebugLLog(@"gwcomp", @"TimeDisplayProvider: Unloading");
     self.timeFormatter = nil;
 }
 

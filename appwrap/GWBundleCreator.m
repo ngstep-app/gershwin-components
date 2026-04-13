@@ -126,7 +126,7 @@
       return NO;
     }
 
-  NSLog(@"Successfully created application bundle: %@", appPath);
+  NSDebugLLog(@"gwcomp", @"Successfully created application bundle: %@", appPath);
   [parser release];
   return YES;
 }
@@ -174,7 +174,7 @@
       return NO;
     }
 
-  NSLog(@"Successfully created application bundle: %@", appPath);
+  NSDebugLLog(@"gwcomp", @"Successfully created application bundle: %@", appPath);
   return YES;
 }
 

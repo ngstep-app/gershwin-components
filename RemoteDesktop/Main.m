@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
     
     // Schedule auto-connect if hostname provided
     if (hostname) {
-        NSLog(@"RemoteDesktop: Command line connection requested to %@", hostname);
+        NSDebugLLog(@"gwcomp", @"RemoteDesktop: Command line connection requested to %@", hostname);
         
         // Set CLI mode to skip browser window
         [controller setCliMode:YES];

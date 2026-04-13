@@ -37,7 +37,7 @@
     
     _socket = [MBTransport connectToUnixSocket:socketPath];
     if (_socket < 0) {
-        NSLog(@"Failed to connect to D-Bus daemon at %@", socketPath);
+        NSDebugLLog(@"gwcomp", @"Failed to connect to D-Bus daemon at %@", socketPath);
         return NO;
     }
     
@@ -49,29 +49,29 @@
     NSString *authCommand = @"AUTH EXTERNAL 31303031\r\n";
     [authData appendData:[authCommand dataUsingEncoding:NSUTF8StringEncoding]];
     
-    NSLog(@"Sending auth command: %@", authCommand);
+    NSDebugLLog(@"gwcomp", @"Sending auth command: %@", authCommand);
     if (![MBTransport sendData:authData onSocket:_socket]) {
-        NSLog(@"Failed to send authentication");
+        NSDebugLLog(@"gwcomp", @"Failed to send authentication");
         [self disconnect];
         return NO;
     }
     
     // Step 2: Wait for OK response
-    NSLog(@"Waiting for OK response...");
+    NSDebugLLog(@"gwcomp", @"Waiting for OK response...");
     usleep(100000); // 100ms
     NSData *authResponse = [MBTransport receiveDataFromSocket:_socket];
     if (!authResponse || [authResponse length] == 0) {
-        NSLog(@"No auth response received");
+        NSDebugLLog(@"gwcomp", @"No auth response received");
         [self disconnect];
         return NO;
     }
     
     NSString *responseStr = [[NSString alloc] initWithData:authResponse encoding:NSUTF8StringEncoding];
-    NSLog(@"Auth response received (%lu bytes): %@", (unsigned long)[authResponse length], responseStr);
+    NSDebugLLog(@"gwcomp", @"Auth response received (%lu bytes): %@", (unsigned long)[authResponse length], responseStr);
     [responseStr autorelease];
     
     if (![responseStr hasPrefix:@"OK "]) {
-        NSLog(@"Authentication failed - expected OK, got: %@", responseStr);
+        NSDebugLLog(@"gwcomp", @"Authentication failed - expected OK, got: %@", responseStr);
         [self disconnect];
         return NO;
     }
@@ -79,9 +79,9 @@
     // Step 3: Negotiate Unix FD passing (like real dbus-send)
     NSString *negotiateCommand = @"NEGOTIATE_UNIX_FD\r\n";
     NSData *negotiateData = [negotiateCommand dataUsingEncoding:NSUTF8StringEncoding];
-    NSLog(@"Sending NEGOTIATE_UNIX_FD command");
+    NSDebugLLog(@"gwcomp", @"Sending NEGOTIATE_UNIX_FD command");
     if (![MBTransport sendData:negotiateData onSocket:_socket]) {
-        NSLog(@"Failed to send NEGOTIATE_UNIX_FD");
+        NSDebugLLog(@"gwcomp", @"Failed to send NEGOTIATE_UNIX_FD");
         [self disconnect];
         return NO;
     }
@@ -90,17 +90,17 @@
     usleep(100000); // 100ms
     NSData *fdResponse = [MBTransport receiveDataFromSocket:_socket];
     if (!fdResponse || [fdResponse length] == 0) {
-        NSLog(@"No FD negotiation response received");
+        NSDebugLLog(@"gwcomp", @"No FD negotiation response received");
         [self disconnect];
         return NO;
     }
     
     NSString *fdResponseStr = [[NSString alloc] initWithData:fdResponse encoding:NSUTF8StringEncoding];
-    NSLog(@"FD negotiation response: %@", fdResponseStr);
+    NSDebugLLog(@"gwcomp", @"FD negotiation response: %@", fdResponseStr);
     [fdResponseStr autorelease];
     
     if (![fdResponseStr hasPrefix:@"AGREE_UNIX_FD"]) {
-        NSLog(@"Unix FD negotiation failed - expected AGREE_UNIX_FD, got: %@", fdResponseStr);
+        NSDebugLLog(@"gwcomp", @"Unix FD negotiation failed - expected AGREE_UNIX_FD, got: %@", fdResponseStr);
         [self disconnect];
         return NO;
     }
@@ -108,14 +108,14 @@
     // Step 5: Send BEGIN
     NSString *beginCommand = @"BEGIN\r\n";
     NSData *beginData = [beginCommand dataUsingEncoding:NSUTF8StringEncoding];
-    NSLog(@"Sending BEGIN command");
+    NSDebugLLog(@"gwcomp", @"Sending BEGIN command");
     if (![MBTransport sendData:beginData onSocket:_socket]) {
-        NSLog(@"Failed to send BEGIN");
+        NSDebugLLog(@"gwcomp", @"Failed to send BEGIN");
         [self disconnect];
         return NO;
     }
     
-    NSLog(@"Authentication completed successfully");
+    NSDebugLLog(@"gwcomp", @"Authentication completed successfully");
     
     // Send Hello message to get unique name
     MBMessage *helloMessage = [MBMessage methodCallWithDestination:@"org.freedesktop.DBus"
@@ -125,15 +125,15 @@
                                                           arguments:@[]];
     helloMessage.serial = _nextSerial++;
     
-    NSLog(@"Sending Hello message: %@", helloMessage);
+    NSDebugLLog(@"gwcomp", @"Sending Hello message: %@", helloMessage);
     
     if (![self sendMessage:helloMessage]) {
-        NSLog(@"Failed to send Hello message");
+        NSDebugLLog(@"gwcomp", @"Failed to send Hello message");
         [self disconnect];
         return NO;
     }
     
-    NSLog(@"Hello message sent, waiting for reply...");
+    NSDebugLLog(@"gwcomp", @"Hello message sent, waiting for reply...");
     
     // Wait for Hello reply
     NSTimeInterval timeout = 5.0;
@@ -146,7 +146,7 @@
                 message.replySerial == helloMessage.serial) {
                 if ([message.arguments count] > 0) {
                     _uniqueName = [message.arguments[0] copy];
-                    NSLog(@"Connected to D-Bus daemon, unique name: %@", _uniqueName);
+                    NSDebugLLog(@"gwcomp", @"Connected to D-Bus daemon, unique name: %@", _uniqueName);
                     return YES;
                 }
             }
@@ -154,7 +154,7 @@
         usleep(10000); // 10ms
     }
     
-    NSLog(@"Timeout waiting for Hello reply");
+    NSDebugLLog(@"gwcomp", @"Timeout waiting for Hello reply");
     [self disconnect];
     return NO;
 }
@@ -183,7 +183,7 @@
                   timeout:(NSTimeInterval)timeout
 {
     if (![self connected]) {
-        NSLog(@"Not connected to D-Bus daemon");
+        NSDebugLLog(@"gwcomp", @"Not connected to D-Bus daemon");
         return nil;
     }
     
@@ -195,7 +195,7 @@
     message.serial = _nextSerial++;
     
     if (![self sendMessage:message]) {
-        NSLog(@"Failed to send method call");
+        NSDebugLLog(@"gwcomp", @"Failed to send method call");
         return nil;
     }
     
@@ -213,7 +213,7 @@
         usleep(10000); // 10ms
     }
     
-    NSLog(@"Timeout waiting for method reply");
+    NSDebugLLog(@"gwcomp", @"Timeout waiting for method reply");
     return nil;
 }
 
@@ -225,7 +225,7 @@
                   reply:(void(^)(MBMessage *reply))replyBlock
 {
     if (![self connected]) {
-        NSLog(@"Not connected to D-Bus daemon");
+        NSDebugLLog(@"gwcomp", @"Not connected to D-Bus daemon");
         return NO;
     }
     
@@ -249,7 +249,7 @@
          arguments:(NSArray *)arguments
 {
     if (![self connected]) {
-        NSLog(@"Not connected to D-Bus daemon");
+        NSDebugLLog(@"gwcomp", @"Not connected to D-Bus daemon");
         return NO;
     }
     
@@ -359,11 +359,11 @@
     
     NSData *data = [message serialize];
     if (!data) {
-        NSLog(@"Failed to serialize message");
+        NSDebugLLog(@"gwcomp", @"Failed to serialize message");
         return NO;
     }
     
-    NSLog(@"Sending message data: %lu bytes", (unsigned long)[data length]);
+    NSDebugLLog(@"gwcomp", @"Sending message data: %lu bytes", (unsigned long)[data length]);
     // Debug: show first 32 bytes
     if ([data length] > 0) {
         const uint8_t *bytes = [data bytes];
@@ -371,7 +371,7 @@
         for (NSUInteger i = 0; i < MIN([data length], 32); i++) {
             [hexString appendFormat:@"%02x ", bytes[i]];
         }
-        NSLog(@"Message bytes: %@", hexString);
+        NSDebugLLog(@"gwcomp", @"Message bytes: %@", hexString);
     }
     
     return [MBTransport sendData:data onSocket:_socket];
@@ -385,7 +385,7 @@
     
     _socket = [MBTransport connectToUnixSocket:socketPath];
     if (_socket < 0) {
-        NSLog(@"Failed to connect to D-Bus daemon at %@", socketPath);
+        NSDebugLLog(@"gwcomp", @"Failed to connect to D-Bus daemon at %@", socketPath);
         return NO;
     }
     
@@ -397,29 +397,29 @@
     NSString *authCommand = @"AUTH EXTERNAL 31303031\r\n";
     [authData appendData:[authCommand dataUsingEncoding:NSUTF8StringEncoding]];
     
-    NSLog(@"Sending auth command: %@", authCommand);
+    NSDebugLLog(@"gwcomp", @"Sending auth command: %@", authCommand);
     if (![MBTransport sendData:authData onSocket:_socket]) {
-        NSLog(@"Failed to send authentication");
+        NSDebugLLog(@"gwcomp", @"Failed to send authentication");
         [self disconnect];
         return NO;
     }
     
     // Step 2: Wait for OK response
-    NSLog(@"Waiting for OK response...");
+    NSDebugLLog(@"gwcomp", @"Waiting for OK response...");
     usleep(100000); // 100ms
     NSData *authResponse = [MBTransport receiveDataFromSocket:_socket];
     if (!authResponse || [authResponse length] == 0) {
-        NSLog(@"No auth response received");
+        NSDebugLLog(@"gwcomp", @"No auth response received");
         [self disconnect];
         return NO;
     }
     
     NSString *responseStr = [[NSString alloc] initWithData:authResponse encoding:NSUTF8StringEncoding];
-    NSLog(@"Auth response received (%lu bytes): %@", (unsigned long)[authResponse length], responseStr);
+    NSDebugLLog(@"gwcomp", @"Auth response received (%lu bytes): %@", (unsigned long)[authResponse length], responseStr);
     [responseStr autorelease];
     
     if (![responseStr hasPrefix:@"OK "]) {
-        NSLog(@"Authentication failed - expected OK, got: %@", responseStr);
+        NSDebugLLog(@"gwcomp", @"Authentication failed - expected OK, got: %@", responseStr);
         [self disconnect];
         return NO;
     }
@@ -427,9 +427,9 @@
     // Step 3: Negotiate Unix FD passing (like real dbus-send)
     NSString *negotiateCommand = @"NEGOTIATE_UNIX_FD\r\n";
     NSData *negotiateData = [negotiateCommand dataUsingEncoding:NSUTF8StringEncoding];
-    NSLog(@"Sending NEGOTIATE_UNIX_FD command");
+    NSDebugLLog(@"gwcomp", @"Sending NEGOTIATE_UNIX_FD command");
     if (![MBTransport sendData:negotiateData onSocket:_socket]) {
-        NSLog(@"Failed to send NEGOTIATE_UNIX_FD");
+        NSDebugLLog(@"gwcomp", @"Failed to send NEGOTIATE_UNIX_FD");
         [self disconnect];
         return NO;
     }
@@ -438,17 +438,17 @@
     usleep(100000); // 100ms
     NSData *fdResponse = [MBTransport receiveDataFromSocket:_socket];
     if (!fdResponse || [fdResponse length] == 0) {
-        NSLog(@"No FD negotiation response received");
+        NSDebugLLog(@"gwcomp", @"No FD negotiation response received");
         [self disconnect];
         return NO;
     }
     
     NSString *fdResponseStr = [[NSString alloc] initWithData:fdResponse encoding:NSUTF8StringEncoding];
-    NSLog(@"FD negotiation response: %@", fdResponseStr);
+    NSDebugLLog(@"gwcomp", @"FD negotiation response: %@", fdResponseStr);
     [fdResponseStr autorelease];
     
     if (![fdResponseStr hasPrefix:@"AGREE_UNIX_FD"]) {
-        NSLog(@"Unix FD negotiation failed - expected AGREE_UNIX_FD, got: %@", fdResponseStr);
+        NSDebugLLog(@"gwcomp", @"Unix FD negotiation failed - expected AGREE_UNIX_FD, got: %@", fdResponseStr);
         [self disconnect];
         return NO;
     }
@@ -456,14 +456,14 @@
     // Step 5: Send BEGIN
     NSString *beginCommand = @"BEGIN\r\n";
     NSData *beginData = [beginCommand dataUsingEncoding:NSUTF8StringEncoding];
-    NSLog(@"Sending BEGIN command");
+    NSDebugLLog(@"gwcomp", @"Sending BEGIN command");
     if (![MBTransport sendData:beginData onSocket:_socket]) {
-        NSLog(@"Failed to send BEGIN");
+        NSDebugLLog(@"gwcomp", @"Failed to send BEGIN");
         [self disconnect];
         return NO;
     }
     
-    NSLog(@"Authentication completed successfully - ready for D-Bus messages");
+    NSDebugLLog(@"gwcomp", @"Authentication completed successfully - ready for D-Bus messages");
     
     // Set a dummy unique name for testing
     _uniqueName = @":test.connection";

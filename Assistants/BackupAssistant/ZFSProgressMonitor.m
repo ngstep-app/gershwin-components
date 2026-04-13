@@ -26,12 +26,12 @@
                       withCallback:(ZFSProgressCallback)progressCallback
                              error:(NSError **)error
 {
-    NSLog(@"ZFSProgressMonitor: Starting libzfs-based send monitoring for %@", sourceSnapshot);
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Starting libzfs-based send monitoring for %@", sourceSnapshot);
     
     // Initialize libzfs
     libzfs_handle_t *libzfs = libzfs_init();
     if (libzfs == NULL) {
-        NSLog(@"ERROR: Failed to initialize libzfs");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to initialize libzfs");
         if (error) {
             *error = [NSError errorWithDomain:@"ZFSProgressMonitor" 
                                          code:1 
@@ -43,7 +43,7 @@
     // Get the ZFS handle for the snapshot
     zfs_handle_t *zhp = zfs_open(libzfs, [sourceSnapshot UTF8String], ZFS_TYPE_SNAPSHOT);
     if (zhp == NULL) {
-        NSLog(@"ERROR: Failed to open ZFS snapshot %@", sourceSnapshot);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to open ZFS snapshot %@", sourceSnapshot);
         libzfs_fini(libzfs);
         if (error) {
             *error = [NSError errorWithDomain:@"ZFSProgressMonitor" 
@@ -59,7 +59,7 @@
     sendflags.progress = B_TRUE;  // Enable progress monitoring
     sendflags.parsable = B_TRUE;  // Enable parsable output
     
-    NSLog(@"ZFSProgressMonitor: Starting ZFS send with progress monitoring");
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Starting ZFS send with progress monitoring");
     
     // Create a monitoring thread to check progress
     dispatch_queue_t progressQueue = dispatch_queue_create("zfs.progress.monitor", DISPATCH_QUEUE_SERIAL);
@@ -75,7 +75,7 @@
         nvlist_t *props = NULL;
         if (zfs_send_one(zhp, NULL, STDOUT_FILENO, &sendflags, NULL) == 0) {
             // This is a dry run to get size estimate
-            NSLog(@"ZFSProgressMonitor: Got size estimate for send operation");
+            NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Got size estimate for send operation");
         }
         
         while (!sendCompleted) {
@@ -99,7 +99,7 @@
                         }
                     });
                     
-                    NSLog(@"ZFS Progress: %llu/%llu bytes (%.1f%%) - REAL LIBZFS DATA", 
+                    NSDebugLLog(@"gwcomp", @"ZFS Progress: %llu/%llu bytes (%.1f%%) - REAL LIBZFS DATA", 
                           transferredBytes, totalBytes, progress * 100.0);
                 }
             }
@@ -107,7 +107,7 @@
     });
     
     // Perform the actual send operation
-    NSLog(@"ZFSProgressMonitor: Executing zfs_send_one()");
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Executing zfs_send_one()");
     int result = zfs_send_one(zhp, NULL, outputFileDescriptor, &sendflags, NULL);
     
     // Mark send as completed
@@ -125,7 +125,7 @@
     zfs_close(zhp);
     libzfs_fini(libzfs);
     
-    NSLog(@"ZFSProgressMonitor: ZFS send completed with result: %d (%s)", result, sendSuccess ? "SUCCESS" : "FAILURE");
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: ZFS send completed with result: %d (%s)", result, sendSuccess ? "SUCCESS" : "FAILURE");
     
     if (!sendSuccess && error) {
         *error = [NSError errorWithDomain:@"ZFSProgressMonitor" 
@@ -141,12 +141,12 @@
                       withCallback:(ZFSProgressCallback)progressCallback
                              error:(NSError **)error
 {
-    NSLog(@"ZFSProgressMonitor: Starting libzfs-based receive monitoring for %@", destinationDataset);
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Starting libzfs-based receive monitoring for %@", destinationDataset);
     
     // Initialize libzfs
     libzfs_handle_t *libzfs = libzfs_init();
     if (libzfs == NULL) {
-        NSLog(@"ERROR: Failed to initialize libzfs");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to initialize libzfs");
         if (error) {
             *error = [NSError errorWithDomain:@"ZFSProgressMonitor" 
                                          code:1 
@@ -160,7 +160,7 @@
     recvflags.verbose = B_TRUE;
     recvflags.force = B_TRUE;  // Equivalent to -F flag
     
-    NSLog(@"ZFSProgressMonitor: Starting ZFS receive");
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Starting ZFS receive");
     
     // Perform the receive operation
     int result = zfs_receive(libzfs, [destinationDataset UTF8String], NULL, &recvflags, inputFileDescriptor, NULL);
@@ -177,7 +177,7 @@
     // Cleanup
     libzfs_fini(libzfs);
     
-    NSLog(@"ZFSProgressMonitor: ZFS receive completed with result: %d (%s)", result, success ? "SUCCESS" : "FAILURE");
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: ZFS receive completed with result: %d (%s)", result, success ? "SUCCESS" : "FAILURE");
     
     if (!success && error) {
         *error = [NSError errorWithDomain:@"ZFSProgressMonitor" 
@@ -193,14 +193,14 @@
                              withCallback:(ZFSProgressCallback)progressCallback
                                     error:(NSError **)error
 {
-    NSLog(@"ZFSProgressMonitor: Starting combined ZFS send/receive with libzfs progress monitoring");
-    NSLog(@"ZFSProgressMonitor: Source: %@", sourceSnapshot);
-    NSLog(@"ZFSProgressMonitor: Destination: %@", destinationDataset);
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Starting combined ZFS send/receive with libzfs progress monitoring");
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Source: %@", sourceSnapshot);
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Destination: %@", destinationDataset);
     
     // Create a pipe for the send/receive operation
     int pipefd[2];
     if (pipe(pipefd) != 0) {
-        NSLog(@"ERROR: Failed to create pipe for ZFS send/receive");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to create pipe for ZFS send/receive");
         if (error) {
             *error = [NSError errorWithDomain:@"ZFSProgressMonitor" 
                                          code:5 
@@ -224,7 +224,7 @@
     
     // Start the send operation
     dispatch_group_async(transferGroup, sendQueue, ^{
-        NSLog(@"ZFSProgressMonitor: Starting send operation in background");
+        NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Starting send operation in background");
         sendResult = [self monitorZFSSendFromSnapshot:sourceSnapshot
                                              toHandle:writefd
                                          withCallback:^(CGFloat progress, NSString *status, uint64_t bytesTransferred, uint64_t totalBytes) {
@@ -238,12 +238,12 @@
         
         // Close write end when send is done
         close(writefd);
-        NSLog(@"ZFSProgressMonitor: Send operation completed with result: %@", sendResult ? @"SUCCESS" : @"FAILURE");
+        NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Send operation completed with result: %@", sendResult ? @"SUCCESS" : @"FAILURE");
     });
     
     // Start the receive operation
     dispatch_group_async(transferGroup, receiveQueue, ^{
-        NSLog(@"ZFSProgressMonitor: Starting receive operation in background");
+        NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Starting receive operation in background");
         receiveResult = [self monitorZFSReceiveToDataset:destinationDataset
                                               fromHandle:readfd
                                             withCallback:^(CGFloat progress, NSString *status, uint64_t bytesTransferred, uint64_t totalBytes) {
@@ -257,7 +257,7 @@
         
         // Close read end when receive is done
         close(readfd);
-        NSLog(@"ZFSProgressMonitor: Receive operation completed with result: %@", receiveResult ? @"SUCCESS" : @"FAILURE");
+        NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Receive operation completed with result: %@", receiveResult ? @"SUCCESS" : @"FAILURE");
     });
     
     // Wait for both operations to complete
@@ -277,7 +277,7 @@
         }
     }
     
-    NSLog(@"ZFSProgressMonitor: Combined ZFS send/receive completed with overall result: %@", overallSuccess ? @"SUCCESS" : @"FAILURE");
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Combined ZFS send/receive completed with overall result: %@", overallSuccess ? @"SUCCESS" : @"FAILURE");
     
     return overallSuccess;
 }
@@ -288,15 +288,15 @@
                                         withCallback:(ZFSProgressCallback)progressCallback
                                                error:(NSError **)error
 {
-    NSLog(@"ZFSProgressMonitor: Starting incremental ZFS send/receive with libzfs progress monitoring");
-    NSLog(@"ZFSProgressMonitor: Base snapshot: %@", baseSnapshot);
-    NSLog(@"ZFSProgressMonitor: Source snapshot: %@", sourceSnapshot);
-    NSLog(@"ZFSProgressMonitor: Destination: %@", destinationDataset);
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Starting incremental ZFS send/receive with libzfs progress monitoring");
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Base snapshot: %@", baseSnapshot);
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Source snapshot: %@", sourceSnapshot);
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Destination: %@", destinationDataset);
     
     // Initialize libzfs
     libzfs_handle_t *libzfs = libzfs_init();
     if (libzfs == NULL) {
-        NSLog(@"ERROR: Failed to initialize libzfs for incremental send");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to initialize libzfs for incremental send");
         if (error) {
             *error = [NSError errorWithDomain:@"ZFSProgressMonitor" 
                                          code:1 
@@ -308,7 +308,7 @@
     // Get the ZFS handles for both snapshots
     zfs_handle_t *fromZhp = zfs_open(libzfs, [baseSnapshot UTF8String], ZFS_TYPE_SNAPSHOT);
     if (fromZhp == NULL) {
-        NSLog(@"ERROR: Failed to open base ZFS snapshot %@", baseSnapshot);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to open base ZFS snapshot %@", baseSnapshot);
         libzfs_fini(libzfs);
         if (error) {
             *error = [NSError errorWithDomain:@"ZFSProgressMonitor" 
@@ -320,7 +320,7 @@
     
     zfs_handle_t *toZhp = zfs_open(libzfs, [sourceSnapshot UTF8String], ZFS_TYPE_SNAPSHOT);
     if (toZhp == NULL) {
-        NSLog(@"ERROR: Failed to open source ZFS snapshot %@", sourceSnapshot);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to open source ZFS snapshot %@", sourceSnapshot);
         zfs_close(fromZhp);
         libzfs_fini(libzfs);
         if (error) {
@@ -334,7 +334,7 @@
     // Create a pipe for the send/receive operation
     int pipefd[2];
     if (pipe(pipefd) != 0) {
-        NSLog(@"ERROR: Failed to create pipe for incremental ZFS send/receive");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to create pipe for incremental ZFS send/receive");
         zfs_close(fromZhp);
         zfs_close(toZhp);
         libzfs_fini(libzfs);
@@ -367,7 +367,7 @@
     
     // Start the incremental send operation
     dispatch_group_async(transferGroup, sendQueue, ^{
-        NSLog(@"ZFSProgressMonitor: Starting incremental send operation in background");
+        NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Starting incremental send operation in background");
         
         // Monitor progress in background
         dispatch_queue_t progressQueue = dispatch_queue_create("zfs.incremental.progress", DISPATCH_QUEUE_SERIAL);
@@ -399,7 +399,7 @@
                             }
                         });
                         
-                        NSLog(@"ZFS Incremental Progress: %llu/%llu bytes (%.1f%%) - REAL LIBZFS DATA", 
+                        NSDebugLLog(@"gwcomp", @"ZFS Incremental Progress: %llu/%llu bytes (%.1f%%) - REAL LIBZFS DATA", 
                               transferredBytes, totalBytes, progress * 100.0);
                     }
                 }
@@ -407,7 +407,7 @@
         });
         
         // Perform the incremental send (from base snapshot to source snapshot)
-        NSLog(@"ZFSProgressMonitor: Executing incremental zfs_send_one() from %@ to %@", baseSnapshot, sourceSnapshot);
+        NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Executing incremental zfs_send_one() from %@ to %@", baseSnapshot, sourceSnapshot);
         int result = zfs_send_one(toZhp, [baseSnapshot UTF8String], writefd, &sendflags, NULL);
         
         // Mark send as completed
@@ -416,7 +416,7 @@
         
         // Close write end when send is done
         close(writefd);
-        NSLog(@"ZFSProgressMonitor: Incremental send operation completed with result: %@", sendResult ? @"SUCCESS" : @"FAILURE");
+        NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Incremental send operation completed with result: %@", sendResult ? @"SUCCESS" : @"FAILURE");
         
         if (!sendResult) {
             sendError = [NSError errorWithDomain:@"ZFSProgressMonitor" 
@@ -427,7 +427,7 @@
     
     // Start the receive operation
     dispatch_group_async(transferGroup, receiveQueue, ^{
-        NSLog(@"ZFSProgressMonitor: Starting receive operation in background");
+        NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Starting receive operation in background");
         
         // Set up receive flags
         recvflags_t recvflags = {0};
@@ -440,7 +440,7 @@
         
         // Close read end when receive is done
         close(readfd);
-        NSLog(@"ZFSProgressMonitor: Receive operation completed with result: %@", receiveResult ? @"SUCCESS" : @"FAILURE");
+        NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Receive operation completed with result: %@", receiveResult ? @"SUCCESS" : @"FAILURE");
         
         if (receiveResult && progressCallback) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -475,7 +475,7 @@
         }
     }
     
-    NSLog(@"ZFSProgressMonitor: Incremental ZFS send/receive completed with overall result: %@", overallSuccess ? @"SUCCESS" : @"FAILURE");
+    NSDebugLLog(@"gwcomp", @"ZFSProgressMonitor: Incremental ZFS send/receive completed with overall result: %@", overallSuccess ? @"SUCCESS" : @"FAILURE");
     
     return overallSuccess;
 }

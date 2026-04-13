@@ -139,11 +139,11 @@
 - (BOOL)connectToVNC
 {
     if (_connected) {
-        NSLog(@"VNCWindow: Already connected");
+        NSDebugLLog(@"gwcomp", @"VNCWindow: Already connected");
         return YES;
     }
     
-    NSLog(@"VNCWindow: Connecting to %@:%ld (username: %@)%@", _hostname, (long)_port, 
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Connecting to %@:%ld (username: %@)%@", _hostname, (long)_port, 
           _username ? _username : @"(none)",
           _headlessMode ? @" [headless mode]" : @"");
     
@@ -162,7 +162,7 @@
     if (!result) {
         if (_headlessMode) {
             // In headless mode, just log the error and exit
-            NSLog(@"VNCWindow: ERROR - Connection failed in headless mode");
+            NSDebugLLog(@"gwcomp", @"VNCWindow: ERROR - Connection failed in headless mode");
             [NSApp terminate:nil];
         } else {
             NSAlert *alert = [[NSAlert alloc] init];
@@ -180,11 +180,11 @@
 {
     // Prevent multiple calls to disconnect - if EITHER is already cleared, we're disconnecting or disconnected
     if (!_vncClient || !_connected) {
-        NSLog(@"VNCWindow: Already disconnected or disconnecting, skipping");
+        NSDebugLLog(@"gwcomp", @"VNCWindow: Already disconnected or disconnecting, skipping");
         return;
     }
     
-    NSLog(@"VNCWindow: Disconnecting from VNC");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Disconnecting from VNC");
     
     // Set _connected to NO immediately to prevent re-entry
     _connected = NO;
@@ -240,7 +240,7 @@
         return;
     }
     
-    NSLog(@"VNCWindow: Resizing window to fit framebuffer: %.0fx%.0f", _framebufferSize.width, _framebufferSize.height);
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Resizing window to fit framebuffer: %.0fx%.0f", _framebufferSize.width, _framebufferSize.height);
     
     NSSize windowSize = _framebufferSize;
     NSRect contentRect = NSMakeRect(0, 0, windowSize.width, windowSize.height);
@@ -537,7 +537,7 @@
 
 - (BOOL)windowShouldClose:(id)sender
 {
-    NSLog(@"VNCWindow: windowShouldClose called");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: windowShouldClose called");
     return YES;
 }
 
@@ -553,7 +553,7 @@
 
 - (void)windowWillClose:(NSNotification *)notification
 {
-    NSLog(@"VNCWindow: Window closing, notifying delegate");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Window closing, notifying delegate");
     if (_vncDelegate && [_vncDelegate respondsToSelector:@selector(vncWindowWillClose:)]) {
         [_vncDelegate vncWindowWillClose:self];
     }
@@ -564,7 +564,7 @@
 
 - (void)vncClient:(VNCClient *)client didConnect:(BOOL)success
 {
-    NSLog(@"VNCWindow: VNC connection result: %@", success ? @"SUCCESS" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: VNC connection result: %@", success ? @"SUCCESS" : @"FAILED");
     
     if (success) {
         _connected = YES;
@@ -575,7 +575,7 @@
         [_vncClient requestFullFramebufferUpdate];
     } else {
         if (_headlessMode) {
-            NSLog(@"VNCWindow: ERROR - Connection failed in headless mode");
+            NSDebugLLog(@"gwcomp", @"VNCWindow: ERROR - Connection failed in headless mode");
             [NSApp terminate:nil];
         } else {
             NSAlert *alert = [[NSAlert alloc] init];
@@ -589,7 +589,7 @@
 
 - (void)vncClient:(VNCClient *)client didDisconnect:(NSString *)reason
 {
-    NSLog(@"VNCWindow: VNC disconnected: %@", reason);
+    NSDebugLLog(@"gwcomp", @"VNCWindow: VNC disconnected: %@", reason);
     _connected = NO;
     
     NSImage *disconnectedImage = [[NSImage alloc] initWithSize:NSMakeSize(640, 480)];
@@ -613,7 +613,7 @@
 
 - (void)vncClient:(VNCClient *)client didReceiveError:(NSString *)error
 {
-    NSLog(@"VNCWindow: VNC error: %@", error);
+    NSDebugLLog(@"gwcomp", @"VNCWindow: VNC error: %@", error);
     
     NSAlert *alert = [[NSAlert alloc] init];
     [alert setMessageText:@"VNC Error"];
@@ -631,7 +631,7 @@
 
 - (NSString *)vncClientNeedsPassword:(VNCClient *)client
 {
-    NSLog(@"VNCWindow: Prompting for password");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Prompting for password");
     
     // Match Workspace credentials dialog geometry exactly
     // Panel: 400x200, centered
@@ -696,15 +696,15 @@
     [panel makeFirstResponder:passwordField];
     
     NSString *result = nil;
-    NSLog(@"VNCWindow: Showing modal password dialog...");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Showing modal password dialog...");
     NSInteger response = [NSApp runModalForWindow:panel];
-    NSLog(@"VNCWindow: Modal password dialog returned with response: %ld", (long)response);
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Modal password dialog returned with response: %ld", (long)response);
     
     if (response == NSRunStoppedResponse) {
         result = [[passwordField stringValue] retain];
-        NSLog(@"VNCWindow: Password provided (length: %lu)", (unsigned long)[result length]);
+        NSDebugLLog(@"gwcomp", @"VNCWindow: Password provided (length: %lu)", (unsigned long)[result length]);
     } else {
-        NSLog(@"VNCWindow: Password dialog cancelled");
+        NSDebugLLog(@"gwcomp", @"VNCWindow: Password dialog cancelled");
     }
     
     [passwordField release];
@@ -718,10 +718,10 @@
         }
     }
     
-    NSLog(@"VNCWindow: Closing password panel...");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Closing password panel...");
     [panel orderOut:nil];
     [panel release];
-    NSLog(@"VNCWindow: Password panel released");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Password panel released");
     
     // Small delay to ensure modal state is fully cleaned up
     usleep(100000); // 100ms
@@ -731,7 +731,7 @@
 
 - (NSDictionary *)vncClientNeedsCredentials:(VNCClient *)client
 {
-    NSLog(@"VNCWindow: Prompting for credentials");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Prompting for credentials");
     
     // Match Workspace credentials dialog geometry exactly
     // Panel: 400x200, centered
@@ -813,15 +813,15 @@
     [panel makeFirstResponder:usernameField];
     
     NSDictionary *result = nil;
-    NSLog(@"VNCWindow: Showing modal credentials dialog...");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Showing modal credentials dialog...");
     NSInteger response = [NSApp runModalForWindow:panel];
-    NSLog(@"VNCWindow: Modal credentials dialog returned with response: %ld", (long)response);
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Modal credentials dialog returned with response: %ld", (long)response);
     
     if (response == NSRunStoppedResponse) {
         NSString *enteredUsername = [usernameField stringValue];
         NSString *enteredPassword = [passwordField stringValue];
         
-        NSLog(@"VNCWindow: User entered credentials - username: '%@' (length: %lu), password: %@ (length: %lu)",
+        NSDebugLLog(@"gwcomp", @"VNCWindow: User entered credentials - username: '%@' (length: %lu), password: %@ (length: %lu)",
               enteredUsername ? enteredUsername : @"(nil)", 
               (unsigned long)[enteredUsername length],
               enteredPassword && [enteredPassword length] > 0 ? @"<provided>" : @"<empty>",
@@ -832,7 +832,7 @@
                   enteredPassword, @"password",
                   nil];
     } else {
-        NSLog(@"VNCWindow: User cancelled credential dialog");
+        NSDebugLLog(@"gwcomp", @"VNCWindow: User cancelled credential dialog");
     }
     
     [usernameField release];
@@ -847,10 +847,10 @@
         }
     }
     
-    NSLog(@"VNCWindow: Closing credentials panel...");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Closing credentials panel...");
     [panel orderOut:nil];
     [panel release];
-    NSLog(@"VNCWindow: Credentials panel released");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Credentials panel released");
     
     // Small delay to ensure modal state is fully cleaned up
     usleep(100000); // 100ms

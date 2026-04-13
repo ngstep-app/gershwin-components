@@ -31,13 +31,13 @@ static void cleanup_on_exit(void)
     if (cleanup_in_progress) return;
     cleanup_in_progress = 1;
     
-    NSLog(@"Menu.app: atexit cleanup...");
+    NSDebugLLog(@"gwcomp", @"Menu.app: atexit cleanup...");
     
     @try {
         [[X11ShortcutManager sharedManager] cleanup];
         [DBusMenuParser cleanup];
     } @catch (NSException *exception) {
-        NSLog(@"Menu.app: Exception during atexit cleanup: %@", exception);
+        NSDebugLLog(@"gwcomp", @"Menu.app: Exception during atexit cleanup: %@", exception);
     }
 }
 
@@ -49,7 +49,7 @@ static void signalHandler(int sig)
 
     // SIGUSR1 is used as a non-fatal probe; log and continue
     if (sig == SIGUSR1) {
-        NSLog(@"Menu.app: USR1 signal handled, continuing operation...");
+        NSDebugLLog(@"gwcomp", @"Menu.app: USR1 signal handled, continuing operation...");
         cleanup_in_progress = 0; // reset flag since we aren't exiting
         return;
     }
@@ -61,21 +61,21 @@ static void signalHandler(int sig)
         case SIGHUP:  signame = "SIGHUP"; break;
     }
 
-    NSLog(@"Menu.app: Received signal %d (%s), performing cleanup...", sig, signame);
+    NSDebugLLog(@"gwcomp", @"Menu.app: Received signal %d (%s), performing cleanup...", sig, signame);
 
     @try {
         // Clean up global shortcuts
         [[X11ShortcutManager sharedManager] cleanup];
         [DBusMenuParser cleanup];
     } @catch (NSException *exception) {
-        NSLog(@"Menu.app: Exception during signal cleanup: %@", exception);
+        NSDebugLLog(@"gwcomp", @"Menu.app: Exception during signal cleanup: %@", exception);
     }
 
     // Reset signal handlers to default to avoid infinite loops
     signal(sig, SIG_DFL);
 
     // Exit gracefully
-    NSLog(@"Menu.app: Cleanup complete, exiting...");
+    NSDebugLLog(@"gwcomp", @"Menu.app: Cleanup complete, exiting...");
     exit(0);
 }
 
@@ -91,7 +91,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL _cmd, NSRect dirtyRect);
     // Swizzle NSMenuView's drawRect: method to remove bottom line
     Class menuViewClass = NSClassFromString(@"NSMenuView");
     if (!menuViewClass) {
-        NSLog(@"MenuApplication: Warning: NSMenuView class not found for swizzling");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: NSMenuView class not found for swizzling");
         return;
     }
     
@@ -99,7 +99,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL _cmd, NSRect dirtyRect);
     Method originalMethod = class_getInstanceMethod(menuViewClass, @selector(drawRect:));
     
     if (!originalMethod) {
-        NSLog(@"MenuApplication: Warning: NSMenuView drawRect: method not found for swizzling");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: NSMenuView drawRect: method not found for swizzling");
         return;
     }
     
@@ -117,7 +117,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL _cmd, NSRect dirtyRect);
     // Replace the original drawRect: with our custom implementation
     method_setImplementation(originalMethod, (IMP)menu_drawRectWithoutBottomLine);
     
-    NSLog(@"MenuApplication: Successfully swizzled NSMenuView drawRect: method");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Successfully swizzled NSMenuView drawRect: method");
 }
 
 // Store the original IMP globally so we can call it properly
@@ -154,7 +154,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     [backgroundColor set];
     NSRectFill(bottomSeparatorRect);
     
-    NSLog(@"MenuApplication: Removed bottom line from menu view bounds: %@", NSStringFromRect(bounds));
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Removed bottom line from menu view bounds: %@", NSStringFromRect(bounds));
     */
     return nil; // drawRect: returns void, but IMP expects id return type
 }
@@ -170,12 +170,12 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
 - (void)checkForExistingMenuApplicationBackground
 {
     @autoreleasepool {
-        NSLog(@"MenuApplication: Checking for existing menu applications (async)...");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Checking for existing menu applications (async)...");
         
         // Create a temporary DBus connection to check if services are already registered
         GNUDBusConnection *tempConnection = [GNUDBusConnection sessionBus];
         if (![tempConnection isConnected]) {
-            NSLog(@"MenuApplication: Cannot connect to DBus to check for existing services");
+            NSDebugLLog(@"gwcomp", @"MenuApplication: Cannot connect to DBus to check for existing services");
             return; // If we can't connect to DBus, let the app try to start normally
         }
         
@@ -195,19 +195,19 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
             }
         }
         @catch (NSException *exception) {
-            NSLog(@"MenuApplication: Exception while checking for existing service: %@", exception);
+            NSDebugLLog(@"gwcomp", @"MenuApplication: Exception while checking for existing service: %@", exception);
             serviceExists = NO;
         }
         
         if (serviceExists) {
-            NSLog(@"MenuApplication: Found existing AppMenu.Registrar service - another menu application is running");
+            NSDebugLLog(@"gwcomp", @"MenuApplication: Found existing AppMenu.Registrar service - another menu application is running");
             
             // Show NSAlert to inform user on main thread
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self showMenuConflictAlert];
             });
         } else {
-            NSLog(@"MenuApplication: No conflicting menu applications found");
+            NSDebugLLog(@"gwcomp", @"MenuApplication: No conflicting menu applications found");
         }
     }
 }
@@ -220,10 +220,10 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     [alert addButtonWithTitle:NSLocalizedString(@"OK", @"OK button")];
     [alert setAlertStyle:NSWarningAlertStyle];
     
-    NSLog(@"MenuApplication: Showing conflict alert...");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Showing conflict alert...");
     [alert runModal];
     
-    NSLog(@"MenuApplication: Exiting due to service conflict");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Exiting due to service conflict");
     exit(1);
 }
 
@@ -243,16 +243,16 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
 
 - (void)finishLaunching
 {
-    NSLog(@"MenuApplication: ===== FINISH LAUNCHING CALLED =====");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: ===== FINISH LAUNCHING CALLED =====");
     
     // Set up method swizzling after runtime is fully initialized
     static BOOL hasSwizzled = NO;
     if (!hasSwizzled) {
-        NSLog(@"MenuApplication: Setting up method swizzling to remove menu bottom line");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Setting up method swizzling to remove menu bottom line");
         [MenuApplication swizzleMenuViewDrawing];
         
         // Hook NSMenu panel creation to use custom styled menus
-        NSLog(@"MenuApplication: Hooking NSMenu panel creation for custom styling");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Hooking NSMenu panel creation for custom styling");
         HookNSMenuPanelCreation();
         
         hasSwizzled = YES;
@@ -263,94 +263,94 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     
     // DON'T call super finishLaunching as it may be causing immediate termination
     // [super finishLaunching];
-    NSLog(@"MenuApplication: Skipped super finishLaunching to prevent termination");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Skipped super finishLaunching to prevent termination");
     
-    NSLog(@"MenuApplication: Initializing application...");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Initializing application...");
     
     // Check if we're running in a terminal
     if (isatty(STDIN_FILENO)) {
-        NSLog(@"MenuApplication: Running in terminal - Ctrl-C and Ctrl-D will trigger cleanup");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Running in terminal - Ctrl-C and Ctrl-D will trigger cleanup");
     } else {
-        NSLog(@"MenuApplication: Running detached from terminal");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Running detached from terminal");
     }
     
     // Create MenuController
-    NSLog(@"MenuApplication: Creating MenuController...");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Creating MenuController...");
     self.controller = [[MenuController alloc] init];
     g_controller = self.controller; // Store global reference for signal handlers
     
 
-    NSLog(@"MenuApplication: Created MenuController");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Created MenuController");
     
     // Set up signal handlers for graceful shutdown
-    NSLog(@"MenuApplication: Setting up signal handlers...");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Setting up signal handlers...");
     
     // CRITICAL: Ignore SIGPIPE to prevent crashes when stdout/stderr is unavailable
     // This happens when running in background without output redirection
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
-        NSLog(@"MenuApplication: Warning: Failed to ignore SIGPIPE - app may crash if terminal closes");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: Failed to ignore SIGPIPE - app may crash if terminal closes");
     } else {
-        NSLog(@"MenuApplication: SIGPIPE handler set to ignore (prevents crashes on write to closed stdout/stderr)");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: SIGPIPE handler set to ignore (prevents crashes on write to closed stdout/stderr)");
     }
     
     if (signal(SIGTERM, signalHandler) == SIG_ERR) {
-        NSLog(@"MenuApplication: Warning: Failed to set SIGTERM handler");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: Failed to set SIGTERM handler");
     } else {
-        NSLog(@"MenuApplication: SIGTERM handler registered");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: SIGTERM handler registered");
     }
     
     if (signal(SIGINT, signalHandler) == SIG_ERR) {
-        NSLog(@"MenuApplication: Warning: Failed to set SIGINT handler");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: Failed to set SIGINT handler");
     } else {
-        NSLog(@"MenuApplication: SIGINT handler registered (Ctrl-C will trigger cleanup)");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: SIGINT handler registered (Ctrl-C will trigger cleanup)");
     }
     
     if (signal(SIGHUP, signalHandler) == SIG_ERR) {
-        NSLog(@"MenuApplication: Warning: Failed to set SIGHUP handler");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: Failed to set SIGHUP handler");
     } else {
-        NSLog(@"MenuApplication: SIGHUP handler registered");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: SIGHUP handler registered");
     }
     
     if (signal(SIGUSR1, signalHandler) == SIG_ERR) {
-        NSLog(@"MenuApplication: Warning: Failed to set SIGUSR1 handler");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: Failed to set SIGUSR1 handler");
     } else {
-        NSLog(@"MenuApplication: SIGUSR1 handler registered");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: SIGUSR1 handler registered");
     }
     
     // Set up atexit handler as additional safety
     if (atexit(cleanup_on_exit) != 0) {
-        NSLog(@"MenuApplication: Warning: Failed to register atexit handler");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: Failed to register atexit handler");
     } else {
-        NSLog(@"MenuApplication: atexit handler registered");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: atexit handler registered");
     }
 
-    NSLog(@"MenuApplication: Starting DBus global menu bar");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Starting DBus global menu bar");
     
     // Create protocol manager first
-    NSLog(@"MenuApplication: Creating protocol manager...");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Creating protocol manager...");
     [self.controller createProtocolManager];
     
     // Ensure the application is activated BEFORE setting up the menu bar
-    NSLog(@"MenuApplication: Activating application...");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Activating application...");
     [self activateIgnoringOtherApps:YES];
-    NSLog(@"MenuApplication: Application activated");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Application activated");
     
     // Setup menu bar (this calls initializeProtocols and setupWindowMonitoring internally)
-    NSLog(@"MenuApplication: Setting up menu bar...");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Setting up menu bar...");
     [self.controller setupMenuBar];
     
     // Announce global menu support via X11 properties
-    NSLog(@"MenuApplication: Announcing global menu support...");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Announcing global menu support...");
     [self.controller announceGlobalMenuSupport];
     
     // Set MenuController as delegate so applicationDidFinishLaunching gets called
     [self setDelegate:self.controller];
-    NSLog(@"MenuApplication: Set MenuController as application delegate");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Set MenuController as application delegate");
     
     // Ensure the application is activated (again, just in case)
     [self activateIgnoringOtherApps:YES];
     
-    NSLog(@"MenuApplication: Initialization complete - Menu will appear immediately");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Initialization complete - Menu will appear immediately");
 }
 
 - (void)sendEvent:(NSEvent *)event
@@ -360,7 +360,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     if (eventType == NSKeyDown) {
         // Log KeyDown events and route to key window / search panel
         NSWindow *keyWin = [self keyWindow];
-        NSLog(@"MenuApplication: KeyDown event, key window: %@, characters: %@", 
+        NSDebugLLog(@"gwcomp", @"MenuApplication: KeyDown event, key window: %@, characters: %@", 
               keyWin, [event characters]);
 
         // If Action Search is visible, route KeyDown events to it first to make sure
@@ -373,7 +373,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
             [NSApp activateIgnoringOtherApps:YES];
             [search.searchPanel makeKeyWindow];
             [search.searchPanel makeFirstResponder:search.searchField];
-            NSLog(@"MenuApplication: Ensured focus on ActionSearchPanel before routing key");
+            NSDebugLLog(@"gwcomp", @"MenuApplication: Ensured focus on ActionSearchPanel before routing key");
             [search.searchPanel sendEvent:event];
             return;
         }
@@ -382,13 +382,13 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
         if (!keyWin) {
             for (NSWindow *window in [self windows]) {
                 if ([window isVisible] && [[window className] isEqualToString:@"ActionSearchPanel"]) {
-                    NSLog(@"MenuApplication: Routing KeyDown to ActionSearchPanel (found by class)");
+                    NSDebugLLog(@"gwcomp", @"MenuApplication: Routing KeyDown to ActionSearchPanel (found by class)");
                     [window sendEvent:event];
                     return;
                 }
             }
         } else if (keyWin != [event window]) {
-            NSLog(@"MenuApplication: Forwarding KeyDown to key window");
+            NSDebugLLog(@"gwcomp", @"MenuApplication: Forwarding KeyDown to key window");
             [keyWin sendEvent:event];
             return;
         }
@@ -419,7 +419,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
                eventType == NSOtherMouseDragged) {
         // Suppress all high-frequency mouse tracking events to prevent log I/O tight loop
     } else {
-        NSLog(@"MenuApplication: Processing event type %ld", (long)eventType);
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Processing event type %ld", (long)eventType);
     }
     
     [super sendEvent:event];
@@ -427,10 +427,10 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
 
 - (void)terminate:(id)sender
 {
-    NSLog(@"MenuApplication: Application terminating gracefully");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Application terminating gracefully");
     
     if (cleanup_in_progress) {
-        NSLog(@"MenuApplication: Cleanup already in progress, calling super terminate");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Cleanup already in progress, calling super terminate");
         [super terminate:sender];
         return;
     }
@@ -438,13 +438,13 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     
     @try {
         // Ensure global shortcuts are cleaned up before termination
-        NSLog(@"MenuApplication: Cleaning up global shortcuts...");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Cleaning up global shortcuts...");
         [[X11ShortcutManager sharedManager] cleanup];
         [DBusMenuParser cleanup];
         
-        NSLog(@"MenuApplication: Graceful cleanup completed");
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Graceful cleanup completed");
     } @catch (NSException *exception) {
-        NSLog(@"MenuApplication: Exception during graceful termination: %@", exception);
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Exception during graceful termination: %@", exception);
     }
     
     [super terminate:sender];
@@ -452,7 +452,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
 {
-    NSLog(@"MenuApplication: applicationShouldTerminateAfterLastWindowClosed called - returning NO");
+    NSDebugLLog(@"gwcomp", @"MenuApplication: applicationShouldTerminateAfterLastWindowClosed called - returning NO");
     return NO; // Menu app runs without visible windows
 }
 

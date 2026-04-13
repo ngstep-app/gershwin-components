@@ -31,7 +31,7 @@ static void killOtherInstances(void) {
     // Get the path to the current executable
     NSString *currentPath = [[NSBundle mainBundle] executablePath];
     if (!currentPath) {
-        NSLog(@"Menu.app: Warning - could not determine executable path");
+        NSDebugLLog(@"gwcomp", @"Menu.app: Warning - could not determine executable path");
         return;
     }
     
@@ -42,12 +42,12 @@ static void killOtherInstances(void) {
         [NSString stringWithUTF8String:realpath([currentPath fileSystemRepresentation], NULL)] :
         currentPath;
     
-    NSLog(@"Menu.app: Current executable: %@ (real: %@)", currentPath, currentRealPath);
+    NSDebugLLog(@"gwcomp", @"Menu.app: Current executable: %@ (real: %@)", currentPath, currentRealPath);
     
     // Scan /proc filesystem for other instances (works on Linux and BSD with /proc)
     DIR *procDir = opendir("/proc");
     if (!procDir) {
-        NSLog(@"Menu.app: Warning - could not open /proc directory");
+        NSDebugLLog(@"gwcomp", @"Menu.app: Warning - could not open /proc directory");
         return;
     }
     
@@ -84,7 +84,7 @@ static void killOtherInstances(void) {
         
         // Compare the executable paths
         if ([otherRealPath isEqualToString:currentRealPath]) {
-            NSLog(@"Menu.app: Killing other instance with PID %d", otherPID);
+            NSDebugLLog(@"gwcomp", @"Menu.app: Killing other instance with PID %d", otherPID);
             kill(otherPID, SIGTERM);
             // Give it a moment to terminate gracefully
             usleep(100000); // 100ms
@@ -104,7 +104,7 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
         return 1;
     }
 
-    NSLog(@"Menu.app: Starting application initialization...");
+    NSDebugLLog(@"gwcomp", @"Menu.app: Starting application initialization...");
     
     // Kill any other instances of Menu.app before proceeding
     killOtherInstances();
@@ -117,25 +117,25 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
             // Set it as the shared application instance manually
             NSApp = app;
             
-            NSLog(@"Menu.app: About to start main run loop...");
+            NSDebugLLog(@"gwcomp", @"Menu.app: About to start main run loop...");
             
             // Run the application with better exception handling
             @try {
                 [app run];
             } @catch (NSException *runException) {
-                NSLog(@"Menu.app: Exception in run loop: %@", runException);
-                NSLog(@"Menu.app: Run loop exception reason: %@", [runException reason]);
+                NSDebugLLog(@"gwcomp", @"Menu.app: Exception in run loop: %@", runException);
+                NSDebugLLog(@"gwcomp", @"Menu.app: Run loop exception reason: %@", [runException reason]);
             }
             
-            NSLog(@"Menu.app: Main run loop exited normally");
+            NSDebugLLog(@"gwcomp", @"Menu.app: Main run loop exited normally");
         } @catch (NSException *exception) {
-            NSLog(@"Menu.app: Caught exception in main: %@", exception);
-            NSLog(@"Menu.app: Exception reason: %@", [exception reason]);
-            NSLog(@"Menu.app: Exception stack: %@", [exception callStackSymbols]);
+            NSDebugLLog(@"gwcomp", @"Menu.app: Caught exception in main: %@", exception);
+            NSDebugLLog(@"gwcomp", @"Menu.app: Exception reason: %@", [exception reason]);
+            NSDebugLLog(@"gwcomp", @"Menu.app: Exception stack: %@", [exception callStackSymbols]);
             return 1;
         }
     }
     
-    NSLog(@"Menu.app: Application exiting normally");
+    NSDebugLLog(@"gwcomp", @"Menu.app: Application exiting normally");
     return 0;
 }

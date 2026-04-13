@@ -252,7 +252,7 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
 - (void)readLogs
 {
     // Subclasses must override
-    NSLog(@"WARNING: LogSource readLogs not implemented in %@", [self class]);
+    NSDebugLLog(@"gwcomp", @"WARNING: LogSource readLogs not implemented in %@", [self class]);
 }
 
 @end

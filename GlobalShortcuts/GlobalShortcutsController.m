@@ -323,13 +323,13 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
     }
     
     // Debug: log what we're about to send
-    NSLog(@"GlobalShortcuts: Shortcuts array to send: %@", shortcutsArray);
+    NSDebugLLog(@"gwcomp", @"GlobalShortcuts: Shortcuts array to send: %@", shortcutsArray);
     
     NSDictionary *userInfo = @{
         @"shortcutCount": @([globalShortcuts count]),
         @"shortcuts": shortcutsArray
     };
-    NSLog(@"GlobalShortcuts: UserInfo to send: %@", userInfo);
+    NSDebugLLog(@"gwcomp", @"GlobalShortcuts: UserInfo to send: %@", userInfo);
     
     // Post distributed notification for cross-application communication with shortcuts data
     [[NSDistributedNotificationCenter defaultCenter] 
@@ -337,7 +337,7 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
                       object:@"GlobalShortcuts"
                     userInfo:userInfo];
     
-    NSLog(@"GlobalShortcuts: Saved %lu shortcuts to defaults and posted distributed notification", (unsigned long)[globalShortcuts count]);
+    NSDebugLLog(@"gwcomp", @"GlobalShortcuts: Saved %lu shortcuts to defaults and posted distributed notification", (unsigned long)[globalShortcuts count]);
     
     return YES;
 }
@@ -701,7 +701,7 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
     [capturedModifiers removeAllObjects];
     
     // Temporarily disable all global shortcuts to avoid conflicts
-    NSLog(@"GlobalShortcuts: Sending temporary disable notification");
+    NSDebugLLog(@"gwcomp", @"GlobalShortcuts: Sending temporary disable notification");
     [[NSDistributedNotificationCenter defaultCenter] 
         postNotificationName:@"GSGlobalShortcutsTemporaryDisable"
                       object:@"GlobalShortcuts"
@@ -724,7 +724,7 @@ NSArray *parseKeyComboInPrefPane(NSString *keyCombo) {
     [setButton setEnabled:YES];
     
     // Re-enable all global shortcuts
-    NSLog(@"GlobalShortcuts: Sending re-enable notification");
+    NSDebugLLog(@"gwcomp", @"GlobalShortcuts: Sending re-enable notification");
     [[NSDistributedNotificationCenter defaultCenter] 
         postNotificationName:@"GSGlobalShortcutsReEnable"
                       object:@"GlobalShortcuts"

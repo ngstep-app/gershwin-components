@@ -20,7 +20,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"BhyveConfigurationStep: init");
+        NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: init");
         [self setupView];
     }
     return self;
@@ -28,7 +28,7 @@
 
 - (void)setupView
 {
-    NSLog(@"BhyveConfigurationStep: setupView");
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: setupView");
     
     // Match installer card inner area (approx 354x230 for more fields)
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 230)];
@@ -226,7 +226,7 @@
 - (void)vmNameChanged:(id)sender
 {
     NSString *vmName = [_vmNameField stringValue];
-    NSLog(@"BhyveConfigurationStep: VM name changed to: %@", vmName);
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: VM name changed to: %@", vmName);
     if (_controller) {
         [_controller setVmName:vmName];
     }
@@ -236,7 +236,7 @@
 {
     NSInteger ramValue = [_ramSlider integerValue];
     [_ramLabel setStringValue:[NSString stringWithFormat:@"%ld", (long)ramValue]];
-    NSLog(@"BhyveConfigurationStep: RAM changed to: %ld MB", (long)ramValue);
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: RAM changed to: %ld MB", (long)ramValue);
     if (_controller) {
         [_controller setAllocatedRAM:ramValue];
     }
@@ -246,7 +246,7 @@
 {
     NSInteger cpuValue = [_cpuSlider integerValue];
     [_cpuLabel setStringValue:[NSString stringWithFormat:@"%ld", (long)cpuValue]];
-    NSLog(@"BhyveConfigurationStep: CPU changed to: %ld", (long)cpuValue);
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: CPU changed to: %ld", (long)cpuValue);
     if (_controller) {
         [_controller setAllocatedCPUs:cpuValue];
     }
@@ -256,7 +256,7 @@
 {
     NSInteger diskValue = [_diskSlider integerValue];
     [_diskLabel setStringValue:[NSString stringWithFormat:@"%ld", (long)diskValue]];
-    NSLog(@"BhyveConfigurationStep: Disk size changed to: %ld GB", (long)diskValue);
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: Disk size changed to: %ld GB", (long)diskValue);
     if (_controller) {
         [_controller setDiskSize:diskValue];
     }
@@ -266,7 +266,7 @@
 {
     BOOL vncEnabled = ([_vncCheckbox state] == NSOnState);
     [_vncPortField setEnabled:vncEnabled];
-    NSLog(@"BhyveConfigurationStep: VNC toggled: %@", vncEnabled ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: VNC toggled: %@", vncEnabled ? @"YES" : @"NO");
     if (_controller) {
         [_controller setEnableVNC:vncEnabled];
     }
@@ -279,7 +279,7 @@
         vncPort = 5900;
         [_vncPortField setStringValue:@"5900"];
     }
-    NSLog(@"BhyveConfigurationStep: VNC port changed to: %ld", (long)vncPort);
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: VNC port changed to: %ld", (long)vncPort);
     if (_controller) {
         [_controller setVncPort:vncPort];
     }
@@ -290,7 +290,7 @@
     id<NSMenuItem> selectedItem = [_vncSizePopup selectedItem];
     if (selectedItem && [selectedItem representedObject]) {
         NSString *sizeString = [selectedItem representedObject];
-        NSLog(@"BhyveConfigurationStep: VNC size changed to: %@", sizeString);
+        NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: VNC size changed to: %@", sizeString);
         if (_controller) {
             [_controller setVncWindowSize:sizeString];
         }
@@ -299,7 +299,7 @@
 
 - (void)populateVNCResolutions
 {
-    NSLog(@"BhyveConfigurationStep: populateVNCResolutions");
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: populateVNCResolutions");
     
     // Get host screen size to filter available resolutions
     NSScreen *mainScreen = [NSScreen mainScreen];
@@ -307,7 +307,7 @@
     CGFloat screenWidth = screenFrame.size.width;
     CGFloat screenHeight = screenFrame.size.height;
     
-    NSLog(@"BhyveConfigurationStep: Host screen size: %.0fx%.0f", screenWidth, screenHeight);
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: Host screen size: %.0fx%.0f", screenWidth, screenHeight);
     
     // Predefined VNC resolutions (must be smaller than host display)
     NSArray *allResolutions = @[
@@ -351,7 +351,7 @@
         [_vncSizePopup selectItemAtIndex:0];
     }
     
-    NSLog(@"BhyveConfigurationStep: Added %ld VNC resolution options", (long)[[_vncSizePopup itemArray] count]);
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: Added %ld VNC resolution options", (long)[[_vncSizePopup itemArray] count]);
 }
 
 - (void)networkChanged:(id)sender
@@ -372,7 +372,7 @@
             networkMode = @"bridge";
             break;
     }
-    NSLog(@"BhyveConfigurationStep: Network mode changed to: %@", networkMode);
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: Network mode changed to: %@", networkMode);
     if (_controller) {
         [_controller setNetworkMode:networkMode];
     }
@@ -393,7 +393,7 @@
             bootMode = @"bios";
             break;
     }
-    NSLog(@"BhyveConfigurationStep: Boot mode changed to: %@", bootMode);
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: Boot mode changed to: %@", bootMode);
     if (_controller) {
         [_controller setBootMode:bootMode];
     }
@@ -421,13 +421,13 @@
     // Can continue if VM name is set
     NSString *vmName = [_vmNameField stringValue];
     BOOL hasName = vmName && [vmName length] > 0;
-    NSLog(@"BhyveConfigurationStep: canContinue = %@", hasName ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: canContinue = %@", hasName ? @"YES" : @"NO");
     return hasName;
 }
 
 - (void)stepWillAppear
 {
-    NSLog(@"BhyveConfigurationStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: stepWillAppear");
     
     // Update UI with controller values
     if (_controller) {
@@ -470,12 +470,12 @@
 
 - (void)stepDidAppear
 {
-    NSLog(@"BhyveConfigurationStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: stepDidAppear");
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"BhyveConfigurationStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"BhyveConfigurationStep: stepWillDisappear");
 }
 
 @end

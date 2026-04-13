@@ -12,16 +12,16 @@
 int main(int argc, const char * argv[])
 {
     @autoreleasepool {
-        NSLog(@"=== STRUCT Serialization Detail Debug ===");
+        NSDebugLLog(@"gwcomp", @"=== STRUCT Serialization Detail Debug ===");
         
         // Create a simple struct
         NSArray *structData = @[@"test", @(123), @"end"];
-        NSLog(@"Input struct: %@", structData);
+        NSDebugLLog(@"gwcomp", @"Input struct: %@", structData);
         
         // Test signature generation first
         NSString *signature = [MBMessage signatureForArguments:@[structData]];
-        NSLog(@"Generated signature: '%@'", signature);
-        NSLog(@"Signature contains '(': %@", [signature containsString:@"("] ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"Generated signature: '%@'", signature);
+        NSDebugLLog(@"gwcomp", @"Signature contains '(': %@", [signature containsString:@"("] ? @"YES" : @"NO");
         
         // Create a message manually to control the signature
         MBMessage *message = [[MBMessage alloc] init];
@@ -33,19 +33,19 @@ int main(int argc, const char * argv[])
         message.arguments = @[structData];
         message.signature = @"(sus)"; // Force the signature
         
-        NSLog(@"Message signature: '%@'", message.signature);
-        NSLog(@"Message signature contains '(': %@", [message.signature containsString:@"("] ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"Message signature: '%@'", message.signature);
+        NSDebugLLog(@"gwcomp", @"Message signature contains '(': %@", [message.signature containsString:@"("] ? @"YES" : @"NO");
         
         // Let's test what happens during serialization
-        NSLog(@"About to serialize body...");
+        NSDebugLLog(@"gwcomp", @"About to serialize body...");
         
         // Check argument type
         id arg = [message.arguments objectAtIndex:0];
-        NSLog(@"Argument class: %@", [arg class]);
-        NSLog(@"Is NSArray: %@", [arg isKindOfClass:[NSArray class]] ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"Argument class: %@", [arg class]);
+        NSDebugLLog(@"gwcomp", @"Is NSArray: %@", [arg isKindOfClass:[NSArray class]] ? @"YES" : @"NO");
         
         [message release];
-        NSLog(@"\n=== Debug Complete ===");
+        NSDebugLLog(@"gwcomp", @"\n=== Debug Complete ===");
     }
     return 0;
 }

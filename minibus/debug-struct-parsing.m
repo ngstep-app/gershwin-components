@@ -12,11 +12,11 @@
 int main(int argc, const char * argv[])
 {
     @autoreleasepool {
-        NSLog(@"=== STRUCT Parsing Debug ===");
+        NSDebugLLog(@"gwcomp", @"=== STRUCT Parsing Debug ===");
         
         // Create a simple struct and serialize it
         NSArray *structData = @[@"test", @(123), @"end"];
-        NSLog(@"Input struct: %@", structData);
+        NSDebugLLog(@"gwcomp", @"Input struct: %@", structData);
         
         MBMessage *message = [MBMessage methodCallWithDestination:@"test.dest"
                                                              path:@"/test"
@@ -24,68 +24,68 @@ int main(int argc, const char * argv[])
                                                            member:@"TestMethod"
                                                         arguments:@[structData]];
         
-        NSLog(@"Message signature: '%@'", message.signature);
+        NSDebugLLog(@"gwcomp", @"Message signature: '%@'", message.signature);
         
         // Serialize it
         NSData *serialized = [message serialize];
-        NSLog(@"Serialized length: %lu bytes", [serialized length]);
+        NSDebugLLog(@"gwcomp", @"Serialized length: %lu bytes", [serialized length]);
         
         // Now let's manually debug the parsing
         MBMessage *parsed = [MBMessage parseFromData:serialized];
         if (parsed) {
-            NSLog(@"Parsed successfully");
-            NSLog(@"Parsed signature: '%@'", parsed.signature);
-            NSLog(@"Parsed arguments count: %lu", [parsed.arguments count]);
+            NSDebugLLog(@"gwcomp", @"Parsed successfully");
+            NSDebugLLog(@"gwcomp", @"Parsed signature: '%@'", parsed.signature);
+            NSDebugLLog(@"gwcomp", @"Parsed arguments count: %lu", [parsed.arguments count]);
             
             if ([parsed.arguments count] > 0) {
                 id arg = [parsed.arguments objectAtIndex:0];
-                NSLog(@"First argument class: %@", [arg class]);
+                NSDebugLLog(@"gwcomp", @"First argument class: %@", [arg class]);
                 if ([arg isKindOfClass:[NSArray class]]) {
                     NSArray *arr = (NSArray *)arg;
-                    NSLog(@"Parsed struct fields: %lu", [arr count]);
+                    NSDebugLLog(@"gwcomp", @"Parsed struct fields: %lu", [arr count]);
                     for (NSUInteger i = 0; i < [arr count]; i++) {
                         id field = [arr objectAtIndex:i];
-                        NSLog(@"  Field %lu: %@ (class: %@)", i, field, [field class]);
+                        NSDebugLLog(@"gwcomp", @"  Field %lu: %@ (class: %@)", i, field, [field class]);
                     }
                 }
             }
         } else {
-            NSLog(@"ERROR: Parsing failed");
+            NSDebugLLog(@"gwcomp", @"ERROR: Parsing failed");
         }
         
-        NSLog(@"\n=== Manual struct body parsing ===");
+        NSDebugLLog(@"gwcomp", @"\n=== Manual struct body parsing ===");
         
         // Let's manually parse just the body to see what happens
         NSData *bodyData = [message serializeBody];
-        NSLog(@"Body data: %lu bytes", [bodyData length]);
+        NSDebugLLog(@"gwcomp", @"Body data: %lu bytes", [bodyData length]);
         
         const uint8_t *bytes = [bodyData bytes];
-        NSLog(@"Body bytes:");
+        NSDebugLLog(@"gwcomp", @"Body bytes:");
         for (NSUInteger i = 0; i < [bodyData length]; i += 8) {
             NSMutableString *hexLine = [NSMutableString string];
             for (NSUInteger j = 0; j < 8 && i + j < [bodyData length]; j++) {
                 [hexLine appendFormat:@"%02x ", bytes[i + j]];
             }
-            NSLog(@"%04lx: %@", i, hexLine);
+            NSDebugLLog(@"gwcomp", @"%04lx: %@", i, hexLine);
         }
         
         // Parse arguments manually 
         NSString *signature = @"(sus)";
         NSArray *parsedArgs = [MBMessage parseArgumentsFromBodyData:bodyData signature:signature endianness:'l'];
-        NSLog(@"Manual parse result: %@", parsedArgs);
+        NSDebugLLog(@"gwcomp", @"Manual parse result: %@", parsedArgs);
         if ([parsedArgs count] > 0) {
             id arg = [parsedArgs objectAtIndex:0];
             if ([arg isKindOfClass:[NSArray class]]) {
                 NSArray *arr = (NSArray *)arg;
-                NSLog(@"Manual parsed struct fields: %lu", [arr count]);
+                NSDebugLLog(@"gwcomp", @"Manual parsed struct fields: %lu", [arr count]);
                 for (NSUInteger i = 0; i < [arr count]; i++) {
                     id field = [arr objectAtIndex:i];
-                    NSLog(@"  Manual field %lu: %@ (class: %@)", i, field, [field class]);
+                    NSDebugLLog(@"gwcomp", @"  Manual field %lu: %@ (class: %@)", i, field, [field class]);
                 }
             }
         }
         
-        NSLog(@"\n=== Debug Complete ===");
+        NSDebugLLog(@"gwcomp", @"\n=== Debug Complete ===");
     }
     return 0;
 }

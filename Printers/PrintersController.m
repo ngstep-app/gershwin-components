@@ -164,7 +164,7 @@ static void deviceCallback(const char *device_class,
     [ctx->devices addObject:device];
     [device release];
     
-    NSLog(@"[Printers] Discovered device: %s (%s)", device_info, device_uri);
+    NSDebugLLog(@"gwcomp", @"[Printers] Discovered device: %s (%s)", device_info, device_uri);
 }
 
 #pragma mark - PrintersController Implementation
@@ -184,11 +184,11 @@ static void deviceCallback(const char *device_class,
         
         // Check if CUPS is available
         cupsAvailable = [self isCupsAvailable];
-        NSLog(@"[Printers] Controller initialized, CUPS available: %@", cupsAvailable ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"[Printers] Controller initialized, CUPS available: %@", cupsAvailable ? @"YES" : @"NO");
         
         // Check if user is in lpadmin group
         userInLpadminGroup = [self isUserInLpadminGroup];
-        NSLog(@"[Printers] User in lpadmin group: %@", userInLpadminGroup ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"[Printers] User in lpadmin group: %@", userInLpadminGroup ? @"YES" : @"NO");
     }
     return self;
 }
@@ -282,7 +282,7 @@ static void deviceCallback(const char *device_class,
     // Get user info
     struct passwd *pwd = getpwuid(uid);
     if (!pwd) {
-        NSLog(@"[Printers] Warning: Could not get user info for UID %d", uid);
+        NSDebugLLog(@"gwcomp", @"[Printers] Warning: Could not get user info for UID %d", uid);
         return NO;
     }
     
@@ -292,7 +292,7 @@ static void deviceCallback(const char *device_class,
     // Get admin group info
     struct group *grp = getgrnam([adminGroupName UTF8String]);
     if (!grp) {
-        NSLog(@"[Printers] Warning: %@ group not found on system", adminGroupName);
+        NSDebugLLog(@"gwcomp", @"[Printers] Warning: %@ group not found on system", adminGroupName);
         return NO;
     }
     
@@ -596,7 +596,7 @@ static void deviceCallback(const char *device_class,
         return;
     }
     
-    NSLog(@"[Printers] Refreshing printer list...");
+    NSDebugLLog(@"gwcomp", @"[Printers] Refreshing printer list...");
     
     // Get all destinations (printers and classes)
     cups_dest_t *dests = NULL;
@@ -964,10 +964,10 @@ static void deviceCallback(const char *device_class,
                 ipp_status_t status = ippGetStatusCode(response);
                 if (status == IPP_OK) {
                     success = YES;
-                    NSLog(@"[Printers] Removed printer: %@", printerName);
+                    NSDebugLLog(@"gwcomp", @"[Printers] Removed printer: %@", printerName);
                     [statusLabel setStringValue:[NSString stringWithFormat:@"Printer \"%@\" removed", printerName]];
                 } else {
-                    NSLog(@"[Printers] Failed to remove printer: %s", ippErrorString(status));
+                    NSDebugLLog(@"gwcomp", @"[Printers] Failed to remove printer: %s", ippErrorString(status));
                 }
                 ippDelete(response);
             }
@@ -976,7 +976,7 @@ static void deviceCallback(const char *device_class,
         }
         
         if (!success) {
-            NSLog(@"[Printers] Failed to remove printer: %@", printerName);
+            NSDebugLLog(@"gwcomp", @"[Printers] Failed to remove printer: %@", printerName);
             [statusLabel setStringValue:@"Failed to remove printer. Add yourself to the 'lpadmin' group to manage printers."];
         }
         
@@ -1002,7 +1002,7 @@ static void deviceCallback(const char *device_class,
     if (dest) {
         cupsSetDefaultDest(printerName, NULL, num_dests, dests);
         
-        NSLog(@"[Printers] Set default printer: %@", [selectedPrinter name]);
+        NSDebugLLog(@"gwcomp", @"[Printers] Set default printer: %@", [selectedPrinter name]);
         [statusLabel setStringValue:[NSString stringWithFormat:@"\"%@\" is now the default printer", 
                                      [selectedPrinter displayName]]];
     }
@@ -1045,11 +1045,11 @@ static void deviceCallback(const char *device_class,
         if (response) {
             ipp_status_t status = ippGetStatusCode(response);
             if (status == IPP_OK) {
-                NSLog(@"[Printers] Enabled printer: %@", [selectedPrinter name]);
+                NSDebugLLog(@"gwcomp", @"[Printers] Enabled printer: %@", [selectedPrinter name]);
                 [statusLabel setStringValue:[NSString stringWithFormat:@"Printer \"%@\" enabled", 
                                              [selectedPrinter displayName]]];
             } else {
-                NSLog(@"[Printers] Failed to enable printer: %s", ippErrorString(status));
+                NSDebugLLog(@"gwcomp", @"[Printers] Failed to enable printer: %s", ippErrorString(status));
             }
             ippDelete(response);
         }
@@ -1083,11 +1083,11 @@ static void deviceCallback(const char *device_class,
         if (response) {
             ipp_status_t status = ippGetStatusCode(response);
             if (status == IPP_OK) {
-                NSLog(@"[Printers] Disabled printer: %@", [selectedPrinter name]);
+                NSDebugLLog(@"gwcomp", @"[Printers] Disabled printer: %@", [selectedPrinter name]);
                 [statusLabel setStringValue:[NSString stringWithFormat:@"Printer \"%@\" disabled", 
                                              [selectedPrinter displayName]]];
             } else {
-                NSLog(@"[Printers] Failed to disable printer: %s", ippErrorString(status));
+                NSDebugLLog(@"gwcomp", @"[Printers] Failed to disable printer: %s", ippErrorString(status));
             }
             ippDelete(response);
         }
@@ -1111,10 +1111,10 @@ static void deviceCallback(const char *device_class,
     
     // Cancel the job
     if (cupsCancelJob2(CUPS_HTTP_DEFAULT, printerName, jobId, 0) == 0) {
-        NSLog(@"[Printers] Cancelled job: %d", jobId);
+        NSDebugLLog(@"gwcomp", @"[Printers] Cancelled job: %d", jobId);
         [statusLabel setStringValue:[NSString stringWithFormat:@"Job %d cancelled", jobId]];
     } else {
-        NSLog(@"[Printers] Failed to cancel job: %d - %s", jobId, cupsLastErrorString());
+        NSDebugLLog(@"gwcomp", @"[Printers] Failed to cancel job: %d - %s", jobId, cupsLastErrorString());
         [statusLabel setStringValue:[NSString stringWithFormat:@"Failed to cancel job: %s", cupsLastErrorString()]];
     }
     
@@ -1146,11 +1146,11 @@ static void deviceCallback(const char *device_class,
         if (response) {
             ipp_status_t status = ippGetStatusCode(response);
             if (status == IPP_OK) {
-                NSLog(@"[Printers] %@ job: %d", isHeld ? @"Released" : @"Held", jobId);
+                NSDebugLLog(@"gwcomp", @"[Printers] %@ job: %d", isHeld ? @"Released" : @"Held", jobId);
                 [statusLabel setStringValue:[NSString stringWithFormat:@"Job %d %@", 
                                              jobId, isHeld ? @"released" : @"held"]];
             } else {
-                NSLog(@"[Printers] Failed to %@ job: %s", isHeld ? @"release" : @"hold", ippErrorString(status));
+                NSDebugLLog(@"gwcomp", @"[Printers] Failed to %@ job: %s", isHeld ? @"release" : @"hold", ippErrorString(status));
             }
             ippDelete(response);
         }
@@ -1401,7 +1401,7 @@ static void deviceCallback(const char *device_class,
     
     [deviceTable reloadData];
     
-    NSLog(@"[Printers] Discovery complete, found %lu devices", (unsigned long)[discoveredDevices count]);
+    NSDebugLLog(@"gwcomp", @"[Printers] Discovery complete, found %lu devices", (unsigned long)[discoveredDevices count]);
 }
 
 - (IBAction)confirmAddPrinter:(id)sender
@@ -1489,9 +1489,9 @@ static void deviceCallback(const char *device_class,
             ipp_status_t status = ippGetStatusCode(response);
             if (status == IPP_OK || status == IPP_OK_SUBST || status == IPP_OK_CONFLICT) {
                 success = YES;
-                NSLog(@"[Printers] Added printer: %@", printerName);
+                NSDebugLLog(@"gwcomp", @"[Printers] Added printer: %@", printerName);
             } else {
-                NSLog(@"[Printers] Failed to add printer: %s", ippErrorString(status));
+                NSDebugLLog(@"gwcomp", @"[Printers] Failed to add printer: %s", ippErrorString(status));
             }
             ippDelete(response);
         }

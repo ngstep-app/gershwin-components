@@ -26,7 +26,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"GSSelectionStep: init");
+        NSDebugLLog(@"gwcomp", @"GSSelectionStep: init");
         _items = [[NSMutableArray alloc] init];
         _stepTitle = @"Selection";
         _stepDescription = @"Please make a selection";
@@ -39,7 +39,7 @@
 
 - (void)setupView
 {
-    NSLog(@"GSSelectionStep: setupView");
+    NSDebugLLog(@"gwcomp", @"GSSelectionStep: setupView");
     
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 480, 360)];
     
@@ -123,7 +123,7 @@
 
 - (void)tableSelectionDidChange:(NSNotification *)notification
 {
-    NSLog(@"GSSelectionStep: tableSelectionDidChange");
+    NSDebugLLog(@"gwcomp", @"GSSelectionStep: tableSelectionDidChange");
     
     NSInteger selectedRow = [_tableView selectedRow];
     
@@ -177,18 +177,18 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"GSSelectionStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"GSSelectionStep: stepWillAppear");
     [self loadItems];
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"GSSelectionStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"GSSelectionStep: stepDidAppear");
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"GSSelectionStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"GSSelectionStep: stepWillDisappear");
 }
 
 - (void)requestNavigationUpdate
@@ -199,11 +199,11 @@
     }
     NSWindowController *wc = [window windowController];
     if ([wc isKindOfClass:[GSAssistantWindow class]]) {
-        NSLog(@"GSSelectionStep: requesting navigation button update");
+        NSDebugLLog(@"gwcomp", @"GSSelectionStep: requesting navigation button update");
         GSAssistantWindow *assistantWindow = (GSAssistantWindow *)wc;
         [assistantWindow updateNavigationButtons];
     } else {
-        NSLog(@"GSSelectionStep: could not find GSAssistantWindow to update navigation (wc=%@)", wc);
+        NSDebugLLog(@"gwcomp", @"GSSelectionStep: could not find GSAssistantWindow to update navigation (wc=%@)", wc);
     }
 }
 

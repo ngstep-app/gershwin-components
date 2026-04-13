@@ -75,7 +75,7 @@
             NSString *username = [creds objectForKey:@"username"];
             NSString *password = [creds objectForKey:@"password"];
             
-            NSLog(@"VNCPasswordPromptHelper: Received credentials from dialog - username: '%@' (length: %lu), password: %@ (length: %lu)",
+            NSDebugLLog(@"gwcomp", @"VNCPasswordPromptHelper: Received credentials from dialog - username: '%@' (length: %lu), password: %@ (length: %lu)",
                   username ? username : @"(nil)",
                   (unsigned long)[username length],
                   password && [password length] > 0 ? @"<provided>" : @"<empty>",
@@ -86,18 +86,18 @@
                 [_client setUsername:username];
                 [_client setPassword:password];
                 
-                NSLog(@"VNCPasswordPromptHelper: Stored in VNCClient - username: '%@', password: <provided>",
+                NSDebugLLog(@"gwcomp", @"VNCPasswordPromptHelper: Stored in VNCClient - username: '%@', password: <provided>",
                       [_client username]);
                 
                 self.result = @"OK";
             } else {
-                NSLog(@"VNCPasswordPromptHelper: ERROR - Empty credentials not stored (username: %lu chars, password: %lu chars)",
+                NSDebugLLog(@"gwcomp", @"VNCPasswordPromptHelper: ERROR - Empty credentials not stored (username: %lu chars, password: %lu chars)",
                       (unsigned long)[username length],
                       (unsigned long)[password length]);
                 self.result = nil;
             }
         } else {
-            NSLog(@"VNCPasswordPromptHelper: No credentials returned (user cancelled)");
+            NSDebugLLog(@"gwcomp", @"VNCPasswordPromptHelper: No credentials returned (user cancelled)");
             self.result = nil;
         }
     }
@@ -175,7 +175,7 @@ static VNCClient *g_currentVNCClient = nil;
         return YES;
     }
     
-    NSLog(@"VNCClient: libvncclient not found. Install libvncserver package.");
+    NSDebugLLog(@"gwcomp", @"VNCClient: libvncclient not found. Install libvncserver package.");
     return NO;
 }
 
@@ -197,13 +197,13 @@ static char *VNCGetPassword(rfbClient *client)
     
     // In headless mode, don't prompt
     if ([vncClient headlessMode]) {
-        NSLog(@"VNCClient: ERROR - Password required but running in headless mode (CLI)");
-        NSLog(@"VNCClient: Please provide --password on the command line");
+        NSDebugLLog(@"gwcomp", @"VNCClient: ERROR - Password required but running in headless mode (CLI)");
+        NSDebugLLog(@"gwcomp", @"VNCClient: Please provide --password on the command line");
         return NULL;
     }
     
     // Otherwise prompt the user on main thread
-    NSLog(@"VNCClient: Server requires password, prompting user...");
+    NSDebugLLog(@"gwcomp", @"VNCClient: Server requires password, prompting user...");
     
     VNCPasswordPromptHelper *helper = [[VNCPasswordPromptHelper alloc] initWithClient:vncClient];
     [helper performSelectorOnMainThread:@selector(promptPassword) withObject:nil waitUntilDone:YES];
@@ -215,11 +215,11 @@ static char *VNCGetPassword(rfbClient *client)
         // Store the password for future use
         [vncClient setPassword:password];
         char *result = strdup([password UTF8String]);
-        NSLog(@"VNCClient: Password provided (length: %lu)", (unsigned long)[password length]);
+        NSDebugLLog(@"gwcomp", @"VNCClient: Password provided (length: %lu)", (unsigned long)[password length]);
         return result;
     }
     
-    NSLog(@"VNCClient: No password provided or empty password");
+    NSDebugLLog(@"gwcomp", @"VNCClient: No password provided or empty password");
     return NULL;
 }
 
@@ -232,7 +232,7 @@ static rfbCredential *VNCGetCredential(rfbClient *client, int credentialType)
     }
     
     if (credentialType == rfbCredentialTypeUser) {
-        NSLog(@"VNCClient: Server requires username/password credentials");
+        NSDebugLLog(@"gwcomp", @"VNCClient: Server requires username/password credentials");
         
         // Check if we already have credentials - retain them to ensure they stay valid
         NSString *username = [[vncClient username] retain];
@@ -244,19 +244,19 @@ static rfbCredential *VNCGetCredential(rfbClient *client, int credentialType)
             [password release];
             
             if ([vncClient headlessMode]) {
-                NSLog(@"VNCClient: ERROR - Credentials required but running in headless mode (CLI)");
-                NSLog(@"VNCClient: Please provide --user and --password on the command line");
+                NSDebugLLog(@"gwcomp", @"VNCClient: ERROR - Credentials required but running in headless mode (CLI)");
+                NSDebugLLog(@"gwcomp", @"VNCClient: Please provide --user and --password on the command line");
                 return NULL;
             }
             
-            NSLog(@"VNCClient: Prompting user for credentials...");
+            NSDebugLLog(@"gwcomp", @"VNCClient: Prompting user for credentials...");
             
             VNCPasswordPromptHelper *helper = [[VNCPasswordPromptHelper alloc] initWithClient:vncClient];
             [helper performSelectorOnMainThread:@selector(promptCredentials) withObject:nil waitUntilDone:YES];
             
             // Check if user actually provided credentials
             if (![helper result]) {
-                NSLog(@"VNCClient: User cancelled or provided invalid credentials");
+                NSDebugLLog(@"gwcomp", @"VNCClient: User cancelled or provided invalid credentials");
                 [helper release];
                 return NULL;
             }
@@ -267,7 +267,7 @@ static rfbCredential *VNCGetCredential(rfbClient *client, int credentialType)
             password = [[vncClient password] retain];
         }
         
-        NSLog(@"VNCGetCredential: Retrieved from VNCClient - username: '%@' (length: %lu), password: %@ (length: %lu)",
+        NSDebugLLog(@"gwcomp", @"VNCGetCredential: Retrieved from VNCClient - username: '%@' (length: %lu), password: %@ (length: %lu)",
               username ? username : @"(nil)",
               (unsigned long)[username length],
               password && [password length] > 0 ? @"<provided>" : @"<empty>",
@@ -275,19 +275,19 @@ static rfbCredential *VNCGetCredential(rfbClient *client, int credentialType)
         
         // Defensive check - must have both valid credentials
         if (!username || [username length] == 0) {
-            NSLog(@"VNCClient: ERROR - Empty username! Apple Remote Desktop requires both username AND password.");
+            NSDebugLLog(@"gwcomp", @"VNCClient: ERROR - Empty username! Apple Remote Desktop requires both username AND password.");
             [username release];
             [password release];
             return NULL;
         }
         if (!password || [password length] == 0) {
-            NSLog(@"VNCClient: ERROR - Empty password!");
+            NSDebugLLog(@"gwcomp", @"VNCClient: ERROR - Empty password!");
             [username release];
             [password release];
             return NULL;
         }
         
-        NSLog(@"VNCGetCredential: Creating rfbCredential with username='%@', password=<provided>", username);
+        NSDebugLLog(@"gwcomp", @"VNCGetCredential: Creating rfbCredential with username='%@', password=<provided>", username);
         
         // Get C strings from NSString - these are temporary pointers, so strdup immediately
         const char *usernameC = [username UTF8String];
@@ -295,7 +295,7 @@ static rfbCredential *VNCGetCredential(rfbClient *client, int credentialType)
         
         rfbCredential *cred = (rfbCredential *)malloc(sizeof(rfbCredential));
         if (!cred) {
-            NSLog(@"VNCClient: ERROR - Failed to allocate credential struct");
+            NSDebugLLog(@"gwcomp", @"VNCClient: ERROR - Failed to allocate credential struct");
             [username release];
             [password release];
             return NULL;
@@ -310,19 +310,19 @@ static rfbCredential *VNCGetCredential(rfbClient *client, int credentialType)
         [password release];
         
         if (!cred->userCredential.username || !cred->userCredential.password) {
-            NSLog(@"VNCClient: ERROR - Failed to duplicate credential strings");
+            NSDebugLLog(@"gwcomp", @"VNCClient: ERROR - Failed to duplicate credential strings");
             if (cred->userCredential.username) free(cred->userCredential.username);
             if (cred->userCredential.password) free(cred->userCredential.password);
             free(cred);
             return NULL;
         }
         
-        NSLog(@"VNCGetCredential: Returning credential struct (username ptr: %p, password ptr: %p)",
+        NSDebugLLog(@"gwcomp", @"VNCGetCredential: Returning credential struct (username ptr: %p, password ptr: %p)",
               cred->userCredential.username, cred->userCredential.password);
         return cred;
     }
     
-    NSLog(@"VNCClient: Unsupported credential type: %d", credentialType);
+    NSDebugLLog(@"gwcomp", @"VNCClient: Unsupported credential type: %d", credentialType);
     return NULL;
 }
 
@@ -334,7 +334,7 @@ static rfbBool VNCMallocFrameBuffer(rfbClient *client)
         return FALSE;
     }
     
-    NSLog(@"VNCClient: Framebuffer size: %dx%d, depth: %d, bpp: %d",
+    NSDebugLLog(@"gwcomp", @"VNCClient: Framebuffer size: %dx%d, depth: %d, bpp: %d",
           client->width, client->height, client->format.depth, client->format.bitsPerPixel);
     
     // Free old framebuffer
@@ -355,13 +355,13 @@ static rfbBool VNCMallocFrameBuffer(rfbClient *client)
     
     vncClient->_framebuffer = (unsigned char *)malloc(bufferSize);
     if (!vncClient->_framebuffer) {
-        NSLog(@"VNCClient: Failed to allocate framebuffer of size %zu", bufferSize);
+        NSDebugLLog(@"gwcomp", @"VNCClient: Failed to allocate framebuffer of size %zu", bufferSize);
         return FALSE;
     }
     
     client->frameBuffer = vncClient->_framebuffer;
     
-    NSLog(@"VNCClient: Using server pixel format - red:%d green:%d blue:%d",
+    NSDebugLLog(@"gwcomp", @"VNCClient: Using server pixel format - red:%d green:%d blue:%d",
           client->format.redShift, client->format.greenShift, client->format.blueShift);
     
     // Notify delegate on main thread
@@ -400,7 +400,7 @@ static void VNCLog(const char *format, ...)
     
     char buffer[1024];
     vsnprintf(buffer, sizeof(buffer), format, args);
-    NSLog(@"VNCClient libvncclient: %s", buffer);
+    NSDebugLLog(@"gwcomp", @"VNCClient libvncclient: %s", buffer);
     
     va_end(args);
 }
@@ -413,7 +413,7 @@ static void VNCErr(const char *format, ...)
     
     char buffer[1024];
     vsnprintf(buffer, sizeof(buffer), format, args);
-    NSLog(@"VNCClient libvncclient ERROR: %s", buffer);
+    NSDebugLLog(@"gwcomp", @"VNCClient libvncclient ERROR: %s", buffer);
     
     va_end(args);
     
@@ -456,7 +456,7 @@ static void VNCErr(const char *format, ...)
 - (BOOL)connectToHost:(NSString *)hostname port:(NSInteger)port password:(NSString *)password
 {
     if (_connecting || _connected) {
-        NSLog(@"VNCClient: Already connecting or connected");
+        NSDebugLLog(@"gwcomp", @"VNCClient: Already connecting or connected");
         return NO;
     }
     
@@ -487,7 +487,7 @@ static void VNCErr(const char *format, ...)
 
 - (void)disconnect
 {
-    NSLog(@"VNCClient: Disconnecting...");
+    NSDebugLLog(@"gwcomp", @"VNCClient: Disconnecting...");
     
     _shouldStop = YES;
     _connecting = NO;
@@ -535,7 +535,7 @@ static void VNCErr(const char *format, ...)
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     
-    NSLog(@"VNCClient: Starting connection to %@:%ld", _hostname, (long)_port);
+    NSDebugLLog(@"gwcomp", @"VNCClient: Starting connection to %@:%ld", _hostname, (long)_port);
     
     // Initialize libvncclient logging
     rfbClientLog = VNCLog;
@@ -544,7 +544,7 @@ static void VNCErr(const char *format, ...)
     // Enable verbose libvncclient logging
     rfbEnableClientLogging = TRUE;
     
-    NSLog(@"VNCClient: libvncclient verbose logging enabled");
+    NSDebugLLog(@"gwcomp", @"VNCClient: libvncclient verbose logging enabled");
     
     // Set global reference for error callback to access
     g_currentVNCClient = self;
@@ -558,17 +558,17 @@ static void VNCErr(const char *format, ...)
     
     for (int attempt = 0; attempt < 3; attempt++) {
         if (_shouldStop) {
-            NSLog(@"VNCClient: Connection cancelled before attempt %d", attempt + 1);
+            NSDebugLLog(@"gwcomp", @"VNCClient: Connection cancelled before attempt %d", attempt + 1);
             [self notifyConnectionResult:NO error:@"Connection cancelled"];
             goto cleanup;
         }
         
-        NSLog(@"VNCClient: Connection attempt %d/3", attempt + 1);
+        NSDebugLLog(@"gwcomp", @"VNCClient: Connection attempt %d/3", attempt + 1);
         
         // Create a fresh client for each attempt
         client = rfbGetClient(8, 3, 4);
         if (!client) {
-            NSLog(@"VNCClient: Failed to create RFB client");
+            NSDebugLLog(@"gwcomp", @"VNCClient: Failed to create RFB client");
             continue;
         }
         
@@ -596,14 +596,14 @@ static void VNCErr(const char *format, ...)
         client->serverHost = strdup([_hostname UTF8String]);
         client->serverPort = (int)_port;
         
-        NSLog(@"VNCClient: Attempting to connect to %s:%d", client->serverHost, client->serverPort);
+        NSDebugLLog(@"gwcomp", @"VNCClient: Attempting to connect to %s:%d", client->serverHost, client->serverPort);
         
         // rfbInitClient returns 0 on failure AND frees the client!
         // So after a failed call, client is invalid
         connectResult = rfbInitClient(client, NULL, NULL);
         
         if (connectResult) {
-            NSLog(@"VNCClient: Connection successful on attempt %d", attempt + 1);
+            NSDebugLLog(@"gwcomp", @"VNCClient: Connection successful on attempt %d", attempt + 1);
             _rfbClient = client;
             break;
         }
@@ -611,12 +611,12 @@ static void VNCErr(const char *format, ...)
         // rfbInitClient already freed the client on failure, so set to NULL
         client = NULL;
         
-        NSLog(@"VNCClient: Connection attempt %d failed, waiting before retry...", attempt + 1);
+        NSDebugLLog(@"gwcomp", @"VNCClient: Connection attempt %d failed, waiting before retry...", attempt + 1);
         
         // If we have stored credentials (meaning authentication succeeded but connection failed for another reason),
         // don't retry - the issue is likely not authentication-related
         if (_username && _password) {
-            NSLog(@"VNCClient: Have stored credentials - authentication likely succeeded but connection failed. Not retrying.");
+            NSDebugLLog(@"gwcomp", @"VNCClient: Have stored credentials - authentication likely succeeded but connection failed. Not retrying.");
             break;
         }
         
@@ -624,29 +624,29 @@ static void VNCErr(const char *format, ...)
             // Only clear credentials if connection attempt failed AND we don't have pre-set credentials
             // If credentials were provided (e.g., via command line), keep them for retry
             if (!_username && !_password) {
-                NSLog(@"VNCClient: No pre-set credentials, will prompt again on retry");
+                NSDebugLLog(@"gwcomp", @"VNCClient: No pre-set credentials, will prompt again on retry");
             }
             
             // Use autorelease pool around sleep to ensure modal dialog cleanup
-            NSLog(@"VNCClient: Sleeping 2 seconds before retry %d...", attempt + 2);
+            NSDebugLLog(@"gwcomp", @"VNCClient: Sleeping 2 seconds before retry %d...", attempt + 2);
             {
                 NSAutoreleasePool *sleepPool = [[NSAutoreleasePool alloc] init];
                 sleep(2);
                 [sleepPool drain];
             }
-            NSLog(@"VNCClient: Woke up, preparing for retry %d", attempt + 2);
+            NSDebugLLog(@"gwcomp", @"VNCClient: Woke up, preparing for retry %d", attempt + 2);
         }
     }
     
     if (!connectResult || !_rfbClient) {
-        NSLog(@"VNCClient: All connection attempts failed");
+        NSDebugLLog(@"gwcomp", @"VNCClient: All connection attempts failed");
         [self notifyConnectionResult:NO error:@"Failed to connect to VNC server. The server may use unsupported authentication (e.g., Apple Remote Desktop)."];
         goto cleanup;
     }
     
     client = (rfbClient *)_rfbClient;
     
-    NSLog(@"VNCClient: Successfully connected to %@:%ld", _hostname, (long)_port);
+    NSDebugLLog(@"gwcomp", @"VNCClient: Successfully connected to %@:%ld", _hostname, (long)_port);
     _connected = YES;
     _connecting = NO;
     
@@ -671,14 +671,14 @@ static void VNCErr(const char *format, ...)
             if (errno == EINTR) {
                 continue;
             }
-            NSLog(@"VNCClient: select() error: %s", strerror(errno));
+            NSDebugLLog(@"gwcomp", @"VNCClient: select() error: %s", strerror(errno));
             break;
         }
         
         if (result > 0 && FD_ISSET(client->sock, &readfds)) {
             int msgResult = HandleRFBServerMessage(client);
             if (msgResult == FALSE) {
-                NSLog(@"VNCClient: HandleRFBServerMessage failed");
+                NSDebugLLog(@"gwcomp", @"VNCClient: HandleRFBServerMessage failed");
                 break;
             }
         }
@@ -687,7 +687,7 @@ static void VNCErr(const char *format, ...)
     }
     
 cleanup:
-    NSLog(@"VNCClient: Connection thread ending");
+    NSDebugLLog(@"gwcomp", @"VNCClient: Connection thread ending");
     
     // Clear global reference
     if (g_currentVNCClient == self) {

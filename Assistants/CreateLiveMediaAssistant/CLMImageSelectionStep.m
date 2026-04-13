@@ -31,19 +31,19 @@
     }
     NSWindowController *wc = [window windowController];
     if ([wc isKindOfClass:[GSAssistantWindow class]]) {
-        NSLog(@"CLMImageSelectionStep: requesting navigation button update");
+        NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: requesting navigation button update");
         GSAssistantWindow *assistantWindow = (GSAssistantWindow *)wc;
         // Always call the public method - it should handle layout-specific logic
         [assistantWindow updateNavigationButtons];
     } else {
-        NSLog(@"CLMImageSelectionStep: could not find GSAssistantWindow to update navigation (wc=%@)", wc);
+        NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: could not find GSAssistantWindow to update navigation (wc=%@)", wc);
     }
 }
 
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"CLMImageSelectionStep: init");
+        NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: init");
         _availableReleases = [[NSMutableArray alloc] init];
         _isLoading = NO;
         [self setupView];
@@ -53,7 +53,7 @@
 
 - (void)setupView
 {
-    NSLog(@"CLMImageSelectionStep: setupView");
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: setupView");
     
     // Fit step view to installer card inner area
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
@@ -187,7 +187,7 @@
 
 - (void)repositoryChanged:(id)sender
 {
-    NSLog(@"CLMImageSelectionStep: repositoryChanged");
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: repositoryChanged");
     
     NSInteger selectedIndex = [_repositoryPopUp indexOfSelectedItem];
     
@@ -288,13 +288,13 @@
 
 - (void)prereleaseChanged:(id)sender
 {
-    NSLog(@"CLMImageSelectionStep: prereleaseChanged");
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: prereleaseChanged");
     [self repositoryChanged:nil]; // Reload current repository with new prerelease setting
 }
 
 - (void)loadReleasesFromURL:(NSString *)repoURL
 {
-    NSLog(@"CLMImageSelectionStep: loadReleasesFromURL: %@", repoURL);
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: loadReleasesFromURL: %@", repoURL);
     
     if (_isLoading) {
         return;
@@ -329,7 +329,7 @@
 
 - (void)loadLocalFile:(NSString *)filePath
 {
-    NSLog(@"CLMImageSelectionStep: loadLocalFile: %@", filePath);
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: loadLocalFile: %@", filePath);
     
     [_availableReleases removeAllObjects];
     
@@ -363,7 +363,7 @@
 
 - (void)finishLoadingWithAssets:(NSArray *)assets
 {
-    NSLog(@"CLMImageSelectionStep: finishLoadingWithAssets: %lu", (unsigned long)[assets count]);
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: finishLoadingWithAssets: %lu", (unsigned long)[assets count]);
     
     _isLoading = NO;
     [_loadingIndicator stopAnimation:nil];
@@ -391,7 +391,7 @@
 
 - (void)showError:(NSString *)message
 {
-    NSLog(@"CLMImageSelectionStep: showError: %@", message);
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: showError: %@", message);
     
     _isLoading = NO;
     [_loadingIndicator stopAnimation:nil];
@@ -410,7 +410,7 @@
 
 - (void)tableSelectionChanged:(NSNotification *)notification
 {
-    NSLog(@"CLMImageSelectionStep: tableSelectionChanged");
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: tableSelectionChanged");
     
     NSInteger selectedRow = [_releaseTableView selectedRow];
     
@@ -478,32 +478,32 @@
 
 - (BOOL)canContinue
 {
-    NSLog(@"CLMImageSelectionStep: canContinue called");
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: canContinue called");
     NSIndexSet *selectedIndexes = [_releaseTableView selectedRowIndexes];
-    NSLog(@"CLMImageSelectionStep: selectedRowIndexes count = %lu", (unsigned long)[selectedIndexes count]);
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: selectedRowIndexes count = %lu", (unsigned long)[selectedIndexes count]);
     if ([selectedIndexes count] == 1) {
         NSInteger selectedRow = [_releaseTableView selectedRow];
-        NSLog(@"CLMImageSelectionStep: selectedRow = %ld", (long)selectedRow);
+        NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: selectedRow = %ld", (long)selectedRow);
         if (selectedRow >= 0 && selectedRow < (NSInteger)[_availableReleases count]) {
             NSDictionary *selectedRelease = [_availableReleases objectAtIndex:selectedRow];
             NSNumber *size = [selectedRelease objectForKey:@"size"];
             NSString *url = [selectedRelease objectForKey:@"url"];
             NSString *name = [selectedRelease objectForKey:@"name"];
-            NSLog(@"CLMImageSelectionStep: name=%@ url=%@ size=%@", name, url, size);
+            NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: name=%@ url=%@ size=%@", name, url, size);
             if ([url length] > 0 && [size longLongValue] > 0 &&
                 ([name hasSuffix:@".iso"] || [name hasSuffix:@".img"])) {
-                NSLog(@"CLMImageSelectionStep: canContinue = YES");
+                NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: canContinue = YES");
                 return YES;
             }
         }
     }
-    NSLog(@"CLMImageSelectionStep: canContinue = NO");
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: canContinue = NO");
     return NO;
 }
 
 - (void)stepWillAppear
 {
-    NSLog(@"CLMImageSelectionStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: stepWillAppear");
     
     // Ensure navigation buttons start with correct state (should be disabled if no selection)
     [self requestNavigationUpdate];
@@ -519,12 +519,12 @@
 
 - (void)stepDidAppear
 {
-    NSLog(@"CLMImageSelectionStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: stepDidAppear");
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"CLMImageSelectionStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"CLMImageSelectionStep: stepWillDisappear");
 }
 
 @end

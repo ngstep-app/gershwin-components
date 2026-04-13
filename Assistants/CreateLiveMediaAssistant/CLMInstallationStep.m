@@ -38,19 +38,19 @@
     }
     NSWindowController *wc = [window windowController];
     if ([wc isKindOfClass:[GSAssistantWindow class]]) {
-        NSLog(@"CLMInstallationStep: requesting navigation button update");
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: requesting navigation button update");
         GSAssistantWindow *assistantWindow = (GSAssistantWindow *)wc;
         // Always call the public method - it should handle layout-specific logic
         [assistantWindow updateNavigationButtons];
     } else {
-        NSLog(@"CLMInstallationStep: could not find GSAssistantWindow to update navigation (wc=%@)", wc);
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: could not find GSAssistantWindow to update navigation (wc=%@)", wc);
     }
 }
 
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"CLMInstallationStep: init");
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: init");
     _installationInProgress = NO;
     _installationCompleted = NO;
     _installationSuccessful = NO;
@@ -64,14 +64,14 @@
 
 - (void)dealloc
 {
-    NSLog(@"CLMInstallationStep: dealloc");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: dealloc");
     [self stopStallDetectionTimer];
     [self stopDDProgressTimer];
 }
 
 - (void)setupView
 {
-    NSLog(@"CLMInstallationStep: setupView");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: setupView");
     
     // Fit step view to installer card inner area
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
@@ -123,13 +123,13 @@
 
 - (void)startInstallation
 {
-    NSLog(@"CLMInstallationStep: startInstallation");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: startInstallation");
     
     // Stop disk polling to prevent interference during installation
     [_controller stopDiskPolling];
     
     if (_installationInProgress) {
-        NSLog(@"CLMInstallationStep: Installation already in progress");
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Installation already in progress");
         return;
     }
     
@@ -191,7 +191,7 @@
     if (currentProgress - lastProgress >= 1.0 || currentProgress >= 99.0 || lastProgress < 0 || 
         (currentTime - lastUpdateTime >= 2.0)) { // Also update every 2 seconds
         
-        NSLog(@"CLMInstallationStep: downloadProgressChanged: %.2f%% (%lld/%lld)", currentProgress, bytesReceived, totalBytes);
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: downloadProgressChanged: %.2f%% (%lld/%lld)", currentProgress, bytesReceived, totalBytes);
         lastProgress = currentProgress;
         lastUpdateTime = currentTime;
         lastBytesReceived = bytesReceived;
@@ -243,13 +243,13 @@
         NSTimeInterval timeSinceSignificantProgress = currentTime - lastSignificantProgressTime;
         
         if (timeSinceSignificantProgress > 60.0) { // 1 minute without significant progress at 99%+
-            NSLog(@"CLMInstallationStep: Near-completion stall detected - %.2f%% complete, %.0f seconds without significant progress", 
+            NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Near-completion stall detected - %.2f%% complete, %.0f seconds without significant progress", 
                   currentProgress, timeSinceSignificantProgress);
-            NSLog(@"CLMInstallationStep: Last significant progress was %lld bytes ago", bytesReceived - lastBytesReceived);
+            NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Last significant progress was %lld bytes ago", bytesReceived - lastBytesReceived);
             
             // Force completion if we're extremely close
             if (currentProgress >= 99.5 || timeSinceSignificantProgress > 120.0) {
-                NSLog(@"CLMInstallationStep: Forcing download completion due to near-completion stall");
+                NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Forcing download completion due to near-completion stall");
                 
                 // Check if we actually have all the bytes before forcing success
                 if (_downloader) {
@@ -257,24 +257,24 @@
                     long long totalBytes = [_downloader totalBytes];
                     float actualProgress = totalBytes > 0 ? ((float)receivedBytes / (float)totalBytes) * 100.0 : 0.0;
                     
-                    NSLog(@"CLMInstallationStep: Byte verification - received: %lld, total: %lld, actual progress: %.2f%%", 
+                    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Byte verification - received: %lld, total: %lld, actual progress: %.2f%%", 
                           receivedBytes, totalBytes, actualProgress);
                     
                     if (actualProgress >= 99.5) {
-                        NSLog(@"CLMInstallationStep: Byte verification passed (%.2f%%), forcing successful completion", actualProgress);
+                        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Byte verification passed (%.2f%%), forcing successful completion", actualProgress);
                         [self stopStallDetectionTimer];
                         [_progressBar setDoubleValue:100.0];
                         [_progressLabel setStringValue:NSLocalizedString(@"Download completed - Writing to disk...", @"")];
                         [self installationCompletedWithSuccess:YES error:nil];
                     } else {
-                        NSLog(@"CLMInstallationStep: Byte verification failed (%.2f%%), treating as incomplete download", actualProgress);
+                        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Byte verification failed (%.2f%%), treating as incomplete download", actualProgress);
                         [self stopStallDetectionTimer];
                         NSString *errorMsg = [NSString stringWithFormat:@"Download incomplete - only %.1f%% received (%lld of %lld bytes)", 
                                             actualProgress, receivedBytes, totalBytes];
                         [self installationCompletedWithSuccess:NO error:errorMsg];
                     }
                 } else {
-                    NSLog(@"CLMInstallationStep: No downloader available for byte verification, forcing completion anyway");
+                    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: No downloader available for byte verification, forcing completion anyway");
                     [self stopStallDetectionTimer];
                     [_progressBar setDoubleValue:100.0];
                     [_progressLabel setStringValue:NSLocalizedString(@"Download completed - Writing to disk...", @"")];
@@ -288,7 +288,7 @@
 
 - (void)downloadCompleted:(BOOL)success error:(NSString *)error
 {
-    NSLog(@"CLMInstallationStep: downloadCompleted: success=%d error=%@", success, error);
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: downloadCompleted: success=%d error=%@", success, error);
     
     // Stop stall detection timer
     [self stopStallDetectionTimer];
@@ -299,21 +299,21 @@
         long long receivedBytes = [_downloader receivedBytes];
         long long totalBytes = [_downloader totalBytes];
         
-        NSLog(@"CLMInstallationStep: Download completion check - received: %lld, total: %lld", receivedBytes, totalBytes);
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Download completion check - received: %lld, total: %lld", receivedBytes, totalBytes);
         
         if (totalBytes > 0 && receivedBytes < totalBytes) {
             long long missingBytes = totalBytes - receivedBytes;
             float percentComplete = ((float)receivedBytes / (float)totalBytes) * 100.0;
             
-            NSLog(@"CLMInstallationStep: Download incomplete - missing %lld bytes (%.2f%% complete)", missingBytes, percentComplete);
+            NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Download incomplete - missing %lld bytes (%.2f%% complete)", missingBytes, percentComplete);
             
             // If we're very close to completion (missing less than 0.5%), consider it successful
             if (percentComplete >= 99.5) {
-                NSLog(@"CLMInstallationStep: Download is %.2f%% complete, considering it successful despite missing %lld bytes", percentComplete, missingBytes);
+                NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Download is %.2f%% complete, considering it successful despite missing %lld bytes", percentComplete, missingBytes);
                 success = YES;
                 error = nil;
             } else {
-                NSLog(@"CLMInstallationStep: Download significantly incomplete (%.2f%%), treating as failure", percentComplete);
+                NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Download significantly incomplete (%.2f%%), treating as failure", percentComplete);
                 success = NO;
                 error = [NSString stringWithFormat:@"Download incomplete - received %lld of %lld bytes (%.1f%%)", receivedBytes, totalBytes, percentComplete];
             }
@@ -333,7 +333,7 @@
 
 - (void)installationCompletedWithSuccess:(BOOL)success error:(NSString *)error
 {
-    NSLog(@"CLMInstallationStep: installationCompletedWithSuccess: %d", success);
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: installationCompletedWithSuccess: %d", success);
     
     _installationInProgress = NO;
     _installationCompleted = YES;
@@ -385,7 +385,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"CLMInstallationStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: stepWillAppear");
     
     // Failsafe: Ensure disk polling is stopped when installation begins
     [_controller stopDiskPolling];
@@ -393,7 +393,7 @@
 
 - (void)stepDidAppear
 {
-    NSLog(@"CLMInstallationStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: stepDidAppear");
     
     // Start installation automatically when step appears
     // Use performSelector:withObject:afterDelay: for better reliability
@@ -403,14 +403,14 @@
 
 - (void)stepWillDisappear
 {
-    NSLog(@"CLMInstallationStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: stepWillDisappear");
 }
 
 #pragma mark - Stall Detection
 
 - (void)startStallDetectionTimer
 {
-    NSLog(@"CLMInstallationStep: Starting stall detection timer");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Starting stall detection timer");
     [self stopStallDetectionTimer];
     
     _stallDetectionTimer = [NSTimer scheduledTimerWithTimeInterval:10.0  // Check every 10 seconds
@@ -425,7 +425,7 @@
 - (void)stopStallDetectionTimer
 {
     if (_stallDetectionTimer) {
-        NSLog(@"CLMInstallationStep: Stopping stall detection timer");
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Stopping stall detection timer");
         [_stallDetectionTimer invalidate];
         _stallDetectionTimer = nil;
     }
@@ -441,12 +441,12 @@
     NSTimeInterval currentTime = [[NSDate date] timeIntervalSince1970];
     NSTimeInterval timeSinceLastProgress = currentTime - _lastProgressTime;
     
-    NSLog(@"CLMInstallationStep: Stall check - time since last progress: %.1f seconds (last progress: %.1f%%)", 
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Stall check - time since last progress: %.1f seconds (last progress: %.1f%%)", 
           timeSinceLastProgress, _lastProgressValue);
     
     // If we're at high completion percentage and haven't made progress for a while, force completion
     if (_lastProgressValue >= 99.0 && timeSinceLastProgress > 120.0) { // 2 minutes at 99%+
-        NSLog(@"CLMInstallationStep: Download stalled at %.1f%% for %.0f seconds, checking bytes before forcing completion", 
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Download stalled at %.1f%% for %.0f seconds, checking bytes before forcing completion", 
               _lastProgressValue, timeSinceLastProgress);
         
         // Verify we actually have the bytes before forcing completion
@@ -455,24 +455,24 @@
             long long totalBytes = [_downloader totalBytes];
             float actualProgress = totalBytes > 0 ? ((float)receivedBytes / (float)totalBytes) * 100.0 : 0.0;
             
-            NSLog(@"CLMInstallationStep: Timer-based byte verification - received: %lld, total: %lld, actual progress: %.2f%%", 
+            NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Timer-based byte verification - received: %lld, total: %lld, actual progress: %.2f%%", 
                   receivedBytes, totalBytes, actualProgress);
             
             if (actualProgress >= 99.5) {
-                NSLog(@"CLMInstallationStep: Timer-based byte verification passed (%.2f%%), forcing successful completion", actualProgress);
+                NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Timer-based byte verification passed (%.2f%%), forcing successful completion", actualProgress);
                 [self stopStallDetectionTimer];
                 [_progressBar setDoubleValue:100.0];
                 [_progressLabel setStringValue:NSLocalizedString(@"Download completed - Writing to disk...", @"")];
                 [self installationCompletedWithSuccess:YES error:nil];
             } else {
-                NSLog(@"CLMInstallationStep: Timer-based byte verification failed (%.2f%%), treating as incomplete", actualProgress);
+                NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Timer-based byte verification failed (%.2f%%), treating as incomplete", actualProgress);
                 [self stopStallDetectionTimer];
                 NSString *errorMsg = [NSString stringWithFormat:@"Download stalled and incomplete - only %.1f%% received (%lld of %lld bytes)", 
                                     actualProgress, receivedBytes, totalBytes];
                 [self installationCompletedWithSuccess:NO error:errorMsg];
             }
         } else {
-            NSLog(@"CLMInstallationStep: No downloader for byte verification, forcing completion based on reported progress");
+            NSDebugLLog(@"gwcomp", @"CLMInstallationStep: No downloader for byte verification, forcing completion based on reported progress");
             [self stopStallDetectionTimer];
             [_progressBar setDoubleValue:100.0];
             [_progressLabel setStringValue:NSLocalizedString(@"Download completed - Writing to disk...", @"")];
@@ -480,7 +480,7 @@
         }
         
     } else if (_lastProgressValue >= 98.0 && timeSinceLastProgress > 300.0) { // 5 minutes at 98%+
-        NSLog(@"CLMInstallationStep: Download stalled at %.1f%% for %.0f seconds, checking bytes before forcing completion", 
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Download stalled at %.1f%% for %.0f seconds, checking bytes before forcing completion", 
               _lastProgressValue, timeSinceLastProgress);
         
         // Verify bytes for 98%+ stalls as well
@@ -489,15 +489,15 @@
             long long totalBytes = [_downloader totalBytes];
             float actualProgress = totalBytes > 0 ? ((float)receivedBytes / (float)totalBytes) * 100.0 : 0.0;
             
-            NSLog(@"CLMInstallationStep: 98%% or higher byte verification - received: %lld, total: %lld, actual progress: %.2f%%", 
+            NSDebugLLog(@"gwcomp", @"CLMInstallationStep: 98%% or higher byte verification - received: %lld, total: %lld, actual progress: %.2f%%", 
                   receivedBytes, totalBytes, actualProgress);
             
             if (actualProgress >= 98.0) {
-                NSLog(@"CLMInstallationStep: 98%% or higher stall verification passed (%.2f%%), forcing completion", actualProgress);
+                NSDebugLLog(@"gwcomp", @"CLMInstallationStep: 98%% or higher stall verification passed (%.2f%%), forcing completion", actualProgress);
                 [self stopStallDetectionTimer];
                 [self installationCompletedWithSuccess:YES error:nil];
             } else {
-                NSLog(@"CLMInstallationStep: 98%% or higher stall verification failed (%.2f%%), treating as failure", actualProgress);
+                NSDebugLLog(@"gwcomp", @"CLMInstallationStep: 98%% or higher stall verification failed (%.2f%%), treating as failure", actualProgress);
                 [self stopStallDetectionTimer];
                 NSString *errorMsg = [NSString stringWithFormat:@"Download stalled - only %.1f%% actually received (%lld of %lld bytes)", 
                                     actualProgress, receivedBytes, totalBytes];
@@ -509,7 +509,7 @@
         }
         
     } else if (timeSinceLastProgress > 600.0) { // 10 minutes with no progress at all
-        NSLog(@"CLMInstallationStep: Download completely stalled for %.0f seconds, treating as failure", timeSinceLastProgress);
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Download completely stalled for %.0f seconds, treating as failure", timeSinceLastProgress);
         
         [self stopStallDetectionTimer];
         [self installationCompletedWithSuccess:NO error:@"Download stalled - no progress for over 10 minutes"];
@@ -520,7 +520,7 @@
 
 - (void)startDirectDownload
 {
-    NSLog(@"CLMInstallationStep: startDirectDownload - using temp file approach due to block device limitations");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: startDirectDownload - using temp file approach due to block device limitations");
     
     // Prepare destination device path
     NSString *devicePath = [NSString stringWithFormat:@"/dev/%@", _controller.selectedDiskDevice];
@@ -551,7 +551,7 @@
     NSString *tempFileName = [NSString stringWithFormat:@"gershwin-livecd-%d.img", getpid()];
     NSString *tempFilePath = [tempDir stringByAppendingPathComponent:tempFileName];
     
-    NSLog(@"CLMInstallationStep: Using temporary file: %@", tempFilePath);
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Using temporary file: %@", tempFilePath);
     
     // Create temporary file
     if (![fileManager createFileAtPath:tempFilePath contents:nil attributes:nil]) {
@@ -591,7 +591,7 @@
         return;
     }
     
-    NSLog(@"CLMInstallationStep: Direct download started, writing to temp file: %@", tempFilePath);
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Direct download started, writing to temp file: %@", tempFilePath);
 }
 
 #pragma mark - Direct Download NSURLConnection Delegate Methods
@@ -600,14 +600,14 @@
 {
     if (connection != _directConnection) return;
     
-    NSLog(@"CLMInstallationStep: Direct download didReceiveResponse");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Direct download didReceiveResponse");
     
     if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
         NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
         NSInteger statusCode = [httpResponse statusCode];
         
         if (statusCode >= 400) {
-            NSLog(@"CLMInstallationStep: HTTP error %ld", (long)statusCode);
+            NSDebugLLog(@"gwcomp", @"CLMInstallationStep: HTTP error %ld", (long)statusCode);
             [self cancelDirectDownload];
             [self installationCompletedWithSuccess:NO 
                                              error:[NSString stringWithFormat:@"HTTP error %ld", (long)statusCode]];
@@ -618,7 +618,7 @@
     _directTotalBytes = [response expectedContentLength];
     _directReceivedBytes = 0;
     
-    NSLog(@"CLMInstallationStep: Expected %lld bytes total", _directTotalBytes);
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Expected %lld bytes total", _directTotalBytes);
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
@@ -626,7 +626,7 @@
     if (connection != _directConnection) return;
     
     if (!_directOutputFile) {
-        NSLog(@"CLMInstallationStep: No output file handle, cancelling");
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: No output file handle, cancelling");
         [self cancelDirectDownload];
         return;
     }
@@ -655,14 +655,14 @@
         // Log progress periodically
         static long long lastLog = 0;
         if (_directReceivedBytes - lastLog >= 50 * 1024 * 1024) { // Every 50MB
-            NSLog(@"CLMInstallationStep: Direct write progress: %lld / %lld bytes (%.1f%%)", 
+            NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Direct write progress: %lld / %lld bytes (%.1f%%)", 
                   _directReceivedBytes, _directTotalBytes, 
                   _directTotalBytes > 0 ? (_directReceivedBytes * 100.0 / _directTotalBytes) : 0.0);
             lastLog = _directReceivedBytes;
         }
         
     } @catch (NSException *exception) {
-        NSLog(@"CLMInstallationStep: Error writing to device: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Error writing to device: %@", [exception reason]);
         [self cancelDirectDownload];
         [self installationCompletedWithSuccess:NO 
                                          error:[NSString stringWithFormat:@"Error writing to device: %@", [exception reason]]];
@@ -673,7 +673,7 @@
 {
     if (connection != _directConnection) return;
     
-    NSLog(@"CLMInstallationStep: Direct download connectionDidFinishLoading - %lld bytes written to temp file", _directReceivedBytes);
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Direct download connectionDidFinishLoading - %lld bytes written to temp file", _directReceivedBytes);
     
     // Close temp file
     if (_directOutputFile) {
@@ -703,7 +703,7 @@
         return;
     }
     
-    NSLog(@"CLMInstallationStep: Copying temp file %@ to device %@", _tempFilePath, _devicePath);
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Copying temp file %@ to device %@", _tempFilePath, _devicePath);
     
     // Update progress message
     [_statusLabel setStringValue:[NSString stringWithFormat:@"Writing image to device %@...", _controller.selectedDiskDevice]];
@@ -737,7 +737,7 @@
         _tempFilePath = nil;
         
         if (exitStatus == 0) {
-            NSLog(@"CLMInstallationStep: Successfully copied image to device");
+            NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Successfully copied image to device");
             
             // Update progress to 100%
             [_progressBar setDoubleValue:100.0];
@@ -757,7 +757,7 @@
             NSData *errorData = [errorHandle readDataToEndOfFile];
             NSString *errorString = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
             
-            NSLog(@"CLMInstallationStep: dd command failed with exit status %d: %@", exitStatus, errorString);
+            NSDebugLLog(@"gwcomp", @"CLMInstallationStep: dd command failed with exit status %d: %@", exitStatus, errorString);
             [self installationCompletedWithSuccess:NO 
                                              error:[NSString stringWithFormat:@"Failed to write image to device (exit %d): %@", exitStatus, errorString]];
         }
@@ -770,7 +770,7 @@
         [fileManager removeItemAtPath:_tempFilePath error:nil];
         _tempFilePath = nil;
         
-        NSLog(@"CLMInstallationStep: Exception while copying to device: %@", [e reason]);
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Exception while copying to device: %@", [e reason]);
         [self installationCompletedWithSuccess:NO 
                                          error:[NSString stringWithFormat:@"Exception while writing to device: %@", [e reason]]];
     }
@@ -780,7 +780,7 @@
 {
     if (connection != _directConnection) return;
     
-    NSLog(@"CLMInstallationStep: Direct download failed with error: %@", error.localizedDescription);
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Direct download failed with error: %@", error.localizedDescription);
     
     [self cancelDirectDownload];
     [self installationCompletedWithSuccess:NO error:error.localizedDescription];
@@ -788,7 +788,7 @@
 
 - (void)cancelDirectDownload
 {
-    NSLog(@"CLMInstallationStep: cancelDirectDownload");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: cancelDirectDownload");
     
     [self stopStallDetectionTimer];
     
@@ -817,7 +817,7 @@
 
 - (void)startDDProgressTimer
 {
-    NSLog(@"CLMInstallationStep: Starting DD progress timer");
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Starting DD progress timer");
     [self stopDDProgressTimer];
     
     _ddStartTime = [[NSDate date] timeIntervalSince1970];
@@ -831,7 +831,7 @@
 - (void)stopDDProgressTimer
 {
     if (_ddProgressTimer) {
-        NSLog(@"CLMInstallationStep: Stopping DD progress timer");
+        NSDebugLLog(@"gwcomp", @"CLMInstallationStep: Stopping DD progress timer");
         [_ddProgressTimer invalidate];
         _ddProgressTimer = nil;
     }
@@ -859,6 +859,6 @@
         [_progressLabel setStringValue:NSLocalizedString(@"Writing to device... (almost complete)", @"")];
     }
     
-    NSLog(@"CLMInstallationStep: DD progress update: %.1f%% (%.0f seconds elapsed)", overallProgress, elapsed);
+    NSDebugLLog(@"gwcomp", @"CLMInstallationStep: DD progress update: %.1f%% (%.0f seconds elapsed)", overallProgress, elapsed);
 }
 @end

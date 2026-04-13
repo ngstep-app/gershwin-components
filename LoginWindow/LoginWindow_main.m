@@ -104,7 +104,7 @@ static int main_write_xauth_entry(
     
     FILE *fp = fopen(authfile, "ab");
     if (!fp) {
-        NSLog(@"[MAIN XAUTH] Failed to open %s for writing: %s", authfile, strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[MAIN XAUTH] Failed to open %s for writing: %s", authfile, strerror(errno));
         return -1;
     }
     
@@ -112,17 +112,17 @@ static int main_write_xauth_entry(
     fclose(fp);
     
     if (ret == 0) {
-        NSLog(@"[MAIN XAUTH] Failed to write Xauth entry to %s", authfile);
+        NSDebugLLog(@"gwcomp", @"[MAIN XAUTH] Failed to write Xauth entry to %s", authfile);
         return -1;
     }
     
-    NSLog(@"[MAIN XAUTH] Successfully wrote MIT-MAGIC-COOKIE-1 to %s for display %s", authfile, display);
+    NSDebugLLog(@"gwcomp", @"[MAIN XAUTH] Successfully wrote MIT-MAGIC-COOKIE-1 to %s for display %s", authfile, display);
     return 0;
 }
 
 // X11 I/O error handler for main - called when X connection is lost
 static int mainXIOErrorHandler(Display *display) {
-    NSLog(@"[ERROR] X11 I/O error in main() - X server connection lost");
+    NSDebugLLog(@"gwcomp", @"[ERROR] X11 I/O error in main() - X server connection lost");
     // Exit immediately to allow systemd to restart us
     exit(1);
 }
@@ -131,7 +131,7 @@ static int mainXIOErrorHandler(Display *display) {
 static int mainXErrorHandler(Display *display, XErrorEvent *error) {
     char error_text[256];
     XGetErrorText(display, error->error_code, error_text, sizeof(error_text));
-    NSLog(@"[WARNING] X11 error in main(): %s (request: %d, minor: %d)",
+    NSDebugLLog(@"gwcomp", @"[WARNING] X11 error in main(): %s (request: %d, minor: %d)",
           error_text, error->request_code, error->minor_code);
     return 0;
 }
@@ -169,7 +169,7 @@ static Display* mainSafeXOpenDisplay(const char *display_name, int timeout_secon
     sigaction(SIGALRM, &old_sa, NULL);
     
     if (mainXOpenDisplayTimedOut) {
-        NSLog(@"[ERROR] XOpenDisplay timed out after %d seconds in main", timeout_seconds);
+        NSDebugLLog(@"gwcomp", @"[ERROR] XOpenDisplay timed out after %d seconds in main", timeout_seconds);
         return NULL;
     }
     
@@ -265,11 +265,11 @@ static BOOL isProcessRunningByName(const char *processName)
 
 BOOL isXServerRunning(void)
 {
-    NSLog(@"[DEBUG] Checking if X server is running");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Checking if X server is running");
     
     // First check if there's a lock file indicating X server should be running
     if ([[NSFileManager defaultManager] fileExistsAtPath:@"/tmp/.X0-lock"]) {
-        NSLog(@"[DEBUG] Found X server lock file at /tmp/.X0-lock");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Found X server lock file at /tmp/.X0-lock");
         
         // Read the PID from the lock file to see if the process is actually running
         NSString *lockContent = [NSString stringWithContentsOfFile:@"/tmp/.X0-lock" 
@@ -278,9 +278,9 @@ BOOL isXServerRunning(void)
         if (lockContent) {
             pid_t xpid = [lockContent intValue];
             if (xpid > 0 && kill(xpid, 0) == 0) {
-                NSLog(@"[DEBUG] X server process %d is running according to lock file", xpid);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] X server process %d is running according to lock file", xpid);
             } else {
-                NSLog(@"[DEBUG] X server lock file exists but process %d is not running - removing stale lock", xpid);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] X server lock file exists but process %d is not running - removing stale lock", xpid);
                 [[NSFileManager defaultManager] removeItemAtPath:@"/tmp/.X0-lock" error:nil];
                 [[NSFileManager defaultManager] removeItemAtPath:@"/tmp/.X11-unix/X0" error:nil];
                 return NO;
@@ -297,7 +297,7 @@ BOOL isXServerRunning(void)
     for (NSString *authPath in authPaths) {
         if ([[NSFileManager defaultManager] fileExistsAtPath:authPath]) {
             setenv("XAUTHORITY", [authPath UTF8String], 1);
-            NSLog(@"[DEBUG] Using X authority file: %@", authPath);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Using X authority file: %@", authPath);
             break;
         }
     }
@@ -306,10 +306,10 @@ BOOL isXServerRunning(void)
     Display *testDisplay = mainSafeXOpenDisplay(display_name, 2);  // 2 second timeout
     if (testDisplay != NULL) {
         XCloseDisplay(testDisplay);
-        NSLog(@"[DEBUG] X server is running and accessible on %s", display_name);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server is running and accessible on %s", display_name);
         return YES;
     } else {
-        NSLog(@"[DEBUG] Cannot connect to X server on %s (may not be running or auth issue)", display_name);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Cannot connect to X server on %s (may not be running or auth issue)", display_name);
         return NO;
     }
 }
@@ -317,7 +317,7 @@ BOOL isXServerRunning(void)
 // Function to wait for X server to accept connections (like SLiM WaitForServer)
 BOOL waitForXServer(void)
 {
-    NSLog(@"[DEBUG] Waiting for X server to accept connections");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Waiting for X server to accept connections");
     int attempts = 0;
     int maxAttempts = 120; // 120 seconds timeout like SLiM
     
@@ -325,24 +325,24 @@ BOOL waitForXServer(void)
         Display *testDisplay = mainSafeXOpenDisplay(":0", 2);  // 2 second timeout per attempt
         if (testDisplay != NULL) {
             XCloseDisplay(testDisplay);
-            NSLog(@"[DEBUG] X server is now accepting connections after %d attempts", attempts + 1);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] X server is now accepting connections after %d attempts", attempts + 1);
             return YES;
         }
         
         if (attempts % 10 == 0 && attempts > 0) {
-            NSLog(@"[DEBUG] Still waiting for X server to accept connections (attempt %d/%d)", attempts, maxAttempts);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Still waiting for X server to accept connections (attempt %d/%d)", attempts, maxAttempts);
         }
         
         sleep(1);
     }
     
-    NSLog(@"[DEBUG] X server failed to accept connections within timeout");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] X server failed to accept connections within timeout");
     return NO;
 }
 
 BOOL startXServer(void)
 {
-    NSLog(@"[DEBUG] Starting X server");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Starting X server");
     
     // Find X server executable
     NSString *xserverPath = nil;
@@ -356,11 +356,11 @@ BOOL startXServer(void)
     }
     
     if (!xserverPath) {
-        NSLog(@"[DEBUG] X server not found in standard locations");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server not found in standard locations");
         return NO;
     }
     
-    NSLog(@"[DEBUG] Found X server at: %@", xserverPath);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Found X server at: %@", xserverPath);
     
     // Create X authority file using libXau (no external xauth command needed)
     NSString *authFile = @"/var/run/loginwindow.auth";
@@ -374,20 +374,20 @@ BOOL startXServer(void)
     
     // Write the cookie to the X server's auth file
     if (main_write_xauth_entry([authFile UTF8String], ":0", cookie) != 0) {
-        NSLog(@"[ERROR] Failed to create X authorization file");
+        NSDebugLLog(@"gwcomp", @"[ERROR] Failed to create X authorization file");
         return NO;
     }
     
     // Set proper permissions on auth file
     chmod([authFile UTF8String], 0600);
     
-    NSLog(@"[DEBUG] Created X authorization file at %@ using libXau", authFile);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Created X authorization file at %@ using libXau", authFile);
     
     // Start X server on display :0
     pid_t xserver_pid = fork();
     if (xserver_pid == 0) {
         // Child process - start X server
-        NSLog(@"[DEBUG] Starting X server");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Starting X server");
         
         // Set up environment for X server
         setenv("DISPLAY", ":0", 1);
@@ -415,22 +415,22 @@ BOOL startXServer(void)
               (char *)NULL);
         
         // If we get here, exec failed
-        NSLog(@"[DEBUG] Failed to exec X server: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to exec X server: %s", strerror(errno));
         exit(1);
     } else if (xserver_pid > 0) {
         // Parent process
-        NSLog(@"[DEBUG] X server started with PID: %d", xserver_pid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server started with PID: %d", xserver_pid);
         
         // Wait for X server to accept connections (like SLiM WaitForServer)
-        NSLog(@"[DEBUG] Waiting for X server to accept connections");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Waiting for X server to accept connections");
         if (waitForXServer()) {
-            NSLog(@"[DEBUG] X server successfully started and ready for connections");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] X server successfully started and ready for connections");
             return YES;
         } else {
-            NSLog(@"[DEBUG] X server failed to accept connections within timeout");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] X server failed to accept connections within timeout");
             
             // Kill the X server since it's not ready
-            NSLog(@"[DEBUG] Killing unresponsive X server");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Killing unresponsive X server");
             if (kill(xserver_pid, SIGTERM) == 0) {
                 sleep(2);
                 kill(xserver_pid, SIGKILL);
@@ -438,7 +438,7 @@ BOOL startXServer(void)
             return NO;
         }
     } else {
-        NSLog(@"[DEBUG] Failed to fork for X server: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to fork for X server: %s", strerror(errno));
         return NO;
     }
 }
@@ -450,16 +450,16 @@ static BOOL global_we_started_xorg = NO;
 // Function to start Xorg using the same logic as the shell script
 BOOL startXorgLikeShellScript(void)
 {
-    NSLog(@"[DEBUG] Starting Xorg using shell script logic");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Starting Xorg using shell script logic");
     
     // Check if Xorg is already running using native code
     if (isProcessRunningByName("Xorg")) {
-        NSLog(@"[DEBUG] Xorg already running, not starting our own instance");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Xorg already running, not starting our own instance");
         global_we_started_xorg = NO;
         return YES;
     }
     
-    NSLog(@"[DEBUG] Starting Xorg server...");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Starting Xorg server...");
     
     // Prepare log file
     const char *logfile = "/var/log/LoginWindow.log";
@@ -487,7 +487,7 @@ BOOL startXorgLikeShellScript(void)
         execl("/usr/bin/Xorg", "Xorg", ":0", "-auth", "/var/run/xauth", (char *)NULL);
         
         // If we get here, exec failed
-        NSLog(@"[ERROR] Failed to exec Xorg");
+        NSDebugLLog(@"gwcomp", @"[ERROR] Failed to exec Xorg");
         exit(1);
     } else if (xorg_pid > 0) {
         // Parent process - save PID and mark that we started it
@@ -511,10 +511,10 @@ BOOL startXorgLikeShellScript(void)
         sleep(1);
         setenv("DISPLAY", ":0", 1);
         
-        NSLog(@"[DEBUG] Xorg started with PID: %d", xorg_pid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Xorg started with PID: %d", xorg_pid);
         return YES;
     } else {
-        NSLog(@"[ERROR] Failed to fork for Xorg");
+        NSDebugLLog(@"gwcomp", @"[ERROR] Failed to fork for Xorg");
         return NO;
     }
 }
@@ -522,11 +522,11 @@ BOOL startXorgLikeShellScript(void)
 // Function to stop Xorg using the same logic as the shell script
 void stopXorgLikeShellScript(void)
 {
-    NSLog(@"[DEBUG] Stopping Xorg using shell script logic");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Stopping Xorg using shell script logic");
     
     // Stop Xorg only if we started it (equivalent to if [ -f ${xorg_started_flag} ])
     if (global_we_started_xorg && access("/var/run/loginwindow.xorg.started", F_OK) == 0) {
-        NSLog(@"[DEBUG] Stopping Xorg server (we started it)...");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Stopping Xorg server (we started it)...");
         
         if (global_xorg_pid > 0) {
             kill(global_xorg_pid, SIGTERM);
@@ -551,7 +551,7 @@ void stopXorgLikeShellScript(void)
         global_we_started_xorg = NO;
         global_xorg_pid = 0;
     } else {
-        NSLog(@"[DEBUG] Not stopping Xorg (we didn't start it)");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Not stopping Xorg (we didn't start it)");
     }
 }
 
@@ -562,13 +562,13 @@ int main(int argc, const char *argv[])
     // Install X11 error handlers FIRST before any X operations
     XSetIOErrorHandler(mainXIOErrorHandler);
     XSetErrorHandler(mainXErrorHandler);
-    NSLog(@"[DEBUG] X11 error handlers installed in main()");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] X11 error handlers installed in main()");
     
     // Start Xorg at the very beginning before anything else happens
-    NSLog(@"[DEBUG] Starting Xorg management");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Starting Xorg management");
     
     if (!startXorgLikeShellScript()) {
-        NSLog(@"[ERROR] Failed to start Xorg - LoginWindow may not work properly");
+        NSDebugLLog(@"gwcomp", @"[ERROR] Failed to start Xorg - LoginWindow may not work properly");
         // Continue anyway, as the existing code had fallback logic
     }
     
@@ -576,14 +576,14 @@ int main(int argc, const char *argv[])
     setenv("DISPLAY", ":0", 1);
     
     // Additional delay before starting GUI application
-    NSLog(@"[DEBUG] Starting LoginWindow GUI application");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Starting LoginWindow GUI application");
     
     [NSApplication sharedApplication];
     [NSApp setDelegate: [[LoginWindow alloc] init]];
     [NSApp run];
     
     // MOVED FROM SHELL SCRIPT: Stop Xorg when LoginWindow exits
-    NSLog(@"[DEBUG] LoginWindow exiting, stopping Xorg if we started it");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] LoginWindow exiting, stopping Xorg if we started it");
     stopXorgLikeShellScript();
     
     [pool drain];

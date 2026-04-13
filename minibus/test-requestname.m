@@ -10,40 +10,40 @@
 
 int main(int argc, char *argv[]) {
     @autoreleasepool {
-        NSLog(@"Testing RequestName functionality");
+        NSDebugLLog(@"gwcomp", @"Testing RequestName functionality");
         
         // Connect to daemon
         MBClient *client = [[MBClient alloc] init];
         
         if (![client connectToPath:@"/tmp/minibus-socket"]) {
-            NSLog(@"Failed to connect to daemon");
+            NSDebugLLog(@"gwcomp", @"Failed to connect to daemon");
             return 1;
         }
         
-        NSLog(@"Connected successfully, unique name: %@", client.uniqueName);
+        NSDebugLLog(@"gwcomp", @"Connected successfully, unique name: %@", client.uniqueName);
         
         // Test name acquisition
         NSString *testName = @"org.test.Panel";
-        NSLog(@"Requesting name: %@", testName);
+        NSDebugLLog(@"gwcomp", @"Requesting name: %@", testName);
         
         if ([client requestName:testName]) {
-            NSLog(@"SUCCESS: Name acquired successfully!");
+            NSDebugLLog(@"gwcomp", @"SUCCESS: Name acquired successfully!");
         } else {
-            NSLog(@"FAILED: Could not acquire name");
+            NSDebugLLog(@"gwcomp", @"FAILED: Could not acquire name");
             return 1;
         }
         
         // Try to request the same name again (should get ALREADY_OWNER)
-        NSLog(@"Requesting the same name again...");
+        NSDebugLLog(@"gwcomp", @"Requesting the same name again...");
         if ([client requestName:testName]) {
-            NSLog(@"SUCCESS: Already owned name (expected)");
+            NSDebugLLog(@"gwcomp", @"SUCCESS: Already owned name (expected)");
         } else {
-            NSLog(@"FAILED: Should have returned ALREADY_OWNER");
+            NSDebugLLog(@"gwcomp", @"FAILED: Should have returned ALREADY_OWNER");
             return 1;
         }
         
         [client disconnect];
-        NSLog(@"Test completed successfully!");
+        NSDebugLLog(@"gwcomp", @"Test completed successfully!");
         return 0;
     }
 }

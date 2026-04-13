@@ -16,7 +16,7 @@
 @implementation GSInstallerAssistantTest
 
 + (void)runInstallerDemo {
-    NSLog(@"[GSInstallerAssistantTest] Starting installer assistant demo");
+    NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantTest] Starting installer assistant demo");
     
     // Create sample application icons for the introduction step
     NSMutableArray *appIcons = [[NSMutableArray alloc] init];
@@ -107,7 +107,7 @@
     // Show the installer window
     [[installer window] makeKeyAndOrderFront:nil];
     
-    NSLog(@"[GSInstallerAssistantTest] Installer assistant demo window created and displayed");
+    NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantTest] Installer assistant demo window created and displayed");
     
     [appIcons release];
     [steps release];

@@ -54,10 +54,10 @@ static NSArray *ethernetPrefixes(void)
         helperPath = [[self findHelperPath] retain];
 
         if (backendAvailable) {
-            NSLog(@"[Network] BSDBackend initialized");
+            NSDebugLLog(@"gwcomp", @"[Network] BSDBackend initialized");
             [self discoverWLANDevice];
         } else {
-            NSLog(@"[Network] BSDBackend: required tools not found, backend unavailable");
+            NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: required tools not found, backend unavailable");
         }
     }
     return self;
@@ -123,7 +123,7 @@ static NSArray *ethernetPrefixes(void)
             }
         }
     } @catch (NSException *e) {
-        NSLog(@"[Network] BSDBackend: exception finding %@: %@", name, e);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: exception finding %@: %@", name, e);
     }
     [task release];
     return nil;
@@ -158,21 +158,21 @@ static NSArray *ethernetPrefixes(void)
     sudoPath = [[self findExecutable:@"sudo"] retain];
 
     if (ifconfigPath) {
-        NSLog(@"[Network] BSDBackend: ifconfig at %@", ifconfigPath);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: ifconfig at %@", ifconfigPath);
     } else {
-        NSLog(@"[Network] BSDBackend: ifconfig NOT found");
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: ifconfig NOT found");
     }
     if (sysrcPath) {
-        NSLog(@"[Network] BSDBackend: sysrc at %@", sysrcPath);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: sysrc at %@", sysrcPath);
     }
     if (wpaCliPath) {
-        NSLog(@"[Network] BSDBackend: wpa_cli at %@", wpaCliPath);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: wpa_cli at %@", wpaCliPath);
     }
     if (dhclientPath) {
-        NSLog(@"[Network] BSDBackend: dhclient at %@", dhclientPath);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: dhclient at %@", dhclientPath);
     }
     if (sudoPath) {
-        NSLog(@"[Network] BSDBackend: sudo at %@", sudoPath);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: sudo at %@", sudoPath);
     }
 
     /* ifconfig is the minimum requirement */
@@ -218,7 +218,7 @@ static NSArray *ethernetPrefixes(void)
                                              encoding:NSUTF8StringEncoding] autorelease];
         }
     } @catch (NSException *e) {
-        NSLog(@"[Network] BSDBackend: exception running %@: %@", path, e);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: exception running %@: %@", path, e);
         if (output) *output = nil;
     }
     [task release];
@@ -287,7 +287,7 @@ static NSArray *ethernetPrefixes(void)
         [task release];
         return YES;
     } @catch (NSException *e) {
-        NSLog(@"[Network] BSDBackend: privileged helper exception: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: privileged helper exception: %@", e);
         [task release];
         if (error) {
             *error = [NSError errorWithDomain:@"BSDBackendError" code:2
@@ -324,21 +324,21 @@ static NSArray *ethernetPrefixes(void)
         if (outData && [outData length] > 0) {
             NSString *outStr = [[[NSString alloc] initWithData:outData
                                                       encoding:NSUTF8StringEncoding] autorelease];
-            NSLog(@"[Network] BSDBackend helper stdout: %@", outStr);
+            NSDebugLLog(@"gwcomp", @"[Network] BSDBackend helper stdout: %@", outStr);
         }
 
         if (status != 0) {
             NSString *msg = (errStr && [errStr length] > 0) ? errStr :
                 NSLocalizedString(@"Operation failed", @"Helper error");
-            NSLog(@"[Network] BSDBackend helper failed: %@", msg);
+            NSDebugLLog(@"gwcomp", @"[Network] BSDBackend helper failed: %@", msg);
             [self performSelectorOnMainThread:@selector(reportErrorWithMessage:)
                                    withObject:msg
                                 waitUntilDone:NO];
         } else {
-            NSLog(@"[Network] BSDBackend helper succeeded");
+            NSDebugLLog(@"gwcomp", @"[Network] BSDBackend helper succeeded");
         }
     } @catch (NSException *e) {
-        NSLog(@"[Network] BSDBackend waitForTaskCompletion exception: %@", e);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend waitForTaskCompletion exception: %@", e);
     }
     [pool release];
 }
@@ -346,7 +346,7 @@ static NSArray *ethernetPrefixes(void)
 - (void)reportErrorWithMessage:(NSString *)message
 {
     if (message && [message length] > 0) {
-        NSLog(@"[Network] BSDBackend error: %@", message);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend error: %@", message);
         if (delegate && [delegate respondsToSelector:
                          @selector(networkBackend:didEncounterError:)]) {
             NSError *err = [NSError errorWithDomain:@"BSDBackendError" code:1
@@ -688,7 +688,7 @@ static NSArray *ethernetPrefixes(void)
     if (!interface) return NO;
 
     NSString *name = [interface name];
-    NSLog(@"[Network] BSDBackend: enabling interface %@", name);
+    NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: enabling interface %@", name);
 
     NSError *err = nil;
     BOOL ok = [self runPrivilegedHelper:@[@"interface-enable", name] error:&err];
@@ -707,7 +707,7 @@ static NSArray *ethernetPrefixes(void)
     if (!interface) return NO;
 
     NSString *name = [interface name];
-    NSLog(@"[Network] BSDBackend: disabling interface %@", name);
+    NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: disabling interface %@", name);
 
     NSError *err = nil;
     BOOL ok = [self runPrivilegedHelper:@[@"interface-disable", name] error:&err];
@@ -821,7 +821,7 @@ static NSArray *ethernetPrefixes(void)
     NSString *ssid = [connection ssid];
     if (!ssid) return NO;
 
-    NSLog(@"[Network] BSDBackend: deleting saved network '%@'", ssid);
+    NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: deleting saved network '%@'", ssid);
     NSError *err = nil;
     BOOL ok = [self runPrivilegedHelper:@[@"connection-delete", ssid] error:&err];
     if (!ok) {
@@ -861,12 +861,12 @@ static NSArray *ethernetPrefixes(void)
      */
     if (!deviceName || [deviceName length] == 0) return NO;
 
-    NSLog(@"[Network] BSDBackend: setting up NIC %@", deviceName);
+    NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: setting up NIC %@", deviceName);
 
     NSError *err = nil;
     BOOL ok = [self runPrivilegedHelper:@[@"setup-nic", deviceName] error:&err];
     if (!ok) {
-        NSLog(@"[Network] BSDBackend: setup-nic failed for %@: %@",
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: setup-nic failed for %@: %@",
               deviceName, err ? [err localizedDescription] : @"unknown error");
     }
     return ok;
@@ -884,7 +884,7 @@ static NSArray *ethernetPrefixes(void)
         if ([name hasPrefix:@"wlan"]) {
             [primaryWLANDevice release];
             primaryWLANDevice = [name retain];
-            NSLog(@"[Network] BSDBackend: found existing WLAN device %@", name);
+            NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: found existing WLAN device %@", name);
             wifiEnabled = YES;
             return primaryWLANDevice;
         }
@@ -908,7 +908,7 @@ static NSArray *ethernetPrefixes(void)
                     NSArray *devList = [devices componentsSeparatedByString:@" "];
                     for (NSString *dev in devList) {
                         if ([dev length] > 0) {
-                            NSLog(@"[Network] BSDBackend: physical wireless device: %@",
+                            NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: physical wireless device: %@",
                                   dev);
                             /* Setup NIC in rc.conf if not already configured */
                             [self setupNIC:dev];
@@ -940,7 +940,7 @@ static NSArray *ethernetPrefixes(void)
     /* Try to create wlan0 from the first physical device */
     if ([wlanDeviceMap count] > 0) {
         NSString *physDev = [[wlanDeviceMap allKeys] objectAtIndex:0];
-        NSLog(@"[Network] BSDBackend: creating wlan0 from %@", physDev);
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: creating wlan0 from %@", physDev);
 
         NSError *err = nil;
         [self runPrivilegedHelper:@[@"wlan-create", physDev] error:&err];
@@ -1010,7 +1010,7 @@ static NSArray *ethernetPrefixes(void)
     [self ensureWLANDevice];
 
     if (!primaryWLANDevice) {
-        NSLog(@"[Network] BSDBackend: no WLAN device for scanning");
+        NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: no WLAN device for scanning");
         return networks;
     }
 
@@ -1370,7 +1370,7 @@ static NSArray *ethernetPrefixes(void)
         return NO;
     }
 
-    NSLog(@"[Network] BSDBackend: connecting to WLAN '%@'", ssid);
+    NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: connecting to WLAN '%@'", ssid);
 
     NSMutableArray *args = [NSMutableArray arrayWithObjects:@"wlan-connect",
                             ssid, nil];
@@ -1390,7 +1390,7 @@ static NSArray *ethernetPrefixes(void)
 
 - (BOOL)disconnectFromWLAN
 {
-    NSLog(@"[Network] BSDBackend: disconnecting from WLAN");
+    NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: disconnecting from WLAN");
 
     NSError *err = nil;
     BOOL ok = [self runPrivilegedHelper:@[@"wlan-disconnect"] error:&err];
@@ -1458,7 +1458,7 @@ static NSArray *ethernetPrefixes(void)
         return;
     }
 
-    NSLog(@"[Network] BSDBackend: refreshing...");
+    NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: refreshing...");
 
     [self availableInterfaces];
     [self savedConnections];
@@ -1476,7 +1476,7 @@ static NSArray *ethernetPrefixes(void)
         [delegate networkBackend:self didUpdateConnections:connCopy];
     }
 
-    NSLog(@"[Network] BSDBackend: refresh complete");
+    NSDebugLLog(@"gwcomp", @"[Network] BSDBackend: refresh complete");
 }
 
 @end

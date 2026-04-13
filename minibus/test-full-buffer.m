@@ -54,59 +54,59 @@ int main() {
         };
         
         NSData *fullData = [NSData dataWithBytes:fullBuffer length:sizeof(fullBuffer)];
-        NSLog(@"Testing complete two-message buffer (%lu bytes)", [fullData length]);
+        NSDebugLLog(@"gwcomp", @"Testing complete two-message buffer (%lu bytes)", [fullData length]);
         
         // Test step-by-step parsing
         NSUInteger offset = 0;
         int messageCount = 0;
         
         // Parse first message
-        NSLog(@"\n=== PARSING MESSAGE 1 ===");
+        NSDebugLLog(@"gwcomp", @"\n=== PARSING MESSAGE 1 ===");
         NSUInteger offset1 = offset;
         MBMessage *msg1 = [MBMessage messageFromData:fullData offset:&offset];
         if (msg1) {
             messageCount++;
-            NSLog(@"Message 1: SUCCESS, consumed %lu bytes (offset %lu -> %lu)", 
+            NSDebugLLog(@"gwcomp", @"Message 1: SUCCESS, consumed %lu bytes (offset %lu -> %lu)", 
                   offset - offset1, offset1, offset);
-            NSLog(@"  Type: %d, Serial: %lu, Member: %@", (int)msg1.type, msg1.serial, msg1.member);
+            NSDebugLLog(@"gwcomp", @"  Type: %d, Serial: %lu, Member: %@", (int)msg1.type, msg1.serial, msg1.member);
         } else {
-            NSLog(@"Message 1: FAILED at offset %lu", offset);
+            NSDebugLLog(@"gwcomp", @"Message 1: FAILED at offset %lu", offset);
             return 1;
         }
         
         // Parse second message
-        NSLog(@"\n=== PARSING MESSAGE 2 ===");
+        NSDebugLLog(@"gwcomp", @"\n=== PARSING MESSAGE 2 ===");
         if (offset < [fullData length]) {
             NSUInteger offset2 = offset;
-            NSLog(@"Starting message 2 at offset %lu", offset2);
+            NSDebugLLog(@"gwcomp", @"Starting message 2 at offset %lu", offset2);
             
             // Show the bytes at the second message start
             const uint8_t *bytes = [fullData bytes];
-            NSLog(@"Bytes at offset %lu: %02x %02x %02x %02x %02x %02x %02x %02x", 
+            NSDebugLLog(@"gwcomp", @"Bytes at offset %lu: %02x %02x %02x %02x %02x %02x %02x %02x", 
                   offset2, bytes[offset2], bytes[offset2+1], bytes[offset2+2], bytes[offset2+3],
                   bytes[offset2+4], bytes[offset2+5], bytes[offset2+6], bytes[offset2+7]);
             
             MBMessage *msg2 = [MBMessage messageFromData:fullData offset:&offset];
             if (msg2) {
                 messageCount++;
-                NSLog(@"Message 2: SUCCESS, consumed %lu bytes (offset %lu -> %lu)", 
+                NSDebugLLog(@"gwcomp", @"Message 2: SUCCESS, consumed %lu bytes (offset %lu -> %lu)", 
                       offset - offset2, offset2, offset);
-                NSLog(@"  Type: %d, Serial: %lu, Member: %@", (int)msg2.type, msg2.serial, msg2.member);
+                NSDebugLLog(@"gwcomp", @"  Type: %d, Serial: %lu, Member: %@", (int)msg2.type, msg2.serial, msg2.member);
             } else {
-                NSLog(@"Message 2: FAILED at offset %lu", offset2);
+                NSDebugLLog(@"gwcomp", @"Message 2: FAILED at offset %lu", offset2);
             }
         } else {
-            NSLog(@"No more data for message 2");
+            NSDebugLLog(@"gwcomp", @"No more data for message 2");
         }
         
-        NSLog(@"\n=== SUMMARY ===");
-        NSLog(@"Parsed %d messages total", messageCount);
+        NSDebugLLog(@"gwcomp", @"\n=== SUMMARY ===");
+        NSDebugLLog(@"gwcomp", @"Parsed %d messages total", messageCount);
         
         // Also test with messagesFromData
-        NSLog(@"\n=== TESTING messagesFromData ===");
+        NSDebugLLog(@"gwcomp", @"\n=== TESTING messagesFromData ===");
         NSUInteger consumed = 0;
         NSArray *messages = [MBMessage messagesFromData:fullData consumedBytes:&consumed];
-        NSLog(@"messagesFromData: parsed %lu messages, consumed %lu bytes", 
+        NSDebugLLog(@"gwcomp", @"messagesFromData: parsed %lu messages, consumed %lu bytes", 
               [messages count], consumed);
     }
     return 0;

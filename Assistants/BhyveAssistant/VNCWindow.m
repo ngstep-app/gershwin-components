@@ -127,11 +127,11 @@
 - (BOOL)connectToVNC
 {
     if (_connected) {
-        NSLog(@"VNCWindow: Already connected");
+        NSDebugLLog(@"gwcomp", @"VNCWindow: Already connected");
         return YES;
     }
     
-    NSLog(@"VNCWindow: Connecting to %@:%ld", _hostname, (long)_port);
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Connecting to %@:%ld", _hostname, (long)_port);
     
     BOOL result = [_vncClient connectToHost:_hostname port:_port password:_password];
     if (!result) {
@@ -146,7 +146,7 @@
 
 - (void)disconnectFromVNC
 {
-    NSLog(@"VNCWindow: Disconnecting from VNC");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Disconnecting from VNC");
     
     // Make window invisible when disconnecting
     [self orderOut:nil];
@@ -201,7 +201,7 @@
         return;
     }
     
-    NSLog(@"VNCWindow: Resizing window to fit framebuffer: %.0fx%.0f", _framebufferSize.width, _framebufferSize.height);
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Resizing window to fit framebuffer: %.0fx%.0f", _framebufferSize.width, _framebufferSize.height);
     
     // Calculate new window size (1:1 pixel ratio)
     NSSize windowSize = _framebufferSize;
@@ -645,7 +645,7 @@
 
 - (void)windowWillClose:(NSNotification *)notification
 {
-    NSLog(@"VNCWindow: Window closing, notifying delegate");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: Window closing, notifying delegate");
     if (_vncDelegate && [_vncDelegate respondsToSelector:@selector(vncWindowWillClose:)]) {
         [_vncDelegate vncWindowWillClose:self];
     }
@@ -656,7 +656,7 @@
 
 - (void)vncClient:(VNCClient *)client didConnect:(BOOL)success
 {
-    NSLog(@"VNCWindow: VNC connection result: %@", success ? @"SUCCESS" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"VNCWindow: VNC connection result: %@", success ? @"SUCCESS" : @"FAILED");
     
     if (success) {
         _connected = YES;
@@ -674,7 +674,7 @@
 
 - (void)vncClient:(VNCClient *)client didDisconnect:(NSString *)reason
 {
-    NSLog(@"VNCWindow: VNC disconnected: %@", reason);
+    NSDebugLLog(@"gwcomp", @"VNCWindow: VNC disconnected: %@", reason);
     _connected = NO;
     
     // Show disconnected image
@@ -698,7 +698,7 @@
 
 - (void)vncClient:(VNCClient *)client didReceiveError:(NSString *)error
 {
-    NSLog(@"VNCWindow: VNC error: %@", error);
+    NSDebugLLog(@"gwcomp", @"VNCWindow: VNC error: %@", error);
     
     NSAlert *alert = [[NSAlert alloc] init];
     [alert setMessageText:NSLocalizedString(@"VNC Error", @"VNC error title")];

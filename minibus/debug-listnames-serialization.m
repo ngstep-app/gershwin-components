@@ -10,7 +10,7 @@
 
 int main(void) {
     @autoreleasepool {
-        NSLog(@"=== TESTING LISTNAMES SERIALIZATION ===");
+        NSDebugLLog(@"gwcomp", @"=== TESTING LISTNAMES SERIALIZATION ===");
         
         // Create the same array that would be sent in ListNames
         NSArray *names = @[@"org.freedesktop.DBus", @"org.xfce.Panel", @":1.1"];
@@ -20,12 +20,12 @@ int main(void) {
         reply.sender = @"org.freedesktop.DBus";
         reply.destination = @":1.1";
         
-        NSLog(@"Reply signature: %@", reply.signature);
-        NSLog(@"Reply arguments: %@", reply.arguments);
+        NSDebugLLog(@"gwcomp", @"Reply signature: %@", reply.signature);
+        NSDebugLLog(@"gwcomp", @"Reply arguments: %@", reply.arguments);
         
         // Serialize it
         NSData *serialized = [reply serialize];
-        NSLog(@"Serialized to %lu bytes", (unsigned long)[serialized length]);
+        NSDebugLLog(@"gwcomp", @"Serialized to %lu bytes", (unsigned long)[serialized length]);
         
         // Print hex dump
         const uint8_t *bytes = [serialized bytes];
@@ -38,16 +38,16 @@ int main(void) {
         }
         
         // Try to parse it back
-        NSLog(@"\\n=== TESTING PARSING ===");
+        NSDebugLLog(@"gwcomp", @"\\n=== TESTING PARSING ===");
         NSUInteger offset = 0;
         MBMessage *parsed = [MBMessage messageFromData:serialized offset:&offset];
         
         if (parsed) {
-            NSLog(@"Successfully parsed back!");
-            NSLog(@"Parsed signature: %@", parsed.signature);
-            NSLog(@"Parsed arguments: %@", parsed.arguments);
+            NSDebugLLog(@"gwcomp", @"Successfully parsed back!");
+            NSDebugLLog(@"gwcomp", @"Parsed signature: %@", parsed.signature);
+            NSDebugLLog(@"gwcomp", @"Parsed arguments: %@", parsed.arguments);
         } else {
-            NSLog(@"FAILED to parse back!");
+            NSDebugLLog(@"gwcomp", @"FAILED to parse back!");
         }
     }
     return 0;

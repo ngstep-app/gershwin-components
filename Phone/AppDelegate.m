@@ -58,14 +58,14 @@
 	NSString *username = [defaults stringForKey:@"SIPUsername"];
 	NSString *server = [defaults stringForKey:@"SIPServer"];
 	if ((username == nil || username.length == 0) || (server == nil || server.length == 0)) {
-		NSLog(@"AppDelegate: No SIP config found, opening Preferences");
+		NSDebugLLog(@"gwcomp", @"AppDelegate: No SIP config found, opening Preferences");
 		[self showPreferences:nil];
 	}
 }
 
 - (void)showPreferences:(id)sender
 {
-    NSLog(@"AppDelegate: showPreferences called");
+    NSDebugLLog(@"gwcomp", @"AppDelegate: showPreferences called");
 	[[PreferencesController sharedController] showWindow:self];
 }
 

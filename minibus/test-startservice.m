@@ -9,7 +9,7 @@
 
 int main() {
     @autoreleasepool {
-        NSLog(@"Testing StartServiceByName argument parsing...");
+        NSDebugLLog(@"gwcomp", @"Testing StartServiceByName argument parsing...");
         
         // Create a test StartServiceByName message similar to what GLib would send
         MBMessage *message = [[MBMessage alloc] init];
@@ -26,32 +26,32 @@ int main() {
         
         // Serialize the message
         NSData *serialized = [message serialize];
-        NSLog(@"Serialized StartServiceByName message: %lu bytes", [serialized length]);
+        NSDebugLLog(@"gwcomp", @"Serialized StartServiceByName message: %lu bytes", [serialized length]);
         
         // Parse it back
         NSUInteger offset = 0;
         MBMessage *parsed = [MBMessage messageFromData:serialized offset:&offset];
         
         if (parsed) {
-            NSLog(@"Parsed message successfully:");
-            NSLog(@"  Member: %@", parsed.member);
-            NSLog(@"  Signature: %@", parsed.signature);
-            NSLog(@"  Arguments count: %lu", [parsed.arguments count]);
+            NSDebugLLog(@"gwcomp", @"Parsed message successfully:");
+            NSDebugLLog(@"gwcomp", @"  Member: %@", parsed.member);
+            NSDebugLLog(@"gwcomp", @"  Signature: %@", parsed.signature);
+            NSDebugLLog(@"gwcomp", @"  Arguments count: %lu", [parsed.arguments count]);
             for (NSUInteger i = 0; i < [parsed.arguments count]; i++) {
-                NSLog(@"    Arg[%lu]: %@ (type: %@)", i, parsed.arguments[i], [parsed.arguments[i] class]);
+                NSDebugLLog(@"gwcomp", @"    Arg[%lu]: %@ (type: %@)", i, parsed.arguments[i], [parsed.arguments[i] class]);
             }
             
             // Test the condition that fails
             if ([parsed.arguments count] < 2) {
-                NSLog(@"ERROR: Would fail argument count check!");
+                NSDebugLLog(@"gwcomp", @"ERROR: Would fail argument count check!");
             } else {
-                NSLog(@"SUCCESS: Arguments look correct");
+                NSDebugLLog(@"gwcomp", @"SUCCESS: Arguments look correct");
                 NSString *serviceName = parsed.arguments[0];
                 NSUInteger flags = [parsed.arguments[1] unsignedIntegerValue];
-                NSLog(@"  Service: %@, Flags: %lu", serviceName, flags);
+                NSDebugLLog(@"gwcomp", @"  Service: %@, Flags: %lu", serviceName, flags);
             }
         } else {
-            NSLog(@"FAILED to parse message back!");
+            NSDebugLLog(@"gwcomp", @"FAILED to parse message back!");
         }
         
         [message release];

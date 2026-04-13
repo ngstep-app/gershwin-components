@@ -74,7 +74,7 @@
         [self setOpaque:NO];
         [self setAlphaValue:1.0];
         
-        NSLog(@"CustomMenuPanel: Created with gradient and opacity styling");
+        NSDebugLLog(@"gwcomp", @"CustomMenuPanel: Created with gradient and opacity styling");
     }
     
     return self;
@@ -219,7 +219,7 @@ static IMP original_NSMenuView_windowIMP = NULL;
         [window setContentView:gradientView];
         [gradientView addSubview:contentView];
 
-        NSLog(@"CustomMenuPanel: Wrapped window %@ content view with gradient", window);
+        NSDebugLLog(@"gwcomp", @"CustomMenuPanel: Wrapped window %@ content view with gradient", window);
     }
 
     return window;
@@ -229,7 +229,7 @@ static IMP original_NSMenuView_windowIMP = NULL;
 
 void HookNSMenuPanelCreation(void)
 {
-    NSLog(@"CustomMenuPanel: Setting up hooks for menu window styling");
+    NSDebugLLog(@"gwcomp", @"CustomMenuPanel: Setting up hooks for menu window styling");
     
     // Hook NSMenuView to make it transparent and apply gradient styling
     Class nsMenuViewClass = NSClassFromString(@"NSMenuView");
@@ -242,7 +242,7 @@ void HookNSMenuPanelCreation(void)
             // Save the original implementation
             original_NSMenuView_drawRectIMP = method_getImplementation(originalDrawMethod);
             method_exchangeImplementations(originalDrawMethod, newDrawMethod);
-            NSLog(@"CustomMenuPanel: Swizzled NSMenuView.drawRect for transparent background");
+            NSDebugLLog(@"gwcomp", @"CustomMenuPanel: Swizzled NSMenuView.drawRect for transparent background");
         }
         
         // Swizzle isOpaque:
@@ -251,7 +251,7 @@ void HookNSMenuPanelCreation(void)
         
         if (originalOpaqueMethod && newOpaqueMethod) {
             method_exchangeImplementations(originalOpaqueMethod, newOpaqueMethod);
-            NSLog(@"CustomMenuPanel: Swizzled NSMenuView.isOpaque");
+            NSDebugLLog(@"gwcomp", @"CustomMenuPanel: Swizzled NSMenuView.isOpaque");
         }
         
         // Swizzle window:
@@ -262,11 +262,11 @@ void HookNSMenuPanelCreation(void)
             // Save the original implementation
             original_NSMenuView_windowIMP = method_getImplementation(originalWindowMethod);
             method_exchangeImplementations(originalWindowMethod, newWindowMethod);
-            NSLog(@"CustomMenuPanel: Swizzled NSMenuView.window for gradient styling");
+            NSDebugLLog(@"gwcomp", @"CustomMenuPanel: Swizzled NSMenuView.window for gradient styling");
         }
     }
     
-    NSLog(@"CustomMenuPanel: Menu window styling hooks complete");
+    NSDebugLLog(@"gwcomp", @"CustomMenuPanel: Menu window styling hooks complete");
 }
 
 

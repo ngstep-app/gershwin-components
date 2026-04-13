@@ -13,7 +13,7 @@
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
-    NSLog(@"applicationDidFinishLaunching called");
+    NSDebugLLog(@"gwcomp", @"applicationDidFinishLaunching called");
     BuildController *controller = [[BuildController alloc] init];
     [controller setMakefilePath: self.makefilePath];
     [controller setExtraArgs: self.extraArgs];

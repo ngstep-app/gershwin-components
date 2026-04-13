@@ -80,7 +80,7 @@
         return YES;
     }
     
-    NSLog(@"VNCClient: libvncclient not found. Install libvncserver package.");
+    NSDebugLLog(@"gwcomp", @"VNCClient: libvncclient not found. Install libvncserver package.");
     return NO;
 }
 
@@ -105,7 +105,7 @@ static rfbBool VNCMallocFrameBuffer(rfbClient *client)
         return FALSE;
     }
     
-    NSLog(@"VNCClient: Framebuffer size: %dx%d, depth: %d, bpp: %d",
+    NSDebugLLog(@"gwcomp", @"VNCClient: Framebuffer size: %dx%d, depth: %d, bpp: %d",
           client->width, client->height, client->format.depth, client->format.bitsPerPixel);
     
     // Free old framebuffer
@@ -126,7 +126,7 @@ static rfbBool VNCMallocFrameBuffer(rfbClient *client)
     
     vncClient->_framebuffer = (unsigned char *)malloc(bufferSize);
     if (!vncClient->_framebuffer) {
-        NSLog(@"VNCClient: Failed to allocate framebuffer of size %zu", bufferSize);
+        NSDebugLLog(@"gwcomp", @"VNCClient: Failed to allocate framebuffer of size %zu", bufferSize);
         return FALSE;
     }
     
@@ -135,7 +135,7 @@ static rfbBool VNCMallocFrameBuffer(rfbClient *client)
     // Accept the server's pixel format instead of forcing our own
     // The server reported: "shift red 16 green 8 blue 0" which is RGB format
     // Let's use the server's format and handle color conversion in the image creation
-    NSLog(@"VNCClient: Using server pixel format - red:%d green:%d blue:%d",
+    NSDebugLLog(@"gwcomp", @"VNCClient: Using server pixel format - red:%d green:%d blue:%d",
           client->format.redShift, client->format.greenShift, client->format.blueShift);
     
     // Don't call SetFormatAndEncodings() to avoid changing the server's format
@@ -178,7 +178,7 @@ static void VNCLog(const char *format, ...)
     
     char buffer[1024];
     vsnprintf(buffer, sizeof(buffer), format, args);
-    NSLog(@"VNCClient libvncclient: %s", buffer);
+    NSDebugLLog(@"gwcomp", @"VNCClient libvncclient: %s", buffer);
     
     va_end(args);
 }
@@ -191,7 +191,7 @@ static void VNCErr(const char *format, ...)
     
     char buffer[1024];
     vsnprintf(buffer, sizeof(buffer), format, args);
-    NSLog(@"VNCClient libvncclient ERROR: %s", buffer);
+    NSDebugLLog(@"gwcomp", @"VNCClient libvncclient ERROR: %s", buffer);
     
     va_end(args);
 }
@@ -206,7 +206,7 @@ static void VNCErr(const char *format, ...)
 - (BOOL)connectToHost:(NSString *)hostname port:(NSInteger)port password:(NSString *)password
 {
     if (_connecting || _connected) {
-        NSLog(@"VNCClient: Already connecting or connected");
+        NSDebugLLog(@"gwcomp", @"VNCClient: Already connecting or connected");
         return NO;
     }
     
@@ -234,7 +234,7 @@ static void VNCErr(const char *format, ...)
 
 - (void)disconnect
 {
-    NSLog(@"VNCClient: Disconnecting...");
+    NSDebugLLog(@"gwcomp", @"VNCClient: Disconnecting...");
     
     _shouldStop = YES;
     _connecting = NO;
@@ -283,7 +283,7 @@ static void VNCErr(const char *format, ...)
 {
     @autoreleasepool {
     
-    NSLog(@"VNCClient: Starting connection to %@:%ld", _hostname, (long)_port);
+    NSDebugLLog(@"gwcomp", @"VNCClient: Starting connection to %@:%ld", _hostname, (long)_port);
     
     // Initialize libvncclient
     rfbClientLog = VNCLog;
@@ -291,7 +291,7 @@ static void VNCErr(const char *format, ...)
     
     _rfbClient = rfbGetClient(8, 3, 4); // 8 bits per sample, 3 samples per pixel, 4 bytes per pixel
     if (!_rfbClient) {
-        NSLog(@"VNCClient: Failed to create RFB client");
+        NSDebugLLog(@"gwcomp", @"VNCClient: Failed to create RFB client");
         [self notifyConnectionResult:NO error:@"Failed to create RFB client"];
         goto cleanup;
     }
@@ -314,39 +314,39 @@ static void VNCErr(const char *format, ...)
     client->serverHost = strdup([_hostname UTF8String]);
     client->serverPort = (int)_port;
     
-    NSLog(@"VNCClient: Attempting to connect to %s:%d", client->serverHost, client->serverPort);
+    NSDebugLLog(@"gwcomp", @"VNCClient: Attempting to connect to %s:%d", client->serverHost, client->serverPort);
     
     // Add connection timeout handling
     int connectResult = 0;
     for (int attempt = 0; attempt < 3; attempt++) {
         if (_shouldStop) {
-            NSLog(@"VNCClient: Connection cancelled before attempt %d", attempt + 1);
+            NSDebugLLog(@"gwcomp", @"VNCClient: Connection cancelled before attempt %d", attempt + 1);
             [self notifyConnectionResult:NO error:@"Connection cancelled"];
             goto cleanup;
         }
         
-        NSLog(@"VNCClient: Connection attempt %d/3", attempt + 1);
+        NSDebugLLog(@"gwcomp", @"VNCClient: Connection attempt %d/3", attempt + 1);
         
         // Try to connect
         connectResult = rfbInitClient(client, NULL, NULL);
         if (connectResult) {
-            NSLog(@"VNCClient: Connection successful on attempt %d", attempt + 1);
+            NSDebugLLog(@"gwcomp", @"VNCClient: Connection successful on attempt %d", attempt + 1);
             break;
         }
         
-        NSLog(@"VNCClient: Connection attempt %d failed, waiting before retry...", attempt + 1);
+        NSDebugLLog(@"gwcomp", @"VNCClient: Connection attempt %d failed, waiting before retry...", attempt + 1);
         if (attempt < 2) { // Don't sleep after the last attempt
             sleep(2);
         }
     }
     
     if (!connectResult) {
-        NSLog(@"VNCClient: All connection attempts failed");
+        NSDebugLLog(@"gwcomp", @"VNCClient: All connection attempts failed");
         [self notifyConnectionResult:NO error:@"Failed to connect to VNC server after multiple attempts"];
         goto cleanup;
     }
     
-    NSLog(@"VNCClient: Successfully connected to %@:%ld", _hostname, (long)_port);
+    NSDebugLLog(@"gwcomp", @"VNCClient: Successfully connected to %@:%ld", _hostname, (long)_port);
     _connected = YES;
     _connecting = NO;
     
@@ -373,7 +373,7 @@ static void VNCErr(const char *format, ...)
             if (errno == EINTR) {
                 continue; // Interrupted by signal, try again
             }
-            NSLog(@"VNCClient: select() error: %s", strerror(errno));
+            NSDebugLLog(@"gwcomp", @"VNCClient: select() error: %s", strerror(errno));
             break;
         }
         
@@ -381,7 +381,7 @@ static void VNCErr(const char *format, ...)
             // Handle RFB messages
             int msgResult = HandleRFBServerMessage(client);
             if (msgResult == FALSE) {
-                NSLog(@"VNCClient: HandleRFBServerMessage failed");
+                NSDebugLLog(@"gwcomp", @"VNCClient: HandleRFBServerMessage failed");
                 break;
             }
         }
@@ -391,7 +391,7 @@ static void VNCErr(const char *format, ...)
     }
     
 cleanup:
-    NSLog(@"VNCClient: Connection thread ending");
+    NSDebugLLog(@"gwcomp", @"VNCClient: Connection thread ending");
     
     if (_rfbClient) {
         rfbClient *client = (rfbClient *)_rfbClient;

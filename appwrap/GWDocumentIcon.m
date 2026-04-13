@@ -191,7 +191,7 @@
 
   if (!(pngData && [pngData writeToFile:docPath atomically:YES]))
     {
-      NSLog(@"Failed to write document icon to %@", docPath);
+      NSDebugLLog(@"gwcomp", @"Failed to write document icon to %@", docPath);
       return nil;
     }
 
@@ -206,7 +206,7 @@
       return docFilename;
     }
 
-  NSLog(@"Removing invalid document icon: %@", docPath);
+  NSDebugLLog(@"gwcomp", @"Removing invalid document icon: %@", docPath);
   [[NSFileManager defaultManager] removeItemAtPath:docPath error:NULL];
   return nil;
 }

@@ -17,27 +17,27 @@ int main(int argc, const char *argv[])
     
     NSString *path = [NSString stringWithUTF8String:argv[1]];
     
-    NSLog(@"Attempting to load ICNS file: %@", path);
+    NSDebugLLog(@"gwcomp", @"Attempting to load ICNS file: %@", path);
     
     NSData *data = [NSData dataWithContentsOfFile:path];
     
     if (!data)
     {
-        NSLog(@"✗ Failed to read file");
+        NSDebugLLog(@"gwcomp", @"✗ Failed to read file");
         [pool release];
         return 1;
     }
     
-    NSLog(@"✓ Successfully read file: %lu bytes", (unsigned long)[data length]);
+    NSDebugLLog(@"gwcomp", @"✓ Successfully read file: %lu bytes", (unsigned long)[data length]);
     
     if ([data length] >= 4)
     {
         const unsigned char *bytes = [data bytes];
-        NSLog(@"  Magic: '%c%c%c%c'", bytes[0], bytes[1], bytes[2], bytes[3]);
+        NSDebugLLog(@"gwcomp", @"  Magic: '%c%c%c%c'", bytes[0], bytes[1], bytes[2], bytes[3]);
         
         if (bytes[0] == 'i' && bytes[1] == 'c' && bytes[2] == 'n' && bytes[3] == 's')
         {
-            NSLog(@"✓ File is a valid ICNS file");
+            NSDebugLLog(@"gwcomp", @"✓ File is a valid ICNS file");
         }
     }
     

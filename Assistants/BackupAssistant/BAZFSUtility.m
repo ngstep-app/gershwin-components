@@ -21,7 +21,7 @@
 
 + (BOOL)isZFSAvailable
 {
-    NSLog(@"BAZFSUtility: Checking ZFS availability");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking ZFS availability");
     
     // Check if zfs command exists
     NSTask *task = [[NSTask alloc] init];
@@ -35,10 +35,10 @@
         [task waitUntilExit];
         BOOL available = ([task terminationStatus] == 0);
         
-        NSLog(@"BAZFSUtility: ZFS %@", available ? @"is available" : @"is not available");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS %@", available ? @"is available" : @"is not available");
         return available;
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to check ZFS availability: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to check ZFS availability: %@", [exception reason]);
         return NO;
     }
 }
@@ -71,69 +71,69 @@
 
 + (BOOL)createPool:(NSString *)poolName onDisk:(NSString *)diskDevice
 {
-    NSLog(@"BAZFSUtility: ===================================================");
-    NSLog(@"BAZFSUtility: === CREATING ZFS POOL '%@' ON DISK %@ ===", poolName, diskDevice);
-    NSLog(@"BAZFSUtility: ===================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ===================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: === CREATING ZFS POOL '%@' ON DISK %@ ===", poolName, diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ===================================================");
     
     // === PHASE 1: PRELIMINARY VALIDATION ===
-    NSLog(@"BAZFSUtility: PHASE 1: Preliminary validation...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 1: Preliminary validation...");
     
     if (![self isValidPoolName:poolName]) {
-        NSLog(@"ERROR: Invalid pool name: %@", poolName);
-        NSLog(@"ERROR: Pool names must start with a letter and contain only alphanumeric characters, dashes, and underscores");
+        NSDebugLLog(@"gwcomp", @"ERROR: Invalid pool name: %@", poolName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Pool names must start with a letter and contain only alphanumeric characters, dashes, and underscores");
         return NO;
     }
-    NSLog(@"BAZFSUtility: Pool name '%@' is valid", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool name '%@' is valid", poolName);
     
     // Check if pool already exists
-    NSLog(@"BAZFSUtility: Checking if pool '%@' already exists...", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking if pool '%@' already exists...", poolName);
     if ([self poolExists:poolName]) {
-        NSLog(@"ERROR: Pool '%@' already exists", poolName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Pool '%@' already exists", poolName);
         return NO;
     }
-    NSLog(@"BAZFSUtility: Pool name '%@' is available", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool name '%@' is available", poolName);
     
     // === PHASE 2: DEVICE VALIDATION ===
-    NSLog(@"BAZFSUtility: PHASE 2: Device validation...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 2: Device validation...");
     
     // Check if device exists
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSString *devicePath = [NSString stringWithFormat:@"/dev/%@", diskDevice];
-    NSLog(@"BAZFSUtility: Checking if device path exists: %@", devicePath);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking if device path exists: %@", devicePath);
     if (![fileManager fileExistsAtPath:devicePath]) {
-        NSLog(@"ERROR: Device %@ does not exist", devicePath);
+        NSDebugLLog(@"gwcomp", @"ERROR: Device %@ does not exist", devicePath);
         return NO;
     }
-    NSLog(@"BAZFSUtility: Device path exists: %@", devicePath);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Device path exists: %@", devicePath);
     
     // Check device permissions and accessibility
-    NSLog(@"BAZFSUtility: Checking device accessibility...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking device accessibility...");
     NSDictionary *attrs = [fileManager attributesOfItemAtPath:devicePath error:nil];
     if (attrs) {
-        NSLog(@"BAZFSUtility: Device attributes: %@", attrs);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Device attributes: %@", attrs);
     } else {
-        NSLog(@"WARNING: Could not get device attributes for %@", devicePath);
+        NSDebugLLog(@"gwcomp", @"WARNING: Could not get device attributes for %@", devicePath);
     }
     
     // Check current effective user ID
     uid_t euid = geteuid();
-    NSLog(@"BAZFSUtility: Running as effective UID: %d (root=0)", euid);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Running as effective UID: %d (root=0)", euid);
     if (euid != 0) {
-        NSLog(@"WARNING: Not running as root (UID=%d). ZFS operations may fail.", euid);
-        NSLog(@"WARNING: Consider running with sudo or as root for ZFS pool creation.");
+        NSDebugLLog(@"gwcomp", @"WARNING: Not running as root (UID=%d). ZFS operations may fail.", euid);
+        NSDebugLLog(@"gwcomp", @"WARNING: Consider running with sudo or as root for ZFS pool creation.");
     }
     
     // === PHASE 3: ZFS SYSTEM VALIDATION ===
-    NSLog(@"BAZFSUtility: PHASE 3: ZFS system validation...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 3: ZFS system validation...");
     
     if (![self isZFSAvailable]) {
-        NSLog(@"ERROR: ZFS is not available on this system");
+        NSDebugLLog(@"gwcomp", @"ERROR: ZFS is not available on this system");
         return NO;
     }
-    NSLog(@"BAZFSUtility: ZFS is available");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS is available");
     
     // Check zpool command specifically
-    NSLog(@"BAZFSUtility: Verifying zpool command availability...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Verifying zpool command availability...");
     NSTask *zpoolCheck = [[NSTask alloc] init];
     [zpoolCheck setLaunchPath:@"which"];
     [zpoolCheck setArguments:@[@"zpool"]];
@@ -144,77 +144,77 @@
         [zpoolCheck launch];
         [zpoolCheck waitUntilExit];
         if ([zpoolCheck terminationStatus] != 0) {
-            NSLog(@"ERROR: zpool command not found");
+            NSDebugLLog(@"gwcomp", @"ERROR: zpool command not found");
             return NO;
         }
-        NSLog(@"BAZFSUtility: zpool command is available");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: zpool command is available");
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to check zpool command: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to check zpool command: %@", [exception reason]);
         return NO;
     }
     
     // === PHASE 3.5: EXISTING POOL STATE MANAGEMENT ===
-    NSLog(@"BAZFSUtility: PHASE 3.5: Existing pool state management...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 3.5: Existing pool state management...");
     
     // Check if pool already exists
-    NSLog(@"BAZFSUtility: Checking if pool '%@' already exists...", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking if pool '%@' already exists...", poolName);
     if ([self poolExists:poolName]) {
-        NSLog(@"WARNING: Pool '%@' already exists - checking state and handling...", poolName);
+        NSDebugLLog(@"gwcomp", @"WARNING: Pool '%@' already exists - checking state and handling...", poolName);
         
         // Get pool status
         NSArray *statusArgs = @[@"status", poolName];
         NSString *poolStatus = [self executeZPoolCommand:statusArgs];
         if (poolStatus && [poolStatus length] > 0) {
-            NSLog(@"BAZFSUtility: Existing pool status:\n%@", poolStatus);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Existing pool status:\n%@", poolStatus);
         }
         
         // Check if the pool is using the same device
         if ([poolStatus containsString:diskDevice]) {
-            NSLog(@"BAZFSUtility: Pool '%@' is already using device %@ - this is what we want!", poolName, diskDevice);
-            NSLog(@"BAZFSUtility: Skipping pool creation as it already exists with correct configuration");
-            NSLog(@"BAZFSUtility: ===================================================");
-            NSLog(@"BAZFSUtility: === ZFS POOL ALREADY EXISTS (SUCCESS) ===");
-            NSLog(@"BAZFSUtility: ===================================================");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool '%@' is already using device %@ - this is what we want!", poolName, diskDevice);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Skipping pool creation as it already exists with correct configuration");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ===================================================");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: === ZFS POOL ALREADY EXISTS (SUCCESS) ===");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ===================================================");
             return YES;
         } else {
-            NSLog(@"WARNING: Pool '%@' exists but uses different device(s)", poolName);
-            NSLog(@"WARNING: Current pool status: %@", poolStatus ?: @"(unable to get status)");
-            NSLog(@"WARNING: Attempting to destroy existing pool and recreate...");
+            NSDebugLLog(@"gwcomp", @"WARNING: Pool '%@' exists but uses different device(s)", poolName);
+            NSDebugLLog(@"gwcomp", @"WARNING: Current pool status: %@", poolStatus ?: @"(unable to get status)");
+            NSDebugLLog(@"gwcomp", @"WARNING: Attempting to destroy existing pool and recreate...");
             
             // Try to export/destroy the existing pool
-            NSLog(@"BAZFSUtility: Attempting to export pool '%@'...", poolName);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Attempting to export pool '%@'...", poolName);
             if ([self exportPool:poolName]) {
-                NSLog(@"BAZFSUtility: Successfully exported pool '%@'", poolName);
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully exported pool '%@'", poolName);
             } else {
-                NSLog(@"WARNING: Failed to export pool '%@', attempting to destroy...", poolName);
+                NSDebugLLog(@"gwcomp", @"WARNING: Failed to export pool '%@', attempting to destroy...", poolName);
             }
             
             // Always attempt destroy regardless of export result
-            NSLog(@"BAZFSUtility: Attempting to destroy pool '%@'...", poolName);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Attempting to destroy pool '%@'...", poolName);
             [self destroyPool:poolName];  // Don't check result - destroyPool now handles all cases
             
             // Check final state - if pool still exists, we'll work around it
             if ([self poolExists:poolName]) {
-                NSLog(@"WARNING: Pool '%@' still exists after export/destroy attempts", poolName);
-                NSLog(@"WARNING: Will attempt to create pool anyway using force flag");
+                NSDebugLLog(@"gwcomp", @"WARNING: Pool '%@' still exists after export/destroy attempts", poolName);
+                NSDebugLLog(@"gwcomp", @"WARNING: Will attempt to create pool anyway using force flag");
             } else {
-                NSLog(@"BAZFSUtility: Pool '%@' successfully removed", poolName);
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool '%@' successfully removed", poolName);
             }
         }
     } else {
-        NSLog(@"BAZFSUtility: Pool name '%@' is available", poolName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool name '%@' is available", poolName);
     }
     
     // === PHASE 4: DISK PREPARATION ===
-    NSLog(@"BAZFSUtility: PHASE 4: Disk preparation...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 4: Disk preparation...");
     
     // Check if disk has existing ZFS pool
-    NSLog(@"BAZFSUtility: Checking if disk %@ has existing ZFS pool...", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking if disk %@ has existing ZFS pool...", diskDevice);
     if ([self diskHasZFSPool:diskDevice]) {
-        NSLog(@"WARNING: Disk %@ appears to have existing ZFS pool data", diskDevice);
+        NSDebugLLog(@"gwcomp", @"WARNING: Disk %@ appears to have existing ZFS pool data", diskDevice);
         
         // Check if any imported pools are using this device
-        NSLog(@"BAZFSUtility: Checking for imported pools using device %@...", diskDevice);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking for imported pools using device %@...", diskDevice);
         NSArray *listArgs = @[@"list", @"-H", @"-o", @"name"];
         NSString *poolList = [self executeZPoolCommand:listArgs];
         
@@ -226,87 +226,87 @@
                     NSArray *statusArgs = @[@"status", trimmedName];
                     NSString *poolStatus = [self executeZPoolCommand:statusArgs];
                     if (poolStatus && [poolStatus containsString:diskDevice]) {
-                        NSLog(@"BAZFSUtility: Found pool '%@' using device %@", trimmedName, diskDevice);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found pool '%@' using device %@", trimmedName, diskDevice);
                         if ([trimmedName isEqualToString:poolName]) {
-                            NSLog(@"BAZFSUtility: This is the pool we want to create - it already exists!");
+                            NSDebugLLog(@"gwcomp", @"BAZFSUtility: This is the pool we want to create - it already exists!");
                         } else {
-                            NSLog(@"WARNING: Device %@ is in use by pool '%@'", diskDevice, trimmedName);
-                            NSLog(@"WARNING: Pool status:\n%@", poolStatus);
+                            NSDebugLLog(@"gwcomp", @"WARNING: Device %@ is in use by pool '%@'", diskDevice, trimmedName);
+                            NSDebugLLog(@"gwcomp", @"WARNING: Pool status:\n%@", poolStatus);
                         }
                     }
                 }
             }
         }
     } else {
-        NSLog(@"BAZFSUtility: No existing ZFS pool detected on disk");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: No existing ZFS pool detected on disk");
     }
     
     // Unmount any existing partitions on the disk (but be careful with ZFS)
-    NSLog(@"BAZFSUtility: Unmounting any existing file systems on disk...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Unmounting any existing file systems on disk...");
     [self unmountDisk:diskDevice];
-    NSLog(@"BAZFSUtility: Unmount operations completed");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Unmount operations completed");
     
     // === PHASE 5: ZFS POOL CREATION ===
-    NSLog(@"BAZFSUtility: PHASE 5: ZFS pool creation...");
-    NSLog(@"BAZFSUtility: Pool name: %@", poolName);
-    NSLog(@"BAZFSUtility: Device: %@", diskDevice);
-    NSLog(@"BAZFSUtility: Device path: %@", devicePath);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 5: ZFS pool creation...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool name: %@", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Device: %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Device path: %@", devicePath);
     
     // Create the ZFS pool using zpool command (not zfs)
     NSArray *args = @[@"create", @"-f", poolName, diskDevice];
-    NSLog(@"BAZFSUtility: Executing command: zpool %@", [args componentsJoinedByString:@" "]);
-    NSLog(@"BAZFSUtility: Command breakdown:");
-    NSLog(@"BAZFSUtility:   - create: Create a new pool");
-    NSLog(@"BAZFSUtility:   - -f: Force creation (override any warnings)");
-    NSLog(@"BAZFSUtility:   - %@: Pool name", poolName);
-    NSLog(@"BAZFSUtility:   - %@: Device name", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Executing command: zpool %@", [args componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Command breakdown:");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility:   - create: Create a new pool");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility:   - -f: Force creation (override any warnings)");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility:   - %@: Pool name", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility:   - %@: Device name", diskDevice);
     
     BOOL success = [self executeZPoolCommandWithSuccess:args];
     
     // === PHASE 6: POST-CREATION VERIFICATION ===
-    NSLog(@"BAZFSUtility: PHASE 6: Post-creation verification...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 6: Post-creation verification...");
     
     if (success) {
-        NSLog(@"BAZFSUtility: zpool create command completed successfully");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: zpool create command completed successfully");
     } else {
-        NSLog(@"WARNING: zpool create command failed, but checking if pool exists anyway...");
+        NSDebugLLog(@"gwcomp", @"WARNING: zpool create command failed, but checking if pool exists anyway...");
     }
     
     // Verify the pool was created (check regardless of command result)
-    NSLog(@"BAZFSUtility: Verifying pool creation...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Verifying pool creation...");
     if ([self poolExists:poolName]) {
-        NSLog(@"BAZFSUtility: Pool '%@' exists and is accessible", poolName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool '%@' exists and is accessible", poolName);
         
         // Get pool status
-        NSLog(@"BAZFSUtility: Getting pool status...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Getting pool status...");
         NSArray *statusArgs = @[@"status", poolName];
         NSString *statusOutput = [self executeZPoolCommand:statusArgs];
         if (statusOutput && [statusOutput length] > 0) {
-            NSLog(@"BAZFSUtility: Pool status:\n%@", statusOutput);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool status:\n%@", statusOutput);
         } else {
-            NSLog(@"WARNING: Could not get pool status");
+            NSDebugLLog(@"gwcomp", @"WARNING: Could not get pool status");
         }
         
-        NSLog(@"BAZFSUtility: ===================================================");
-        NSLog(@"BAZFSUtility: === ZFS POOL CREATION SUCCESSFUL ===");
-        NSLog(@"BAZFSUtility: ===================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ===================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: === ZFS POOL CREATION SUCCESSFUL ===");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ===================================================");
         return YES;
     } else {
-        NSLog(@"WARNING: Pool '%@' does not exist after creation attempt", poolName);
-        NSLog(@"WARNING: Attempting to import pool from disk as fallback...");
+        NSDebugLLog(@"gwcomp", @"WARNING: Pool '%@' does not exist after creation attempt", poolName);
+        NSDebugLLog(@"gwcomp", @"WARNING: Attempting to import pool from disk as fallback...");
         
         // Try to import the pool in case it was created but not imported
         if ([self importPoolFromDisk:diskDevice poolName:poolName]) {
-            NSLog(@"BAZFSUtility: Successfully imported pool '%@' from disk", poolName);
-            NSLog(@"BAZFSUtility: ===================================================");
-            NSLog(@"BAZFSUtility: === ZFS POOL CREATION/IMPORT SUCCESSFUL ===");
-            NSLog(@"BAZFSUtility: ===================================================");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully imported pool '%@' from disk", poolName);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ===================================================");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: === ZFS POOL CREATION/IMPORT SUCCESSFUL ===");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ===================================================");
             return YES;
         } else {
-            NSLog(@"WARNING: Import also failed, but pool creation goal may still be achieved");
-            NSLog(@"BAZFSUtility: ===================================================");
-            NSLog(@"BAZFSUtility: === ZFS POOL CREATION COMPLETED (status unknown) ===");
-            NSLog(@"BAZFSUtility: ===================================================");
+            NSDebugLLog(@"gwcomp", @"WARNING: Import also failed, but pool creation goal may still be achieved");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ===================================================");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: === ZFS POOL CREATION COMPLETED (status unknown) ===");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ===================================================");
             // Return YES anyway - let higher level code handle any issues
             return YES;
         }
@@ -315,56 +315,56 @@
 
 + (BOOL)importPoolFromDisk:(NSString *)diskDevice poolName:(NSString *)poolName
 {
-    NSLog(@"BAZFSUtility: Importing ZFS pool '%@' from disk %@", poolName, diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Importing ZFS pool '%@' from disk %@", poolName, diskDevice);
     
     // First check if the pool is already imported
     if ([self poolExists:poolName]) {
-        NSLog(@"BAZFSUtility: Pool '%@' is already imported - checking if it uses the correct disk", poolName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool '%@' is already imported - checking if it uses the correct disk", poolName);
         
         // Verify that the pool is using the expected disk
         NSArray *statusArgs = @[@"status", poolName];
         NSString *poolStatus = [self executeZPoolCommand:statusArgs];
         if (poolStatus && [poolStatus containsString:diskDevice]) {
-            NSLog(@"BAZFSUtility: Pool '%@' is already imported and uses disk %@ - import successful", poolName, diskDevice);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool '%@' is already imported and uses disk %@ - import successful", poolName, diskDevice);
             return YES;
         } else {
-            NSLog(@"WARNING: Pool '%@' is imported but doesn't use disk %@", poolName, diskDevice);
-            NSLog(@"Pool status:\n%@", poolStatus ?: @"(unable to get status)");
+            NSDebugLLog(@"gwcomp", @"WARNING: Pool '%@' is imported but doesn't use disk %@", poolName, diskDevice);
+            NSDebugLLog(@"gwcomp", @"Pool status:\n%@", poolStatus ?: @"(unable to get status)");
             return NO;
         }
     }
     
     // Pool doesn't exist, try to import it
-    NSLog(@"BAZFSUtility: Pool '%@' not found, attempting to import from disk %@", poolName, diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool '%@' not found, attempting to import from disk %@", poolName, diskDevice);
     NSArray *args = @[@"import", @"-f", poolName];
     BOOL success = [self executeZPoolCommandWithSuccess:args];
     
     if (success) {
-        NSLog(@"BAZFSUtility: Successfully imported ZFS pool '%@' from disk %@", poolName, diskDevice);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully imported ZFS pool '%@' from disk %@", poolName, diskDevice);
         return YES;
     } else {
-        NSLog(@"ERROR: Failed to import ZFS pool '%@' from disk %@", poolName, diskDevice);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to import ZFS pool '%@' from disk %@", poolName, diskDevice);
         return NO;
     }
 }
 
 + (BOOL)exportPool:(NSString *)poolName
 {
-    NSLog(@"BAZFSUtility: Exporting ZFS pool '%@'", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Exporting ZFS pool '%@'", poolName);
     
     // Check if pool can be safely exported first
-    NSLog(@"BAZFSUtility: Performing pre-export safety checks for pool '%@'", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Performing pre-export safety checks for pool '%@'", poolName);
     if (![self checkPoolCanBeExported:poolName]) {
-        NSLog(@"WARNING: Pool '%@' may not be safe to export, but proceeding anyway", poolName);
+        NSDebugLLog(@"gwcomp", @"WARNING: Pool '%@' may not be safe to export, but proceeding anyway", poolName);
     }
     
     NSArray *args = @[@"export", poolName];
     BOOL success = [self executeZPoolCommandWithSuccess:args];
     
     if (success) {
-        NSLog(@"BAZFSUtility: Successfully exported ZFS pool '%@'", poolName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully exported ZFS pool '%@'", poolName);
     } else {
-        NSLog(@"ERROR: Failed to export ZFS pool '%@'", poolName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to export ZFS pool '%@'", poolName);
     }
     
     return success;
@@ -372,18 +372,18 @@
 
 + (BOOL)destroyPool:(NSString *)poolName
 {
-    NSLog(@"BAZFSUtility: ================================================================");
-    NSLog(@"BAZFSUtility: === DESTROYING ZFS POOL '%@' ===", poolName);
-    NSLog(@"BAZFSUtility: ================================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: === DESTROYING ZFS POOL '%@' ===", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
     
     // Step 1: Check if pool exists
     if (![self poolExists:poolName]) {
-        NSLog(@"BAZFSUtility: Pool '%@' does not exist - considering this success", poolName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool '%@' does not exist - considering this success", poolName);
         return YES;
     }
     
     // Step 2: Unmount all datasets in the pool to resolve "busy" condition
-    NSLog(@"BAZFSUtility: Step 1: Unmounting all datasets in pool '%@'...", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Step 1: Unmounting all datasets in pool '%@'...", poolName);
     NSArray *datasets = [self getDatasets:poolName];
     if (datasets && [datasets count] > 0) {
         for (id dataset in datasets) {
@@ -395,34 +395,34 @@
             }
             
             if (datasetName) {
-                NSLog(@"BAZFSUtility: Unmounting dataset: %@", datasetName);
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Unmounting dataset: %@", datasetName);
                 [self unmountDataset:datasetName];  // Don't check result - force unmount all
             }
         }
     } else {
-        NSLog(@"BAZFSUtility: No datasets found in pool or pool not accessible");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: No datasets found in pool or pool not accessible");
     }
     
     // Step 3: Try to export the pool gracefully first
-    NSLog(@"BAZFSUtility: Step 2: Attempting graceful export of pool '%@'...", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Step 2: Attempting graceful export of pool '%@'...", poolName);
     BOOL exported = [self exportPool:poolName];
     if (exported) {
-        NSLog(@"BAZFSUtility: Successfully exported pool '%@'", poolName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully exported pool '%@'", poolName);
         // Verify pool is really gone
         if (![self poolExists:poolName]) {
-            NSLog(@"BAZFSUtility: Pool '%@' successfully removed via export", poolName);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool '%@' successfully removed via export", poolName);
             return YES;
         }
     } else {
-        NSLog(@"BAZFSUtility: Failed to export pool '%@', proceeding with force destroy", poolName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Failed to export pool '%@', proceeding with force destroy", poolName);
     }
     
     // Step 4: Force destroy the pool
-    NSLog(@"BAZFSUtility: Step 3: Force destroying pool '%@'...", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Step 3: Force destroying pool '%@'...", poolName);
     NSArray *args = @[@"destroy", @"-f", poolName];
-    NSLog(@"BAZFSUtility: ================================================================");
-    NSLog(@"BAZFSUtility: Executing ZPool DESTROY command: zpool %@", [args componentsJoinedByString:@" "]);
-    NSLog(@"BAZFSUtility: ================================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Executing ZPool DESTROY command: zpool %@", [args componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"zpool"];
@@ -434,11 +434,11 @@
     [task setStandardError:errorPipe];
     
     @try {
-        NSLog(@"BAZFSUtility: Launching zpool destroy task...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Launching zpool destroy task...");
         [task launch];
-        NSLog(@"BAZFSUtility: Task launched, waiting for completion...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Task launched, waiting for completion...");
         [task waitUntilExit];
-        NSLog(@"BAZFSUtility: Task completed");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Task completed");
         
         int status = [task terminationStatus];
         BOOL success = (status == 0);
@@ -450,19 +450,19 @@
         NSString *outputString = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
         NSString *errorString = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
-        NSLog(@"BAZFSUtility: ================================================================");
-        NSLog(@"BAZFSUtility: ZPool DESTROY command RESULTS:");
-        NSLog(@"BAZFSUtility: Exit status: %d (%@)", status, success ? @"SUCCESS" : @"FAILURE");
-        NSLog(@"BAZFSUtility: ================================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZPool DESTROY command RESULTS:");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Exit status: %d (%@)", status, success ? @"SUCCESS" : @"FAILURE");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
         
         if ([outputString length] > 0) {
-            NSLog(@"BAZFSUtility: STDOUT:\n%@", outputString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDOUT:\n%@", outputString);
         } else {
-            NSLog(@"BAZFSUtility: STDOUT: (empty)");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDOUT: (empty)");
         }
         
         if ([errorString length] > 0) {
-            NSLog(@"BAZFSUtility: STDERR:\n%@", errorString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDERR:\n%@", errorString);
             
             // Special handling for destroy operations - any "pool not found" condition is success
             NSString *lowerError = [errorString lowercaseString];
@@ -470,41 +470,41 @@
                 [lowerError containsString:@"cannot open"] ||
                 [lowerError containsString:@"pool does not exist"] ||
                 [lowerError containsString:@"not found"]) {
-                NSLog(@"DESTROY ANALYSIS: Pool '%@' cannot be accessed - this indicates successful destruction (pool is gone)", poolName);
+                NSDebugLLog(@"gwcomp", @"DESTROY ANALYSIS: Pool '%@' cannot be accessed - this indicates successful destruction (pool is gone)", poolName);
                 success = YES;  // Override the failure status
             } else if ([lowerError containsString:@"permission denied"] || [lowerError containsString:@"operation not permitted"]) {
-                NSLog(@"ERROR ANALYSIS: Permission denied - may need to run as root/sudo");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Permission denied - may need to run as root/sudo");
             } else if ([lowerError containsString:@"busy"] || [lowerError containsString:@"resource busy"]) {
-                NSLog(@"ERROR ANALYSIS: Pool is still busy - datasets may still be mounted");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool is still busy - datasets may still be mounted");
             } else {
-                NSLog(@"ERROR ANALYSIS: Unknown destroy error condition");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Unknown destroy error condition");
             }
         } else {
-            NSLog(@"BAZFSUtility: STDERR: (empty)");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDERR: (empty)");
         }
         
         
         if (success) {
-            NSLog(@"BAZFSUtility: Successfully destroyed ZFS pool '%@' (or confirmed it was already gone)", poolName);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully destroyed ZFS pool '%@' (or confirmed it was already gone)", poolName);
         } else {
-            NSLog(@"ERROR: Destroy command failed, but checking final pool state...");
+            NSDebugLLog(@"gwcomp", @"ERROR: Destroy command failed, but checking final pool state...");
             
             // Final verification - check if the pool no longer exists
             if (![self poolExists:poolName]) {
-                NSLog(@"BAZFSUtility: Pool '%@' no longer exists after destroy attempt - considering this success", poolName);
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool '%@' no longer exists after destroy attempt - considering this success", poolName);
                 success = YES;
             } else {
-                NSLog(@"ERROR: Pool '%@' still exists after destroy attempt", poolName);
+                NSDebugLLog(@"gwcomp", @"ERROR: Pool '%@' still exists after destroy attempt", poolName);
             }
         }
         
-        NSLog(@"BAZFSUtility: ================================================================");
-        NSLog(@"BAZFSUtility: === DESTROY POOL '%@' %@ ===", poolName, success ? @"COMPLETED" : @"FAILED");
-        NSLog(@"BAZFSUtility: ================================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: === DESTROY POOL '%@' %@ ===", poolName, success ? @"COMPLETED" : @"FAILED");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
         return success;
     } @catch (NSException *exception) {
-        NSLog(@"CRITICAL ERROR: Exception while destroying ZFS pool %@: %@", poolName, [exception reason]);
-        NSLog(@"CRITICAL ERROR: Exception details: %@", exception);
+        NSDebugLLog(@"gwcomp", @"CRITICAL ERROR: Exception while destroying ZFS pool %@: %@", poolName, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"CRITICAL ERROR: Exception details: %@", exception);
         return NO;
     }
 }
@@ -519,7 +519,7 @@
 
 + (BOOL)diskHasZFSPool:(NSString *)diskDevice
 {
-    NSLog(@"BAZFSUtility: Checking if disk %@ has ZFS pool", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking if disk %@ has ZFS pool", diskDevice);
     
     // Use zdb to check for ZFS labels on the disk
     NSTask *task = [[NSTask alloc] init];
@@ -533,17 +533,17 @@
         [task waitUntilExit];
         BOOL hasZFS = ([task terminationStatus] == 0);
         
-        NSLog(@"BAZFSUtility: Disk %@ %@ ZFS pool", diskDevice, hasZFS ? @"has" : @"does not have");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Disk %@ %@ ZFS pool", diskDevice, hasZFS ? @"has" : @"does not have");
         return hasZFS;
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to check ZFS labels on disk %@: %@", diskDevice, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to check ZFS labels on disk %@: %@", diskDevice, [exception reason]);
         return NO;
     }
 }
 
 + (NSString *)getPoolNameFromDisk:(NSString *)diskDevice
 {
-    NSLog(@"BAZFSUtility: Getting pool name from disk %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Getting pool name from disk %@", diskDevice);
     
     // Use zdb to get pool information from the disk
     NSTask *task = [[NSTask alloc] init];
@@ -563,7 +563,7 @@
             NSData *outputData = [[outputPipe fileHandleForReading] readDataToEndOfFile];
             NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
             
-            NSLog(@"BAZFSUtility: zdb output for %@:\n%@", diskDevice, output);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: zdb output for %@:\n%@", diskDevice, output);
             
             // Parse the output to find the pool name
             // Look for lines like "name: 'poolname'"
@@ -579,7 +579,7 @@
                         if ([nameValue hasPrefix:@"'"] && [nameValue hasSuffix:@"'"]) {
                             nameValue = [nameValue substringWithRange:NSMakeRange(1, [nameValue length] - 2)];
                         }
-                        NSLog(@"BAZFSUtility: Found pool name '%@' on disk %@", nameValue, diskDevice);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found pool name '%@' on disk %@", nameValue, diskDevice);
                         return nameValue;
                     }
                 }
@@ -587,13 +587,13 @@
         } else {
             NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
             NSString *errorOutput = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
-            NSLog(@"ERROR: zdb failed for disk %@: %@", diskDevice, errorOutput);
+            NSDebugLLog(@"gwcomp", @"ERROR: zdb failed for disk %@: %@", diskDevice, errorOutput);
         }
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to get pool name from disk %@: %@", diskDevice, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to get pool name from disk %@: %@", diskDevice, [exception reason]);
     }
     
-    NSLog(@"BAZFSUtility: Could not determine pool name from disk %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Could not determine pool name from disk %@", diskDevice);
     return nil;
 }
 
@@ -601,15 +601,15 @@
 
 + (BOOL)createDataset:(NSString *)datasetName
 {
-    NSLog(@"BAZFSUtility: Creating dataset '%@'", datasetName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Creating dataset '%@'", datasetName);
     
     NSArray *args = @[@"create", datasetName];
     BOOL success = [self executeZFSCommandWithSuccess:args];
     
     if (success) {
-        NSLog(@"BAZFSUtility: Successfully created dataset '%@'", datasetName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully created dataset '%@'", datasetName);
     } else {
-        NSLog(@"ERROR: Failed to create dataset '%@'", datasetName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to create dataset '%@'", datasetName);
     }
     
     return success;
@@ -617,15 +617,15 @@
 
 + (BOOL)destroyDataset:(NSString *)datasetName
 {
-    NSLog(@"BAZFSUtility: Destroying dataset '%@'", datasetName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Destroying dataset '%@'", datasetName);
     
     NSArray *args = @[@"destroy", @"-r", datasetName];
     BOOL success = [self executeZFSCommandWithSuccess:args];
     
     if (success) {
-        NSLog(@"BAZFSUtility: Successfully destroyed dataset '%@'", datasetName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully destroyed dataset '%@'", datasetName);
     } else {
-        NSLog(@"ERROR: Failed to destroy dataset '%@'", datasetName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to destroy dataset '%@'", datasetName);
     }
     
     return success;
@@ -633,7 +633,7 @@
 
 + (BOOL)datasetExists:(NSString *)datasetName
 {
-    NSLog(@"BAZFSUtility: Checking if dataset '%@' exists", datasetName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking if dataset '%@' exists", datasetName);
     
     NSArray *args = @[@"list", @"-H", @"-o", @"name", datasetName];
     NSString *output = [self executeZFSCommand:args];
@@ -641,16 +641,16 @@
     // If the command succeeds and returns the dataset name, it exists
     BOOL exists = (output != nil && [output rangeOfString:datasetName].location != NSNotFound);
     
-    NSLog(@"BAZFSUtility: Dataset '%@' %@", datasetName, exists ? @"exists" : @"does not exist");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset '%@' %@", datasetName, exists ? @"exists" : @"does not exist");
     return exists;
 }
 
 + (BOOL)mountDataset:(NSString *)datasetName atPath:(NSString *)mountPath
 {
-    NSLog(@"BAZFSUtility: Mounting dataset '%@' at path '%@'", datasetName, mountPath);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Mounting dataset '%@' at path '%@'", datasetName, mountPath);
     
     // === PHASE 1: CHECK CURRENT MOUNT STATUS ===
-    NSLog(@"BAZFSUtility: PHASE 1: Checking current mount status...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 1: Checking current mount status...");
     
     NSArray *listArgs = @[@"list", @"-H", @"-o", @"mounted,mountpoint", datasetName];
     NSString *mountStatus = [self executeZFSCommand:listArgs];
@@ -662,56 +662,56 @@
             NSString *currentMountPoint = [[parts objectAtIndex:1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
             
             if ([mounted isEqualToString:@"yes"]) {
-                NSLog(@"BAZFSUtility: Dataset '%@' is already mounted at '%@'", datasetName, currentMountPoint);
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset '%@' is already mounted at '%@'", datasetName, currentMountPoint);
                 
                 if ([currentMountPoint isEqualToString:mountPath]) {
-                    NSLog(@"BAZFSUtility: Dataset is already mounted at the desired location - success!");
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset is already mounted at the desired location - success!");
                     return YES;
                 } else {
-                    NSLog(@"BAZFSUtility: Dataset is mounted at '%@' but we want '%@'", currentMountPoint, mountPath);
-                    NSLog(@"BAZFSUtility: Will attempt to remount at desired location...");
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset is mounted at '%@' but we want '%@'", currentMountPoint, mountPath);
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Will attempt to remount at desired location...");
                     
                     // Try to unmount first
-                    NSLog(@"BAZFSUtility: Unmounting from current location...");
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Unmounting from current location...");
                     [self unmountDataset:datasetName];
                 }
             } else {
-                NSLog(@"BAZFSUtility: Dataset '%@' is not currently mounted", datasetName);
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset '%@' is not currently mounted", datasetName);
             }
         }
     }
     
     // === PHASE 2: CREATE MOUNT POINT ===
-    NSLog(@"BAZFSUtility: PHASE 2: Ensuring mount point exists...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 2: Ensuring mount point exists...");
     
     NSFileManager *fileManager = [NSFileManager defaultManager];
     if (![fileManager fileExistsAtPath:mountPath]) {
         NSError *error = nil;
         if (![fileManager createDirectoryAtPath:mountPath withIntermediateDirectories:YES attributes:nil error:&error]) {
-            NSLog(@"ERROR: Failed to create mount point %@: %@", mountPath, [error localizedDescription]);
+            NSDebugLLog(@"gwcomp", @"ERROR: Failed to create mount point %@: %@", mountPath, [error localizedDescription]);
             return NO;
         }
-        NSLog(@"BAZFSUtility: Created mount point: %@", mountPath);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Created mount point: %@", mountPath);
     } else {
-        NSLog(@"BAZFSUtility: Mount point already exists: %@", mountPath);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Mount point already exists: %@", mountPath);
     }
     
     // === PHASE 3: SET MOUNT POINT PROPERTY ===
-    NSLog(@"BAZFSUtility: PHASE 3: Setting mountpoint property...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 3: Setting mountpoint property...");
     
     NSArray *args = @[@"set", [NSString stringWithFormat:@"mountpoint=%@", mountPath], datasetName];
     if (![self executeZFSCommandWithSuccess:args]) {
-        NSLog(@"WARNING: Failed to set mount point property for dataset '%@', but continuing...", datasetName);
+        NSDebugLLog(@"gwcomp", @"WARNING: Failed to set mount point property for dataset '%@', but continuing...", datasetName);
         // Don't fail here - continue with mount attempt
     } else {
-        NSLog(@"BAZFSUtility: Set mountpoint property to %@", mountPath);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Set mountpoint property to %@", mountPath);
     }
     
     // === PHASE 4: MOUNT THE DATASET ===
-    NSLog(@"BAZFSUtility: PHASE 4: Mounting dataset...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 4: Mounting dataset...");
     
     args = @[@"mount", datasetName];
-    NSLog(@"BAZFSUtility: Executing mount command: zfs %@", [args componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Executing mount command: zfs %@", [args componentsJoinedByString:@" "]);
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"zfs"];
@@ -732,20 +732,20 @@
         NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
         NSString *errorString = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
-        NSLog(@"BAZFSUtility: Mount command exit status: %d", status);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Mount command exit status: %d", status);
         if ([errorString length] > 0) {
-            NSLog(@"BAZFSUtility: Mount command stderr: %@", errorString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Mount command stderr: %@", errorString);
             
             // Check for "already mounted" condition
             NSString *lowerError = [errorString lowercaseString];
             if ([lowerError containsString:@"filesystem already mounted"] || [lowerError containsString:@"already mounted"]) {
-                NSLog(@"BAZFSUtility: Mount failed because filesystem is already mounted - this is acceptable");
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Mount failed because filesystem is already mounted - this is acceptable");
             }
         }
         
         
         // === PHASE 5: VERIFY MOUNT STATUS ===
-        NSLog(@"BAZFSUtility: PHASE 5: Verifying final mount status...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 5: Verifying final mount status...");
         
         // Always check final mount status regardless of command result
         NSArray *verifyArgs = @[@"list", @"-H", @"-o", @"mounted,mountpoint", datasetName];
@@ -758,68 +758,68 @@
                 NSString *currentMountPoint = [[parts objectAtIndex:1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
                 
                 if ([mounted isEqualToString:@"yes"]) {
-                    NSLog(@"BAZFSUtility: Dataset '%@' is now mounted at '%@'", datasetName, currentMountPoint);
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset '%@' is now mounted at '%@'", datasetName, currentMountPoint);
                     
                     if ([currentMountPoint isEqualToString:mountPath] || [currentMountPoint hasPrefix:mountPath]) {
-                        NSLog(@"BAZFSUtility: Mount location is correct");
-                        NSLog(@"BAZFSUtility: ==========================================================");
-                        NSLog(@"BAZFSUtility: === DATASET MOUNT SUCCESSFUL ===");
-                        NSLog(@"BAZFSUtility: Dataset: %@", datasetName);
-                        NSLog(@"BAZFSUtility: Mount point: %@", currentMountPoint);
-                        NSLog(@"BAZFSUtility: ==========================================================");
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Mount location is correct");
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: === DATASET MOUNT SUCCESSFUL ===");
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset: %@", datasetName);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Mount point: %@", currentMountPoint);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
                         return YES;
                     } else {
-                        NSLog(@"BAZFSUtility: Dataset is mounted but at different location: %@", currentMountPoint);
-                        NSLog(@"BAZFSUtility: This is acceptable - mount operation successful");
-                        NSLog(@"BAZFSUtility: ==========================================================");
-                        NSLog(@"BAZFSUtility: === DATASET MOUNT SUCCESSFUL (different location) ===");
-                        NSLog(@"BAZFSUtility: Dataset: %@", datasetName);
-                        NSLog(@"BAZFSUtility: Actual mount point: %@", currentMountPoint);
-                        NSLog(@"BAZFSUtility: ==========================================================");
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset is mounted but at different location: %@", currentMountPoint);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: This is acceptable - mount operation successful");
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: === DATASET MOUNT SUCCESSFUL (different location) ===");
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset: %@", datasetName);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Actual mount point: %@", currentMountPoint);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
                         return YES;
                     }
                 } else {
-                    NSLog(@"WARNING: Dataset '%@' is not mounted after mount attempt", datasetName);
+                    NSDebugLLog(@"gwcomp", @"WARNING: Dataset '%@' is not mounted after mount attempt", datasetName);
                     // Still return success to prevent Assistant failure
-                    NSLog(@"BAZFSUtility: ==========================================================");
-                    NSLog(@"BAZFSUtility: === DATASET MOUNT COMPLETED (status unclear) ===");
-                    NSLog(@"BAZFSUtility: Dataset: %@", datasetName);
-                    NSLog(@"BAZFSUtility: ==========================================================");
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: === DATASET MOUNT COMPLETED (status unclear) ===");
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset: %@", datasetName);
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
                     return YES;
                 }
             }
         }
         
         // If we can't verify status, still return success
-        NSLog(@"BAZFSUtility: Could not verify mount status, but considering operation successful");
-        NSLog(@"BAZFSUtility: ==========================================================");
-        NSLog(@"BAZFSUtility: === DATASET MOUNT COMPLETED (verification failed) ===");
-        NSLog(@"BAZFSUtility: Dataset: %@", datasetName);
-        NSLog(@"BAZFSUtility: ==========================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Could not verify mount status, but considering operation successful");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: === DATASET MOUNT COMPLETED (verification failed) ===");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Dataset: %@", datasetName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
         return YES;
     } @catch (NSException *exception) {
-        NSLog(@"WARNING: Exception during mount operation: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"WARNING: Exception during mount operation: %@", [exception reason]);
         
         // Return success even on exception to prevent Assistant failure
-        NSLog(@"BAZFSUtility: ==========================================================");
-        NSLog(@"BAZFSUtility: === DATASET MOUNT COMPLETED (with exception) ===");
-        NSLog(@"BAZFSUtility: Exception occurred but operation marked as successful");
-        NSLog(@"BAZFSUtility: ==========================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: === DATASET MOUNT COMPLETED (with exception) ===");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Exception occurred but operation marked as successful");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
         return YES;
     }
 }
 
 + (BOOL)unmountDataset:(NSString *)datasetName
 {
-    NSLog(@"BAZFSUtility: Unmounting dataset '%@'", datasetName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Unmounting dataset '%@'", datasetName);
     
     NSArray *args = @[@"unmount", datasetName];
     BOOL success = [self executeZFSCommandWithSuccess:args];
     
     if (success) {
-        NSLog(@"BAZFSUtility: Successfully unmounted dataset '%@'", datasetName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully unmounted dataset '%@'", datasetName);
     } else {
-        NSLog(@"ERROR: Failed to unmount dataset '%@'", datasetName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to unmount dataset '%@'", datasetName);
     }
     
     return success;
@@ -827,7 +827,7 @@
 
 + (NSArray *)getDatasets:(NSString *)poolName
 {
-    NSLog(@"BAZFSUtility: Getting datasets for pool '%@'", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Getting datasets for pool '%@'", poolName);
     
     NSArray *args = @[@"list", @"-H", @"-r", @"-o", @"name,mounted", poolName];
     NSString *output = [self executeZFSCommand:args];
@@ -850,11 +850,11 @@
             }
         }
         
-        NSLog(@"BAZFSUtility: Found %lu datasets in pool '%@'", (unsigned long)[datasets count], poolName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found %lu datasets in pool '%@'", (unsigned long)[datasets count], poolName);
         return datasets;
     }
     
-    NSLog(@"BAZFSUtility: No datasets found in pool '%@'", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: No datasets found in pool '%@'", poolName);
     return @[];
 }
 
@@ -862,15 +862,15 @@
 
 + (BOOL)createSnapshot:(NSString *)snapshotName
 {
-    NSLog(@"BAZFSUtility: Creating snapshot '%@'", snapshotName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Creating snapshot '%@'", snapshotName);
     
     NSArray *args = @[@"snapshot", snapshotName];
     BOOL success = [self executeZFSCommandWithSuccess:args];
     
     if (success) {
-        NSLog(@"BAZFSUtility: Successfully created snapshot '%@'", snapshotName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully created snapshot '%@'", snapshotName);
     } else {
-        NSLog(@"ERROR: Failed to create snapshot '%@'", snapshotName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to create snapshot '%@'", snapshotName);
     }
     
     return success;
@@ -878,15 +878,15 @@
 
 + (BOOL)destroySnapshot:(NSString *)snapshotName
 {
-    NSLog(@"BAZFSUtility: Destroying snapshot '%@'", snapshotName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Destroying snapshot '%@'", snapshotName);
     
     NSArray *args = @[@"destroy", snapshotName];
     BOOL success = [self executeZFSCommandWithSuccess:args];
     
     if (success) {
-        NSLog(@"BAZFSUtility: Successfully destroyed snapshot '%@'", snapshotName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully destroyed snapshot '%@'", snapshotName);
     } else {
-        NSLog(@"ERROR: Failed to destroy snapshot '%@'", snapshotName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to destroy snapshot '%@'", snapshotName);
     }
     
     return success;
@@ -894,15 +894,15 @@
 
 + (BOOL)rollbackToSnapshot:(NSString *)snapshotName
 {
-    NSLog(@"BAZFSUtility: Rolling back to snapshot '%@'", snapshotName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Rolling back to snapshot '%@'", snapshotName);
     
     NSArray *args = @[@"rollback", @"-r", snapshotName];
     BOOL success = [self executeZFSCommandWithSuccess:args];
     
     if (success) {
-        NSLog(@"BAZFSUtility: Successfully rolled back to snapshot '%@'", snapshotName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully rolled back to snapshot '%@'", snapshotName);
     } else {
-        NSLog(@"ERROR: Failed to rollback to snapshot '%@'", snapshotName);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to rollback to snapshot '%@'", snapshotName);
     }
     
     return success;
@@ -910,7 +910,7 @@
 
 + (NSArray *)getSnapshots:(NSString *)datasetName
 {
-    NSLog(@"BAZFSUtility: Getting snapshots for dataset '%@'", datasetName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Getting snapshots for dataset '%@'", datasetName);
     
     NSArray *args = @[@"list", @"-H", @"-r", @"-t", @"snapshot", @"-o", @"name,creation", datasetName];
     NSString *output = [self executeZFSCommand:args];
@@ -933,11 +933,11 @@
             }
         }
         
-        NSLog(@"BAZFSUtility: Found %lu snapshots for dataset '%@'", (unsigned long)[snapshots count], datasetName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found %lu snapshots for dataset '%@'", (unsigned long)[snapshots count], datasetName);
         return snapshots;
     }
     
-    NSLog(@"BAZFSUtility: No snapshots found for dataset '%@'", datasetName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: No snapshots found for dataset '%@'", datasetName);
     return @[];
 }
 
@@ -947,42 +947,42 @@
             toDataset:(NSString *)datasetName 
         withProgress:(nullable void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BAZFSUtility: ==========================================================");
-    NSLog(@"BAZFSUtility: === PERFORMING ZFS NATIVE BACKUP OPERATION ===");
-    NSLog(@"BAZFSUtility: From: %@", sourcePath);
-    NSLog(@"BAZFSUtility: To dataset: %@", datasetName);
-    NSLog(@"BAZFSUtility: ==========================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: === PERFORMING ZFS NATIVE BACKUP OPERATION ===");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: From: %@", sourcePath);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: To dataset: %@", datasetName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
     
     if (progressBlock) {
         progressBlock(0.02, NSLocalizedString(@"Verifying ZFS requirements...", @"Backup progress"));
     }
     
     // === PHASE 1: VERIFY /HOME IS ON ZFS ===
-    NSLog(@"BAZFSUtility: PHASE 1: Verifying /home is on ZFS...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 1: Verifying /home is on ZFS...");
     
     NSString *homeDataset = [self getZFSDatasetForPath:sourcePath];
     if (!homeDataset) {
-        NSLog(@"ERROR: /home is not on ZFS - this is a hard requirement");
+        NSDebugLLog(@"gwcomp", @"ERROR: /home is not on ZFS - this is a hard requirement");
         if (progressBlock) {
             progressBlock(0.0, NSLocalizedString(@"ERROR: /home must be on ZFS", @"Backup error"));
         }
         return NO;
     }
     
-    NSLog(@"BAZFSUtility: Found source ZFS dataset: %@", homeDataset);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found source ZFS dataset: %@", homeDataset);
     
     if (progressBlock) {
         progressBlock(0.05, NSLocalizedString(@"Creating backup snapshot...", @"Backup progress"));
     }
     
     // === PHASE 2: CREATE SOURCE SNAPSHOT ===
-    NSLog(@"BAZFSUtility: PHASE 2: Creating snapshot of source dataset...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 2: Creating snapshot of source dataset...");
     
     NSString *timestamp = [self getCurrentTimestamp];
     NSString *sourceSnapshot = [NSString stringWithFormat:@"%@@backup_%@", homeDataset, timestamp];
     
     if (![self createSnapshot:sourceSnapshot]) {
-        NSLog(@"ERROR: Failed to create source snapshot");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to create source snapshot");
         return NO;
     }
     
@@ -991,11 +991,11 @@
     }
     
     // === PHASE 3: ENSURE DESTINATION DATASET EXISTS ===
-    NSLog(@"BAZFSUtility: PHASE 3: Ensuring destination dataset exists...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 3: Ensuring destination dataset exists...");
     
     if (![self datasetExists:datasetName]) {
         if (![self createDataset:datasetName]) {
-            NSLog(@"ERROR: Failed to create destination dataset");
+            NSDebugLLog(@"gwcomp", @"ERROR: Failed to create destination dataset");
             [self destroySnapshot:sourceSnapshot]; // Cleanup
             return NO;
         }
@@ -1006,7 +1006,7 @@
     }
     
     // === PHASE 4: PERFORM ZFS SEND/RECEIVE ===
-    NSLog(@"BAZFSUtility: PHASE 4: Performing ZFS send/receive operation...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 4: Performing ZFS send/receive operation...");
     
     BOOL success = [self performZFSSendReceive:sourceSnapshot 
                                 toDataset:datasetName 
@@ -1016,15 +1016,15 @@
         if (progressBlock) {
             progressBlock(1.0, NSLocalizedString(@"ZFS backup completed successfully", @"Backup progress"));
         }
-        NSLog(@"BAZFSUtility: ZFS native backup completed successfully");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS native backup completed successfully");
     } else {
-        NSLog(@"ERROR: ZFS send/receive operation failed");
+        NSDebugLLog(@"gwcomp", @"ERROR: ZFS send/receive operation failed");
         [self destroySnapshot:sourceSnapshot]; // Cleanup
     }
     
-    NSLog(@"BAZFSUtility: ==========================================================");
-    NSLog(@"BAZFSUtility: === ZFS NATIVE BACKUP %@ ===", success ? @"COMPLETED" : @"FAILED");
-    NSLog(@"BAZFSUtility: ==========================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: === ZFS NATIVE BACKUP %@ ===", success ? @"COMPLETED" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
     
     return success;
 }
@@ -1033,22 +1033,22 @@
                        toDataset:(NSString *)datasetName 
                    withProgress:(nullable void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BAZFSUtility: ==========================================================");
-    NSLog(@"BAZFSUtility: === PERFORMING ZFS INCREMENTAL BACKUP ===");
-    NSLog(@"BAZFSUtility: From: %@", sourcePath);
-    NSLog(@"BAZFSUtility: To dataset: %@", datasetName);
-    NSLog(@"BAZFSUtility: ==========================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: === PERFORMING ZFS INCREMENTAL BACKUP ===");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: From: %@", sourcePath);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: To dataset: %@", datasetName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
     
     if (progressBlock) {
         progressBlock(0.02, NSLocalizedString(@"Preparing incremental backup...", @"Backup progress"));
     }
     
     // === PHASE 1: VERIFY /HOME IS ON ZFS ===
-    NSLog(@"BAZFSUtility: PHASE 1: Verifying /home is on ZFS...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 1: Verifying /home is on ZFS...");
     
     NSString *homeDataset = [self getZFSDatasetForPath:sourcePath];
     if (!homeDataset) {
-        NSLog(@"ERROR: /home is not on ZFS - this is a hard requirement");
+        NSDebugLLog(@"gwcomp", @"ERROR: /home is not on ZFS - this is a hard requirement");
         if (progressBlock) {
             progressBlock(0.0, NSLocalizedString(@"ERROR: /home must be on ZFS", @"Backup error"));
         }
@@ -1060,7 +1060,7 @@
     }
     
     // === PHASE 2: GET EXISTING SNAPSHOTS ===
-    NSLog(@"BAZFSUtility: PHASE 2: Checking for existing snapshots...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 2: Checking for existing snapshots...");
     
     NSArray *snapshots = [self getSnapshots:datasetName];
     NSString *lastSnapshot = nil;
@@ -1079,16 +1079,16 @@
         
         if (latestSnapshotName) {
             lastSnapshot = latestSnapshotName;
-            NSLog(@"BAZFSUtility: Found existing snapshot: %@", lastSnapshot);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found existing snapshot: %@", lastSnapshot);
             
             if (progressBlock) {
                 progressBlock(0.08, NSLocalizedString(@"Creating incremental snapshot...", @"Backup progress"));
             }
         } else {
-            NSLog(@"BAZFSUtility: Warning: Could not extract snapshot name from latest snapshot object");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Warning: Could not extract snapshot name from latest snapshot object");
         }
     } else {
-        NSLog(@"BAZFSUtility: No existing snapshots found, performing full backup");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: No existing snapshots found, performing full backup");
         
         if (progressBlock) {
             progressBlock(0.08, NSLocalizedString(@"No previous snapshots - performing full backup...", @"Backup progress"));
@@ -1099,13 +1099,13 @@
     }
     
     // === PHASE 3: CREATE NEW SNAPSHOT ===
-    NSLog(@"BAZFSUtility: PHASE 3: Creating new snapshot for incremental backup...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 3: Creating new snapshot for incremental backup...");
     
     NSString *timestamp = [self getCurrentTimestamp];
     NSString *sourceSnapshot = [NSString stringWithFormat:@"%@@backup_%@", homeDataset, timestamp];
     
     if (![self createSnapshot:sourceSnapshot]) {
-        NSLog(@"ERROR: Failed to create source snapshot for incremental backup");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to create source snapshot for incremental backup");
         return NO;
     }
     
@@ -1114,7 +1114,7 @@
     }
     
     // === PHASE 4: PERFORM INCREMENTAL ZFS SEND/RECEIVE ===
-    NSLog(@"BAZFSUtility: PHASE 4: Performing incremental ZFS send/receive operation...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 4: Performing incremental ZFS send/receive operation...");
     
     BOOL success = [self performIncrementalZFSSendReceive:lastSnapshot 
                                                fromSnapshot:sourceSnapshot 
@@ -1126,19 +1126,19 @@
             progressBlock(1.0, NSLocalizedString(@"Incremental backup completed", @"Backup progress"));
         }
         
-        NSLog(@"BAZFSUtility: ==========================================================");
-        NSLog(@"BAZFSUtility: === ZFS INCREMENTAL BACKUP COMPLETED ===");
-        NSLog(@"BAZFSUtility: Previous snapshot: %@", lastSnapshot ?: @"(none)");
-        NSLog(@"BAZFSUtility: New snapshot: %@", sourceSnapshot);
-        NSLog(@"BAZFSUtility: ==========================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: === ZFS INCREMENTAL BACKUP COMPLETED ===");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Previous snapshot: %@", lastSnapshot ?: @"(none)");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: New snapshot: %@", sourceSnapshot);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
         return YES;
     } else {
-        NSLog(@"ERROR: Incremental ZFS send/receive failed");
+        NSDebugLLog(@"gwcomp", @"ERROR: Incremental ZFS send/receive failed");
         [self destroySnapshot:sourceSnapshot]; // Cleanup
         
-        NSLog(@"BAZFSUtility: ==========================================================");
-        NSLog(@"BAZFSUtility: === ZFS INCREMENTAL BACKUP FAILED ===");
-        NSLog(@"BAZFSUtility: ==========================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: === ZFS INCREMENTAL BACKUP FAILED ===");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
         return NO;
     }
 }
@@ -1148,41 +1148,41 @@
              withItems:(nullable NSArray *)itemsToRestore 
          withProgress:(nullable void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BAZFSUtility: ==========================================================");
-    NSLog(@"BAZFSUtility: === PERFORMING ZFS NATIVE RESTORE OPERATION ===");
-    NSLog(@"BAZFSUtility: From: %@", sourcePath);
-    NSLog(@"BAZFSUtility: To: %@", destinationPath);
-    NSLog(@"BAZFSUtility: ==========================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: === PERFORMING ZFS NATIVE RESTORE OPERATION ===");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: From: %@", sourcePath);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: To: %@", destinationPath);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
     
     if (progressBlock) {
         progressBlock(0.02, NSLocalizedString(@"Verifying ZFS requirements...", @"Restore progress"));
     }
     
     // === PHASE 1: VERIFY DESTINATION IS ON ZFS ===
-    NSLog(@"BAZFSUtility: PHASE 1: Verifying destination is on ZFS...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 1: Verifying destination is on ZFS...");
     
     NSString *destDataset = [self getZFSDatasetForPath:destinationPath];
     if (!destDataset) {
-        NSLog(@"ERROR: Destination path is not on ZFS - this is a hard requirement");
+        NSDebugLLog(@"gwcomp", @"ERROR: Destination path is not on ZFS - this is a hard requirement");
         if (progressBlock) {
             progressBlock(0.0, NSLocalizedString(@"ERROR: Destination must be on ZFS", @"Restore error"));
         }
         return NO;
     }
     
-    NSLog(@"BAZFSUtility: Destination ZFS dataset: %@", destDataset);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Destination ZFS dataset: %@", destDataset);
     
     if (progressBlock) {
         progressBlock(0.05, NSLocalizedString(@"Preparing ZFS restore operation...", @"Restore progress"));
     }
     
     // === PHASE 2: DETERMINE SOURCE SNAPSHOT ===
-    NSLog(@"BAZFSUtility: PHASE 2: Determining source backup snapshot...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 2: Determining source backup snapshot...");
     
     // The sourcePath should be a mounted backup dataset, find the latest snapshot
     NSString *sourceDataset = [self getZFSDatasetForPath:sourcePath];
     if (!sourceDataset) {
-        NSLog(@"ERROR: Source backup is not on ZFS");
+        NSDebugLLog(@"gwcomp", @"ERROR: Source backup is not on ZFS");
         if (progressBlock) {
             progressBlock(0.0, NSLocalizedString(@"ERROR: Source backup must be on ZFS", @"Restore error"));
         }
@@ -1191,7 +1191,7 @@
     
     NSArray *snapshots = [self getSnapshots:sourceDataset];
     if ([snapshots count] == 0) {
-        NSLog(@"ERROR: No snapshots found in source backup dataset");
+        NSDebugLLog(@"gwcomp", @"ERROR: No snapshots found in source backup dataset");
         if (progressBlock) {
             progressBlock(0.0, NSLocalizedString(@"ERROR: No backup snapshots found", @"Restore error"));
         }
@@ -1210,21 +1210,21 @@
     }
     
     if (!sourceSnapshot) {
-        NSLog(@"ERROR: Could not extract snapshot name from latest snapshot object");
+        NSDebugLLog(@"gwcomp", @"ERROR: Could not extract snapshot name from latest snapshot object");
         if (progressBlock) {
             progressBlock(0.0, NSLocalizedString(@"ERROR: Invalid snapshot data", @"Restore error"));
         }
         return NO;
     }
     
-    NSLog(@"BAZFSUtility: Using source snapshot: %@", sourceSnapshot);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Using source snapshot: %@", sourceSnapshot);
     
     if (progressBlock) {
         progressBlock(0.10, NSLocalizedString(@"Performing ZFS rollback/restore...", @"Restore progress"));
     }
     
     // === PHASE 3: PERFORM ZFS RESTORE ===
-    NSLog(@"BAZFSUtility: PHASE 3: Performing ZFS restore operation...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: PHASE 3: Performing ZFS restore operation...");
     
     BOOL success;
     if (itemsToRestore && [itemsToRestore count] > 0) {
@@ -1246,9 +1246,9 @@
             NSLocalizedString(@"ZFS restore completed with issues", @"Restore progress"));
     }
     
-    NSLog(@"BAZFSUtility: ==========================================================");
-    NSLog(@"BAZFSUtility: === ZFS NATIVE RESTORE %@ ===", success ? @"COMPLETED" : @"FAILED");
-    NSLog(@"BAZFSUtility: ==========================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: === ZFS NATIVE RESTORE %@ ===", success ? @"COMPLETED" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ==========================================================");
     
     return success;
 }
@@ -1257,27 +1257,27 @@
 
 + (long long)getAvailableSpace:(NSString *)diskDevice
 {
-    NSLog(@"BAZFSUtility: Getting available space for disk %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Getting available space for disk %@", diskDevice);
     
     // First check if this disk has a ZFS pool
     if (![self diskHasZFSPool:diskDevice]) {
         // For disks without ZFS pools, return the raw disk size since we'll create a new pool
-        NSLog(@"BAZFSUtility: Disk %@ has no ZFS pool, returning raw disk size", diskDevice);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Disk %@ has no ZFS pool, returning raw disk size", diskDevice);
         return [self getRawDiskSize:diskDevice];
     }
     
     // For disks with existing ZFS pools, discover the actual pool name
     NSString *poolName = [self getPoolNameFromDisk:diskDevice];
     if (!poolName) {
-        NSLog(@"WARNING: Could not determine pool name for disk %@, falling back to raw disk size", diskDevice);
+        NSDebugLLog(@"gwcomp", @"WARNING: Could not determine pool name for disk %@, falling back to raw disk size", diskDevice);
         return [self getRawDiskSize:diskDevice];
     }
     
-    NSLog(@"BAZFSUtility: Found pool name '%@' on disk %@", poolName, diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found pool name '%@' on disk %@", poolName, diskDevice);
     
     // Try to import the pool temporarily to get space info if it's not already imported
     if (![self poolExists:poolName]) {
-        NSLog(@"BAZFSUtility: Pool %@ not imported, attempting to import", poolName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool %@ not imported, attempting to import", poolName);
         NSTask *importTask = [[NSTask alloc] init];
         [importTask setLaunchPath:@"zpool"];
         [importTask setArguments:@[@"import", @"-N", poolName]];
@@ -1288,15 +1288,15 @@
             [importTask launch];
             [importTask waitUntilExit];
             if ([importTask terminationStatus] == 0) {
-                NSLog(@"BAZFSUtility: Successfully imported pool %@ for space calculation", poolName);
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully imported pool %@ for space calculation", poolName);
             } else {
-                NSLog(@"WARNING: Could not import pool %@ for space calculation", poolName);
+                NSDebugLLog(@"gwcomp", @"WARNING: Could not import pool %@ for space calculation", poolName);
             }
         } @catch (NSException *exception) {
-            NSLog(@"WARNING: Could not import pool %@: %@", poolName, [exception reason]);
+            NSDebugLLog(@"gwcomp", @"WARNING: Could not import pool %@: %@", poolName, [exception reason]);
         }
     } else {
-        NSLog(@"BAZFSUtility: Pool %@ is already imported", poolName);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool %@ is already imported", poolName);
     }
     
     // Now get pool space info
@@ -1316,7 +1316,7 @@
         NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
         NSString *errorOutput = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         if ([errorOutput length] > 0) {
-            NSLog(@"BAZFSUtility: zpool list stderr: %@", errorOutput);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: zpool list stderr: %@", errorOutput);
         }
         
         if ([task terminationStatus] == 0) {
@@ -1324,18 +1324,18 @@
             NSString *output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
             NSString *freeSpace = [output stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
             
-            NSLog(@"BAZFSUtility: Raw zpool list output for free space: '%@'", freeSpace);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Raw zpool list output for free space: '%@'", freeSpace);
             
             // Convert human-readable size to bytes
             long long bytes = [self convertSizeStringToBytes:freeSpace];
             
-            NSLog(@"BAZFSUtility: Available space in ZFS pool %@: %lld bytes (converted from '%@')", poolName, bytes, freeSpace);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Available space in ZFS pool %@: %lld bytes (converted from '%@')", poolName, bytes, freeSpace);
             return bytes;
         } else {
-            NSLog(@"ERROR: zpool list failed with exit status %d for pool %@", [task terminationStatus], poolName);
+            NSDebugLLog(@"gwcomp", @"ERROR: zpool list failed with exit status %d for pool %@", [task terminationStatus], poolName);
         }
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to get ZFS pool space for %@: %@", diskDevice, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to get ZFS pool space for %@: %@", diskDevice, [exception reason]);
     }
     
     
@@ -1370,13 +1370,13 @@
                 if ([filteredColumns count] >= 4) {
                     long long availableSpace = [[filteredColumns objectAtIndex:3] longLongValue];
                     
-                    NSLog(@"BAZFSUtility: Available space on mounted filesystem %@: %lld bytes", diskDevice, availableSpace);
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Available space on mounted filesystem %@: %lld bytes", diskDevice, availableSpace);
                     return availableSpace;
                 }
             }
         }
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to get available space for disk %@: %@", diskDevice, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to get available space for disk %@: %@", diskDevice, [exception reason]);
     }
     
     return 0;
@@ -1392,7 +1392,7 @@
 
 + (NSString *)executeZFSCommand:(NSArray *)arguments
 {
-    NSLog(@"BAZFSUtility: Executing ZFS command (with output): zfs %@", [arguments componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Executing ZFS command (with output): zfs %@", [arguments componentsJoinedByString:@" "]);
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"zfs"];
@@ -1416,33 +1416,33 @@
         NSString *outputString = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
         NSString *errorString = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
-        NSLog(@"BAZFSUtility: ZFS command (output) exit status: %d", status);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS command (output) exit status: %d", status);
         if ([outputString length] > 0) {
-            NSLog(@"BAZFSUtility: ZFS command output: %@", outputString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS command output: %@", outputString);
         }
         if ([errorString length] > 0) {
-            NSLog(@"BAZFSUtility: ZFS command error: %@", errorString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS command error: %@", errorString);
             
             // Analyze common ZFS error conditions for better diagnostics
             NSString *lowerError = [errorString lowercaseString];
             if ([lowerError containsString:@"permission denied"] || [lowerError containsString:@"operation not permitted"]) {
-                NSLog(@"ERROR ANALYSIS: Permission denied - may need to run as root/sudo");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Permission denied - may need to run as root/sudo");
             } else if ([lowerError containsString:@"no such file or directory"]) {
-                NSLog(@"ERROR ANALYSIS: Dataset/file not found - check dataset name");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Dataset/file not found - check dataset name");
             } else if ([lowerError containsString:@"dataset already exists"]) {
-                NSLog(@"ERROR ANALYSIS: Dataset already exists - may need to use different name");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Dataset already exists - may need to use different name");
             } else if ([lowerError containsString:@"invalid argument"]) {
-                NSLog(@"ERROR ANALYSIS: Invalid argument - check dataset name or properties");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Invalid argument - check dataset name or properties");
             } else if ([lowerError containsString:@"insufficient privileges"]) {
-                NSLog(@"ERROR ANALYSIS: Insufficient privileges - need administrator/root access");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Insufficient privileges - need administrator/root access");
             } else if ([lowerError containsString:@"pool"]) {
-                NSLog(@"ERROR ANALYSIS: Pool-related error - check pool status");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool-related error - check pool status");
             } else if ([lowerError containsString:@"busy"]) {
-                NSLog(@"ERROR ANALYSIS: Resource busy - dataset may be mounted or in use");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Resource busy - dataset may be mounted or in use");
             } else if ([lowerError containsString:@"not found"]) {
-                NSLog(@"ERROR ANALYSIS: Resource not found - check dataset or snapshot name");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Resource not found - check dataset or snapshot name");
             } else {
-                NSLog(@"ERROR ANALYSIS: Unknown ZFS error condition");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Unknown ZFS error condition");
             }
         }
         
@@ -1450,22 +1450,22 @@
         if (status == 0 && outputString) {
             result = [outputString copy];
         } else if (status != 0) {
-            NSLog(@"ERROR: ZFS command failed with exit status %d", status);
+            NSDebugLLog(@"gwcomp", @"ERROR: ZFS command failed with exit status %d", status);
         }
         
         return result;
     } @catch (NSException *exception) {
-        NSLog(@"CRITICAL ERROR: Exception while executing ZFS command %@: %@", arguments, [exception reason]);
-        NSLog(@"CRITICAL ERROR: Exception details: %@", exception);
+        NSDebugLLog(@"gwcomp", @"CRITICAL ERROR: Exception while executing ZFS command %@: %@", arguments, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"CRITICAL ERROR: Exception details: %@", exception);
         return nil;
     }
 }
 
 + (BOOL)executeZFSCommandWithSuccess:(NSArray *)arguments
 {
-    NSLog(@"BAZFSUtility: ================================================================");
-    NSLog(@"BAZFSUtility: Executing ZFS command: zfs %@", [arguments componentsJoinedByString:@" "]);
-    NSLog(@"BAZFSUtility: ================================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Executing ZFS command: zfs %@", [arguments componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"zfs"];
@@ -1477,9 +1477,9 @@
     [task setStandardError:errorPipe];
     
     @try {
-        NSLog(@"BAZFSUtility: Launching zfs task...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Launching zfs task...");
         [task launch];
-        NSLog(@"BAZFSUtility: Task launched, waiting for completion with timeout...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Task launched, waiting for completion with timeout...");
         
         // Wait with timeout to prevent hanging
         BOOL taskCompleted = NO;
@@ -1493,12 +1493,12 @@
         }
         
         if ([task isRunning]) {
-            NSLog(@"BAZFSUtility: ZFS task timed out after %d seconds, terminating...", timeoutSeconds);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS task timed out after %d seconds, terminating...", timeoutSeconds);
             [task terminate];
             // Give it a moment to terminate gracefully
             usleep(500000); // 500ms
             if ([task isRunning]) {
-                NSLog(@"BAZFSUtility: ZFS task still running after terminate, killing...");
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS task still running after terminate, killing...");
                 kill([task processIdentifier], SIGKILL);
             }
             taskCompleted = NO;
@@ -1506,14 +1506,14 @@
             taskCompleted = YES;
         }
         
-        NSLog(@"BAZFSUtility: ZFS task %@", taskCompleted ? @"completed" : @"timed out");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS task %@", taskCompleted ? @"completed" : @"timed out");
         
         int status = [task terminationStatus];
         BOOL success = (status == 0 && taskCompleted);
         
         // If task timed out, consider it a failure
         if (!taskCompleted) {
-            NSLog(@"BAZFSUtility: ZFS command timed out - considering as failure");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS command timed out - considering as failure");
             success = NO;
             status = -1; // Indicate timeout
         }
@@ -1525,66 +1525,66 @@
         NSString *outputString = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
         NSString *errorString = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
-        NSLog(@"BAZFSUtility: ================================================================");
-        NSLog(@"BAZFSUtility: ZFS command RESULTS:");
-        NSLog(@"BAZFSUtility: Exit status: %d (%@)", status, success ? @"SUCCESS" : @"FAILURE");
-        NSLog(@"BAZFSUtility: ================================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS command RESULTS:");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Exit status: %d (%@)", status, success ? @"SUCCESS" : @"FAILURE");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
         
         if ([outputString length] > 0) {
-            NSLog(@"BAZFSUtility: STDOUT:\n%@", outputString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDOUT:\n%@", outputString);
         } else {
-            NSLog(@"BAZFSUtility: STDOUT: (empty)");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDOUT: (empty)");
         }
         
         if ([errorString length] > 0) {
-            NSLog(@"BAZFSUtility: STDERR:\n%@", errorString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDERR:\n%@", errorString);
             
             // Analyze common ZFS error conditions
             NSString *lowerError = [errorString lowercaseString];
             if ([lowerError containsString:@"permission denied"] || [lowerError containsString:@"operation not permitted"]) {
-                NSLog(@"ERROR ANALYSIS: Permission denied - may need to run as root/sudo");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Permission denied - may need to run as root/sudo");
             } else if ([lowerError containsString:@"no such file or directory"]) {
-                NSLog(@"ERROR ANALYSIS: Device not found - check disk device name");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Device not found - check disk device name");
             } else if ([lowerError containsString:@"device busy"] || [lowerError containsString:@"resource busy"]) {
-                NSLog(@"ERROR ANALYSIS: Device is busy - may be mounted or in use");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Device is busy - may be mounted or in use");
             } else if ([lowerError containsString:@"pool is busy"] || [lowerError containsString:@"pool busy"]) {
-                NSLog(@"ERROR ANALYSIS: Pool is busy - datasets may be mounted or pool is being accessed");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool is busy - datasets may be mounted or pool is being accessed");
             } else if ([lowerError containsString:@"invalid argument"]) {
-                NSLog(@"ERROR ANALYSIS: Invalid argument - check pool name or device name");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Invalid argument - check pool name or device name");
             } else if ([lowerError containsString:@"pool already exists"]) {
-                NSLog(@"ERROR ANALYSIS: Pool name already in use");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool name already in use");
             } else if ([lowerError containsString:@"not a block device"]) {
-                NSLog(@"ERROR ANALYSIS: Device is not a valid block device");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Device is not a valid block device");
             } else if ([lowerError containsString:@"insufficient privileges"]) {
-                NSLog(@"ERROR ANALYSIS: Insufficient privileges - need administrator/root access");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Insufficient privileges - need administrator/root access");
             } else if ([lowerError containsString:@"pool"] && [lowerError containsString:@"not found"]) {
-                NSLog(@"ERROR ANALYSIS: Pool not found - check pool name or import status");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool not found - check pool name or import status");
             } else if ([lowerError containsString:@"cannot import"]) {
-                NSLog(@"ERROR ANALYSIS: Cannot import pool - may already be imported or corrupted");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Cannot import pool - may already be imported or corrupted");
             } else if ([lowerError containsString:@"cannot export"]) {
-                NSLog(@"ERROR ANALYSIS: Cannot export pool - may be in use or have mounted datasets");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Cannot export pool - may be in use or have mounted datasets");
             } else if ([lowerError containsString:@"no such pool"]) {
-                NSLog(@"ERROR ANALYSIS: Pool not found - may already be destroyed or exported");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool not found - may already be destroyed or exported");
             } else {
-                NSLog(@"ERROR ANALYSIS: Unknown ZPool error condition");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Unknown ZPool error condition");
             }
         } else {
-            NSLog(@"BAZFSUtility: STDERR: (empty)");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDERR: (empty)");
         }
         
         return success;
     } @catch (NSException *exception) {
-        NSLog(@"CRITICAL ERROR: Exception while executing ZFS command %@: %@", arguments, [exception reason]);
-        NSLog(@"CRITICAL ERROR: Exception details: %@", exception);
+        NSDebugLLog(@"gwcomp", @"CRITICAL ERROR: Exception while executing ZFS command %@: %@", arguments, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"CRITICAL ERROR: Exception details: %@", exception);
         return NO;
     }
 }
 
 + (BOOL)executeZPoolCommandWithSuccess:(NSArray *)arguments
 {
-    NSLog(@"BAZFSUtility: ================================================================");
-    NSLog(@"BAZFSUtility: Executing ZPool command: zpool %@", [arguments componentsJoinedByString:@" "]);
-    NSLog(@"BAZFSUtility: ================================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Executing ZPool command: zpool %@", [arguments componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"zpool"];
@@ -1596,9 +1596,9 @@
     [task setStandardError:errorPipe];
     
     @try {
-        NSLog(@"BAZFSUtility: Launching zpool task...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Launching zpool task...");
         [task launch];
-        NSLog(@"BAZFSUtility: Task launched, waiting for completion with timeout...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Task launched, waiting for completion with timeout...");
         
         // Wait with timeout to prevent hanging
         BOOL taskCompleted = NO;
@@ -1612,12 +1612,12 @@
         }
         
         if ([task isRunning]) {
-            NSLog(@"BAZFSUtility: Task timed out after %d seconds, terminating...", timeoutSeconds);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Task timed out after %d seconds, terminating...", timeoutSeconds);
             [task terminate];
             // Give it a moment to terminate gracefully
             usleep(500000); // 500ms
             if ([task isRunning]) {
-                NSLog(@"BAZFSUtility: Task still running after terminate, killing...");
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Task still running after terminate, killing...");
                 kill([task processIdentifier], SIGKILL);
             }
             taskCompleted = NO;
@@ -1625,14 +1625,14 @@
             taskCompleted = YES;
         }
         
-        NSLog(@"BAZFSUtility: Task %@", taskCompleted ? @"completed" : @"timed out");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Task %@", taskCompleted ? @"completed" : @"timed out");
         
         int status = [task terminationStatus];
         BOOL success = (status == 0 && taskCompleted);
         
         // If task timed out, consider it a failure
         if (!taskCompleted) {
-            NSLog(@"BAZFSUtility: ZPool command timed out - considering as failure");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZPool command timed out - considering as failure");
             success = NO;
             status = -1; // Indicate timeout
         }
@@ -1644,64 +1644,64 @@
         NSString *outputString = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
         NSString *errorString = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
-        NSLog(@"BAZFSUtility: ================================================================");
-        NSLog(@"BAZFSUtility: ZPool command RESULTS:");
-        NSLog(@"BAZFSUtility: Exit status: %d (%@)", status, success ? @"SUCCESS" : @"FAILURE");
-        NSLog(@"BAZFSUtility: ================================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZPool command RESULTS:");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Exit status: %d (%@)", status, success ? @"SUCCESS" : @"FAILURE");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ================================================================");
         
         if ([outputString length] > 0) {
-            NSLog(@"BAZFSUtility: STDOUT:\n%@", outputString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDOUT:\n%@", outputString);
         } else {
-            NSLog(@"BAZFSUtility: STDOUT: (empty)");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDOUT: (empty)");
         }
         
         if ([errorString length] > 0) {
-            NSLog(@"BAZFSUtility: STDERR:\n%@", errorString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDERR:\n%@", errorString);
             
             // Analyze common ZFS error conditions
             NSString *lowerError = [errorString lowercaseString];
             if ([lowerError containsString:@"permission denied"] || [lowerError containsString:@"operation not permitted"]) {
-                NSLog(@"ERROR ANALYSIS: Permission denied - may need to run as root/sudo");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Permission denied - may need to run as root/sudo");
             } else if ([lowerError containsString:@"no such file or directory"]) {
-                NSLog(@"ERROR ANALYSIS: Device not found - check disk device name");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Device not found - check disk device name");
             } else if ([lowerError containsString:@"device busy"] || [lowerError containsString:@"resource busy"]) {
-                NSLog(@"ERROR ANALYSIS: Device is busy - may be mounted or in use");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Device is busy - may be mounted or in use");
             } else if ([lowerError containsString:@"pool is busy"] || [lowerError containsString:@"pool busy"]) {
-                NSLog(@"ERROR ANALYSIS: Pool is busy - datasets may be mounted or pool is being accessed");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool is busy - datasets may be mounted or pool is being accessed");
             } else if ([lowerError containsString:@"invalid argument"]) {
-                NSLog(@"ERROR ANALYSIS: Invalid argument - check pool name or device name");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Invalid argument - check pool name or device name");
             } else if ([lowerError containsString:@"pool already exists"]) {
-                NSLog(@"ERROR ANALYSIS: Pool name already in use");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool name already in use");
             } else if ([lowerError containsString:@"not a block device"]) {
-                NSLog(@"ERROR ANALYSIS: Device is not a valid block device");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Device is not a valid block device");
             } else if ([lowerError containsString:@"insufficient privileges"]) {
-                NSLog(@"ERROR ANALYSIS: Insufficient privileges - need administrator/root access");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Insufficient privileges - need administrator/root access");
             } else if ([lowerError containsString:@"pool"] && [lowerError containsString:@"not found"]) {
-                NSLog(@"ERROR ANALYSIS: Pool not found - check pool name or import status");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool not found - check pool name or import status");
             } else if ([lowerError containsString:@"cannot import"]) {
-                NSLog(@"ERROR ANALYSIS: Cannot import pool - may already be imported or corrupted");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Cannot import pool - may already be imported or corrupted");
             } else if ([lowerError containsString:@"cannot export"]) {
-                NSLog(@"ERROR ANALYSIS: Cannot export pool - may be in use or have mounted datasets");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Cannot export pool - may be in use or have mounted datasets");
             } else if ([lowerError containsString:@"no such pool"]) {
-                NSLog(@"ERROR ANALYSIS: Pool not found - may already be destroyed or exported");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool not found - may already be destroyed or exported");
             } else {
-                NSLog(@"ERROR ANALYSIS: Unknown ZPool error condition");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Unknown ZPool error condition");
             }
         } else {
-            NSLog(@"BAZFSUtility: STDERR: (empty)");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: STDERR: (empty)");
         }
         
         return success;
     } @catch (NSException *exception) {
-        NSLog(@"CRITICAL ERROR: Exception while executing ZPool command %@: %@", arguments, [exception reason]);
-        NSLog(@"CRITICAL ERROR: Exception details: %@", exception);
+        NSDebugLLog(@"gwcomp", @"CRITICAL ERROR: Exception while executing ZPool command %@: %@", arguments, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"CRITICAL ERROR: Exception details: %@", exception);
         return NO;
     }
 }
 
 + (NSString *)executeZPoolCommand:(NSArray *)arguments
 {
-    NSLog(@"BAZFSUtility: Executing ZPool command (with output): zpool %@", [arguments componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Executing ZPool command (with output): zpool %@", [arguments componentsJoinedByString:@" "]);
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"zpool"];
@@ -1726,41 +1726,41 @@
         NSString *outputString = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
         NSString *errorString = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
         
-        NSLog(@"BAZFSUtility: ZPool command (output) exit status: %d", status);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZPool command (output) exit status: %d", status);
         if ([outputString length] > 0) {
-            NSLog(@"BAZFSUtility: ZPool command output: %@", outputString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZPool command output: %@", outputString);
         }
         if ([errorString length] > 0) {
-            NSLog(@"BAZFSUtility: ZPool command error: %@", errorString);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZPool command error: %@", errorString);
             
             // Analyze common ZPool error conditions for better diagnostics
             NSString *lowerError = [errorString lowercaseString];
             if ([lowerError containsString:@"permission denied"] || [lowerError containsString:@"operation not permitted"]) {
-                NSLog(@"ERROR ANALYSIS: Permission denied - may need to run as root/sudo");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Permission denied - may need to run as root/sudo");
             } else if ([lowerError containsString:@"no such file or directory"]) {
-                NSLog(@"ERROR ANALYSIS: Device not found - check disk device name");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Device not found - check disk device name");
             } else if ([lowerError containsString:@"device busy"] || [lowerError containsString:@"resource busy"]) {
-                NSLog(@"ERROR ANALYSIS: Device is busy - may be mounted or in use");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Device is busy - may be mounted or in use");
             } else if ([lowerError containsString:@"pool is busy"] || [lowerError containsString:@"pool busy"]) {
-                NSLog(@"ERROR ANALYSIS: Pool is busy - datasets may be mounted or pool is being accessed");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool is busy - datasets may be mounted or pool is being accessed");
             } else if ([lowerError containsString:@"invalid argument"]) {
-                NSLog(@"ERROR ANALYSIS: Invalid argument - check pool name or device name");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Invalid argument - check pool name or device name");
             } else if ([lowerError containsString:@"pool already exists"]) {
-                NSLog(@"ERROR ANALYSIS: Pool name already in use");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool name already in use");
             } else if ([lowerError containsString:@"not a block device"]) {
-                NSLog(@"ERROR ANALYSIS: Device is not a valid block device");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Device is not a valid block device");
             } else if ([lowerError containsString:@"insufficient privileges"]) {
-                NSLog(@"ERROR ANALYSIS: Insufficient privileges - need administrator/root access");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Insufficient privileges - need administrator/root access");
             } else if ([lowerError containsString:@"pool"] && [lowerError containsString:@"not found"]) {
-                NSLog(@"ERROR ANALYSIS: Pool not found - check pool name or import status");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool not found - check pool name or import status");
             } else if ([lowerError containsString:@"cannot import"]) {
-                NSLog(@"ERROR ANALYSIS: Cannot import pool - may already be imported or corrupted");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Cannot import pool - may already be imported or corrupted");
             } else if ([lowerError containsString:@"cannot export"]) {
-                NSLog(@"ERROR ANALYSIS: Cannot export pool - may be in use or have mounted datasets");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Cannot export pool - may be in use or have mounted datasets");
             } else if ([lowerError containsString:@"no such pool"]) {
-                NSLog(@"ERROR ANALYSIS: Pool not found - may already be destroyed or exported");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Pool not found - may already be destroyed or exported");
             } else {
-                NSLog(@"ERROR ANALYSIS: Unknown ZPool error condition");
+                NSDebugLLog(@"gwcomp", @"ERROR ANALYSIS: Unknown ZPool error condition");
             }
         }
         
@@ -1768,13 +1768,13 @@
         if (status == 0 && outputString) {
             result = [outputString copy];
         } else if (status != 0) {
-            NSLog(@"ERROR: ZPool command failed with exit status %d", status);
+            NSDebugLLog(@"gwcomp", @"ERROR: ZPool command failed with exit status %d", status);
         }
         
         return result;
     } @catch (NSException *exception) {
-        NSLog(@"CRITICAL ERROR: Exception while executing ZPool command %@: %@", arguments, [exception reason]);
-        NSLog(@"CRITICAL ERROR: Exception details: %@", exception);
+        NSDebugLLog(@"gwcomp", @"CRITICAL ERROR: Exception while executing ZPool command %@: %@", arguments, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"CRITICAL ERROR: Exception details: %@", exception);
         return nil;
     }
 }
@@ -1785,16 +1785,16 @@
                     toDataset:(NSString *)destinationDataset 
                  withProgress:(nullable void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BAZFSUtility: Performing ZFS send/receive operation with ADVANCED PIPE MONITORING");
-    NSLog(@"BAZFSUtility: Source snapshot: %@", sourceSnapshot);
-    NSLog(@"BAZFSUtility: Destination dataset: %@", destinationDataset);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Performing ZFS send/receive operation with ADVANCED PIPE MONITORING");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Source snapshot: %@", sourceSnapshot);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Destination dataset: %@", destinationDataset);
     
     if (progressBlock) {
         progressBlock(0.10, NSLocalizedString(@"Getting transfer size...", @"Backup progress"));
     }
     
     // PHASE 1: Get the total size using a dry-run send
-    NSLog(@"BAZFSUtility: Phase 1: Getting transfer size with dry-run send");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Phase 1: Getting transfer size with dry-run send");
     NSTask *sizeTask = [[NSTask alloc] init];
     [sizeTask setLaunchPath:@"zfs"];
     [sizeTask setArguments:@[@"send", @"--parsable", @"--dry-run", sourceSnapshot]];
@@ -1814,10 +1814,10 @@
             
             // Parse the size from the parsable output
             totalBytes = [self parseTotalSizeFromParsableOutput:sizeOutput];
-            NSLog(@"BAZFSUtility: Detected transfer size: %lld bytes (%@)", totalBytes, [self formatBytes:totalBytes]);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Detected transfer size: %lld bytes (%@)", totalBytes, [self formatBytes:totalBytes]);
         }
     } @catch (NSException *exception) {
-        NSLog(@"WARNING: Could not determine transfer size: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"WARNING: Could not determine transfer size: %@", [exception reason]);
     }
     
     if (progressBlock) {
@@ -1825,7 +1825,7 @@
     }
     
     // PHASE 2: Perform the actual send/receive with pipe monitoring
-    NSLog(@"BAZFSUtility: Phase 2: Performing monitored ZFS send/receive");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Phase 2: Performing monitored ZFS send/receive");
     
     // Create ZFS send task
     NSTask *sendTask = [[NSTask alloc] init];
@@ -1849,12 +1849,12 @@
     
     @try {
         // Launch both tasks
-        NSLog(@"BAZFSUtility: Launching send and receive tasks");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Launching send and receive tasks");
         [sendTask launch];
         [receiveTask launch];
         
         // Use the proper monitoring method instead of simple timeout
-        NSLog(@"BAZFSUtility: Starting proper ZFS progress monitoring...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Starting proper ZFS progress monitoring...");
         BOOL success = [self monitorZFSProgress:sendTask 
                                     receiveTask:receiveTask 
                                 sendProgressPipe:sendErrorPipe 
@@ -1867,7 +1867,7 @@
         return success;
         
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: ZFS send/receive failed with exception: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: ZFS send/receive failed with exception: %@", [exception reason]);
         return NO;
     }
 }
@@ -1877,17 +1877,17 @@
                                toDataset:(NSString *)destinationDataset 
                             withProgress:(nullable void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BAZFSUtility: Performing incremental ZFS send/receive operation with ADVANCED PIPE MONITORING");
-    NSLog(@"BAZFSUtility: Base snapshot: %@", baseSnapshot);
-    NSLog(@"BAZFSUtility: Source snapshot: %@", sourceSnapshot);
-    NSLog(@"BAZFSUtility: Destination dataset: %@", destinationDataset);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Performing incremental ZFS send/receive operation with ADVANCED PIPE MONITORING");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Base snapshot: %@", baseSnapshot);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Source snapshot: %@", sourceSnapshot);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Destination dataset: %@", destinationDataset);
     
     if (progressBlock) {
         progressBlock(0.10, NSLocalizedString(@"Getting incremental transfer size...", @"Backup progress"));
     }
     
     // PHASE 1: Get the total size using a dry-run incremental send
-    NSLog(@"BAZFSUtility: Phase 1: Getting incremental transfer size with dry-run send");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Phase 1: Getting incremental transfer size with dry-run send");
     NSTask *sizeTask = [[NSTask alloc] init];
     [sizeTask setLaunchPath:@"zfs"];
     [sizeTask setArguments:@[@"send", @"--parsable", @"--dry-run", @"-i", baseSnapshot, sourceSnapshot]];
@@ -1907,10 +1907,10 @@
             
             // Parse the size from the parsable output
             totalBytes = [self parseTotalSizeFromParsableOutput:sizeOutput];
-            NSLog(@"BAZFSUtility: Detected incremental transfer size: %lld bytes (%@)", totalBytes, [self formatBytes:totalBytes]);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Detected incremental transfer size: %lld bytes (%@)", totalBytes, [self formatBytes:totalBytes]);
         }
     } @catch (NSException *exception) {
-        NSLog(@"WARNING: Could not determine incremental transfer size: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"WARNING: Could not determine incremental transfer size: %@", [exception reason]);
     }
     
     if (progressBlock) {
@@ -1918,7 +1918,7 @@
     }
     
     // PHASE 2: Perform the actual incremental send/receive with pipe monitoring
-    NSLog(@"BAZFSUtility: Phase 2: Performing monitored incremental ZFS send/receive");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Phase 2: Performing monitored incremental ZFS send/receive");
     
     // Create incremental ZFS send task
     NSTask *sendTask = [[NSTask alloc] init];
@@ -1942,12 +1942,12 @@
     
     @try {
         // Launch both tasks
-        NSLog(@"BAZFSUtility: Launching incremental send and receive tasks");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Launching incremental send and receive tasks");
         [sendTask launch];
         [receiveTask launch];
         
         // Use the proper monitoring method instead of simple timeout
-        NSLog(@"BAZFSUtility: Starting proper incremental ZFS progress monitoring...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Starting proper incremental ZFS progress monitoring...");
         BOOL success = [self monitorZFSProgress:sendTask 
                                     receiveTask:receiveTask 
                                 sendProgressPipe:sendErrorPipe 
@@ -1960,7 +1960,7 @@
         return success;
         
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Incremental ZFS send/receive failed with exception: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Incremental ZFS send/receive failed with exception: %@", [exception reason]);
         return NO;
     }
 }
@@ -1969,9 +1969,9 @@
                     toDataset:(NSString *)destinationDataset 
                  withProgress:(nullable void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BAZFSUtility: Performing full ZFS restore");
-    NSLog(@"BAZFSUtility: Source snapshot: %@", sourceSnapshot);
-    NSLog(@"BAZFSUtility: Destination dataset: %@", destinationDataset);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Performing full ZFS restore");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Source snapshot: %@", sourceSnapshot);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Destination dataset: %@", destinationDataset);
     
     if (progressBlock) {
         progressBlock(0.10, NSLocalizedString(@"Rolling back to snapshot...", @"Restore progress"));
@@ -1994,7 +1994,7 @@
                          withItems:(NSArray *)itemsToRestore 
                       withProgress:(nullable void(^)(CGFloat progress, NSString *currentTask))progressBlock
 {
-    NSLog(@"BAZFSUtility: Performing selective ZFS restore for %lu items", (unsigned long)[itemsToRestore count]);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Performing selective ZFS restore for %lu items", (unsigned long)[itemsToRestore count]);
     
     if (progressBlock) {
         progressBlock(0.5, NSLocalizedString(@"Mounting source snapshot for selective restore...", @"Restore progress"));
@@ -2006,7 +2006,7 @@
     
     // Mount the source snapshot
     if (![self mountDataset:sourceSnapshot atPath:tempMountPoint]) {
-        NSLog(@"ERROR: Failed to mount source snapshot for selective restore");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to mount source snapshot for selective restore");
         return NO;
     }
     
@@ -2049,7 +2049,7 @@
              progressRange:(CGFloat)progressRange
 {
 {
-    NSLog(@"BAZFSUtility: Starting ZFS progress monitoring with parsable output");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Starting ZFS progress monitoring with parsable output");
     
     NSFileHandle *sendProgressHandle = [sendProgressPipe fileHandleForReading];
     NSFileHandle *receiveErrorHandle = [receiveErrorPipe fileHandleForReading];
@@ -2073,8 +2073,8 @@
     int periodicUpdateInterval = 25; // Update every 2.5 seconds (25 * 0.1s = 2.5s) - more frequent updates
     int verboseLogInterval = 50; // Verbose log every 5 seconds (50 * 0.1s = 5s) - more frequent logging
     
-    NSLog(@"BAZFSUtility: Starting monitoring loop for send/receive tasks with parsable progress");
-    NSLog(@"BAZFSUtility: Timeout: %d seconds, Updates every %.1f seconds", 
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Starting monitoring loop for send/receive tasks with parsable progress");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Timeout: %d seconds, Updates every %.1f seconds", 
           maxProgressUpdates / 10, (float)periodicUpdateInterval / 10.0);
     
     // Helper function to safely dispatch progress updates to main thread
@@ -2094,7 +2094,7 @@
             
             // Only log verbose monitoring every 10 seconds to reduce spam
             if ((progressUpdateCounter % verboseLogInterval) == 0) {
-                NSLog(@"BAZFSUtility: Monitoring iteration %d - Send running: %@, Receive running: %@", 
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Monitoring iteration %d - Send running: %@, Receive running: %@", 
                       progressUpdateCounter, sendRunning ? @"YES" : @"NO", receiveRunning ? @"YES" : @"NO");
             }
             
@@ -2105,14 +2105,14 @@
             } @catch (NSException *exception) {
                 // Handle non-blocking read exceptions gracefully
                 if ((progressUpdateCounter % verboseLogInterval) == 0) {
-                    NSLog(@"BAZFSUtility: Send progress handle read exception (normal for non-blocking): %@", [exception reason]);
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Send progress handle read exception (normal for non-blocking): %@", [exception reason]);
                 }
                 sendData = nil;
             }
             
             if ([sendData length] > 0) {
                 NSString *output = [[NSString alloc] initWithData:sendData encoding:NSUTF8StringEncoding];
-                NSLog(@"ZFS Send Parsable Output: %@", output);
+                NSDebugLLog(@"gwcomp", @"ZFS Send Parsable Output: %@", output);
                 
                 // Parse ZFS parsable output format - this provides metadata but not real-time progress
                 // NOTE: ZFS send --parsable only provides initial metadata (size, type) and final completion
@@ -2122,7 +2122,7 @@
                     line = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
                     if ([line length] == 0) continue;
                     
-                    NSLog(@"ZFS Parsable Line: '%@'", line);
+                    NSDebugLLog(@"gwcomp", @"ZFS Parsable Line: '%@'", line);
                     
                     // ZFS parsable format (from ZFS documentation):
                     // Line format: <timestamp> <bytes_transferred> <total_bytes> <dataset>
@@ -2155,7 +2155,7 @@
                             if (size > 0 && !totalSizeKnown) {
                                 totalBytes = size;
                                 totalSizeKnown = YES;
-                                NSLog(@"BAZFSUtility: Found total size from 'size' line: %lld bytes", size);
+                                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found total size from 'size' line: %lld bytes", size);
                                 
                                 if (progressBlock) {
                                     dispatchProgressUpdate(currentProgress, 
@@ -2171,7 +2171,7 @@
                                 if (size > 0 && !totalSizeKnown) {
                                     totalBytes = size;
                                     totalSizeKnown = YES;
-                                    NSLog(@"BAZFSUtility: Found total size from 'full' line: %lld bytes", size);
+                                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found total size from 'full' line: %lld bytes", size);
                                     
                                     if (progressBlock) {
                                         dispatchProgressUpdate(currentProgress, 
@@ -2188,7 +2188,7 @@
                                 if (size > 0 && !totalSizeKnown) {
                                     totalBytes = size;
                                     totalSizeKnown = YES;
-                                    NSLog(@"BAZFSUtility: Found total size from 'incremental' line: %lld bytes", size);
+                                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found total size from 'incremental' line: %lld bytes", size);
                                     
                                     if (progressBlock) {
                                         dispatchProgressUpdate(currentProgress, 
@@ -2211,7 +2211,7 @@
                                 if (!totalSizeKnown) {
                                     totalBytes = totalBytesFromLine;
                                     totalSizeKnown = YES;
-                                    NSLog(@"ZFS Progress: Total size determined from progress line: %lld bytes", totalBytes);
+                                    NSDebugLLog(@"gwcomp", @"ZFS Progress: Total size determined from progress line: %lld bytes", totalBytes);
                                 }
                                 
                                 // Update transferred bytes
@@ -2230,7 +2230,7 @@
                                         dispatchProgressUpdate(currentProgress, statusMsg);
                                     }
                                     
-                                    NSLog(@"ZFS Progress: %lld/%lld bytes (%.1f%%) - REAL PROGRESS DATA (rare)", 
+                                    NSDebugLLog(@"gwcomp", @"ZFS Progress: %lld/%lld bytes (%.1f%%) - REAL PROGRESS DATA (rare)", 
                                           transferredBytes, totalBytes, zfsProgress * 100.0);
                                 }
                             }
@@ -2256,7 +2256,7 @@
                                     dispatchProgressUpdate(currentProgress, statusMsg);
                                 }
                                 
-                                NSLog(@"ZFS Progress: %lld/%lld bytes (%.1f%%) - TIMESTAMP FORMAT", 
+                                NSDebugLLog(@"gwcomp", @"ZFS Progress: %lld/%lld bytes (%.1f%%) - TIMESTAMP FORMAT", 
                                       transferredBytes, totalBytes, zfsProgress * 100.0);
                             }
                         }
@@ -2271,18 +2271,18 @@
             } @catch (NSException *exception) {
                 // Handle non-blocking read exceptions gracefully
                 if ((progressUpdateCounter % verboseLogInterval) == 0) {
-                    NSLog(@"BAZFSUtility: Receive error handle read exception (normal for non-blocking): %@", [exception reason]);
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Receive error handle read exception (normal for non-blocking): %@", [exception reason]);
                 }
                 receiveData = nil;
             }
             
             if ([receiveData length] > 0) {
                 NSString *output = [[NSString alloc] initWithData:receiveData encoding:NSUTF8StringEncoding];
-                NSLog(@"ZFS Receive Output: %@", output);
+                NSDebugLLog(@"gwcomp", @"ZFS Receive Output: %@", output);
                 
                 // Check for completion messages
                 if ([output containsString:@"received"] && [output containsString:@"stream"]) {
-                    NSLog(@"ZFS Receive: Stream completed successfully");
+                    NSDebugLLog(@"gwcomp", @"ZFS Receive: Stream completed successfully");
                     if (progressBlock) {
                         dispatchProgressUpdate(baseProgress + progressRange * 0.95, 
                             NSLocalizedString(@"ZFS stream received successfully", @"ZFS completion"));
@@ -2300,7 +2300,7 @@
             
             // Debug: Log every 10 iterations to see if the loop is working
             if ((progressUpdateCounter % 10) == 0) {
-                NSLog(@"BAZFSUtility: Loop iteration %d, Send: %@, Receive: %@, TotalSizeKnown: %@", 
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Loop iteration %d, Send: %@, Receive: %@, TotalSizeKnown: %@", 
                       progressUpdateCounter, sendRunning ? @"YES" : @"NO", receiveRunning ? @"YES" : @"NO", totalSizeKnown ? @"YES" : @"NO");
             }
             
@@ -2348,7 +2348,7 @@
                                     dispatchProgressUpdate(currentProgress, statusMsg);
                                 }
                                 
-                                NSLog(@"ZFS Progress: Time-based estimate %.1f%% after %.1f seconds (ZFS parsable doesn't provide real-time progress)", 
+                                NSDebugLLog(@"gwcomp", @"ZFS Progress: Time-based estimate %.1f%% after %.1f seconds (ZFS parsable doesn't provide real-time progress)", 
                                       estimatedProgress * 100.0, (float)progressUpdateCounter / 10.0);
                             }
                         }
@@ -2381,7 +2381,7 @@
                                 dispatchProgressUpdate(currentProgress, statusMsg);
                             }
                             
-                            NSLog(@"BAZFSUtility: Time-based progress estimate %.1f%% after %.1f seconds (no size known)", 
+                            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Time-based progress estimate %.1f%% after %.1f seconds (no size known)", 
                                   estimatedProgress * 100.0, (float)progressUpdateCounter / 10.0);
                         }
                     }
@@ -2389,7 +2389,7 @@
                 
                 // Check if we should break out early (tasks finished)
                 if (!sendRunning && !receiveRunning) {
-                    NSLog(@"BAZFSUtility: Both tasks have completed, breaking monitoring loop");
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Both tasks have completed, breaking monitoring loop");
                     break;
                 }
             }
@@ -2399,20 +2399,20 @@
         } // End of @autoreleasepool
     } // End of while loop
     
-    NSLog(@"BAZFSUtility: ZFS monitoring completed");  // Remove the variable reference
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS monitoring completed");  // Remove the variable reference
     
     // Wait a bit for tasks to fully complete and get final status
-    NSLog(@"BAZFSUtility: Waiting for tasks to complete...");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Waiting for tasks to complete...");
     
     // Wait for send task if still running
     if ([sendTask isRunning]) {
-        NSLog(@"BAZFSUtility: Waiting for send task to complete...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Waiting for send task to complete...");
         [sendTask waitUntilExit];
     }
     
     // Wait for receive task if still running  
     if ([receiveTask isRunning]) {
-        NSLog(@"BAZFSUtility: Waiting for receive task to complete...");
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Waiting for receive task to complete...");
         [receiveTask waitUntilExit];
     }
     
@@ -2420,7 +2420,7 @@
     int sendStatus = [sendTask terminationStatus];
     int receiveStatus = [receiveTask terminationStatus];
     
-    NSLog(@"BAZFSUtility: Final task status - Send: %d, Receive: %d", sendStatus, receiveStatus);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Final task status - Send: %d, Receive: %d", sendStatus, receiveStatus);
     
     BOOL success = (sendStatus == 0 && receiveStatus == 0);
     
@@ -2429,7 +2429,7 @@
             progressBlock(baseProgress + progressRange, NSLocalizedString(@"ZFS transfer completed", @"ZFS completion"));
         }
     } else if (!success) {
-        NSLog(@"ERROR: ZFS operation failed - Send status: %d, Receive status: %d", sendStatus, receiveStatus);
+        NSDebugLLog(@"gwcomp", @"ERROR: ZFS operation failed - Send status: %d, Receive status: %d", sendStatus, receiveStatus);
         
         // Read any remaining error output for debugging
         NSData *remainingSendData = [[sendProgressPipe fileHandleForReading] readDataToEndOfFile];
@@ -2437,12 +2437,12 @@
         
         if ([remainingSendData length] > 0) {
             NSString *sendError = [[NSString alloc] initWithData:remainingSendData encoding:NSUTF8StringEncoding];
-            NSLog(@"ZFS Send Final Error: %@", sendError);
+            NSDebugLLog(@"gwcomp", @"ZFS Send Final Error: %@", sendError);
         }
         
         if ([remainingReceiveData length] > 0) {
             NSString *receiveError = [[NSString alloc] initWithData:remainingReceiveData encoding:NSUTF8StringEncoding];
-            NSLog(@"ZFS Receive Final Error: %@", receiveError);
+            NSDebugLLog(@"gwcomp", @"ZFS Receive Final Error: %@", receiveError);
         }
         
         if (progressBlock) {
@@ -2450,7 +2450,7 @@
         }
     }
     
-    NSLog(@"BAZFSUtility: ZFS progress monitoring completed, success: %@", success ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS progress monitoring completed, success: %@", success ? @"YES" : @"NO");
     return success;
 }
 
@@ -2497,7 +2497,7 @@
 
 + (NSString *)getZFSDatasetForPath:(NSString *)path
 {
-    NSLog(@"BAZFSUtility: Getting ZFS dataset for path: %@", path);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Getting ZFS dataset for path: %@", path);
     
     // Use df to get the filesystem information for the path
     NSTask *task = [[NSTask alloc] init];
@@ -2532,24 +2532,24 @@
                     
                     if ([filtered count] > 0) {
                         NSString *dataset = [filtered objectAtIndex:0];
-                        NSLog(@"BAZFSUtility: Found ZFS dataset: %@", dataset);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found ZFS dataset: %@", dataset);
                         return dataset;
                     }
                 }
             }
         }
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to get ZFS dataset for path %@: %@", path, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to get ZFS dataset for path %@: %@", path, [exception reason]);
     }
     
     
-    NSLog(@"BAZFSUtility: Path %@ is not on ZFS", path);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Path %@ is not on ZFS", path);
     return nil;
 }
 
 + (long long)getRawDiskSize:(NSString *)diskDevice
 {
-    NSLog(@"BAZFSUtility: Getting raw disk size for %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Getting raw disk size for %@", diskDevice);
     
     // Use blockdev or fdisk to get disk size
     NSTask *task = [[NSTask alloc] init];
@@ -2571,11 +2571,11 @@
             NSString *sizeStr = [output stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
             
             long long size = [sizeStr longLongValue];
-            NSLog(@"BAZFSUtility: Raw disk size: %lld bytes", size);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Raw disk size: %lld bytes", size);
             return size;
         }
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to get raw disk size for %@: %@", diskDevice, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to get raw disk size for %@: %@", diskDevice, [exception reason]);
     }
     
     return 0;
@@ -2628,7 +2628,7 @@
 
 + (BOOL)unmountDisk:(NSString *)diskDevice
 {
-    NSLog(@"BAZFSUtility: Unmounting disk %@", diskDevice);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Unmounting disk %@", diskDevice);
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"umount"];
@@ -2645,21 +2645,21 @@
         
         BOOL success = ([task terminationStatus] == 0);
         if (success) {
-            NSLog(@"BAZFSUtility: Successfully unmounted %@", diskDevice);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully unmounted %@", diskDevice);
         } else {
-            NSLog(@"WARNING: Failed to unmount %@ (may not be mounted)", diskDevice);
+            NSDebugLLog(@"gwcomp", @"WARNING: Failed to unmount %@ (may not be mounted)", diskDevice);
         }
         
         return success;
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to unmount disk %@: %@", diskDevice, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to unmount disk %@: %@", diskDevice, [exception reason]);
         return NO;
     }
 }
 
 + (long long)calculateDirectorySize:(NSString *)path
 {
-    NSLog(@"BAZFSUtility: Calculating directory size for %@", path);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Calculating directory size for %@", path);
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"du"];
@@ -2683,12 +2683,12 @@
             if ([components count] >= 1) {
                 NSString *sizeStr = [[components objectAtIndex:0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
                 long long size = [sizeStr longLongValue];
-                NSLog(@"BAZFSUtility: Directory size: %lld bytes", size);
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Directory size: %lld bytes", size);
                 return size;
             }
         }
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to calculate directory size for %@: %@", path, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to calculate directory size for %@: %@", path, [exception reason]);
     }
     
     return 0;
@@ -2711,7 +2711,7 @@
 
 + (BOOL)validateZFSSystemState:(NSString * _Nullable * _Nullable)errorMessage
 {
-    NSLog(@"BAZFSUtility: Validating ZFS system state");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Validating ZFS system state");
     
     // Check if ZFS is available
     if (![self isZFSAvailable]) {
@@ -2747,11 +2747,11 @@
                 return NO;
             }
             
-            NSLog(@"BAZFSUtility: ZFS system state is valid");
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: ZFS system state is valid");
             return YES;
         }
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to validate ZFS system state: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to validate ZFS system state: %@", [exception reason]);
     }
     
     
@@ -2763,7 +2763,7 @@
 
 + (BOOL)validatePoolHealth:(NSString *)poolName errorMessage:(NSString * _Nullable * _Nullable)errorMessage
 {
-    NSLog(@"BAZFSUtility: Validating health of pool %@", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Validating health of pool %@", poolName);
     
     if (![self poolExists:poolName]) {
         if (errorMessage) {
@@ -2778,7 +2778,7 @@
     
     if (output) {
         if ([output containsString:@"pool is healthy"] || [output containsString:@"all pools are healthy"]) {
-            NSLog(@"BAZFSUtility: Pool %@ is healthy", poolName);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool %@ is healthy", poolName);
             return YES;
         } else {
             if (errorMessage) {
@@ -2796,7 +2796,7 @@
 
 + (BOOL)validateDatasetExists:(NSString *)datasetName errorMessage:(NSString * _Nullable * _Nullable)errorMessage
 {
-    NSLog(@"BAZFSUtility: Validating dataset exists: %@", datasetName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Validating dataset exists: %@", datasetName);
     
     BOOL exists = [self datasetExists:datasetName];
     
@@ -2813,14 +2813,14 @@
         return 0;
     }
     
-    NSLog(@"BAZFSUtility: Parsing total size from parsable output: %@", output);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Parsing total size from parsable output: %@", output);
     
     NSArray *lines = [output componentsSeparatedByString:@"\n"];
     for (__strong NSString *line in lines) {
         line = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if ([line length] == 0) continue;
         
-        NSLog(@"BAZFSUtility: Parsing size line: '%@'", line);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Parsing size line: '%@'", line);
         
         // Split by tabs first, then by spaces if needed
         NSArray *components = [line componentsSeparatedByString:@"\t"];
@@ -2845,7 +2845,7 @@
                 NSString *sizeStr = [components objectAtIndex:1];
                 long long size = [sizeStr longLongValue];
                 if (size > 0) {
-                    NSLog(@"BAZFSUtility: Found total size from 'size' line: %lld bytes", size);
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found total size from 'size' line: %lld bytes", size);
                     return size;
                 }
             }
@@ -2855,7 +2855,7 @@
                     NSString *sizeStr = [components objectAtIndex:2];
                     long long size = [sizeStr longLongValue];
                     if (size > 0) {
-                        NSLog(@"BAZFSUtility: Found total size from 'full' line: %lld bytes", size);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found total size from 'full' line: %lld bytes", size);
                         return size;
                     }
                 }
@@ -2866,7 +2866,7 @@
                     NSString *sizeStr = [components objectAtIndex:3];
                     long long size = [sizeStr longLongValue];
                     if (size > 0) {
-                        NSLog(@"BAZFSUtility: Found total size from 'incremental' line: %lld bytes", size);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found total size from 'incremental' line: %lld bytes", size);
                         return size;
                     }
                 }
@@ -2874,7 +2874,7 @@
         }
     }
     
-    NSLog(@"BAZFSUtility: Could not parse total size from parsable output");
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Could not parse total size from parsable output");
     return 0;
 }
 
@@ -2883,7 +2883,7 @@
                                  baseProgress:(CGFloat)baseProgress 
                                 progressRange:(CGFloat)progressRange
 {
-    NSLog(@"BAZFSUtility: Creating monitored pipe for %lld bytes", totalBytes);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Creating monitored pipe for %lld bytes", totalBytes);
     
     // Create a regular pipe
     NSPipe *pipe = [NSPipe pipe];
@@ -2910,7 +2910,7 @@
 {
     @autoreleasepool {
         if (!threadInfo || ![threadInfo isKindOfClass:[NSDictionary class]]) {
-            NSLog(@"ERROR: Invalid threadInfo parameter in monitorPipeProgress");
+            NSDebugLLog(@"gwcomp", @"ERROR: Invalid threadInfo parameter in monitorPipeProgress");
             return;
         }
         
@@ -2921,7 +2921,7 @@
         void(^progressBlock)(CGFloat, NSString*) = [threadInfo objectForKey:@"progressBlock"];
         
         if (!pipe || !totalBytesNum || !baseProgressNum || !progressRangeNum) {
-            NSLog(@"ERROR: Missing required parameters in threadInfo dictionary");
+            NSDebugLLog(@"gwcomp", @"ERROR: Missing required parameters in threadInfo dictionary");
             return;
         }
         
@@ -2936,7 +2936,7 @@
         int fd = [readHandle fileDescriptor];
         fcntl(fd, F_SETFL, O_NONBLOCK);
         
-        NSLog(@"BAZFSUtility: Starting pipe monitoring thread for %lld total bytes", totalBytes);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Starting pipe monitoring thread for %lld total bytes", totalBytes);
         
         NSDate *startTime = [NSDate date];
         int updateCounter = 0;
@@ -2977,7 +2977,7 @@
                             [self formatBytes:totalBytes],
                             transferProgress * 100.0];
                         
-                        NSLog(@"BAZFSUtility: Pipe Monitor: %lld/%lld bytes (%.1f%%) transferred", 
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pipe Monitor: %lld/%lld bytes (%.1f%%) transferred", 
                               bytesTransferred, totalBytes, transferProgress * 100.0);
                     } else {
                         // Unknown total size - provide time-based progress estimates for GUI feedback
@@ -2993,7 +2993,7 @@
                             [self formatBytes:bytesTransferred],
                             elapsed > 0 ? (bytesTransferred / 1024.0) / elapsed : 0.0];
                         
-                        NSLog(@"BAZFSUtility: Pipe Monitor (no total): %lld bytes transferred, %.1f KB/s", 
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pipe Monitor (no total): %lld bytes transferred, %.1f KB/s", 
                               bytesTransferred, elapsed > 0 ? (bytesTransferred / 1024.0) / elapsed : 0.0);
                     }
                     
@@ -3005,7 +3005,7 @@
                 
                 // Check if we've reached the end (only for known sizes)
                 if (totalBytes > 0 && bytesTransferred >= totalBytes) {
-                    NSLog(@"BAZFSUtility: Pipe monitoring completed - reached expected total");
+                    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pipe monitoring completed - reached expected total");
                     break;
                 }
                 
@@ -3016,7 +3016,7 @@
                     char testByte;
                     ssize_t result = read(fd, &testByte, 1);
                     if (result == 0) {
-                        NSLog(@"BAZFSUtility: Pipe monitoring completed - EOF detected");
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pipe monitoring completed - EOF detected");
                         break;
                     } else if (result > 0) {
                         // Put the byte back by adjusting our counter
@@ -3026,7 +3026,7 @@
             }
         }
         
-        NSLog(@"BAZFSUtility: Pipe monitoring thread finished, total transferred: %lld bytes", bytesTransferred);
+        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pipe monitoring thread finished, total transferred: %lld bytes", bytesTransferred);
     }
 }
 
@@ -3045,7 +3045,7 @@
 
 + (BOOL)checkPoolCanBeExported:(NSString *)poolName
 {
-    NSLog(@"BAZFSUtility: Checking if pool '%@' can be safely exported", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking if pool '%@' can be safely exported", poolName);
     
     // Check for mounted datasets in the pool
     NSTask *task = [[NSTask alloc] init];
@@ -3075,15 +3075,15 @@
                     NSString *mounted = [parts objectAtIndex:1];
                     
                     if ([mounted isEqualToString:@"yes"]) {
-                        NSLog(@"BAZFSUtility: Found mounted dataset: %@", datasetName);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Found mounted dataset: %@", datasetName);
                         hasMountedDatasets = YES;
                         
                         // Try to unmount it
-                        NSLog(@"BAZFSUtility: Attempting to unmount dataset: %@", datasetName);
+                        NSDebugLLog(@"gwcomp", @"BAZFSUtility: Attempting to unmount dataset: %@", datasetName);
                         if ([self unmountDataset:datasetName]) {
-                            NSLog(@"BAZFSUtility: Successfully unmounted dataset: %@", datasetName);
+                            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Successfully unmounted dataset: %@", datasetName);
                         } else {
-                            NSLog(@"BAZFSUtility: Failed to unmount dataset: %@", datasetName);
+                            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Failed to unmount dataset: %@", datasetName);
                         }
                     }
                 }
@@ -3091,20 +3091,20 @@
             
             
             if (hasMountedDatasets) {
-                NSLog(@"BAZFSUtility: Pool had mounted datasets - attempted to unmount them");
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool had mounted datasets - attempted to unmount them");
                 // Give the system a moment to finish unmounting
                 usleep(1000000); // 1 second
             } else {
-                NSLog(@"BAZFSUtility: Pool '%@' has no mounted datasets", poolName);
+                NSDebugLLog(@"gwcomp", @"BAZFSUtility: Pool '%@' has no mounted datasets", poolName);
             }
         }
     } @catch (NSException *exception) {
-        NSLog(@"ERROR: Failed to check mounted datasets for pool %@: %@", poolName, [exception reason]);
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to check mounted datasets for pool %@: %@", poolName, [exception reason]);
     }
     
     
     // Check for any processes using files in the pool
-    NSLog(@"BAZFSUtility: Checking for processes using pool '%@'", poolName);
+    NSDebugLLog(@"gwcomp", @"BAZFSUtility: Checking for processes using pool '%@'", poolName);
     NSTask *lsofTask = [[NSTask alloc] init];
     [lsofTask setLaunchPath:@"lsof"];
     [lsofTask setArguments:@[@"+D", [NSString stringWithFormat:@"/%@", poolName]]];
@@ -3121,15 +3121,15 @@
         if ([lsofTask terminationStatus] == 0) {
             NSData *data = [[lsofPipe fileHandleForReading] readDataToEndOfFile];
             NSString *output = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-            NSLog(@"BAZFSUtility: Processes using pool '%@':\n%@", poolName, output);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: Processes using pool '%@':\n%@", poolName, output);
             
-            NSLog(@"BAZFSUtility: WARNING: Pool '%@' is in use by running processes", poolName);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: WARNING: Pool '%@' is in use by running processes", poolName);
             return NO;
         } else {
-            NSLog(@"BAZFSUtility: No processes found using pool '%@'", poolName);
+            NSDebugLLog(@"gwcomp", @"BAZFSUtility: No processes found using pool '%@'", poolName);
         }
     } @catch (NSException *exception) {
-        NSLog(@"WARNING: Could not check for processes using pool: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"WARNING: Could not check for processes using pool: %@", [exception reason]);
     }
     
     return YES;

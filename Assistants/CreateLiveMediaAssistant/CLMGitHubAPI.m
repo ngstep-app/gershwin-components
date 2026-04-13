@@ -28,7 +28,7 @@
 
 + (NSArray *)fetchReleasesFromRepository:(NSString *)repoURL includePrereleases:(BOOL)includePrereleases
 {
-    NSLog(@"CLMGitHubAPI: fetchReleasesFromRepository: %@", repoURL);
+    NSDebugLLog(@"gwcomp", @"CLMGitHubAPI: fetchReleasesFromRepository: %@", repoURL);
     
     NSMutableArray *releases = [NSMutableArray array];
     
@@ -47,18 +47,18 @@
                                                      error:&connectionError];
     
     if (connectionError) {
-        NSLog(@"CLMGitHubAPI: Connection error: %@", [connectionError localizedDescription]);
+        NSDebugLLog(@"gwcomp", @"CLMGitHubAPI: Connection error: %@", [connectionError localizedDescription]);
         return releases;
     }
     
     if (!data || [data length] == 0) {
-        NSLog(@"CLMGitHubAPI: No data received");
+        NSDebugLLog(@"gwcomp", @"CLMGitHubAPI: No data received");
         return releases;
     }
     
     NSInteger statusCode = [response statusCode];
     if (statusCode != 200) {
-        NSLog(@"CLMGitHubAPI: HTTP error %ld", (long)statusCode);
+        NSDebugLLog(@"gwcomp", @"CLMGitHubAPI: HTTP error %ld", (long)statusCode);
         return releases;
     }
     
@@ -69,7 +69,7 @@
                                                       error:&jsonError];
     
     if (jsonError || ![jsonResult isKindOfClass:[NSArray class]]) {
-        NSLog(@"CLMGitHubAPI: JSON parsing error: %@", [jsonError localizedDescription]);
+        NSDebugLLog(@"gwcomp", @"CLMGitHubAPI: JSON parsing error: %@", [jsonError localizedDescription]);
         return releases;
     }
     
@@ -130,13 +130,13 @@
         }
     }
     
-    NSLog(@"CLMGitHubAPI: Fetched %lu releases", (unsigned long)[releases count]);
+    NSDebugLLog(@"gwcomp", @"CLMGitHubAPI: Fetched %lu releases", (unsigned long)[releases count]);
     return releases;
 }
 
 + (NSArray *)extractISOAssetsFromReleases:(NSArray *)releases includePrereleases:(BOOL)includePrereleases
 {
-    NSLog(@"CLMGitHubAPI: extractISOAssetsFromReleases");
+    NSDebugLLog(@"gwcomp", @"CLMGitHubAPI: extractISOAssetsFromReleases");
     
     NSMutableArray *isoAssets = [NSMutableArray array];
     
@@ -175,7 +175,7 @@
         }
     }
     
-    NSLog(@"CLMGitHubAPI: Found %lu ISO assets", (unsigned long)[isoAssets count]);
+    NSDebugLLog(@"gwcomp", @"CLMGitHubAPI: Found %lu ISO assets", (unsigned long)[isoAssets count]);
     return isoAssets;
 }
 

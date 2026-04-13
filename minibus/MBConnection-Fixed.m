@@ -56,7 +56,7 @@ typedef enum {
         _authFailures = 0;
         _maxAuthFailures = 6;
         
-        NSLog(@"Created connection for socket %d", socket);
+        NSDebugLLog(@"gwcomp", @"Created connection for socket %d", socket);
     }
     return self;
 }
@@ -79,17 +79,17 @@ typedef enum {
     socklen_t len = sizeof(cred);
     
     if (getsockopt(socket, SOL_SOCKET, SO_PEERCRED, &cred, &len) == 0) {
-        NSLog(@"Socket credentials: pid=%d uid=%d gid=%d, claimed uid=%d", 
+        NSDebugLLog(@"gwcomp", @"Socket credentials: pid=%d uid=%d gid=%d, claimed uid=%d", 
               cred.pid, cred.uid, cred.gid, claimedUID);
         return (cred.uid == claimedUID);
     } else {
-        NSLog(@"Failed to get socket credentials: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"Failed to get socket credentials: %s", strerror(errno));
         // Fallback - allow if we can't verify
         return YES;
     }
 #else
     // No socket credential support, allow authentication
-    NSLog(@"No socket credential support, allowing authentication");
+    NSDebugLLog(@"gwcomp", @"No socket credential support, allowing authentication");
     return YES;
 #endif
 }
@@ -97,7 +97,7 @@ typedef enum {
 - (void)handleData:(NSData *)data
 {
     [_readBuffer appendData:data];
-    NSLog(@"Received %lu bytes on socket %d", (unsigned long)[data length], _socket);
+    NSDebugLLog(@"gwcomp", @"Received %lu bytes on socket %d", (unsigned long)[data length], _socket);
     
     if (_state == CONNECTION_STATE_AUTHENTICATING) {
         [self processAuthentication];
@@ -105,7 +105,7 @@ typedef enum {
         // Process D-Bus messages
         NSArray *messages = [self parseMessages];
         for (MBMessage *message in messages) {
-            NSLog(@"Parsed message: %@", [message description]);
+            NSDebugLLog(@"gwcomp", @"Parsed message: %@", [message description]);
         }
     }
 }
@@ -122,7 +122,7 @@ typedef enum {
     // Send any pending auth responses
     if ([_authOutgoing length] > 0) {
         BOOL sent = [MBTransport sendData:_authOutgoing onSocket:_socket];
-        NSLog(@"Sent auth response: %@ (%lu bytes)", sent ? @"SUCCESS" : @"FAILED", (unsigned long)[_authOutgoing length]);
+        NSDebugLLog(@"gwcomp", @"Sent auth response: %@ (%lu bytes)", sent ? @"SUCCESS" : @"FAILED", (unsigned long)[_authOutgoing length]);
         [_authOutgoing setData:[NSData data]];
     }
 }
@@ -162,7 +162,7 @@ typedef enum {
     // Remove this command from buffer
     [_authIncoming replaceBytesInRange:NSMakeRange(0, cmdEnd + 2) withBytes:NULL length:0];
     
-    NSLog(@"Processing auth command: '%@' (state=%d)", command, _authState);
+    NSDebugLLog(@"gwcomp", @"Processing auth command: '%@' (state=%d)", command, _authState);
     
     BOOL result = [self handleAuthCommand:command];
     [command release];
@@ -219,7 +219,7 @@ typedef enum {
             }
         }
         claimedUID = [decodedUID intValue];
-        NSLog(@"Client claims UID: %d", claimedUID);
+        NSDebugLLog(@"gwcomp", @"Client claims UID: %d", claimedUID);
     }
     
     // Verify socket credentials
@@ -246,7 +246,7 @@ typedef enum {
     
     _authState = AUTH_STATE_AUTHENTICATED;
     _state = CONNECTION_STATE_ACTIVE;
-    NSLog(@"Authentication completed for connection %d", _socket);
+    NSDebugLLog(@"gwcomp", @"Authentication completed for connection %d", _socket);
     
     // Move any remaining data from auth buffer to message buffer
     if ([_authIncoming length] > 0) {
@@ -258,7 +258,7 @@ typedef enum {
 }
 
 - (BOOL)handleCancelOrError:(NSString *)command {
-    NSLog(@"Authentication cancelled or error for connection %d: '%@'", _socket, command);
+    NSDebugLLog(@"gwcomp", @"Authentication cancelled or error for connection %d: '%@'", _socket, command);
     [self close];
     return NO;
 }
@@ -269,7 +269,7 @@ typedef enum {
     [_authOutgoing appendData:responseData];
     
     _authState = AUTH_STATE_WAITING_FOR_BEGIN;
-    NSLog(@"Prepared OK response, moving to WAITING_FOR_BEGIN state");
+    NSDebugLLog(@"gwcomp", @"Prepared OK response, moving to WAITING_FOR_BEGIN state");
     return YES;
 }
 

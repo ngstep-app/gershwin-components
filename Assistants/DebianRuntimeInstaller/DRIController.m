@@ -29,7 +29,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"DRIController: init");
+        NSDebugLLog(@"gwcomp", @"DRIController: init");
         _selectedImageURL = @"";
         _selectedImageName = @"";
         _selectedImageSize = 0;
@@ -40,14 +40,14 @@
 
 - (void)dealloc
 {
-    NSLog(@"DRIController: dealloc");
+    NSDebugLLog(@"gwcomp", @"DRIController: dealloc");
     [_assistantWindow release];
     [super dealloc];
 }
 
 - (void)showAssistant
 {
-    NSLog(@"DRIController: showAssistant");
+    NSDebugLLog(@"gwcomp", @"DRIController: showAssistant");
     
     // Create step views
     _introStep = [[DRIIntroStep alloc] init];
@@ -91,19 +91,19 @@
 
 - (void)assistantWindowWillFinish:(GSAssistantWindow *)window
 {
-    NSLog(@"DRIController: assistantWindowWillFinish");
+    NSDebugLLog(@"gwcomp", @"DRIController: assistantWindowWillFinish");
 }
 
 - (void)assistantWindowDidFinish:(GSAssistantWindow *)window
 {
-    NSLog(@"DRIController: assistantWindowDidFinish");
+    NSDebugLLog(@"gwcomp", @"DRIController: assistantWindowDidFinish");
     [[window window] close];
     [NSApp terminate:nil];
 }
 
 - (void)assistantWindowDidCancel:(GSAssistantWindow *)window
 {
-    NSLog(@"DRIController: assistantWindowDidCancel");
+    NSDebugLLog(@"gwcomp", @"DRIController: assistantWindowDidCancel");
     
     // Cancel any ongoing installations
     if (_installationStep) {
@@ -117,27 +117,27 @@
 // Step navigation delegate methods
 - (void)assistantWindow:(GSAssistantWindow *)window willShowStep:(id<GSAssistantStepProtocol>)step
 {
-    NSLog(@"DRIController: willShowStep: %@", [step stepTitle]);
+    NSDebugLLog(@"gwcomp", @"DRIController: willShowStep: %@", [step stepTitle]);
     
     // If going to installation step, pass the selected image URL
     if ([step isKindOfClass:[DRIInstallationStep class]]) {
         NSString *selectedURL = [_imageSelectionStep getSelectedImageURL];
-        NSLog(@"DRIController: transferring selected URL to installation step: %@", selectedURL);
+        NSDebugLLog(@"gwcomp", @"DRIController: transferring selected URL to installation step: %@", selectedURL);
         [(DRIInstallationStep *)step setSelectedImageURL:selectedURL];
     }
 }
 
 - (void)assistantWindow:(GSAssistantWindow *)window didShowStep:(id<GSAssistantStepProtocol>)step
 {
-    NSLog(@"DRIController: didShowStep: %@", [step stepTitle]);
+    NSDebugLLog(@"gwcomp", @"DRIController: didShowStep: %@", [step stepTitle]);
     
     // Trigger loading when the image selection step appears
     if ([[step stepTitle] isEqualToString:@"Select Runtime Image"]) {
-        NSLog(@"DRIController: Image selection step appeared, triggering load");
+        NSDebugLLog(@"gwcomp", @"DRIController: Image selection step appeared, triggering load");
         [_imageSelectionStep stepWillAppear];
-        NSLog(@"DRIController: stepWillAppear called");
+        NSDebugLLog(@"gwcomp", @"DRIController: stepWillAppear called");
     } else {
-        NSLog(@"DRIController: Step is not image selection step (title: %@)", [step stepTitle]);
+        NSDebugLLog(@"gwcomp", @"DRIController: Step is not image selection step (title: %@)", [step stepTitle]);
     }
 }
 
@@ -156,7 +156,7 @@
         
         if (response == NSAlertFirstButtonReturn) {
             // User confirmed cancellation - clean up
-            NSLog(@"DRIController: User confirmed cancellation, cleaning up...");
+            NSDebugLLog(@"gwcomp", @"DRIController: User confirmed cancellation, cleaning up...");
             if (_installationStep) {
                 [_installationStep cancel];
             }
@@ -174,7 +174,7 @@
 
 - (void)showInstallationSuccess:(NSString *)message
 {
-    NSLog(@"DRIController: showInstallationSuccess: %@", message);
+    NSDebugLLog(@"gwcomp", @"DRIController: showInstallationSuccess: %@", message);
     
     // Ensure we're on the main thread for UI updates
     if (![NSThread isMainThread]) {
@@ -189,7 +189,7 @@
 
 - (void)showInstallationError:(NSString *)message
 {
-    NSLog(@"DRIController: showInstallationError: %@", message);
+    NSDebugLLog(@"gwcomp", @"DRIController: showInstallationError: %@", message);
     
     // Ensure we're on the main thread for UI updates
     if (![NSThread isMainThread]) {
@@ -201,13 +201,13 @@
     
     // Try multiple approaches to show the error
     if ([_assistantWindow respondsToSelector:@selector(showErrorPageWithTitle:message:)]) {
-        NSLog(@"DRIController: calling showErrorPageWithTitle:message:");
+        NSDebugLLog(@"gwcomp", @"DRIController: calling showErrorPageWithTitle:message:");
         [_assistantWindow showErrorPageWithTitle:NSLocalizedString(@"Installation Failed", @"") message:message];
     } else if ([_assistantWindow respondsToSelector:@selector(showErrorPageWithMessage:)]) {
-        NSLog(@"DRIController: calling showErrorPageWithMessage:");
+        NSDebugLLog(@"gwcomp", @"DRIController: calling showErrorPageWithMessage:");
         [_assistantWindow showErrorPageWithMessage:message];
     } else {
-        NSLog(@"DRIController: assistant window doesn't respond to error page methods, showing alert");
+        NSDebugLLog(@"gwcomp", @"DRIController: assistant window doesn't respond to error page methods, showing alert");
         NSAlert *alert = [[NSAlert alloc] init];
         [alert setMessageText:@"Installation Failed"];
         [alert setInformativeText:message];

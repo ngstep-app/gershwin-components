@@ -12,7 +12,7 @@
 int main(int argc, const char * argv[])
 {
     @autoreleasepool {
-        NSLog(@"MiniBus Simple Test Client - Testing message format only");
+        NSDebugLLog(@"gwcomp", @"MiniBus Simple Test Client - Testing message format only");
         
         NSString *socketPath = @"/tmp/minibus-socket";
         if (argc > 1) {
@@ -21,13 +21,13 @@ int main(int argc, const char * argv[])
         
         MBClient *client = [[MBClient alloc] init];
         
-        NSLog(@"Connecting to daemon at %@...", socketPath);
+        NSDebugLLog(@"gwcomp", @"Connecting to daemon at %@...", socketPath);
         if (![client connectToPathWithoutHello:socketPath]) {
-            NSLog(@"Failed to connect to daemon");
+            NSDebugLLog(@"gwcomp", @"Failed to connect to daemon");
             return 1;
         }
         
-        NSLog(@"Connected! Testing ListNames method call...");
+        NSDebugLLog(@"gwcomp", @"Connected! Testing ListNames method call...");
         
         // Test ListNames without sending Hello first
         MBMessage *listReply = [client callMethod:@"org.freedesktop.DBus"
@@ -38,14 +38,14 @@ int main(int argc, const char * argv[])
                                           timeout:5.0];
         
         if (listReply && listReply.type == MBMessageTypeMethodReturn) {
-            NSLog(@"SUCCESS! ListNames returned: %@", listReply.arguments);
+            NSDebugLLog(@"gwcomp", @"SUCCESS! ListNames returned: %@", listReply.arguments);
         } else if (listReply && listReply.type == MBMessageTypeError) {
-            NSLog(@"ERROR from daemon: %@ - %@", listReply.errorName, listReply.arguments);
+            NSDebugLLog(@"gwcomp", @"ERROR from daemon: %@ - %@", listReply.errorName, listReply.arguments);
         } else {
-            NSLog(@"Failed to get ListNames response");
+            NSDebugLLog(@"gwcomp", @"Failed to get ListNames response");
         }
         
-        NSLog(@"Test completed!");
+        NSDebugLLog(@"gwcomp", @"Test completed!");
         [client disconnect];
     }
     

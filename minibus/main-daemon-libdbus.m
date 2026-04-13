@@ -12,7 +12,7 @@
 static MBDaemonLibDBus *globalDaemon = nil;
 
 static void signal_handler(int sig) {
-    NSLog(@"Received signal %d, stopping daemon...", sig);
+    NSDebugLLog(@"gwcomp", @"Received signal %d, stopping daemon...", sig);
     if (globalDaemon) {
         [globalDaemon stop];
     }
@@ -23,14 +23,14 @@ int main(int argc, const char *argv[]) {
     
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     
-    NSLog(@"Starting MiniBus daemon (libdbus version)...");
+    NSDebugLLog(@"gwcomp", @"Starting MiniBus daemon (libdbus version)...");
     
     MBDaemonLibDBus *daemon = [[MBDaemonLibDBus alloc] init];
     globalDaemon = daemon;
     
     // Start the daemon
     if (![daemon startWithSocketPath:@"/tmp/minibus-socket"]) {
-        NSLog(@"Failed to start daemon");
+        NSDebugLLog(@"gwcomp", @"Failed to start daemon");
         [daemon release];
         [pool drain];
         return 1;
@@ -47,6 +47,6 @@ int main(int argc, const char *argv[]) {
     globalDaemon = nil;
     [pool drain];
     
-    NSLog(@"MiniBus daemon (libdbus version) stopped");
+    NSDebugLLog(@"gwcomp", @"MiniBus daemon (libdbus version) stopped");
     return 0;
 }

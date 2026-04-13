@@ -103,11 +103,11 @@
     }
 
     if (mixerFd < 0) {
-        NSLog(@"OSSBackend: Failed to open %@", mixerPath);
+        NSDebugLLog(@"gwcomp", @"OSSBackend: Failed to open %@", mixerPath);
         return NO;
     }
 
-    NSLog(@"OSSBackend: Opened %@ (fd=%d)", mixerPath, mixerFd);
+    NSDebugLLog(@"gwcomp", @"OSSBackend: Opened %@ (fd=%d)", mixerPath, mixerFd);
     return YES;
 }
 
@@ -131,7 +131,7 @@
     int request = MIXER_READ(channel);
 
     if (ioctl(mixerFd, request, &vol) < 0) {
-        NSLog(@"OSSBackend: Failed to read mixer channel %d", channel);
+        NSDebugLLog(@"gwcomp", @"OSSBackend: Failed to read mixer channel %d", channel);
         return -1;
     }
 
@@ -158,11 +158,11 @@
     int request = MIXER_WRITE(channel);
 
     if (ioctl(mixerFd, request, &vol) < 0) {
-        NSLog(@"OSSBackend: Failed to write mixer channel %d", channel);
+        NSDebugLLog(@"gwcomp", @"OSSBackend: Failed to write mixer channel %d", channel);
         return NO;
     }
 
-    NSLog(@"OSSBackend: Set mixer channel %d to %d", channel, value);
+    NSDebugLLog(@"gwcomp", @"OSSBackend: Set mixer channel %d to %d", channel, value);
     return YES;
 }
 
@@ -366,7 +366,7 @@
     // use file handle to read it properly instead of stringWithContentsOfFile
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:@"/dev/sndstat"];
     if (!fh) {
-        NSLog(@"OSSBackend: Failed to open /dev/sndstat");
+        NSDebugLLog(@"gwcomp", @"OSSBackend: Failed to open /dev/sndstat");
         [self enumerateDevicesFromDevfs];
         return;
     }
@@ -375,7 +375,7 @@
     [fh closeFile];
 
     if (!data || [data length] == 0) {
-        NSLog(@"OSSBackend: Failed to read data from /dev/sndstat");
+        NSDebugLLog(@"gwcomp", @"OSSBackend: Failed to read data from /dev/sndstat");
         [self enumerateDevicesFromDevfs];
         return;
     }
@@ -383,12 +383,12 @@
     NSString *sndstat = [[[NSString alloc] initWithData:data
                                                encoding:NSUTF8StringEncoding] autorelease];
     if (!sndstat) {
-        NSLog(@"OSSBackend: Failed to decode /dev/sndstat as UTF-8");
+        NSDebugLLog(@"gwcomp", @"OSSBackend: Failed to decode /dev/sndstat as UTF-8");
         [self enumerateDevicesFromDevfs];
         return;
     }
 
-    NSLog(@"OSSBackend: Parsing /dev/sndstat:\n%@", sndstat);
+    NSDebugLLog(@"gwcomp", @"OSSBackend: Parsing /dev/sndstat:\n%@", sndstat);
 
     // Parse sndstat output
     // Format on FreeBSD:
@@ -442,11 +442,11 @@
             if ([lowerDesc containsString:@"hdmi"] ||
                 [lowerDesc containsString:@"displayport"] ||
                 [lowerDesc containsString:@"hdmi/dp"]) {
-                NSLog(@"OSSBackend: Skipping HDMI/DP device pcm%d: '%@'", unitNum, description);
+                NSDebugLLog(@"gwcomp", @"OSSBackend: Skipping HDMI/DP device pcm%d: '%@'", unitNum, description);
                 continue;
             }
 
-            NSLog(@"OSSBackend: Found pcm%d: '%@' (play=%d, rec=%d, default=%d)",
+            NSDebugLLog(@"gwcomp", @"OSSBackend: Found pcm%d: '%@' (play=%d, rec=%d, default=%d)",
                   unitNum, description, canPlay, canRec, isDefault);
 
             // Create output device if it can play
@@ -536,7 +536,7 @@
         }
 
         if ([fm fileExistsAtPath:dspPath] || [fm fileExistsAtPath:mixerPath]) {
-            NSLog(@"OSSBackend: Found device at unit %d", i);
+            NSDebugLLog(@"gwcomp", @"OSSBackend: Found device at unit %d", i);
 
             // Create output device
             AudioDevice *outDevice = [[AudioDevice alloc] init];
@@ -614,7 +614,7 @@
 
 - (BOOL)setDefaultUnit:(int)unit
 {
-    NSLog(@"OSSBackend: Setting default unit to %d", unit);
+    NSDebugLLog(@"gwcomp", @"OSSBackend: Setting default unit to %d", unit);
 
     // Use sysctl to set hw.snd.default_unit
     // This typically requires root privileges
@@ -625,11 +625,11 @@
     if (output && [output containsString:@"default_unit"]) {
         defaultUnit = unit;
         [self openMixerForUnit:unit];
-        NSLog(@"OSSBackend: Successfully set default unit to %d", unit);
+        NSDebugLLog(@"gwcomp", @"OSSBackend: Successfully set default unit to %d", unit);
         return YES;
     }
 
-    NSLog(@"OSSBackend: Failed to set default unit (may require root)");
+    NSDebugLLog(@"gwcomp", @"OSSBackend: Failed to set default unit (may require root)");
     return NO;
 }
 
@@ -744,7 +744,7 @@
 
 - (BOOL)setDefaultOutputDevice:(AudioDevice *)device
 {
-    NSLog(@"OSSBackend: setDefaultOutputDevice: %@", device ? device.name : @"(nil)");
+    NSDebugLLog(@"gwcomp", @"OSSBackend: setDefaultOutputDevice: %@", device ? device.name : @"(nil)");
 
     if (!device) {
         return NO;
@@ -792,7 +792,7 @@
 
 - (BOOL)setDefaultInputDevice:(AudioDevice *)device
 {
-    NSLog(@"OSSBackend: setDefaultInputDevice: %@", device ? device.name : @"(nil)");
+    NSDebugLLog(@"gwcomp", @"OSSBackend: setDefaultInputDevice: %@", device ? device.name : @"(nil)");
 
     if (!device) {
         return NO;
@@ -844,7 +844,7 @@
 
 - (BOOL)setOutputVolume:(float)volume
 {
-    NSLog(@"OSSBackend: setOutputVolume: %.2f", volume);
+    NSDebugLLog(@"gwcomp", @"OSSBackend: setOutputVolume: %.2f", volume);
 
     if (volume < 0.0) volume = 0.0;
     if (volume > 1.0) volume = 1.0;
@@ -892,7 +892,7 @@
 
 - (BOOL)setOutputMuted:(BOOL)muted
 {
-    NSLog(@"OSSBackend: setOutputMuted: %@", muted ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"OSSBackend: setOutputMuted: %@", muted ? @"YES" : @"NO");
 
     if (muted) {
         // Save current volume and set to 0
@@ -946,7 +946,7 @@
 
 - (BOOL)setOutputBalance:(float)balance
 {
-    NSLog(@"OSSBackend: setOutputBalance: %.2f", balance);
+    NSDebugLLog(@"gwcomp", @"OSSBackend: setOutputBalance: %.2f", balance);
 
     if (balance < 0.0) balance = 0.0;
     if (balance > 1.0) balance = 1.0;
@@ -1020,7 +1020,7 @@
 
 - (BOOL)setInputVolume:(float)volume
 {
-    NSLog(@"OSSBackend: setInputVolume: %.2f", volume);
+    NSDebugLLog(@"gwcomp", @"OSSBackend: setInputVolume: %.2f", volume);
 
     if (!defaultInput) return NO;
 
@@ -1075,7 +1075,7 @@
 
 - (BOOL)setInputMuted:(BOOL)muted
 {
-    NSLog(@"OSSBackend: setInputMuted: %@", muted ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"OSSBackend: setInputMuted: %@", muted ? @"YES" : @"NO");
 
     if (!defaultInput) return NO;
 
@@ -1307,7 +1307,7 @@
         return [a.displayName compare:b.displayName];
     }];
 
-    NSLog(@"OSSBackend: loadAlertSounds: found %lu alert sounds",
+    NSDebugLLog(@"gwcomp", @"OSSBackend: loadAlertSounds: found %lu alert sounds",
           (unsigned long)[cachedAlertSounds count]);
 
     // Set first sound as current if none selected
@@ -1365,7 +1365,7 @@
 
 - (BOOL)playAlertSound:(AlertSound *)sound
 {
-    NSLog(@"OSSBackend: playAlertSound: %@", sound ? sound.name : @"(nil)");
+    NSDebugLLog(@"gwcomp", @"OSSBackend: playAlertSound: %@", sound ? sound.name : @"(nil)");
 
     if (!sound || !sound.path) {
         NSBeep();
@@ -1414,9 +1414,9 @@
 
     @try {
         [task launch];
-        NSLog(@"OSSBackend: Playing sound: %@", path);
+        NSDebugLLog(@"gwcomp", @"OSSBackend: Playing sound: %@", path);
     } @catch (NSException *e) {
-        NSLog(@"OSSBackend: Failed to play sound: %@", e);
+        NSDebugLLog(@"gwcomp", @"OSSBackend: Failed to play sound: %@", e);
         [task release];
         NSBeep();
         return NO;
@@ -1479,11 +1479,11 @@
 - (BOOL)forceImmediateOutputDeviceSwitch:(AudioDevice *)device
 {
     if (!device) {
-        NSLog(@"OSSBackend: forceImmediateOutputDeviceSwitch: FAILED - device is nil");
+        NSDebugLLog(@"gwcomp", @"OSSBackend: forceImmediateOutputDeviceSwitch: FAILED - device is nil");
         return NO;
     }
 
-    NSLog(@"OSSBackend: forceImmediateOutputDeviceSwitch: %@ (unit %d)",
+    NSDebugLLog(@"gwcomp", @"OSSBackend: forceImmediateOutputDeviceSwitch: %@ (unit %d)",
           device.name, device.cardIndex);
 
     // Set as default device
@@ -1502,11 +1502,11 @@
 - (BOOL)forceImmediateInputDeviceSwitch:(AudioDevice *)device
 {
     if (!device) {
-        NSLog(@"OSSBackend: forceImmediateInputDeviceSwitch: FAILED - device is nil");
+        NSDebugLLog(@"gwcomp", @"OSSBackend: forceImmediateInputDeviceSwitch: FAILED - device is nil");
         return NO;
     }
 
-    NSLog(@"OSSBackend: forceImmediateInputDeviceSwitch: %@ (unit %d)",
+    NSDebugLLog(@"gwcomp", @"OSSBackend: forceImmediateInputDeviceSwitch: %@ (unit %d)",
           device.name, device.cardIndex);
 
     return [self setDefaultInputDevice:device];
@@ -1545,7 +1545,7 @@
         [task launch];
         [task waitUntilExit];
     } @catch (NSException *e) {
-        NSLog(@"OSSBackend: Failed to run command %@: %@", command, e);
+        NSDebugLLog(@"gwcomp", @"OSSBackend: Failed to run command %@: %@", command, e);
         [task release];
         return nil;
     }
@@ -1561,7 +1561,7 @@
 
 - (void)reportErrorWithMessage:(NSString *)message
 {
-    NSLog(@"OSSBackend error: %@", message);
+    NSDebugLLog(@"gwcomp", @"OSSBackend error: %@", message);
 
     if ([delegate respondsToSelector:@selector(soundBackend:didEncounterError:)]) {
         NSError *error = [NSError errorWithDomain:@"OSSBackend"

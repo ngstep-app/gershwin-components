@@ -22,7 +22,7 @@
 
 + (NSArray *)getAvailableDisks
 {
-    NSLog(@"CLMDiskUtility: getAvailableDisks");
+    NSDebugLLog(@"gwcomp", @"CLMDiskUtility: getAvailableDisks");
     
     NSMutableArray *disks = [NSMutableArray array];
     
@@ -72,16 +72,16 @@
         
     }
     @catch (NSException *exception) {
-        NSLog(@"CLMDiskUtility: Error running geom: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"CLMDiskUtility: Error running geom: %@", [exception reason]);
     }
     
-    NSLog(@"CLMDiskUtility: Found %lu disks", (unsigned long)[disks count]);
+    NSDebugLLog(@"gwcomp", @"CLMDiskUtility: Found %lu disks", (unsigned long)[disks count]);
     return disks;
 }
 
 + (CLMDisk *)getDiskInfo:(NSString *)deviceName
 {
-    NSLog(@"CLMDiskUtility: getDiskInfo: %@", deviceName);
+    NSDebugLLog(@"gwcomp", @"CLMDiskUtility: getDiskInfo: %@", deviceName);
     
     // Use geom to get detailed disk information
     NSTask *task = [[NSTask alloc] init];
@@ -151,7 +151,7 @@
         
     }
     @catch (NSException *exception) {
-        NSLog(@"CLMDiskUtility: Error getting disk info: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"CLMDiskUtility: Error getting disk info: %@", [exception reason]);
         disk = nil;
     }
     
@@ -160,7 +160,7 @@
 
 + (BOOL)unmountPartitionsForDisk:(NSString *)deviceName
 {
-    NSLog(@"CLMDiskUtility: unmountPartitionsForDisk: %@", deviceName);
+    NSDebugLLog(@"gwcomp", @"CLMDiskUtility: unmountPartitionsForDisk: %@", deviceName);
     
     // Find all partitions for this disk
     NSString *diskPattern = [NSString stringWithFormat:@"/dev/%@*", deviceName];
@@ -193,17 +193,17 @@
                 @try {
                     [umountTask launch];
                     [umountTask waitUntilExit];
-                    NSLog(@"CLMDiskUtility: Unmounted %@", partition);
+                    NSDebugLLog(@"gwcomp", @"CLMDiskUtility: Unmounted %@", partition);
                 }
                 @catch (NSException *exception) {
-                    NSLog(@"CLMDiskUtility: Could not unmount %@: %@", partition, [exception reason]);
+                    NSDebugLLog(@"gwcomp", @"CLMDiskUtility: Could not unmount %@: %@", partition, [exception reason]);
                 }
             }
         }
         
     }
     @catch (NSException *exception) {
-        NSLog(@"CLMDiskUtility: Error finding partitions: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"CLMDiskUtility: Error finding partitions: %@", [exception reason]);
         return NO;
     }
     

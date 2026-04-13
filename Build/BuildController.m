@@ -225,7 +225,7 @@
         if (statusLabel) [statusLabel setStringValue: @"Build failed"];
         if (progressBar) [progressBar setDoubleValue: 0.0];
         NSString *errorMessage = [self formatErrorOutput: self.buildOutput];
-        NSLog(@"Build failed with the following output:\n%@", errorMessage);
+        NSDebugLLog(@"gwcomp", @"Build failed with the following output:\n%@", errorMessage);
         if (self.consoleMode) {
             exit(status);
         } else {

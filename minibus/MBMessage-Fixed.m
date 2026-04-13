@@ -139,7 +139,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
 
 - (NSData *)serialize
 {
-    NSLog(@"Serializing message type=%d, replySerial=%lu", (int)_type, (unsigned long)_replySerial);
+    NSDebugLLog(@"gwcomp", @"Serializing message type=%d, replySerial=%lu", (int)_type, (unsigned long)_replySerial);
     
     NSMutableData *message = [NSMutableData data];
     
@@ -166,7 +166,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     // Header fields array length (just the data length, not including padding)
     uint32_t fieldsLength = (uint32_t)[headerFieldsData length];
     
-    NSLog(@"Header fields data length: %u bytes", fieldsLength);
+    NSDebugLLog(@"gwcomp", @"Header fields data length: %u bytes", fieldsLength);
     
     // Write fixed header
     [message appendBytes:&endian length:1];
@@ -186,7 +186,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     // Add body
     [message appendData:body];
     
-    NSLog(@"Final message length: %lu bytes", (unsigned long)[message length]);
+    NSDebugLLog(@"gwcomp", @"Final message length: %lu bytes", (unsigned long)[message length]);
     return message;
 }
 

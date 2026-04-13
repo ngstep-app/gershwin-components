@@ -139,11 +139,11 @@
 - (BOOL)connectToRDP
 {
     if (_connected) {
-        NSLog(@"RDPWindow: Already connected");
+        NSDebugLLog(@"gwcomp", @"RDPWindow: Already connected");
         return YES;
     }
     
-    NSLog(@"RDPWindow: Connecting to %@:%ld", _hostname, (long)_port);
+    NSDebugLLog(@"gwcomp", @"RDPWindow: Connecting to %@:%ld", _hostname, (long)_port);
     
     BOOL result = [_rdpClient connectToHost:_hostname port:_port username:_username password:_password domain:_domain];
     if (!result) {
@@ -159,7 +159,7 @@
 
 - (void)disconnectFromRDP
 {
-    NSLog(@"RDPWindow: Disconnecting from RDP");
+    NSDebugLLog(@"gwcomp", @"RDPWindow: Disconnecting from RDP");
     
     [self orderOut:nil];
     
@@ -212,7 +212,7 @@
         return;
     }
     
-    NSLog(@"RDPWindow: Resizing window to fit framebuffer: %.0fx%.0f", _framebufferSize.width, _framebufferSize.height);
+    NSDebugLLog(@"gwcomp", @"RDPWindow: Resizing window to fit framebuffer: %.0fx%.0f", _framebufferSize.width, _framebufferSize.height);
     
     NSSize windowSize = _framebufferSize;
     NSRect contentRect = NSMakeRect(0, 0, windowSize.width, windowSize.height);
@@ -428,7 +428,7 @@
 
 - (void)windowWillClose:(NSNotification *)notification
 {
-    NSLog(@"RDPWindow: Window closing, notifying delegate");
+    NSDebugLLog(@"gwcomp", @"RDPWindow: Window closing, notifying delegate");
     if (_rdpDelegate && [_rdpDelegate respondsToSelector:@selector(rdpWindowWillClose:)]) {
         [_rdpDelegate rdpWindowWillClose:self];
     }
@@ -439,7 +439,7 @@
 
 - (void)rdpClient:(RDPClient *)client didConnect:(BOOL)success
 {
-    NSLog(@"RDPWindow: RDP connection result: %@", success ? @"SUCCESS" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"RDPWindow: RDP connection result: %@", success ? @"SUCCESS" : @"FAILED");
     
     if (success) {
         _connected = YES;
@@ -455,7 +455,7 @@
 
 - (void)rdpClient:(RDPClient *)client didDisconnect:(NSString *)reason
 {
-    NSLog(@"RDPWindow: RDP disconnected: %@", reason);
+    NSDebugLLog(@"gwcomp", @"RDPWindow: RDP disconnected: %@", reason);
     _connected = NO;
     
     NSImage *disconnectedImage = [[NSImage alloc] initWithSize:NSMakeSize(640, 480)];
@@ -479,7 +479,7 @@
 
 - (void)rdpClient:(RDPClient *)client didReceiveError:(NSString *)error
 {
-    NSLog(@"RDPWindow: RDP error: %@", error);
+    NSDebugLLog(@"gwcomp", @"RDPWindow: RDP error: %@", error);
     
     NSAlert *alert = [[NSAlert alloc] init];
     [alert setMessageText:@"RDP Error"];

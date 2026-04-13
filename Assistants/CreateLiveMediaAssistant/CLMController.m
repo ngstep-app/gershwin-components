@@ -41,7 +41,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"CLMController: init");
+        NSDebugLLog(@"gwcomp", @"CLMController: init");
         _selectedImageURL = @"";
         _selectedImageName = @"";
         _selectedImageSize = 0;
@@ -60,7 +60,7 @@
 
 - (void)showAssistant
 {
-    NSLog(@"CLMController: showAssistant");
+    NSDebugLLog(@"gwcomp", @"CLMController: showAssistant");
     
     // Create step views
     _introStep = [[CLMIntroStep alloc] init];
@@ -98,7 +98,7 @@
 
 - (BOOL)checkInternetConnection
 {
-    NSLog(@"CLMController: checkInternetConnection");
+    NSDebugLLog(@"gwcomp", @"CLMController: checkInternetConnection");
     return [GSNetworkUtilities checkInternetConnectivity];
 }
 
@@ -111,12 +111,12 @@
 
 - (void)stopDiskPolling
 {
-    NSLog(@"CLMController: stopDiskPolling - failsafe to stop any running disk polling");
+    NSDebugLLog(@"gwcomp", @"CLMController: stopDiskPolling - failsafe to stop any running disk polling");
     if (_diskSelectionStep) {
-        NSLog(@"CLMController: Calling stopRefreshTimer on diskSelectionStep");
+        NSDebugLLog(@"gwcomp", @"CLMController: Calling stopRefreshTimer on diskSelectionStep");
         [_diskSelectionStep stopRefreshTimer];
     } else {
-        NSLog(@"CLMController: diskSelectionStep is nil, cannot stop timer");
+        NSDebugLLog(@"gwcomp", @"CLMController: diskSelectionStep is nil, cannot stop timer");
     }
 }
 
@@ -124,14 +124,14 @@
 
 - (void)showInstallationSuccess:(NSString *)message
 {
-    NSLog(@"CLMController: showInstallationSuccess: %@", message);
+    NSDebugLLog(@"gwcomp", @"CLMController: showInstallationSuccess: %@", message);
     _installationSuccessful = YES;
     // The success will be handled by the completion step
 }
 
 - (void)showInstallationError:(NSString *)message
 {
-    NSLog(@"CLMController: showInstallationError: %@", message);
+    NSDebugLLog(@"gwcomp", @"CLMController: showInstallationError: %@", message);
     _installationSuccessful = NO;
     
     // Ensure we're on the main thread for UI updates
@@ -144,13 +144,13 @@
     
     // Try to navigate to error page with red X graphic
     if ([_assistantWindow respondsToSelector:@selector(showErrorPageWithTitle:message:)]) {
-        NSLog(@"CLMController: calling showErrorPageWithTitle:message:");
+        NSDebugLLog(@"gwcomp", @"CLMController: calling showErrorPageWithTitle:message:");
         [_assistantWindow showErrorPageWithTitle:NSLocalizedString(@"Installation Failed", @"Error title") message:message];
     } else if ([_assistantWindow respondsToSelector:@selector(showErrorPageWithMessage:)]) {
-        NSLog(@"CLMController: calling showErrorPageWithMessage:");
+        NSDebugLLog(@"gwcomp", @"CLMController: calling showErrorPageWithMessage:");
         [_assistantWindow showErrorPageWithMessage:message];
     } else {
-        NSLog(@"CLMController: assistant window doesn't respond to error page methods, showing alert");
+        NSDebugLLog(@"gwcomp", @"CLMController: assistant window doesn't respond to error page methods, showing alert");
         // Fallback to alert if error page methods are not available
         NSAlert *alert = [NSAlert alertWithMessageText:@"Installation Error"
                                       defaultButton:@"OK"
@@ -165,19 +165,19 @@
 
 - (void)assistantWindowWillFinish:(GSAssistantWindow *)window
 {
-    NSLog(@"CLMController: assistantWindowWillFinish");
+    NSDebugLLog(@"gwcomp", @"CLMController: assistantWindowWillFinish");
 }
 
 - (void)assistantWindowDidFinish:(GSAssistantWindow *)window
 {
-    NSLog(@"CLMController: assistantWindowDidFinish");
+    NSDebugLLog(@"gwcomp", @"CLMController: assistantWindowDidFinish");
     [[window window] close];
     [NSApp terminate:nil];
 }
 
 - (void)assistantWindowDidCancel:(GSAssistantWindow *)window
 {
-    NSLog(@"CLMController: assistantWindowDidCancel");
+    NSDebugLLog(@"gwcomp", @"CLMController: assistantWindowDidCancel");
     [[window window] close];
     [NSApp terminate:nil];
 }

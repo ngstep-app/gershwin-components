@@ -20,18 +20,18 @@
 
 @implementation CLMApplicationDelegate
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
-    NSLog(@"CreateLiveMediaAssistant: Last window closed, terminating application");
+    NSDebugLLog(@"gwcomp", @"CreateLiveMediaAssistant: Last window closed, terminating application");
     return YES;
 }
 @end
 
 int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) argv[])
 {
-    NSLog(@"CreateLiveMediaAssistant: main() starting");
+    NSDebugLLog(@"gwcomp", @"CreateLiveMediaAssistant: main() starting");
     
     // Check if running as root
     if (getuid() != 0) {
-        NSLog(@"CreateLiveMediaAssistant: Not running as root, re-executing with sudo -A -E");
+        NSDebugLLog(@"gwcomp", @"CreateLiveMediaAssistant: Not running as root, re-executing with sudo -A -E");
         
         @autoreleasepool {
             // Build the sudo command with current executable path
@@ -54,7 +54,7 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
                 int exitStatus = [task terminationStatus];
                 return exitStatus;
             } @catch (NSException *exception) {
-                NSLog(@"ERROR: Failed to re-execute with sudo: %@", [exception reason]);
+                NSDebugLLog(@"gwcomp", @"ERROR: Failed to re-execute with sudo: %@", [exception reason]);
                 
                 // Fall back to showing error
                 NSRunAlertPanel(@"Root Privileges Required",
@@ -81,6 +81,6 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
         [app run];
     }
     
-    NSLog(@"CreateLiveMediaAssistant: main() exiting");
+    NSDebugLLog(@"gwcomp", @"CreateLiveMediaAssistant: main() exiting");
     return 0;
 }

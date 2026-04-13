@@ -31,7 +31,7 @@
 - (void)startRefreshTimer
 {
     if (!refreshTimer) {
-        NSLog(@"SoundPane: Starting device refresh timer (2 second interval)");
+        NSDebugLLog(@"gwcomp", @"SoundPane: Starting device refresh timer (2 second interval)");
         refreshTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
                                               dispatch_get_main_queue());
         dispatch_source_set_timer(refreshTimer,
@@ -41,20 +41,20 @@
             [controller refreshDevices];
         });
         dispatch_resume(refreshTimer);
-        NSLog(@"SoundPane: Device refresh timer started");
+        NSDebugLLog(@"gwcomp", @"SoundPane: Device refresh timer started");
     } else {
-        NSLog(@"SoundPane: Refresh timer already running");
+        NSDebugLLog(@"gwcomp", @"SoundPane: Refresh timer already running");
     }
 }
 
 - (void)stopRefreshTimer
 {
     if (refreshTimer) {
-        NSLog(@"SoundPane: Stopping device refresh timer");
+        NSDebugLLog(@"gwcomp", @"SoundPane: Stopping device refresh timer");
         dispatch_source_cancel(refreshTimer);
         dispatch_release(refreshTimer);
         refreshTimer = nil;
-        NSLog(@"SoundPane: Device refresh timer stopped");
+        NSDebugLLog(@"gwcomp", @"SoundPane: Device refresh timer stopped");
     }
 }
 
@@ -81,7 +81,7 @@
 - (void)didSelect
 {
     [super didSelect];
-    NSLog(@"SoundPane: didSelect called, starting device refresh timer");
+    NSDebugLLog(@"gwcomp", @"SoundPane: didSelect called, starting device refresh timer");
     // Refresh data when the pane is selected
     [controller refreshDevices];
     [controller startInputLevelMonitoring];
@@ -92,7 +92,7 @@
 
 - (void)willUnselect
 {
-    NSLog(@"SoundPane: willUnselect called");
+    NSDebugLLog(@"gwcomp", @"SoundPane: willUnselect called");
     [controller stopInputLevelMonitoring];
 }
 
@@ -100,12 +100,12 @@
 {
     [super didUnselect];
     [self stopRefreshTimer];
-    NSLog(@"SoundPane: didUnselect called");
+    NSDebugLLog(@"gwcomp", @"SoundPane: didUnselect called");
 }
 
 - (NSPreferencePaneUnselectReply)shouldUnselect
 {
-    NSLog(@"SoundPane: shouldUnselect called, allowing unselect");
+    NSDebugLLog(@"gwcomp", @"SoundPane: shouldUnselect called, allowing unselect");
     return NSUnselectNow;
 }
 

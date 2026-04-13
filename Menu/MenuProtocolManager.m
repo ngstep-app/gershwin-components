@@ -33,7 +33,7 @@
         self.windowToProtocolMap = [[NSMutableDictionary alloc] init];
         // Don't explicitly set weak property to nil - ARC will handle it
         
-        NSLog(@"MenuProtocolManager: Initialized protocol manager");
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Initialized protocol manager");
     }
     return self;
 }
@@ -42,30 +42,30 @@
 
 - (void)registerProtocolHandler:(id<MenuProtocolHandler>)handler forType:(MenuProtocolType)type
 {
-    NSLog(@"MenuProtocolManager: registerProtocolHandler STARTING for type %d", (int)type);
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: registerProtocolHandler STARTING for type %d", (int)type);
     
     if (!handler) {
-        NSLog(@"MenuProtocolManager: ERROR: Cannot register nil handler");
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: ERROR: Cannot register nil handler");
         return;
     }
     
-    NSLog(@"MenuProtocolManager: Handler is not nil, proceeding...");
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Handler is not nil, proceeding...");
     
     // Ensure we have enough space in the array
     while ([self.protocolHandlers count] <= (NSUInteger)type) {
         [self.protocolHandlers addObject:[NSNull null]];
     }
     
-    NSLog(@"MenuProtocolManager: About to replace object at index %d", (int)type);
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: About to replace object at index %d", (int)type);
     [self.protocolHandlers replaceObjectAtIndex:type withObject:handler];
     
-    NSLog(@"MenuProtocolManager: About to check for appMenuWidget");
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: About to check for appMenuWidget");
     // Defer AppMenuWidget setup until after it's created - check will be done later
-    NSLog(@"MenuProtocolManager: Deferring appMenuWidget setup until after widget creation");
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Deferring appMenuWidget setup until after widget creation");
     
-    NSLog(@"MenuProtocolManager: registerProtocolHandler COMPLETED for type %d", (int)type);
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: registerProtocolHandler COMPLETED for type %d", (int)type);
     
-    NSLog(@"MenuProtocolManager: Registered handler for protocol type %ld", (long)type);
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Registered handler for protocol type %ld", (long)type);
 }
 
 - (id<MenuProtocolHandler>)handlerForType:(MenuProtocolType)type
@@ -84,29 +84,29 @@
 
 - (BOOL)initializeAllProtocols
 {
-    NSLog(@"MenuProtocolManager: Initializing all registered protocols...");
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Initializing all registered protocols...");
     
     BOOL anySucceeded = NO;
     for (NSUInteger i = 0; i < [self.protocolHandlers count]; i++) {
         id handler = [self.protocolHandlers objectAtIndex:i];
         if (![handler isKindOfClass:[NSNull class]]) {
-            NSLog(@"MenuProtocolManager: Initializing protocol %lu...", (unsigned long)i);
-            NSLog(@"MenuProtocolManager: About to call connectToDBus on protocol %lu", (unsigned long)i);
+            NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Initializing protocol %lu...", (unsigned long)i);
+            NSDebugLLog(@"gwcomp", @"MenuProtocolManager: About to call connectToDBus on protocol %lu", (unsigned long)i);
             if ([handler connectToDBus]) {
-                NSLog(@"MenuProtocolManager: Protocol %lu initialized successfully", (unsigned long)i);
+                NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Protocol %lu initialized successfully", (unsigned long)i);
                 anySucceeded = YES;
             } else {
-                NSLog(@"MenuProtocolManager: Protocol %lu failed to initialize", (unsigned long)i);
+                NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Protocol %lu failed to initialize", (unsigned long)i);
             }
-            NSLog(@"MenuProtocolManager: Finished with protocol %lu", (unsigned long)i);
+            NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Finished with protocol %lu", (unsigned long)i);
         }
     }
     
     if (anySucceeded) {
-        NSLog(@"MenuProtocolManager: About to scan for existing menu services...");
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: About to scan for existing menu services...");
         // Scan for existing menus after all protocols are initialized
         [self scanForExistingMenuServices];
-        NSLog(@"MenuProtocolManager: Finished scanning for existing menu services");
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Finished scanning for existing menu services");
     }
     
     return anySucceeded;
@@ -200,7 +200,7 @@
                 else if (protocolType == 1) protoName = @"GTK";
                 else if (protocolType == 2) protoName = @"GNUstep";
 
-                NSLog(@"MenuProtocolManager: Window %lu handled by protocol: %@ (Type %lu) [Cached]", windowId, protoName, (unsigned long)protocolType);
+                NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Window %lu handled by protocol: %@ (Type %lu) [Cached]", windowId, protoName, (unsigned long)protocolType);
 
                 NSMenu *menu = [handler getMenuForWindow:windowId];
                 if (menu) {
@@ -212,7 +212,7 @@
                 }
                 // Cached protocol returned nil — remove stale mapping so other protocols
                 // can be tried on the next call and we don't keep hitting a broken handler.
-                NSLog(@"MenuProtocolManager: Cached protocol %@ returned nil for window %lu — clearing stale mapping", protoName, windowId);
+                NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Cached protocol %@ returned nil for window %lu — clearing stale mapping", protoName, windowId);
                 [self.windowToProtocolMap removeObjectForKey:windowKey];
                 return nil;
             }
@@ -232,7 +232,7 @@
                     else if (i == 1) protoName = @"GTK";
                     else if (i == 2) protoName = @"GNUstep";
 
-                    NSLog(@"MenuProtocolManager: Window %lu handled by protocol: %@ (Type %lu)", windowId, protoName, (unsigned long)i);
+                    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Window %lu handled by protocol: %@ (Type %lu)", windowId, protoName, (unsigned long)i);
 
                     if ((MenuProtocolType)i != MenuProtocolTypeGNUstep)
                         menu = [self prependGNUstepStubIfNeeded:menu
@@ -245,13 +245,13 @@
         
         static unsigned long lastFailedWindowId = 0;
         if (lastFailedWindowId != windowId) {
-            NSLog(@"MenuProtocolManager: No protocol could provide menu for window %lu", windowId);
+            NSDebugLLog(@"gwcomp", @"MenuProtocolManager: No protocol could provide menu for window %lu", windowId);
             lastFailedWindowId = windowId;
         }
         return nil;
     }
     @catch (NSException *exception) {
-        NSLog(@"MenuProtocolManager: Exception getting menu for window %lu: %@", windowId, exception);
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Exception getting menu for window %lu: %@", windowId, exception);
         return nil;
     }
 }
@@ -270,7 +270,7 @@
         }
     }
     
-    NSLog(@"MenuProtocolManager: No protocol handler found for window %lu menu activation", windowId);
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: No protocol handler found for window %lu menu activation", windowId);
 }
 
 - (void)scanForExistingMenuServices
@@ -282,7 +282,7 @@
     BOOL shouldLogVerbose = (scanCount <= 10) || (scanCount % 50 == 0);
     
     if (shouldLogVerbose) {
-        NSLog(@"MenuProtocolManager: SCAN #%d - scanForExistingMenuServices called", scanCount);
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: SCAN #%d - scanForExistingMenuServices called", scanCount);
     }
     
     for (NSUInteger i = 0; i < [self.protocolHandlers count]; i++) {
@@ -290,14 +290,14 @@
         if (![handler isKindOfClass:[NSNull class]]) {
             // Only log protocol scanning on first few scans
             if (scanCount <= 3) {
-                NSLog(@"MenuProtocolManager: Scanning protocol %lu for existing services...", (unsigned long)i);
+                NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Scanning protocol %lu for existing services...", (unsigned long)i);
             }
             [handler scanForExistingMenuServices];
         }
     }
     
     if (shouldLogVerbose) {
-        NSLog(@"MenuProtocolManager: SCAN #%d - scanForExistingMenuServices completed", scanCount);
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: SCAN #%d - scanForExistingMenuServices completed", scanCount);
     }
 }
 
@@ -308,7 +308,7 @@
             objectPath:(NSString *)objectPath
 {
     if (!serviceName || !objectPath) {
-        NSLog(@"MenuProtocolManager: ERROR: Invalid service name or object path");
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: ERROR: Invalid service name or object path");
         return;
     }
     
@@ -317,7 +317,7 @@
     
     id<MenuProtocolHandler> handler = [self handlerForType:protocolType];
     if (!handler) {
-        NSLog(@"MenuProtocolManager: ERROR: No handler available for protocol type %ld", (long)protocolType);
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: ERROR: No handler available for protocol type %ld", (long)protocolType);
         return;
     }
     
@@ -328,7 +328,7 @@
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
     [self.windowToProtocolMap setObject:[NSNumber numberWithInteger:protocolType] forKey:windowKey];
     
-    NSLog(@"MenuProtocolManager: Registered window %lu with protocol %ld (service: %@, path: %@)", 
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Registered window %lu with protocol %ld (service: %@, path: %@)", 
           windowId, (long)protocolType, serviceName, objectPath);
 }
 
@@ -347,11 +347,11 @@
         [self.windowToProtocolMap removeObjectForKey:windowKey];
     }
     
-    NSLog(@"MenuProtocolManager: Unregistered window %lu", windowId);
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Unregistered window %lu", windowId);
 
     // If the unregistered window is currently displayed, force a menu refresh
     if (_appMenuWidget && _appMenuWidget.currentWindowId == windowId) {
-        NSLog(@"MenuProtocolManager: Current menu window %lu unregistered - refreshing menu", windowId);
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Current menu window %lu unregistered - refreshing menu", windowId);
         dispatch_async(dispatch_get_main_queue(), ^{
             [_appMenuWidget updateForActiveWindow];
         });
@@ -372,12 +372,12 @@
     if ([objectPath hasPrefix:@"/org/gtk/Menus"] || 
         [serviceName hasPrefix:@"org.gtk."] ||
         [serviceName containsString:@".gtk."]) {
-        NSLog(@"MenuProtocolManager: Detected GTK protocol for service %@ path %@", serviceName, objectPath);
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Detected GTK protocol for service %@ path %@", serviceName, objectPath);
         return MenuProtocolTypeGTK;
     }
     
     // Default to Canonical for compatibility with existing applications
-    NSLog(@"MenuProtocolManager: Defaulting to Canonical protocol for service %@ path %@", serviceName, objectPath);
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Defaulting to Canonical protocol for service %@ path %@", serviceName, objectPath);
     return MenuProtocolTypeCanonical;
 }
 
@@ -416,42 +416,42 @@
     id<MenuProtocolHandler> canonicalHandler = [self handlerForType:MenuProtocolTypeCanonical];
     
     if (!canonicalHandler) {
-        NSLog(@"MenuProtocolManager: No canonical handler available for DBus file descriptor");
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: No canonical handler available for DBus file descriptor");
         return -1;
     }
     
     // Use defensive programming to avoid potential crashes
     @try {
         if ([canonicalHandler respondsToSelector:@selector(getDBusFileDescriptor)]) {
-            NSLog(@"MenuProtocolManager: Calling getDBusFileDescriptor on canonical handler");
+            NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Calling getDBusFileDescriptor on canonical handler");
             int fd = [(id)canonicalHandler getDBusFileDescriptor];
-            NSLog(@"MenuProtocolManager: Got file descriptor %d from canonical handler", fd);
+            NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Got file descriptor %d from canonical handler", fd);
             return fd;
         } else {
-            NSLog(@"MenuProtocolManager: Canonical handler doesn't respond to getDBusFileDescriptor");
+            NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Canonical handler doesn't respond to getDBusFileDescriptor");
             return -1;
         }
     } @catch (NSException *exception) {
-        NSLog(@"MenuProtocolManager: Exception getting DBus file descriptor: %@", exception);
+        NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Exception getting DBus file descriptor: %@", exception);
         return -1;
     }
 }
 
 - (void)updateAllHandlersWithAppMenuWidget:(AppMenuWidget *)appMenuWidget
 {
-    NSLog(@"MenuProtocolManager: Updating all handlers with AppMenuWidget");
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Updating all handlers with AppMenuWidget");
     
     for (NSUInteger i = 0; i < [self.protocolHandlers count]; i++) {
         id<MenuProtocolHandler> handler = [self.protocolHandlers objectAtIndex:i];
         if (handler && [handler respondsToSelector:@selector(setAppMenuWidget:)]) {
-            NSLog(@"MenuProtocolManager: Setting AppMenuWidget on handler %lu", (unsigned long)i);
+            NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Setting AppMenuWidget on handler %lu", (unsigned long)i);
             @try {
                 [handler setAppMenuWidget:appMenuWidget];
             } @catch (NSException *exception) {
-                NSLog(@"MenuProtocolManager: Exception setting AppMenuWidget on handler %lu: %@", (unsigned long)i, exception);
+                NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Exception setting AppMenuWidget on handler %lu: %@", (unsigned long)i, exception);
             }
         } else {
-            NSLog(@"MenuProtocolManager: Handler %lu doesn't support setAppMenuWidget", (unsigned long)i);
+            NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Handler %lu doesn't support setAppMenuWidget", (unsigned long)i);
         }
     }
 }
@@ -471,7 +471,7 @@
 
 - (void)cleanup
 {
-    NSLog(@"MenuProtocolManager: Cleaning up all protocol handlers...");
+    NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Cleaning up all protocol handlers...");
     
     for (NSUInteger i = 0; i < [self.protocolHandlers count]; i++) {
         id handler = [self.protocolHandlers objectAtIndex:i];

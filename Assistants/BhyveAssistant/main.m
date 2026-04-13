@@ -20,18 +20,18 @@
 
 @implementation BhyveApplicationDelegate
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
-    NSLog(@"BhyveAssistant: Last window closed, terminating application");
+    NSDebugLLog(@"gwcomp", @"BhyveAssistant: Last window closed, terminating application");
     return YES;
 }
 @end
 
 int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) argv[])
 {
-    NSLog(@"BhyveAssistant: main() starting");
+    NSDebugLLog(@"gwcomp", @"BhyveAssistant: main() starting");
     
     // Check if running as root
     if (getuid() != 0) {
-        NSLog(@"BhyveAssistant: Not running as root, re-executing with sudo -A -E");
+        NSDebugLLog(@"gwcomp", @"BhyveAssistant: Not running as root, re-executing with sudo -A -E");
         
         @autoreleasepool {
             // Build the sudo command with current executable path
@@ -54,7 +54,7 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
                 int exitStatus = [task terminationStatus];
                 return exitStatus;
             } @catch (NSException *exception) {
-                NSLog(@"ERROR: Failed to re-execute with sudo: %@", [exception reason]);
+                NSDebugLLog(@"gwcomp", @"ERROR: Failed to re-execute with sudo: %@", [exception reason]);
                 
                 // Fall back to showing error
                 NSRunAlertPanel(@"Root Privileges Required",
@@ -81,6 +81,6 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
         [app run];
     }
     
-    NSLog(@"BhyveAssistant: main() exiting");
+    NSDebugLLog(@"gwcomp", @"BhyveAssistant: main() exiting");
     return 0;
 }

@@ -326,7 +326,7 @@ static void appendString(NSMutableData *data, NSString *str) {
     // Read fixed header
     uint8_t endian = bytes[pos++];
     if (endian != DBUS_LITTLE_ENDIAN && endian != DBUS_BIG_ENDIAN) {
-        NSLog(@"Invalid endianness: %c", endian);
+        NSDebugLLog(@"gwcomp", @"Invalid endianness: %c", endian);
         return nil;
     }
     
@@ -336,7 +336,7 @@ static void appendString(NSMutableData *data, NSString *str) {
     uint8_t version = bytes[pos++];
     
     if (version != DBUS_MAJOR_PROTOCOL_VERSION) {
-        NSLog(@"Unsupported protocol version: %d", version);
+        NSDebugLLog(@"gwcomp", @"Unsupported protocol version: %d", version);
         return nil;
     }
     

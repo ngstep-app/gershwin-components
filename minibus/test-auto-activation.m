@@ -22,19 +22,19 @@ int main(int argc, const char * argv[])
             serviceName = [NSString stringWithUTF8String:argv[2]];
         }
         
-        NSLog(@"Testing auto-activation by sending message to %@", serviceName);
+        NSDebugLLog(@"gwcomp", @"Testing auto-activation by sending message to %@", serviceName);
         
         MBClient *client = [[MBClient alloc] init];
         
         if (![client connectToPath:socketPath]) {
-            NSLog(@"Failed to connect to daemon");
+            NSDebugLLog(@"gwcomp", @"Failed to connect to daemon");
             return 1;
         }
         
-        NSLog(@"Connected! Unique name: %@", client.uniqueName);
+        NSDebugLLog(@"gwcomp", @"Connected! Unique name: %@", client.uniqueName);
         
         // Send a method call to the service - this should trigger auto-activation
-        NSLog(@"Sending method call to trigger auto-activation...");
+        NSDebugLLog(@"gwcomp", @"Sending method call to trigger auto-activation...");
         MBMessage *reply = [client callMethod:serviceName
                                          path:@"/com/example/TestService" 
                                     interface:@"com.example.TestService"
@@ -43,17 +43,17 @@ int main(int argc, const char * argv[])
                                       timeout:15.0];
         
         if (reply && reply.type == MBMessageTypeMethodReturn) {
-            NSLog(@"SUCCESS: Received method return from auto-activated service");
+            NSDebugLLog(@"gwcomp", @"SUCCESS: Received method return from auto-activated service");
             if ([reply.arguments count] > 0) {
-                NSLog(@"Reply: %@", [reply.arguments objectAtIndex:0]);
+                NSDebugLLog(@"gwcomp", @"Reply: %@", [reply.arguments objectAtIndex:0]);
             }
         } else if (reply && reply.type == MBMessageTypeError) {
-            NSLog(@"ERROR: Method call failed: %@", reply.errorName);
+            NSDebugLLog(@"gwcomp", @"ERROR: Method call failed: %@", reply.errorName);
             if ([reply.arguments count] > 0) {
-                NSLog(@"Error message: %@", [reply.arguments objectAtIndex:0]);
+                NSDebugLLog(@"gwcomp", @"Error message: %@", [reply.arguments objectAtIndex:0]);
             }
         } else {
-            NSLog(@"ERROR: No reply or timeout");
+            NSDebugLLog(@"gwcomp", @"ERROR: No reply or timeout");
             return 1;
         }
         

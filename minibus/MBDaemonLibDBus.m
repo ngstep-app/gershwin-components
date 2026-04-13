@@ -37,18 +37,18 @@ static DBusHandlerResult message_handler(DBusConnection *connection, DBusMessage
     
     _server = dbus_server_listen([serverAddress UTF8String], &error);
     if (!_server) {
-        NSLog(@"Failed to create D-Bus server: %s", error.message);
+        NSDebugLLog(@"gwcomp", @"Failed to create D-Bus server: %s", error.message);
         dbus_error_free(&error);
         return NO;
     }
     
-    NSLog(@"Created D-Bus server at %@", socketPath);
+    NSDebugLLog(@"gwcomp", @"Created D-Bus server at %@", socketPath);
     
     // Set up new connection callback
     dbus_server_set_new_connection_function(_server, new_connection_callback, self, NULL);
     
     _running = YES;
-    NSLog(@"MBDaemonLibDBus started successfully");
+    NSDebugLLog(@"gwcomp", @"MBDaemonLibDBus started successfully");
     
     return YES;
 }
@@ -69,11 +69,11 @@ static DBusHandlerResult message_handler(DBusConnection *connection, DBusMessage
     [_connections removeAllObjects];
     
     _running = NO;
-    NSLog(@"MBDaemonLibDBus stopped");
+    NSDebugLLog(@"gwcomp", @"MBDaemonLibDBus stopped");
 }
 
 - (void)runMainLoop {
-    NSLog(@"Starting main loop");
+    NSDebugLLog(@"gwcomp", @"Starting main loop");
     
     while (_running) {
         // Process server events
@@ -89,7 +89,7 @@ static DBusHandlerResult message_handler(DBusConnection *connection, DBusMessage
             if (dbus_connection_get_is_connected(connection)) {
                 dbus_connection_read_write_dispatch(connection, 0);
             } else {
-                NSLog(@"Connection closed, removing from list");
+                NSDebugLLog(@"gwcomp", @"Connection closed, removing from list");
                 dbus_connection_unref(connection);
                 [_connections removeObject:connValue];
             }
@@ -99,15 +99,15 @@ static DBusHandlerResult message_handler(DBusConnection *connection, DBusMessage
         usleep(1000); // 1ms
     }
     
-    NSLog(@"Main loop finished");
+    NSDebugLLog(@"gwcomp", @"Main loop finished");
 }
 
 - (void)handleNewConnection:(DBusConnection *)connection {
-    NSLog(@"New D-Bus connection established");
+    NSDebugLLog(@"gwcomp", @"New D-Bus connection established");
     
     // Add message handler
     if (!dbus_connection_add_filter(connection, message_handler, self, NULL)) {
-        NSLog(@"Failed to add message filter to connection");
+        NSDebugLLog(@"gwcomp", @"Failed to add message filter to connection");
         dbus_connection_close(connection);
         return;
     }
@@ -119,7 +119,7 @@ static DBusHandlerResult message_handler(DBusConnection *connection, DBusMessage
     // Request Hello to get unique name
     dbus_connection_set_exit_on_disconnect(connection, FALSE);
     
-    NSLog(@"Connection setup complete, total connections: %lu", (unsigned long)[_connections count]);
+    NSDebugLLog(@"gwcomp", @"Connection setup complete, total connections: %lu", (unsigned long)[_connections count]);
 }
 
 - (void)handleMessage:(DBusMessage *)message onConnection:(DBusConnection *)connection {
@@ -127,7 +127,7 @@ static DBusHandlerResult message_handler(DBusConnection *connection, DBusMessage
     const char *member = dbus_message_get_member(message);
     const char *path = dbus_message_get_path(message);
     
-    NSLog(@"Received message: interface=%s, member=%s, path=%s", 
+    NSDebugLLog(@"gwcomp", @"Received message: interface=%s, member=%s, path=%s", 
           interface ? interface : "(null)",
           member ? member : "(null)", 
           path ? path : "(null)");
@@ -139,15 +139,15 @@ static DBusHandlerResult message_handler(DBusConnection *connection, DBusMessage
         } else if (member && strcmp(member, "ListNames") == 0) {
             [self handleListNamesMessage:message onConnection:connection];
         } else {
-            NSLog(@"Unhandled D-Bus method: %s", member);
+            NSDebugLLog(@"gwcomp", @"Unhandled D-Bus method: %s", member);
         }
     } else {
-        NSLog(@"Message not for org.freedesktop.DBus interface");
+        NSDebugLLog(@"gwcomp", @"Message not for org.freedesktop.DBus interface");
     }
 }
 
 - (void)handleHelloMessage:(DBusMessage *)message onConnection:(DBusConnection *)connection {
-    NSLog(@"Handling Hello message");
+    NSDebugLLog(@"gwcomp", @"Handling Hello message");
     
     // Generate unique name for this connection
     static int connectionCounter = 1;
@@ -156,34 +156,34 @@ static DBusHandlerResult message_handler(DBusConnection *connection, DBusMessage
     // Create reply message
     DBusMessage *reply = dbus_message_new_method_return(message);
     if (!reply) {
-        NSLog(@"Failed to create Hello reply");
+        NSDebugLLog(@"gwcomp", @"Failed to create Hello reply");
         return;
     }
     
     const char *uniqueNameStr = [uniqueName UTF8String];
     if (!dbus_message_append_args(reply, DBUS_TYPE_STRING, &uniqueNameStr, DBUS_TYPE_INVALID)) {
-        NSLog(@"Failed to append unique name to Hello reply");
+        NSDebugLLog(@"gwcomp", @"Failed to append unique name to Hello reply");
         dbus_message_unref(reply);
         return;
     }
     
     // Send reply
     if (!dbus_connection_send(connection, reply, NULL)) {
-        NSLog(@"Failed to send Hello reply");
+        NSDebugLLog(@"gwcomp", @"Failed to send Hello reply");
     } else {
-        NSLog(@"Sent Hello reply with unique name: %@", uniqueName);
+        NSDebugLLog(@"gwcomp", @"Sent Hello reply with unique name: %@", uniqueName);
     }
     
     dbus_message_unref(reply);
 }
 
 - (void)handleListNamesMessage:(DBusMessage *)message onConnection:(DBusConnection *)connection {
-    NSLog(@"Handling ListNames message");
+    NSDebugLLog(@"gwcomp", @"Handling ListNames message");
     
     // Create reply with basic bus names
     DBusMessage *reply = dbus_message_new_method_return(message);
     if (!reply) {
-        NSLog(@"Failed to create ListNames reply");
+        NSDebugLLog(@"gwcomp", @"Failed to create ListNames reply");
         return;
     }
     
@@ -198,30 +198,30 @@ static DBusHandlerResult message_handler(DBusConnection *connection, DBusMessage
     dbus_message_iter_init_append(reply, &iter);
     
     if (!dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "s", &array_iter)) {
-        NSLog(@"Failed to open array container");
+        NSDebugLLog(@"gwcomp", @"Failed to open array container");
         dbus_message_unref(reply);
         return;
     }
     
     for (int i = 0; names[i]; i++) {
         if (!dbus_message_iter_append_basic(&array_iter, DBUS_TYPE_STRING, &names[i])) {
-            NSLog(@"Failed to append name to array");
+            NSDebugLLog(@"gwcomp", @"Failed to append name to array");
             dbus_message_unref(reply);
             return;
         }
     }
     
     if (!dbus_message_iter_close_container(&iter, &array_iter)) {
-        NSLog(@"Failed to close array container");
+        NSDebugLLog(@"gwcomp", @"Failed to close array container");
         dbus_message_unref(reply);
         return;
     }
     
     // Send reply
     if (!dbus_connection_send(connection, reply, NULL)) {
-        NSLog(@"Failed to send ListNames reply");
+        NSDebugLLog(@"gwcomp", @"Failed to send ListNames reply");
     } else {
-        NSLog(@"Sent ListNames reply");
+        NSDebugLLog(@"gwcomp", @"Sent ListNames reply");
     }
     
     dbus_message_unref(reply);

@@ -45,12 +45,12 @@ static volatile BOOL xOpenDisplayTimedOut = NO;
 // Alarm signal handler for XOpenDisplay timeout
 static void xOpenDisplayAlarmHandler(int sig) {
     xOpenDisplayTimedOut = YES;
-    NSLog(@"[ERROR] XOpenDisplay timed out");
+    NSDebugLLog(@"gwcomp", @"[ERROR] XOpenDisplay timed out");
 }
 
 // X11 I/O error handler - called when X connection is lost
 static int xIOErrorHandler(Display *display) {
-    NSLog(@"[ERROR] X11 I/O error detected - X server connection lost");
+    NSDebugLLog(@"gwcomp", @"[ERROR] X11 I/O error detected - X server connection lost");
     xIOErrorOccurred = YES;
     
     // Exit immediately to allow systemd to restart us
@@ -62,7 +62,7 @@ static int xIOErrorHandler(Display *display) {
 static int xErrorHandler(Display *display, XErrorEvent *error) {
     char error_text[256];
     XGetErrorText(display, error->error_code, error_text, sizeof(error_text));
-    NSLog(@"[WARNING] X11 error: %s (request code: %d, minor code: %d)",
+    NSDebugLLog(@"gwcomp", @"[WARNING] X11 error: %s (request code: %d, minor code: %d)",
           error_text, error->request_code, error->minor_code);
     
     // Return 0 to continue execution for non-fatal errors
@@ -126,7 +126,7 @@ static void waitForTmpWritable(int timeoutSeconds) {
 
     for (int i = 0; i < maxChecks; i++) {
         if (isTmpWritable()) {
-            NSLog(@"[INFO] /tmp is now writable (ready after %.1f seconds)", (float)i / 10.0);
+            NSDebugLLog(@"gwcomp", @"[INFO] /tmp is now writable (ready after %.1f seconds)", (float)i / 10.0);
             return;
         }
 
@@ -146,7 +146,7 @@ static void waitForTmpWritable(int timeoutSeconds) {
         fprintf(stderr, "\n");
         fflush(stderr);
     }
-    NSLog(@"[WARNING] Timeout waiting for /tmp to be writable (waited %d seconds)", timeoutSeconds);
+    NSDebugLLog(@"gwcomp", @"[WARNING] Timeout waiting for /tmp to be writable (waited %d seconds)", timeoutSeconds);
 }
 
 // Safe XOpenDisplay with timeout - prevents indefinite hanging
@@ -174,7 +174,7 @@ static Display* safeXOpenDisplay(const char *display_name, int timeout_seconds) 
     sigaction(SIGALRM, &old_sa, NULL);
     
     if (xOpenDisplayTimedOut) {
-        NSLog(@"[ERROR] XOpenDisplay timed out after %d seconds", timeout_seconds);
+        NSDebugLLog(@"gwcomp", @"[ERROR] XOpenDisplay timed out after %d seconds", timeout_seconds);
         return NULL;
     }
     
@@ -183,7 +183,7 @@ static Display* safeXOpenDisplay(const char *display_name, int timeout_seconds) 
 
 // Signal handler for cleanup on termination
 void signalHandler(int sig) {
-    NSLog(@"[DEBUG] Received signal %d, performing cleanup", sig);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Received signal %d, performing cleanup", sig);
     // We can't safely call Objective-C methods from a signal handler,
     // but we can at least try to kill processes using the global variables
     // Note: This is not the safest approach, but it's better than nothing
@@ -200,7 +200,7 @@ void signalHandler(int sig) {
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
     pamAuth = [[LoginWindowPAM alloc] init];
-    NSLog(@"[DEBUG] pamAuth initialized: %@", pamAuth);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] pamAuth initialized: %@", pamAuth);
     sessionPid = 0;
     sessionUid = 0;
     sessionGid = 0;
@@ -212,7 +212,7 @@ void signalHandler(int sig) {
     // Install X11 error handlers FIRST to prevent hanging if X dies
     XSetIOErrorHandler(xIOErrorHandler);
     XSetErrorHandler(xErrorHandler);
-    NSLog(@"[DEBUG] X11 error handlers installed");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] X11 error handlers installed");
     
     // Set up signal handlers for cleanup
     signal(SIGTERM, signalHandler);
@@ -221,14 +221,14 @@ void signalHandler(int sig) {
     
     // X server should already be running from main() - just verify
     if (![self isXServerRunning]) {
-        NSLog(@"[WARNING] X server is not running even after main() startup attempt");
+        NSDebugLLog(@"gwcomp", @"[WARNING] X server is not running even after main() startup attempt");
     }
     
     [self createLoginWindow];
     
     // Validate LoginWindow.plist security BEFORE anything accesses it
     if (![self validateLoginWindowPreferencesFile]) {
-        NSLog(@"[WARNING] LoginWindow.plist validation failed, skipping auto-login");
+        NSDebugLLog(@"gwcomp", @"[WARNING] LoginWindow.plist validation failed, skipping auto-login");
     } else {
         // Check for auto-login user after window is created but before showing it
         [self checkAutoLogin];
@@ -257,7 +257,7 @@ void signalHandler(int sig) {
                 // Also set input focus directly as there is no window manager
                 XSetInputFocus(display, xid, RevertToParent, CurrentTime);
                 
-                NSLog(@"[DEBUG] Set _NET_ACTIVE_WINDOW and input focus to login window 0x%lx", xid);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Set _NET_ACTIVE_WINDOW and input focus to login window 0x%lx", xid);
             }
         }
         
@@ -268,11 +268,11 @@ void signalHandler(int sig) {
 
 - (void)setX11BackgroundMidGrey
 {
-    NSLog(@"[DEBUG] Setting X11 background to mid grey with persistent pixmap and cursor");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Setting X11 background to mid grey with persistent pixmap and cursor");
     
     Display *display = safeXOpenDisplay(NULL, 5);  // 5 second timeout
     if (!display) {
-        NSLog(@"[WARNING] Could not open X display");
+        NSDebugLLog(@"gwcomp", @"[WARNING] Could not open X display");
         return;
     }
 
@@ -280,7 +280,7 @@ void signalHandler(int sig) {
     XSetCloseDownMode(display, RetainPermanent);
     
     int screen_count = ScreenCount(display);
-    NSLog(@"[DEBUG] Found %d X11 screen(s)", screen_count);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Found %d X11 screen(s)", screen_count);
     
     for (int i = 0; i < screen_count; i++) {
         int screen = i;
@@ -295,22 +295,22 @@ void signalHandler(int sig) {
         color.flags = DoRed | DoGreen | DoBlue;
         
         if (!XAllocColor(display, colormap, &color)) {
-            NSLog(@"[WARNING] Could not allocate mid grey color on screen %d", i);
+            NSDebugLLog(@"gwcomp", @"[WARNING] Could not allocate mid grey color on screen %d", i);
             continue;
         }
         
-        NSLog(@"[DEBUG] Allocated color pixel: 0x%lx on screen %d", color.pixel, i);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Allocated color pixel: 0x%lx on screen %d", color.pixel, i);
         
         // Create a 1x1 pixmap with the mid-grey color
         unsigned int depth = DefaultDepth(display, screen);
         Pixmap pixmap = XCreatePixmap(display, root, 1, 1, depth);
         
         if (!pixmap) {
-            NSLog(@"[WARNING] Could not create pixmap on screen %d", i);
+            NSDebugLLog(@"gwcomp", @"[WARNING] Could not create pixmap on screen %d", i);
             continue;
         }
         
-        NSLog(@"[DEBUG] Created pixmap 0x%lx on screen %d", pixmap, i);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Created pixmap 0x%lx on screen %d", pixmap, i);
         
         // Fill the pixmap with the mid-grey color
         GC gc = XCreateGC(display, pixmap, 0, NULL);
@@ -325,16 +325,16 @@ void signalHandler(int sig) {
         // Free the pixmap (it will persist due to RetainPermanent mode)
         XFreePixmap(display, pixmap);
         
-        NSLog(@"[DEBUG] Screen %d root window background set with persistent pixmap", i);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Screen %d root window background set with persistent pixmap", i);
 
         // Set the standard arrow cursor (XC_left_ptr) on the root window
         Cursor cursor = XCreateFontCursor(display, XC_left_ptr);
         if (cursor) {
             XDefineCursor(display, root, cursor);
             XFreeCursor(display, cursor);
-            NSLog(@"[DEBUG] Standard arrow cursor set on screen %d root window", i);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Standard arrow cursor set on screen %d root window", i);
         } else {
-            NSLog(@"[WARNING] Could not create standard arrow cursor on screen %d", i);
+            NSDebugLLog(@"gwcomp", @"[WARNING] Could not create standard arrow cursor on screen %d", i);
         }
     }
     
@@ -342,7 +342,7 @@ void signalHandler(int sig) {
     XSync(display, False);
     XCloseDisplay(display);
     
-    NSLog(@"[DEBUG] X11 background set to mid grey with persistent pixmap");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] X11 background set to mid grey with persistent pixmap");
 }
 
 - (void)dealloc
@@ -353,20 +353,20 @@ void signalHandler(int sig) {
 
 - (void)applicationWillTerminate:(NSNotification *)notification
 {
-    NSLog(@"[DEBUG] Application terminating, performing session cleanup");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Application terminating, performing session cleanup");
     
     // Set terminating flag to prevent window recreation
     isTerminating = YES;
     
     // If we have an active session, kill all its processes
     if (sessionUid > 0) {
-        NSLog(@"[DEBUG] Cleaning up active session for UID: %d", sessionUid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Cleaning up active session for UID: %d", sessionUid);
         [self killAllSessionProcesses:sessionUid];
         
         // Close PAM session if still open
         if (pamAuth) {
             [pamAuth closeSession];
-            NSLog(@"[DEBUG] PAM session closed during termination");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] PAM session closed during termination");
         }
     }
     
@@ -376,22 +376,22 @@ void signalHandler(int sig) {
 
 - (void)scanAvailableSessions
 {
-    NSLog(@"[DEBUG] scanAvailableSessions started");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] scanAvailableSessions started");
     NSMutableArray *sessions = [NSMutableArray array];
     NSMutableArray *execs = [NSMutableArray array];
     NSArray *dirs = @[ @"/usr/local/share/xsessions", @"/usr/share/xsessions" ];
     NSFileManager *fm = [NSFileManager defaultManager];
     
     for (NSString *dir in dirs) {
-        NSLog(@"[DEBUG] Checking directory: %@", dir);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Checking directory: %@", dir);
         BOOL isDir = NO;
         if ([fm fileExistsAtPath:dir isDirectory:&isDir] && isDir) {
-            NSLog(@"[DEBUG] Directory exists: %@", dir);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Directory exists: %@", dir);
             NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
-            NSLog(@"[DEBUG] Found %lu files in %@", (unsigned long)[files count], dir);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Found %lu files in %@", (unsigned long)[files count], dir);
             for (NSString *file in files) {
                 if ([file hasSuffix:@".desktop"]) {
-                    NSLog(@"[DEBUG] Processing .desktop file: %@", file);
+                    NSDebugLLog(@"gwcomp", @"[DEBUG] Processing .desktop file: %@", file);
                     NSString *path = [dir stringByAppendingPathComponent:file];
                     NSString *name = nil;
                     NSString *exec = nil;
@@ -400,7 +400,7 @@ void signalHandler(int sig) {
                     for (NSString *line in lines) {
                         if ([line hasPrefix:@"Name="]) {
                             name = [line substringFromIndex:5];
-                            NSLog(@"[DEBUG] Found Name: %@", name);
+                            NSDebugLLog(@"gwcomp", @"[DEBUG] Found Name: %@", name);
                         } else if ([line hasPrefix:@"Exec="]) {
                             // Extract the command portion (first token) and strip field codes
                             NSString *rawExec = [line substringFromIndex:5];
@@ -418,15 +418,15 @@ void signalHandler(int sig) {
                             } else {
                                 exec = [rawExec stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                             }
-                            NSLog(@"[DEBUG] Found Exec (parsed): %@ (raw: %@)", exec, rawExec);
+                            NSDebugLLog(@"gwcomp", @"[DEBUG] Found Exec (parsed): %@ (raw: %@)", exec, rawExec);
                         }
                     }
                     if (name && exec) {
                         // Skip placeholder or invalid Exec entries (e.g., "default")
                         if ([[exec lowercaseString] isEqualToString:@"default"] || [exec length] == 0) {
-                            NSLog(@"[DEBUG] Skipping session '%@' because Exec is a placeholder or empty: %@", name, exec);
+                            NSDebugLLog(@"gwcomp", @"[DEBUG] Skipping session '%@' because Exec is a placeholder or empty: %@", name, exec);
                         } else {
-                            NSLog(@"[DEBUG] Adding session: %@ -> %@", name, exec);
+                            NSDebugLLog(@"gwcomp", @"[DEBUG] Adding session: %@ -> %@", name, exec);
                             [sessions addObject:name];
                             [execs addObject:exec];
                         }
@@ -434,12 +434,12 @@ void signalHandler(int sig) {
                 }
             }
         } else {
-            NSLog(@"[DEBUG] Directory does not exist or is not a directory: %@", dir);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Directory does not exist or is not a directory: %@", dir);
         }
     }
     
     if ([sessions count] == 0) {
-        NSLog(@"[DEBUG] No sessions found in .desktop files, adding defaults");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] No sessions found in .desktop files, adding defaults");
         [sessions addObject:@"Gershwin"];
         [execs addObject:@"/System/Library/Scripts/Gershwin.sh"];
     }
@@ -451,12 +451,12 @@ void signalHandler(int sig) {
         if (gershwinIndex != NSNotFound) {
             // Replace existing Gershwin entry with the /System version
             [execs replaceObjectAtIndex:gershwinIndex withObject:@"/System/Library/Scripts/Gershwin.sh"];
-            NSLog(@"[DEBUG] Replaced existing Gershwin session with /System/Library/Scripts/Gershwin.sh");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Replaced existing Gershwin session with /System/Library/Scripts/Gershwin.sh");
         } else {
             // Add new Gershwin entry
             [sessions addObject:@"Gershwin"];
             [execs addObject:@"/System/Library/Scripts/Gershwin-X11"];
-            NSLog(@"[DEBUG] Added Gershwin session: /System/Library/Scripts/Gershwin-X11");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Added Gershwin session: /System/Library/Scripts/Gershwin-X11");
         }
     }
     
@@ -464,9 +464,9 @@ void signalHandler(int sig) {
     availableSessionExecs = [execs copy];
     selectedSessionExec = [execs firstObject];
     
-    NSLog(@"[DEBUG] Final available sessions: %@", availableSessions);
-    NSLog(@"[DEBUG] Final available execs: %@", availableSessionExecs);
-    NSLog(@"[DEBUG] Initial selected exec: %@", selectedSessionExec);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Final available sessions: %@", availableSessions);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Final available execs: %@", availableSessionExecs);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Initial selected exec: %@", selectedSessionExec);
 }
 
 - (void)createLoginWindow
@@ -564,9 +564,9 @@ void signalHandler(int sig) {
             if (lastSessionIndex != NSNotFound) {
                 [sessionDropdown selectItemAtIndex:lastSessionIndex];
                 selectedSessionExec = [availableSessionExecs objectAtIndex:lastSessionIndex];
-                NSLog(@"[DEBUG] Pre-selected last chosen session: %@", lastSession);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Pre-selected last chosen session: %@", lastSession);
             } else {
-                NSLog(@"[DEBUG] Last chosen session not found in available sessions: %@", lastSession);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Last chosen session not found in available sessions: %@", lastSession);
             }
         }
         
@@ -629,7 +629,7 @@ void signalHandler(int sig) {
     NSString *lastUser = [self loadLastLoggedInUser];
     if (lastUser) {
         [usernameField setStringValue:lastUser];
-        NSLog(@"[DEBUG] Pre-filled username field with last logged-in user: %@", lastUser);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Pre-filled username field with last logged-in user: %@", lastUser);
         // If username is pre-filled, focus on password field instead
         [loginWindow makeFirstResponder:passwordField];
     } else {
@@ -643,7 +643,7 @@ void signalHandler(int sig) {
 
 - (void)loginButtonPressed:(id)sender
 {
-    NSLog(@"[DEBUG] loginButtonPressed called");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] loginButtonPressed called");
     NSString *username = [usernameField stringValue];
     NSString *password = [passwordField stringValue];
     
@@ -655,19 +655,19 @@ void signalHandler(int sig) {
         
     // Attempting authentication — empty password is allowed by design for some environments
     // (e.g., GhostBSD Live ISOs) where PAM permits passwordless login.
-    NSLog(@"[DEBUG] authenticateUser:password: will be called (password empty: %s)", ([password length] == 0) ? "yes" : "no");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] authenticateUser:password: will be called (password empty: %s)", ([password length] == 0) ? "yes" : "no");
     if ([self authenticateUser:username password:password]) {
-        NSLog(@"[DEBUG] authenticateUser:password: returned YES");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] authenticateUser:password: returned YES");
         [self saveLastLoggedInUser:username];
         [self startUserSession:username];
     } else {
-        NSLog(@"[DEBUG] authenticateUser:password: returned NO");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] authenticateUser:password: returned NO");
         [self showStatus:@"Authentication failed"];
         
         // Show detailed error message if available
         NSString *errorMsg = [pamAuth lastErrorMessage];
         if (errorMsg && [errorMsg length] > 0) {
-            NSLog(@"[ERROR] Showing PAM error to user: %@", errorMsg);
+            NSDebugLLog(@"gwcomp", @"[ERROR] Showing PAM error to user: %@", errorMsg);
             NSAlert *alert = [NSAlert alertWithMessageText:@"Authentication Error"
                                              defaultButton:@"OK"
                                            alternateButton:nil
@@ -731,7 +731,7 @@ void signalHandler(int sig) {
     }
         
     for (NSArray *cmd in commands) {
-        NSLog(@"Attempting system action with command: %@", [cmd componentsJoinedByString:@" "]);
+        NSDebugLLog(@"gwcomp", @"Attempting system action with command: %@", [cmd componentsJoinedByString:@" "]);
         NSTask *task = [NSTask new];
         [task autorelease];
         [task setLaunchPath:[cmd objectAtIndex:0]];
@@ -744,27 +744,27 @@ void signalHandler(int sig) {
             [task waitUntilExit];
             
             if ([task terminationStatus] == 0) {
-                NSLog(@"System action command launched successfully: %@", [cmd componentsJoinedByString:@" "]);
+                NSDebugLLog(@"gwcomp", @"System action command launched successfully: %@", [cmd componentsJoinedByString:@" "]);
                 
                 // For restart/shutdown commands, if they succeed, the system should restart/shutdown
                 // and this application should never reach this point. If we reach here, it means
                 // the command succeeded but the system didn't restart/shutdown, which is an error.
                 
                 // Wait a bit to see if the system actually restarts/shuts down
-                NSLog(@"Waiting for system to %@...", actionType);
+                NSDebugLLog(@"gwcomp", @"Waiting for system to %@...", actionType);
                 [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:5.0]];
                 
                 // If we reach here, the system didn't restart/shutdown even though the command succeeded
                 // This is a failure case - the command succeeded but didn't work
-                NSLog(@"System action command succeeded but system did not %@", actionType);
+                NSDebugLLog(@"gwcomp", @"System action command succeeded but system did not %@", actionType);
                 // Continue to try next command
             } else {
-                NSLog(@"System action failed with command: %@, exit status: %d", [cmd componentsJoinedByString:@" "], [task terminationStatus]);
+                NSDebugLLog(@"gwcomp", @"System action failed with command: %@, exit status: %d", [cmd componentsJoinedByString:@" "], [task terminationStatus]);
                 // Try next command
             }
         }
         @catch (NSException *exception) {
-            NSLog(@"Exception while executing system action: %@", exception);
+            NSDebugLLog(@"gwcomp", @"Exception while executing system action: %@", exception);
             // Try next command
         }
     }
@@ -783,7 +783,7 @@ void signalHandler(int sig) {
     NSInteger result = [alert runModal];
     [alert release];
     if (result == NSAlertFirstButtonReturn) {
-        NSLog(@"User confirmed shutdown");
+        NSDebugLLog(@"gwcomp", @"User confirmed shutdown");
         BOOL success = [self trySystemAction:@"shutdown"];
         if (!success) {
             NSAlert *errorAlert = [[NSAlert alloc] init];
@@ -807,7 +807,7 @@ void signalHandler(int sig) {
     NSInteger result = [alert runModal];
     [alert release];
     if (result == NSAlertFirstButtonReturn) {
-        NSLog(@"User confirmed restart");
+        NSDebugLLog(@"gwcomp", @"User confirmed restart");
         BOOL success = [self trySystemAction:@"restart"];
         if (!success) {
             NSAlert *errorAlert = [[NSAlert alloc] init];
@@ -828,17 +828,17 @@ void signalHandler(int sig) {
 
 - (void)startUserSession:(NSString *)username
 {
-    NSLog(@"[DEBUG] startUserSession called for user: %@", username);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] startUserSession called for user: %@", username);
     const char *user_cstr = [username UTF8String];
     struct passwd *pwd = getpwnam(user_cstr);
     
     if (!pwd) {
-        NSLog(@"[DEBUG] User not found: %@", username);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] User not found: %@", username);
         [self showStatus:@"User not found"];
         return;
     }
     
-    NSLog(@"[DEBUG] User found - UID: %d, GID: %d, Home: %s, Shell: %s", 
+    NSDebugLLog(@"gwcomp", @"[DEBUG] User found - UID: %d, GID: %d, Home: %s, Shell: %s", 
           pwd->pw_uid, pwd->pw_gid, pwd->pw_dir, pwd->pw_shell);
     
     // Save the current session choice before starting
@@ -846,16 +846,16 @@ void signalHandler(int sig) {
     
     // Get PAM environment
     char **pam_envlist = [pamAuth getEnvironmentList];
-    NSLog(@"[DEBUG] PAM environment list obtained: %p", pam_envlist);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] PAM environment list obtained: %p", pam_envlist);
     
     // Log current selected session
-    NSLog(@"[DEBUG] Currently selected session executable: %@", selectedSessionExec);
-    NSLog(@"[DEBUG] Available sessions: %@", availableSessions);
-    NSLog(@"[DEBUG] Available session execs: %@", availableSessionExecs);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Currently selected session executable: %@", selectedSessionExec);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Available sessions: %@", availableSessions);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Available session execs: %@", availableSessionExecs);
     
     // Change to user's home directory
     if (chdir(pwd->pw_dir) != 0) {
-        NSLog(@"[DEBUG] Cannot change to home directory: %s", pwd->pw_dir);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Cannot change to home directory: %s", pwd->pw_dir);
         NSString *errorMsg = [NSString stringWithFormat:@"Cannot change to home directory: %s\n\nError: %s", 
                              pwd->pw_dir, strerror(errno)];
         NSAlert *alert = [NSAlert alertWithMessageText:@"Home Directory Error"
@@ -869,15 +869,15 @@ void signalHandler(int sig) {
         return;
     }
     
-    NSLog(@"[DEBUG] Changed to user home directory: %s", pwd->pw_dir);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Changed to user home directory: %s", pwd->pw_dir);
     
     // Verify that X11 unix socket is available for the user
-    NSLog(@"[DEBUG] Verifying X11 unix socket accessibility");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Verifying X11 unix socket accessibility");
     const char *x_socket_path = "/tmp/.X11-unix/X0";
     
     // Check if socket exists
     if (access(x_socket_path, F_OK) != 0) {
-        NSLog(@"[ERROR] X11 unix socket does not exist at %s: %s", x_socket_path, strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[ERROR] X11 unix socket does not exist at %s: %s", x_socket_path, strerror(errno));
         NSAlert *alert = [NSAlert alertWithMessageText:@"X Server Socket Not Found"
                                          defaultButton:@"OK"
                                        alternateButton:nil
@@ -888,19 +888,19 @@ void signalHandler(int sig) {
         [pamAuth closeSession];
         return;
     }
-    NSLog(@"[DEBUG] X11 unix socket exists at %s", x_socket_path);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] X11 unix socket exists at %s", x_socket_path);
     
     // Check if user has access to the socket
     struct stat socket_stat;
     if (stat(x_socket_path, &socket_stat) == 0) {
-        NSLog(@"[DEBUG] Socket permissions: mode=0%o, owner=%d:%d", 
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Socket permissions: mode=0%o, owner=%d:%d", 
               socket_stat.st_mode & 0777, socket_stat.st_uid, socket_stat.st_gid);
         
         // Check if socket is world-writable or user has explicit access
         if (!(socket_stat.st_mode & S_IWOTH)) {
             // Not world-writable, check if user is owner or in group
             if (socket_stat.st_uid != pwd->pw_uid && socket_stat.st_gid != pwd->pw_gid) {
-                NSLog(@"[WARNING] User %d may not have access to X socket (owner: %d, group: %d)",
+                NSDebugLLog(@"gwcomp", @"[WARNING] User %d may not have access to X socket (owner: %d, group: %d)",
                       pwd->pw_uid, socket_stat.st_uid, socket_stat.st_gid);
                 NSAlert *alert = [NSAlert alertWithMessageText:@"X Server Access Warning"
                                                  defaultButton:@"Continue Anyway"
@@ -916,93 +916,93 @@ void signalHandler(int sig) {
             }
         }
     } else {
-        NSLog(@"[WARNING] Could not stat X socket: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[WARNING] Could not stat X socket: %s", strerror(errno));
     }
     
-    NSLog(@"[DEBUG] X11 socket verification passed");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] X11 socket verification passed");
     
     // Start the user's session
-    NSLog(@"[DEBUG] About to fork for session");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] About to fork for session");
     pid_t pid = fork();
     if (pid == 0) {
         // Child process - create new session to avoid X11 threading issues
-        NSLog(@"[DEBUG] Child process started");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Child process started");
         
         // Create a new session and process group - this is critical for proper cleanup
         pid_t sessionId = setsid();
         if (sessionId == -1) {
-            NSLog(@"[DEBUG] setsid() failed: %s", strerror(errno));
+            NSDebugLLog(@"gwcomp", @"[DEBUG] setsid() failed: %s", strerror(errno));
             exit(1);
         }
-        NSLog(@"[DEBUG] Created new session with SID: %d", sessionId);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Created new session with SID: %d", sessionId);
         
         // Close all file descriptors except stdin, stdout, stderr
         int maxfd = sysconf(_SC_OPEN_MAX);
-        NSLog(@"[DEBUG] Closing file descriptors up to: %d", maxfd);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Closing file descriptors up to: %d", maxfd);
         for (int fd = 3; fd < maxfd; fd++) {
             close(fd);
         }
         
-        NSLog(@"[DEBUG] About to set user context for user: %s (uid=%d, gid=%d)", pwd->pw_name, pwd->pw_uid, pwd->pw_gid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] About to set user context for user: %s (uid=%d, gid=%d)", pwd->pw_name, pwd->pw_uid, pwd->pw_gid);
         
         // Use manual setup for better error reporting
-        NSLog(@"[DEBUG] Starting manual user setup");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Starting manual user setup");
         
         // Set supplementary groups first
-        NSLog(@"[DEBUG] Calling initgroups for user: %s, gid: %d", pwd->pw_name, pwd->pw_gid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Calling initgroups for user: %s, gid: %d", pwd->pw_name, pwd->pw_gid);
         if (initgroups(pwd->pw_name, pwd->pw_gid) != 0) {
             int err = errno;
             perror("initgroups failed");
-            NSLog(@"[DEBUG] initgroups failed for user: %s, gid: %d (errno: %d - %s)", pwd->pw_name, pwd->pw_gid, err, strerror(err));
+            NSDebugLLog(@"gwcomp", @"[DEBUG] initgroups failed for user: %s, gid: %d (errno: %d - %s)", pwd->pw_name, pwd->pw_gid, err, strerror(err));
             exit(1);
         }
-        NSLog(@"[DEBUG] initgroups succeeded for user: %s", pwd->pw_name);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] initgroups succeeded for user: %s", pwd->pw_name);
         
         // Set group ID
-        NSLog(@"[DEBUG] Calling setgid for gid: %d", pwd->pw_gid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Calling setgid for gid: %d", pwd->pw_gid);
         if (setgid(pwd->pw_gid) != 0) {
             int err = errno;
             perror("setgid failed");
-            NSLog(@"[DEBUG] setgid failed for gid: %d (errno: %d - %s)", pwd->pw_gid, err, strerror(err));
+            NSDebugLLog(@"gwcomp", @"[DEBUG] setgid failed for gid: %d (errno: %d - %s)", pwd->pw_gid, err, strerror(err));
             exit(1);
         }
-        NSLog(@"[DEBUG] setgid succeeded for gid: %d", pwd->pw_gid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] setgid succeeded for gid: %d", pwd->pw_gid);
         
         // Set user ID (this must be last)
-        NSLog(@"[DEBUG] Calling setuid for uid: %d", pwd->pw_uid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Calling setuid for uid: %d", pwd->pw_uid);
         if (setuid(pwd->pw_uid) != 0) {
             int err = errno;
             perror("setuid failed");
-            NSLog(@"[DEBUG] setuid failed for uid: %d (errno: %d - %s)", pwd->pw_uid, err, strerror(err));
+            NSDebugLLog(@"gwcomp", @"[DEBUG] setuid failed for uid: %d (errno: %d - %s)", pwd->pw_uid, err, strerror(err));
             exit(1);
         }
-        NSLog(@"[DEBUG] setuid succeeded for uid: %d", pwd->pw_uid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] setuid succeeded for uid: %d", pwd->pw_uid);
         
         // Verify the change worked
         uid_t real_uid = getuid();
         uid_t eff_uid = geteuid();
         gid_t real_gid = getgid();
         gid_t eff_gid = getegid();
-        NSLog(@"[DEBUG] After user setup - real_uid: %d, eff_uid: %d, real_gid: %d, eff_gid: %d", 
+        NSDebugLLog(@"gwcomp", @"[DEBUG] After user setup - real_uid: %d, eff_uid: %d, real_gid: %d, eff_gid: %d", 
               real_uid, eff_uid, real_gid, eff_gid);
         
         if (real_uid != pwd->pw_uid || eff_uid != pwd->pw_uid) {
-            NSLog(@"[DEBUG] UID verification failed - expected: %d, got real: %d, eff: %d", pwd->pw_uid, real_uid, eff_uid);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] UID verification failed - expected: %d, got real: %d, eff: %d", pwd->pw_uid, real_uid, eff_uid);
             exit(1);
         }
         
         if (real_gid != pwd->pw_gid || eff_gid != pwd->pw_gid) {
-            NSLog(@"[DEBUG] GID verification failed - expected: %d, got real: %d, eff: %d", pwd->pw_gid, real_gid, eff_gid);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] GID verification failed - expected: %d, got real: %d, eff: %d", pwd->pw_gid, real_gid, eff_gid);
             exit(1);
         }
         
-        NSLog(@"[DEBUG] Manual user setup completed successfully");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Manual user setup completed successfully");
         
-        NSLog(@"[DEBUG] User context setup complete");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] User context setup complete");
         
         // Note: X11 unix socket was verified before fork
         // Clients will connect via /tmp/.X11-unix/X0
-        NSLog(@"[DEBUG] User will connect to X server via unix socket");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] User will connect to X server via unix socket");
         
         // Clear signal handlers and reset signal mask
         signal(SIGTERM, SIG_DFL);
@@ -1010,7 +1010,7 @@ void signalHandler(int sig) {
         signal(SIGHUP, SIG_DFL);
         signal(SIGCHLD, SIG_DFL);
         
-        NSLog(@"[DEBUG] Signal handlers reset");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Signal handlers reset");
         
         // Set up environment for the session
         clearenv();
@@ -1026,16 +1026,16 @@ void signalHandler(int sig) {
         setenv("PATH", [fullPath UTF8String], 1);
         setenv("GNUSTEP_USER_ROOT", [[NSString stringWithFormat:@"%s/GNUstep", pwd->pw_dir] UTF8String], 1);
         
-        NSLog(@"[DEBUG] Basic environment set");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Basic environment set");
         
 #if defined(__linux__)
         // Linux: No login_cap, skip BSD-specific login class logic
-        NSLog(@"[DEBUG] Skipping BSD login_cap logic on Linux");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Skipping BSD login_cap logic on Linux");
 #else
         // Set login class environment variables
         login_cap_t *lc = login_getpwclass(pwd);
         if (lc != NULL) {
-            NSLog(@"[DEBUG] Setting login class environment variables");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Setting login class environment variables");
             
             // Iterate through all login class environment and set them
             // These can be set in the file /etc/login.conf
@@ -1043,29 +1043,29 @@ void signalHandler(int sig) {
             for (env_var = login_getcapstr(lc, "env", NULL, NULL); env_var != NULL; env_var = login_getcapstr(lc, "env", env_var, NULL)) {
                 if (env_var && strlen(env_var) > 0) {
                     putenv((char *)env_var);
-                    NSLog(@"[DEBUG] Set login class environment variable: %s", env_var);
+                    NSDebugLLog(@"gwcomp", @"[DEBUG] Set login class environment variable: %s", env_var);
                 }
             }
             login_close(lc);
-            NSLog(@"[DEBUG] Login class environment variables set");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Login class environment variables set");
         } else {
-            NSLog(@"[DEBUG] No login class found for user");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] No login class found for user");
         }
 #endif
         
         // Set PAM environment variables
         if (pam_envlist) {
-            NSLog(@"[DEBUG] Setting PAM environment variables");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Setting PAM environment variables");
             for (int i = 0; pam_envlist[i]; i++) {
-                NSLog(@"[DEBUG] PAM env[%d]: %s", i, pam_envlist[i]);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] PAM env[%d]: %s", i, pam_envlist[i]);
                 putenv(pam_envlist[i]);
             }
         } else {
-            NSLog(@"[DEBUG] No PAM environment variables to set");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] No PAM environment variables to set");
         }
         
         // Set up keyboard layout before starting session
-        NSLog(@"[DEBUG] Setting up keyboard layout");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Setting up keyboard layout");
         
         // First, try to read keyboard layout from login.conf or environment
         const char *kb_layout = NULL;
@@ -1074,7 +1074,7 @@ void signalHandler(int sig) {
         
 #if defined(__linux__)
         // Linux: Skip login_cap, use environment variables only
-        NSLog(@"[DEBUG] Skipping BSD login_cap keyboard config on Linux");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Skipping BSD login_cap keyboard config on Linux");
 #else
         // Get login capabilities for this user in child process
         login_cap_t *child_lc = login_getpwclass(pwd);
@@ -1082,7 +1082,7 @@ void signalHandler(int sig) {
             kb_layout = login_getcapstr(child_lc, "keyboard.layout", NULL, NULL);
             kb_variant = login_getcapstr(child_lc, "keyboard.variant", NULL, NULL);
             kb_options = login_getcapstr(child_lc, "keyboard.options", NULL, NULL);
-            NSLog(@"[DEBUG] Checked login.conf for keyboard settings");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Checked login.conf for keyboard settings");
         }
 #endif
         
@@ -1099,7 +1099,7 @@ void signalHandler(int sig) {
         
         // Check various system configuration files for keyboard layout
         if (!kb_layout) {
-            NSLog(@"[DEBUG] No keyboard layout from login.conf or environment, checking /etc/rc.conf");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] No keyboard layout from login.conf or environment, checking /etc/rc.conf");
             // Check /etc/rc.conf for keyboard layout
             FILE *rc_conf = fopen("/etc/rc.conf", "r");
             if (rc_conf) {
@@ -1115,7 +1115,7 @@ void signalHandler(int sig) {
                             char *end_quote = strchr(keymap, '"');
                             if (end_quote) *end_quote = '\0';
                         }
-                        NSLog(@"[DEBUG] Found raw keymap in /etc/rc.conf: %s", keymap);
+                        NSDebugLLog(@"gwcomp", @"[DEBUG] Found raw keymap in /etc/rc.conf: %s", keymap);
                         // Convert console keymap to X11 layout (simplified mapping)
                         if (strstr(keymap, "us")) kb_layout = "us";
                         else if (strstr(keymap, "de")) kb_layout = "de";
@@ -1131,16 +1131,16 @@ void signalHandler(int sig) {
                         }
                         else {
                             kb_layout = "us"; // fallback
-                            NSLog(@"[DEBUG] Unknown keymap '%s', using fallback 'us'", keymap);
+                            NSDebugLLog(@"gwcomp", @"[DEBUG] Unknown keymap '%s', using fallback 'us'", keymap);
                         }
-                        NSLog(@"[DEBUG] Converted console keymap '%s' to X11 layout '%s'", keymap, kb_layout);
-                        if (kb_variant) NSLog(@"[DEBUG] Set variant to '%s'", kb_variant);
+                        NSDebugLLog(@"gwcomp", @"[DEBUG] Converted console keymap '%s' to X11 layout '%s'", keymap, kb_layout);
+                        if (kb_variant) NSDebugLLog(@"gwcomp", @"[DEBUG] Set variant to '%s'", kb_variant);
                         break;
                     }
                 }
                 fclose(rc_conf);
             } else {
-                NSLog(@"[DEBUG] Could not open /etc/rc.conf");
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Could not open /etc/rc.conf");
             }
         }
         
@@ -1154,15 +1154,15 @@ void signalHandler(int sig) {
         // Default to US layout if nothing found
         if (!kb_layout) {
             kb_layout = "us";
-            NSLog(@"[DEBUG] No keyboard layout found, defaulting to US");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] No keyboard layout found, defaulting to US");
         }
         
-        NSLog(@"[DEBUG] Final keyboard layout: %s", kb_layout ? kb_layout : "none");
-        if (kb_variant) NSLog(@"[DEBUG] Final keyboard variant: %s", kb_variant);
-        if (kb_options) NSLog(@"[DEBUG] Final keyboard options: %s", kb_options);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Final keyboard layout: %s", kb_layout ? kb_layout : "none");
+        if (kb_variant) NSDebugLLog(@"gwcomp", @"[DEBUG] Final keyboard variant: %s", kb_variant);
+        if (kb_options) NSDebugLLog(@"gwcomp", @"[DEBUG] Final keyboard options: %s", kb_options);
         
         // Clear existing keyboard options first
-        NSLog(@"[DEBUG] Clearing existing keyboard options");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Clearing existing keyboard options");
         system("/usr/local/bin/setxkbmap -option '' 2>/dev/null || true");
         
         // Build setxkbmap command
@@ -1185,74 +1185,74 @@ void signalHandler(int sig) {
         
         strcat(xkb_cmd, " 2>/dev/null");
         
-        NSLog(@"[DEBUG] Executing keyboard setup command: %s", xkb_cmd);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Executing keyboard setup command: %s", xkb_cmd);
         int kb_result = system(xkb_cmd);
-        NSLog(@"[DEBUG] Keyboard setup command result: %d", kb_result);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Keyboard setup command result: %d", kb_result);
         
         // Verify the keyboard layout was set correctly
-        NSLog(@"[DEBUG] Verifying keyboard layout after setup");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Verifying keyboard layout after setup");
         system("/usr/local/bin/setxkbmap -query | head -10");
         
         // Also try to force refresh X11 keyboard state
-        NSLog(@"[DEBUG] Refreshing X11 keyboard state");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Refreshing X11 keyboard state");
         system("/usr/local/bin/xkbcomp $DISPLAY - 2>/dev/null < /dev/null || true");
         
-        NSLog(@"[DEBUG] Keyboard layout setup complete");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Keyboard layout setup complete");
         
         // Change to user's home directory
         if (chdir(pwd->pw_dir) != 0) {
-            NSLog(@"[DEBUG] chdir failed in child process");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] chdir failed in child process");
             exit(1);
         }
         
-        NSLog(@"[DEBUG] Changed to home dir in child: %s", pwd->pw_dir);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Changed to home dir in child: %s", pwd->pw_dir);
         
         // Execute the selected session directly
         NSString *sessionToExecute = selectedSessionExec;
-        NSLog(@"[DEBUG] Initial session to execute: '%@'", sessionToExecute ? sessionToExecute : @"(nil)");
-        NSLog(@"[DEBUG] Available sessions: %@", availableSessions);
-        NSLog(@"[DEBUG] Available session execs: %@", availableSessionExecs);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Initial session to execute: '%@'", sessionToExecute ? sessionToExecute : @"(nil)");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Available sessions: %@", availableSessions);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Available session execs: %@", availableSessionExecs);
         
         if (!sessionToExecute || [sessionToExecute length] == 0) {
-            NSLog(@"[DEBUG] No session selected, using default: GWorkspace");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] No session selected, using default: GWorkspace");
             sessionToExecute = @"/System/Applications/GWorkspace.app/GWorkspace";
         }
         
-        NSLog(@"[DEBUG] Final session to execute: '%@'", sessionToExecute);
-        NSLog(@"[DEBUG] User shell: %s", pwd->pw_shell);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Final session to execute: '%@'", sessionToExecute);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] User shell: %s", pwd->pw_shell);
         
         // Check if the executable exists
         NSArray *sessionComponents = [sessionToExecute componentsSeparatedByString:@" "];
         NSString *mainExecutable = [sessionComponents firstObject];
-        NSLog(@"[DEBUG] Main executable from session command: '%@'", mainExecutable);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Main executable from session command: '%@'", mainExecutable);
         
         if ([mainExecutable hasPrefix:@"/"]) {
             // Absolute path - check if it exists
-            NSLog(@"[DEBUG] Checking if session executable exists: %@", mainExecutable);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Checking if session executable exists: %@", mainExecutable);
             if ([[NSFileManager defaultManager] fileExistsAtPath:mainExecutable]) {
-                NSLog(@"[DEBUG] Session executable exists: %@", mainExecutable);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Session executable exists: %@", mainExecutable);
             } else {
-                NSLog(@"[DEBUG] Session executable not found: %@", mainExecutable);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Session executable not found: %@", mainExecutable);
                 // Try fallback
                 sessionToExecute = @"/System/Applications/GWorkspace.app/GWorkspace";
-                NSLog(@"[DEBUG] Using fallback session: %@", sessionToExecute);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Using fallback session: %@", sessionToExecute);
             }
         } else {
-            NSLog(@"[DEBUG] Session executable is not absolute path: %@", mainExecutable);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Session executable is not absolute path: %@", mainExecutable);
             // It will be resolved by the shell through PATH
         }
         
         // Execute the session through the user's shell
-        NSLog(@"[DEBUG] About to execl with shell: %s, command: %s", pwd->pw_shell, [sessionToExecute UTF8String]);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] About to execl with shell: %s, command: %s", pwd->pw_shell, [sessionToExecute UTF8String]);
         execl(pwd->pw_shell, pwd->pw_shell, "-c", [sessionToExecute UTF8String], NULL);
         
         // If execl fails, log and exit
-        NSLog(@"[DEBUG] execl failed for session: %@", sessionToExecute);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] execl failed for session: %@", sessionToExecute);
         perror("execl failed");
         exit(1);
     } else if (pid > 0) {
         // Parent process - save session info and monitor it
-        NSLog(@"[DEBUG] Parent process, session PID: %d", pid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Parent process, session PID: %d", pid);
         
         printf("Session started for user %s (PID: %d)\n", user_cstr, pid);
         
@@ -1265,12 +1265,12 @@ void signalHandler(int sig) {
         // Hide the login window
         [loginWindow orderOut:nil];
         
-        NSLog(@"[DEBUG] LoginWindow hidden, monitoring session PID %d", pid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] LoginWindow hidden, monitoring session PID %d", pid);
         
         // Start monitoring the session in the background
         [self performSelector:@selector(monitorSession) withObject:nil afterDelay:1.0];
     } else {
-        NSLog(@"[DEBUG] Fork failed");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Fork failed");
         NSString *errorMsg = [NSString stringWithFormat:@"Failed to fork process for session\n\nError: %s", 
                              strerror(errno)];
         NSAlert *alert = [NSAlert alertWithMessageText:@"Session Start Error"
@@ -1286,21 +1286,21 @@ void signalHandler(int sig) {
 
 - (BOOL)validateLoginWindowPreferencesFile
 {
-    NSLog(@"[DEBUG] Validating LoginWindow.plist file security");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Validating LoginWindow.plist file security");
     
     NSString *plistPath = [self getLoginWindowPreferencesPath];
     
     // Security check: Verify file ownership and permissions before reading
     struct stat fileStat;
     if (stat([plistPath UTF8String], &fileStat) != 0) {
-        NSLog(@"[DEBUG] LoginWindow.plist file does not exist: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[DEBUG] LoginWindow.plist file does not exist: %s", strerror(errno));
         // It's OK if the file doesn't exist - just skip auto-login
         return NO;
     }
     
     // Check if file is owned by root (uid 0)
     if (fileStat.st_uid != 0) {
-        NSLog(@"[DEBUG] Warning: LoginWindow.plist is not owned by root (owner uid: %d)", fileStat.st_uid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Warning: LoginWindow.plist is not owned by root (owner uid: %d)", fileStat.st_uid);
         NSAlert *alert = [NSAlert alertWithMessageText:@"Autologin File Permission Error"
                                          defaultButton:@"OK"
                                        alternateButton:nil
@@ -1313,7 +1313,7 @@ void signalHandler(int sig) {
     // Check if file has permissions 644 (rw-r--r--)
     mode_t expectedMode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH; // 0644
     if ((fileStat.st_mode & 0777) != expectedMode) {
-        NSLog(@"[DEBUG] Warning: LoginWindow.plist has incorrect permissions (expected 0644, got 0%o)", 
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Warning: LoginWindow.plist has incorrect permissions (expected 0644, got 0%o)", 
               fileStat.st_mode & 0777);
         NSAlert *alert = [NSAlert alertWithMessageText:@"Autologin File Permission Error"
                                          defaultButton:@"OK"
@@ -1324,13 +1324,13 @@ void signalHandler(int sig) {
         return NO;
     }
     
-    NSLog(@"[DEBUG] LoginWindow.plist file security check passed (owned by root with 0644 permissions)");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] LoginWindow.plist file security check passed (owned by root with 0644 permissions)");
     return YES;
 }
 
 - (void)checkAutoLogin
 {
-    NSLog(@"[DEBUG] Checking for auto-login user");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Checking for auto-login user");
     
     // File has already been validated in applicationDidFinishLaunching
     // Read the autoLoginUser from system-wide LoginWindow.plist like other settings
@@ -1339,18 +1339,18 @@ void signalHandler(int sig) {
     NSDictionary *plistData = [NSDictionary dictionaryWithContentsOfFile:plistPath];
     NSString *autoLoginUser = [plistData objectForKey:@"autoLoginUser"];
     
-    NSLog(@"[DEBUG] Auto-login setting from LoginWindow.plist (%@): %@",
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Auto-login setting from LoginWindow.plist (%@): %@",
           plistPath, autoLoginUser ? autoLoginUser : @"(none)");
     
     if (autoLoginUser && [autoLoginUser length] > 0) {
-        NSLog(@"[DEBUG] Auto-login user found: %@", autoLoginUser);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Auto-login user found: %@", autoLoginUser);
         
         // Verify that the user exists
         const char *user_cstr = [autoLoginUser UTF8String];
         struct passwd *pwd = getpwnam(user_cstr);
         
         if (pwd) {
-            NSLog(@"[DEBUG] Auto-login user verified, starting session automatically");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Auto-login user verified, starting session automatically");
             
             // Hide the login window immediately since we're auto-logging in
             [loginWindow orderOut:self];
@@ -1362,33 +1362,33 @@ void signalHandler(int sig) {
             // Note: This bypasses password authentication for auto-login
             [self startAutoLoginSession:autoLoginUser];
         } else {
-            NSLog(@"[DEBUG] Auto-login user '%@' not found in system, showing login window", autoLoginUser);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Auto-login user '%@' not found in system, showing login window", autoLoginUser);
         }
     } else {
-        NSLog(@"[DEBUG] No auto-login user configured, showing login window");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] No auto-login user configured, showing login window");
     }
 }
 
 - (void)startAutoLoginSession:(NSString *)username
 {
-    NSLog(@"[DEBUG] Starting auto-login session for user: %@", username);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Starting auto-login session for user: %@", username);
     const char *user_cstr = [username UTF8String];
     struct passwd *pwd = getpwnam(user_cstr);
     
     if (!pwd) {
-        NSLog(@"[DEBUG] Auto-login user not found: %@", username);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Auto-login user not found: %@", username);
         [self showStatus:@"Auto-login user not found"];
         [loginWindow makeKeyAndOrderFront:self];
         return;
     }
     
-    NSLog(@"[DEBUG] Auto-login user found - UID: %d, GID: %d, Home: %s, Shell: %s", 
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Auto-login user found - UID: %d, GID: %d, Home: %s, Shell: %s", 
           pwd->pw_uid, pwd->pw_gid, pwd->pw_dir, pwd->pw_shell);
     
     // For auto-login, we still need to open a PAM session but skip authentication
     // We'll use a simplified PAM session opening
     if (![pamAuth openSessionForUser:username]) {
-        NSLog(@"[DEBUG] Failed to open PAM session for auto-login user");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to open PAM session for auto-login user");
         NSString *errorMsg = [pamAuth getLastError];
         NSAlert *alert = [NSAlert alertWithMessageText:@"Auto-Login PAM Error"
                                          defaultButton:@"OK"
@@ -1402,20 +1402,20 @@ void signalHandler(int sig) {
         return;
     }
     
-    NSLog(@"[DEBUG] PAM session opened successfully for auto-login");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] PAM session opened successfully for auto-login");
     
     // Get PAM environment
     char **pam_envlist = [pamAuth getEnvironmentList];
-    NSLog(@"[DEBUG] PAM environment list obtained: %p", pam_envlist);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] PAM environment list obtained: %p", pam_envlist);
     
     // Log current selected session
-    NSLog(@"[DEBUG] Currently selected session executable: %@", selectedSessionExec);
-    NSLog(@"[DEBUG] Available sessions: %@", availableSessions);
-    NSLog(@"[DEBUG] Available session execs: %@", availableSessionExecs);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Currently selected session executable: %@", selectedSessionExec);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Available sessions: %@", availableSessions);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Available session execs: %@", availableSessionExecs);
     
     // Change to user's home directory
     if (chdir(pwd->pw_dir) != 0) {
-        NSLog(@"[DEBUG] Cannot change to home directory: %s", pwd->pw_dir);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Cannot change to home directory: %s", pwd->pw_dir);
         NSString *errorMsg = [NSString stringWithFormat:@"Cannot change to home directory: %s\n\nError: %s", 
                              pwd->pw_dir, strerror(errno)];
         NSAlert *alert = [NSAlert alertWithMessageText:@"Auto-Login Home Directory Error"
@@ -1430,15 +1430,15 @@ void signalHandler(int sig) {
         return;
     }
     
-    NSLog(@"[DEBUG] Changed to user home directory: %s", pwd->pw_dir);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Changed to user home directory: %s", pwd->pw_dir);
     
     // Verify that X11 unix socket is available for the user
-    NSLog(@"[DEBUG] Verifying X11 unix socket accessibility for auto-login");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Verifying X11 unix socket accessibility for auto-login");
     const char *x_socket_path_autologin = "/tmp/.X11-unix/X0";
     
     // Check if socket exists
     if (access(x_socket_path_autologin, F_OK) != 0) {
-        NSLog(@"[ERROR] X11 unix socket does not exist at %s: %s", x_socket_path_autologin, strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[ERROR] X11 unix socket does not exist at %s: %s", x_socket_path_autologin, strerror(errno));
         NSAlert *alert = [NSAlert alertWithMessageText:@"Auto-Login X Server Socket Not Found"
                                          defaultButton:@"OK"
                                        alternateButton:nil
@@ -1450,19 +1450,19 @@ void signalHandler(int sig) {
         [loginWindow makeKeyAndOrderFront:self];
         return;
     }
-    NSLog(@"[DEBUG] X11 unix socket exists at %s", x_socket_path_autologin);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] X11 unix socket exists at %s", x_socket_path_autologin);
     
     // Check if user has access to the socket
     struct stat socket_stat_autologin;
     if (stat(x_socket_path_autologin, &socket_stat_autologin) == 0) {
-        NSLog(@"[DEBUG] Socket permissions: mode=0%o, owner=%d:%d", 
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Socket permissions: mode=0%o, owner=%d:%d", 
               socket_stat_autologin.st_mode & 0777, socket_stat_autologin.st_uid, socket_stat_autologin.st_gid);
         
         // Check if socket is world-writable or user has explicit access
         if (!(socket_stat_autologin.st_mode & S_IWOTH)) {
             // Not world-writable, check if user is owner or in group
             if (socket_stat_autologin.st_uid != pwd->pw_uid && socket_stat_autologin.st_gid != pwd->pw_gid) {
-                NSLog(@"[WARNING] Auto-login user %d may not have access to X socket (owner: %d, group: %d)",
+                NSDebugLLog(@"gwcomp", @"[WARNING] Auto-login user %d may not have access to X socket (owner: %d, group: %d)",
                       pwd->pw_uid, socket_stat_autologin.st_uid, socket_stat_autologin.st_gid);
                 NSAlert *alert = [NSAlert alertWithMessageText:@"Auto-Login X Server Access Warning"
                                                  defaultButton:@"OK"
@@ -1477,93 +1477,93 @@ void signalHandler(int sig) {
             }
         }
     } else {
-        NSLog(@"[WARNING] Could not stat X socket for auto-login: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[WARNING] Could not stat X socket for auto-login: %s", strerror(errno));
     }
     
-    NSLog(@"[DEBUG] X11 socket verification passed for auto-login");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] X11 socket verification passed for auto-login");
     
     // Start the user's session (reuse the existing session starting code)
-    NSLog(@"[DEBUG] About to fork for auto-login session");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] About to fork for auto-login session");
     pid_t pid = fork();
     if (pid == 0) {
         // Child process - create new session to avoid X11 threading issues
-        NSLog(@"[DEBUG] Child process started for auto-login");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Child process started for auto-login");
         
         // Create a new session and process group - this is critical for proper cleanup
         pid_t sessionId = setsid();
         if (sessionId == -1) {
-            NSLog(@"[DEBUG] setsid() failed: %s", strerror(errno));
+            NSDebugLLog(@"gwcomp", @"[DEBUG] setsid() failed: %s", strerror(errno));
             exit(1);
         }
-        NSLog(@"[DEBUG] Created new session with SID: %d", sessionId);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Created new session with SID: %d", sessionId);
         
         // Close all file descriptors except stdin, stdout, stderr
         int maxfd = sysconf(_SC_OPEN_MAX);
-        NSLog(@"[DEBUG] Closing file descriptors up to: %d", maxfd);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Closing file descriptors up to: %d", maxfd);
         for (int fd = 3; fd < maxfd; fd++) {
             close(fd);
         }
         
-        NSLog(@"[DEBUG] About to set user context for auto-login user: %s (uid=%d, gid=%d)", pwd->pw_name, pwd->pw_uid, pwd->pw_gid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] About to set user context for auto-login user: %s (uid=%d, gid=%d)", pwd->pw_name, pwd->pw_uid, pwd->pw_gid);
         
         // Use manual setup for better error reporting
-        NSLog(@"[DEBUG] Starting manual user setup for auto-login");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Starting manual user setup for auto-login");
         
         // Set supplementary groups first
-        NSLog(@"[DEBUG] Calling initgroups for user: %s, gid: %d", pwd->pw_name, pwd->pw_gid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Calling initgroups for user: %s, gid: %d", pwd->pw_name, pwd->pw_gid);
         if (initgroups(pwd->pw_name, pwd->pw_gid) != 0) {
             int err = errno;
             perror("initgroups failed");
-            NSLog(@"[DEBUG] initgroups failed for user: %s, gid: %d (errno: %d - %s)", pwd->pw_name, pwd->pw_gid, err, strerror(err));
+            NSDebugLLog(@"gwcomp", @"[DEBUG] initgroups failed for user: %s, gid: %d (errno: %d - %s)", pwd->pw_name, pwd->pw_gid, err, strerror(err));
             exit(1);
         }
-        NSLog(@"[DEBUG] initgroups succeeded for user: %s", pwd->pw_name);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] initgroups succeeded for user: %s", pwd->pw_name);
         
         // Set group ID
-        NSLog(@"[DEBUG] Calling setgid for gid: %d", pwd->pw_gid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Calling setgid for gid: %d", pwd->pw_gid);
         if (setgid(pwd->pw_gid) != 0) {
             int err = errno;
             perror("setgid failed");
-            NSLog(@"[DEBUG] setgid failed for gid: %d (errno: %d - %s)", pwd->pw_gid, err, strerror(err));
+            NSDebugLLog(@"gwcomp", @"[DEBUG] setgid failed for gid: %d (errno: %d - %s)", pwd->pw_gid, err, strerror(err));
             exit(1);
         }
-        NSLog(@"[DEBUG] setgid succeeded for gid: %d", pwd->pw_gid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] setgid succeeded for gid: %d", pwd->pw_gid);
         
         // Set user ID (this must be last)
-        NSLog(@"[DEBUG] Calling setuid for uid: %d", pwd->pw_uid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Calling setuid for uid: %d", pwd->pw_uid);
         if (setuid(pwd->pw_uid) != 0) {
             int err = errno;
             perror("setuid failed");
-            NSLog(@"[DEBUG] setuid failed for uid: %d (errno: %d - %s)", pwd->pw_uid, err, strerror(err));
+            NSDebugLLog(@"gwcomp", @"[DEBUG] setuid failed for uid: %d (errno: %d - %s)", pwd->pw_uid, err, strerror(err));
             exit(1);
         }
-        NSLog(@"[DEBUG] setuid succeeded for uid: %d", pwd->pw_uid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] setuid succeeded for uid: %d", pwd->pw_uid);
         
         // Verify the change worked
         uid_t real_uid = getuid();
         uid_t eff_uid = geteuid();
         gid_t real_gid = getgid();
         gid_t eff_gid = getegid();
-        NSLog(@"[DEBUG] After auto-login user setup - real_uid: %d, eff_uid: %d, real_gid: %d, eff_gid: %d", 
+        NSDebugLLog(@"gwcomp", @"[DEBUG] After auto-login user setup - real_uid: %d, eff_uid: %d, real_gid: %d, eff_gid: %d", 
               real_uid, eff_uid, real_gid, eff_gid);
         
         if (real_uid != pwd->pw_uid || eff_uid != pwd->pw_uid) {
-            NSLog(@"[DEBUG] UID verification failed - expected: %d, got real: %d, eff: %d", pwd->pw_uid, real_uid, eff_uid);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] UID verification failed - expected: %d, got real: %d, eff: %d", pwd->pw_uid, real_uid, eff_uid);
             exit(1);
         }
         
         if (real_gid != pwd->pw_gid || eff_gid != pwd->pw_gid) {
-            NSLog(@"[DEBUG] GID verification failed - expected: %d, got real: %d, eff: %d", pwd->pw_gid, real_gid, eff_gid);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] GID verification failed - expected: %d, got real: %d, eff: %d", pwd->pw_gid, real_gid, eff_gid);
             exit(1);
         }
         
-        NSLog(@"[DEBUG] Manual auto-login user setup completed successfully");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Manual auto-login user setup completed successfully");
         
-        NSLog(@"[DEBUG] Auto-login user context setup complete");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Auto-login user context setup complete");
         
         // Note: X11 unix socket was verified before fork
         // Clients will connect via /tmp/.X11-unix/X0
-        NSLog(@"[DEBUG] Auto-login user will connect to X server via unix socket");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Auto-login user will connect to X server via unix socket");
         
         // Clear signal handlers and reset signal mask
         signal(SIGTERM, SIG_DFL);
@@ -1571,7 +1571,7 @@ void signalHandler(int sig) {
         signal(SIGHUP, SIG_DFL);
         signal(SIGCHLD, SIG_DFL);
         
-        NSLog(@"[DEBUG] Signal handlers reset for auto-login");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Signal handlers reset for auto-login");
         
         // Set up environment for the session (reuse existing environment setup code)
         clearenv();
@@ -1584,65 +1584,65 @@ void signalHandler(int sig) {
         setenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin:/usr/games:/usr/local/sbin:/usr/local/bin", 1);
         setenv("GNUSTEP_USER_ROOT", [[NSString stringWithFormat:@"%s/GNUstep", pwd->pw_dir] UTF8String], 1);
         
-        NSLog(@"[DEBUG] Basic environment set for auto-login");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Basic environment set for auto-login");
         
 #if defined(__linux__)
         // Linux: No login_cap, skip BSD-specific login class logic for auto-login
-        NSLog(@"[DEBUG] Skipping BSD login_cap logic for auto-login on Linux");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Skipping BSD login_cap logic for auto-login on Linux");
 #else
         // Set login class environment variables
         login_cap_t *lc = login_getpwclass(pwd);
         if (lc != NULL) {
-            NSLog(@"[DEBUG] Setting login class environment variables for auto-login");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Setting login class environment variables for auto-login");
             
             // Set language/locale environment
             const char *lang = login_getcapstr(lc, "lang", NULL, NULL);
             if (lang != NULL) {
                 setenv("LANG", lang, 1);
-                NSLog(@"[DEBUG] Set LANG=%s", lang);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Set LANG=%s", lang);
             }
             
             // Set character set
             const char *charset = login_getcapstr(lc, "charset", NULL, NULL);
             if (charset != NULL) {
                 setenv("MM_CHARSET", charset, 1);
-                NSLog(@"[DEBUG] Set MM_CHARSET=%s", charset);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Set MM_CHARSET=%s", charset);
             }
             
             // Set timezone
             const char *timezone = login_getcapstr(lc, "timezone", NULL, NULL);
             if (timezone != NULL) {
                 setenv("TZ", timezone, 1);
-                NSLog(@"[DEBUG] Set TZ=%s", timezone);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Set TZ=%s", timezone);
             }
             
             // Set manual path
             const char *manpath = login_getcapstr(lc, "manpath", NULL, NULL);
             if (manpath != NULL) {
                 setenv("MANPATH", manpath, 1);
-                NSLog(@"[DEBUG] Set MANPATH=%s", manpath);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Set MANPATH=%s", manpath);
             }
             
             login_close(lc);
-            NSLog(@"[DEBUG] Login class environment variables set for auto-login");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Login class environment variables set for auto-login");
         } else {
-            NSLog(@"[DEBUG] No login class found for auto-login user");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] No login class found for auto-login user");
         }
 #endif
         
         // Set PAM environment variables
         if (pam_envlist) {
-            NSLog(@"[DEBUG] Setting PAM environment variables for auto-login");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Setting PAM environment variables for auto-login");
             for (int i = 0; pam_envlist[i]; i++) {
-                NSLog(@"[DEBUG] PAM env[%d]: %s", i, pam_envlist[i]);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] PAM env[%d]: %s", i, pam_envlist[i]);
                 putenv(pam_envlist[i]);
             }
         } else {
-            NSLog(@"[DEBUG] No PAM environment variables to set for auto-login");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] No PAM environment variables to set for auto-login");
         }
         
         // Set up keyboard layout before starting session (reuse existing keyboard setup)
-        NSLog(@"[DEBUG] Setting up keyboard layout for auto-login");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Setting up keyboard layout for auto-login");
         
         // First, try to read keyboard layout from login.conf or environment
         const char *kb_layout = NULL;
@@ -1651,7 +1651,7 @@ void signalHandler(int sig) {
         
 #if defined(__linux__)
         // Linux: Skip login_cap, use environment variables only
-        NSLog(@"[DEBUG] Skipping BSD login_cap keyboard config for auto-login on Linux");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Skipping BSD login_cap keyboard config for auto-login on Linux");
 #else
         // Get login capabilities for this user in child process
         login_cap_t *child_lc = login_getpwclass(pwd);
@@ -1659,7 +1659,7 @@ void signalHandler(int sig) {
             kb_layout = login_getcapstr(child_lc, "keyboard.layout", NULL, NULL);
             kb_variant = login_getcapstr(child_lc, "keyboard.variant", NULL, NULL);
             kb_options = login_getcapstr(child_lc, "keyboard.options", NULL, NULL);
-            NSLog(@"[DEBUG] Checked login.conf for keyboard settings");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Checked login.conf for keyboard settings");
         }
 #endif
         
@@ -1676,7 +1676,7 @@ void signalHandler(int sig) {
         
         // Check various system configuration files for keyboard layout
         if (!kb_layout) {
-            NSLog(@"[DEBUG] No keyboard layout from login.conf or environment, checking /etc/rc.conf");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] No keyboard layout from login.conf or environment, checking /etc/rc.conf");
             // Check /etc/rc.conf for keyboard layout
             FILE *rc_conf = fopen("/etc/rc.conf", "r");
             if (rc_conf) {
@@ -1692,7 +1692,7 @@ void signalHandler(int sig) {
                             char *end_quote = strchr(keymap, '"');
                             if (end_quote) *end_quote = '\0';
                         }
-                        NSLog(@"[DEBUG] Found raw keymap in /etc/rc.conf: %s", keymap);
+                        NSDebugLLog(@"gwcomp", @"[DEBUG] Found raw keymap in /etc/rc.conf: %s", keymap);
                         // Convert console keymap to X11 layout (simplified mapping)
                         if (strstr(keymap, "us")) kb_layout = "us";
                         else if (strstr(keymap, "de")) kb_layout = "de";
@@ -1708,16 +1708,16 @@ void signalHandler(int sig) {
                         }
                         else {
                             kb_layout = "us"; // fallback
-                            NSLog(@"[DEBUG] Unknown keymap '%s', using fallback 'us'", keymap);
+                            NSDebugLLog(@"gwcomp", @"[DEBUG] Unknown keymap '%s', using fallback 'us'", keymap);
                         }
-                        NSLog(@"[DEBUG] Converted console keymap '%s' to X11 layout '%s'", keymap, kb_layout);
-                        if (kb_variant) NSLog(@"[DEBUG] Set variant to '%s'", kb_variant);
+                        NSDebugLLog(@"gwcomp", @"[DEBUG] Converted console keymap '%s' to X11 layout '%s'", keymap, kb_layout);
+                        if (kb_variant) NSDebugLLog(@"gwcomp", @"[DEBUG] Set variant to '%s'", kb_variant);
                         break;
                     }
                 }
                 fclose(rc_conf);
             } else {
-                NSLog(@"[DEBUG] Could not open /etc/rc.conf");
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Could not open /etc/rc.conf");
             }
         }
         
@@ -1731,15 +1731,15 @@ void signalHandler(int sig) {
         // Default to US layout if nothing found
         if (!kb_layout) {
             kb_layout = "us";
-            NSLog(@"[DEBUG] No keyboard layout found, defaulting to US");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] No keyboard layout found, defaulting to US");
         }
         
-        NSLog(@"[DEBUG] Final keyboard layout for auto-login: %s", kb_layout ? kb_layout : "none");
-        if (kb_variant) NSLog(@"[DEBUG] Final keyboard variant for auto-login: %s", kb_variant);
-        if (kb_options) NSLog(@"[DEBUG] Final keyboard options for auto-login: %s", kb_options);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Final keyboard layout for auto-login: %s", kb_layout ? kb_layout : "none");
+        if (kb_variant) NSDebugLLog(@"gwcomp", @"[DEBUG] Final keyboard variant for auto-login: %s", kb_variant);
+        if (kb_options) NSDebugLLog(@"gwcomp", @"[DEBUG] Final keyboard options for auto-login: %s", kb_options);
         
         // Clear existing keyboard options first
-        NSLog(@"[DEBUG] Clearing existing keyboard options for auto-login");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Clearing existing keyboard options for auto-login");
         system("/usr/local/bin/setxkbmap -option '' 2>/dev/null || true");
         
         // Build setxkbmap command
@@ -1762,74 +1762,74 @@ void signalHandler(int sig) {
         
         strcat(xkb_cmd, " 2>/dev/null");
         
-        NSLog(@"[DEBUG] Executing keyboard setup command for auto-login: %s", xkb_cmd);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Executing keyboard setup command for auto-login: %s", xkb_cmd);
         int kb_result = system(xkb_cmd);
-        NSLog(@"[DEBUG] Keyboard setup command result for auto-login: %d", kb_result);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Keyboard setup command result for auto-login: %d", kb_result);
         
         // Verify the keyboard layout was set correctly
-        NSLog(@"[DEBUG] Verifying keyboard layout after auto-login setup");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Verifying keyboard layout after auto-login setup");
         system("/usr/local/bin/setxkbmap -query | head -10");
         
         // Also try to force refresh X11 keyboard state
-        NSLog(@"[DEBUG] Refreshing X11 keyboard state for auto-login");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Refreshing X11 keyboard state for auto-login");
         system("/usr/local/bin/xkbcomp $DISPLAY - 2>/dev/null < /dev/null || true");
         
-        NSLog(@"[DEBUG] Keyboard layout setup complete for auto-login");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Keyboard layout setup complete for auto-login");
         
         // Change to user's home directory
         if (chdir(pwd->pw_dir) != 0) {
-            NSLog(@"[DEBUG] chdir failed in child process for auto-login");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] chdir failed in child process for auto-login");
             exit(1);
         }
         
-        NSLog(@"[DEBUG] Changed to home dir in child for auto-login: %s", pwd->pw_dir);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Changed to home dir in child for auto-login: %s", pwd->pw_dir);
         
         // Execute the selected session directly
         NSString *sessionToExecute = selectedSessionExec;
-        NSLog(@"[DEBUG] Initial session to execute for auto-login: '%@'", sessionToExecute ? sessionToExecute : @"(nil)");
-        NSLog(@"[DEBUG] Available sessions for auto-login: %@", availableSessions);
-        NSLog(@"[DEBUG] Available session execs for auto-login: %@", availableSessionExecs);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Initial session to execute for auto-login: '%@'", sessionToExecute ? sessionToExecute : @"(nil)");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Available sessions for auto-login: %@", availableSessions);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Available session execs for auto-login: %@", availableSessionExecs);
         
         if (!sessionToExecute || [sessionToExecute length] == 0) {
-            NSLog(@"[DEBUG] No session selected for auto-login, using default: GWorkspace");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] No session selected for auto-login, using default: GWorkspace");
             sessionToExecute = @"/System/Applications/GWorkspace.app/GWorkspace";
         }
         
-        NSLog(@"[DEBUG] Final session to execute for auto-login: '%@'", sessionToExecute);
-        NSLog(@"[DEBUG] User shell for auto-login: %s", pwd->pw_shell);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Final session to execute for auto-login: '%@'", sessionToExecute);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] User shell for auto-login: %s", pwd->pw_shell);
         
         // Check if the executable exists
         NSArray *sessionComponents = [sessionToExecute componentsSeparatedByString:@" "];
         NSString *mainExecutable = [sessionComponents firstObject];
-        NSLog(@"[DEBUG] Main executable from session command for auto-login: '%@'", mainExecutable);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Main executable from session command for auto-login: '%@'", mainExecutable);
         
         if ([mainExecutable hasPrefix:@"/"]) {
             // Absolute path - check if it exists
-            NSLog(@"[DEBUG] Checking if session executable exists for auto-login: %@", mainExecutable);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Checking if session executable exists for auto-login: %@", mainExecutable);
             if ([[NSFileManager defaultManager] fileExistsAtPath:mainExecutable]) {
-                NSLog(@"[DEBUG] Session executable exists for auto-login: %@", mainExecutable);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Session executable exists for auto-login: %@", mainExecutable);
             } else {
-                NSLog(@"[DEBUG] Session executable not found for auto-login: %@", mainExecutable);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Session executable not found for auto-login: %@", mainExecutable);
                 // Try fallback
                 sessionToExecute = @"/System/Applications/GWorkspace.app/GWorkspace";
-                NSLog(@"[DEBUG] Using fallback session for auto-login: %@", sessionToExecute);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Using fallback session for auto-login: %@", sessionToExecute);
             }
         } else {
-            NSLog(@"[DEBUG] Session executable is not absolute path for auto-login: %@", mainExecutable);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Session executable is not absolute path for auto-login: %@", mainExecutable);
             // It will be resolved by the shell through PATH
         }
         
         // Execute the session through the user's shell
-        NSLog(@"[DEBUG] About to execl with shell for auto-login: %s, command: %s", pwd->pw_shell, [sessionToExecute UTF8String]);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] About to execl with shell for auto-login: %s, command: %s", pwd->pw_shell, [sessionToExecute UTF8String]);
         execl(pwd->pw_shell, pwd->pw_shell, "-c", [sessionToExecute UTF8String], NULL);
         
         // If execl fails, log and exit
-        NSLog(@"[DEBUG] execl failed for auto-login session: %@", sessionToExecute);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] execl failed for auto-login session: %@", sessionToExecute);
         perror("execl failed");
         exit(1);
     } else if (pid > 0) {
         // Parent process - save session info and monitor it
-        NSLog(@"[DEBUG] Parent process for auto-login, session PID: %d", pid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Parent process for auto-login, session PID: %d", pid);
         
         printf("Auto-login session started for user %s (PID: %d)\n", user_cstr, pid);
         
@@ -1842,12 +1842,12 @@ void signalHandler(int sig) {
         // Hide the login window (it's already visible from startup)
         [loginWindow orderOut:nil];
         
-        NSLog(@"[DEBUG] LoginWindow hidden, monitoring auto-login session PID %d", pid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] LoginWindow hidden, monitoring auto-login session PID %d", pid);
         
         // Start monitoring the session in the background
         [self performSelector:@selector(monitorSession) withObject:nil afterDelay:1.0];
     } else {
-        NSLog(@"[DEBUG] Fork failed for auto-login");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Fork failed for auto-login");
         [self showStatus:@"Failed to start auto-login session"];
         [pamAuth closeSession];
         [loginWindow makeKeyAndOrderFront:self];
@@ -1858,7 +1858,7 @@ void signalHandler(int sig) {
 {
     // Check if the session process is still running
     if (sessionPid <= 0) {
-        NSLog(@"[DEBUG] No session to monitor");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] No session to monitor");
         return;
     }
     
@@ -1867,7 +1867,7 @@ void signalHandler(int sig) {
     
     if (result == sessionPid) {
         // Session has ended
-        NSLog(@"[DEBUG] Session PID %d has ended", sessionPid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Session PID %d has ended", sessionPid);
         
         // Check if session ended very quickly (within 5 seconds), indicating a startup error
         NSTimeInterval sessionDuration = -[sessionStartTime timeIntervalSinceNow];
@@ -1878,13 +1878,13 @@ void signalHandler(int sig) {
         
         if (WIFEXITED(status)) {
             exitCode = WEXITSTATUS(status);
-            NSLog(@"[DEBUG] Session exited normally with status: %d", exitCode);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Session exited normally with status: %d", exitCode);
             if (exitCode != 0) {
                 exitReason = [NSString stringWithFormat:@"Session exited with error code: %d", exitCode];
             }
         } else if (WIFSIGNALED(status)) {
             int signal = WTERMSIG(status);
-            NSLog(@"[DEBUG] Session terminated by signal: %d", signal);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Session terminated by signal: %d", signal);
             exitReason = [NSString stringWithFormat:@"Session terminated by signal: %d (%s)", signal, strsignal(signal)];
         }
         
@@ -1908,13 +1908,13 @@ void signalHandler(int sig) {
         }
         
         // Clean up any remaining session processes
-        NSLog(@"[DEBUG] Cleaning up remaining session processes for UID: %d", sessionUid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Cleaning up remaining session processes for UID: %d", sessionUid);
         [self killAllSessionProcesses:sessionUid];
         
         // Close PAM session
         if (pamAuth) {
             [pamAuth closeSession];
-            NSLog(@"[DEBUG] PAM session closed after session ended");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] PAM session closed after session ended");
         }
         
         // Reset session tracking
@@ -1925,7 +1925,7 @@ void signalHandler(int sig) {
         sessionStartTime = nil;
         
         // Show the login window again
-        NSLog(@"[DEBUG] Session ended, showing login window again");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Session ended, showing login window again");
         [self resetLoginWindow];
         [loginWindow makeKeyAndOrderFront:self];
         [NSApp activateIgnoringOtherApps:YES];
@@ -1937,7 +1937,7 @@ void signalHandler(int sig) {
         // Error occurred
         if (errno == ECHILD) {
             // No child process - session already reaped
-            NSLog(@"[DEBUG] Session PID %d already reaped", sessionPid);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Session PID %d already reaped", sessionPid);
             sessionPid = 0;
             sessionUid = 0;
             sessionGid = 0;
@@ -1947,7 +1947,7 @@ void signalHandler(int sig) {
             [loginWindow makeKeyAndOrderFront:self];
             [NSApp activateIgnoringOtherApps:YES];
         } else {
-            NSLog(@"[DEBUG] Error monitoring session: %s", strerror(errno));
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Error monitoring session: %s", strerror(errno));
             // Continue monitoring
             [self performSelector:@selector(monitorSession) withObject:nil afterDelay:1.0];
         }
@@ -2175,20 +2175,20 @@ static bool isDetachedDaemon(const char *comm)
 - (void)sessionChanged:(id)sender
 {
     NSInteger idx = [sessionDropdown indexOfSelectedItem];
-    NSLog(@"[DEBUG] Session changed to index: %ld", (long)idx);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Session changed to index: %ld", (long)idx);
     if (idx >= 0 && idx < [availableSessionExecs count]) {
         selectedSessionExec = [availableSessionExecs objectAtIndex:idx];
-        NSLog(@"[DEBUG] Selected session exec: %@", selectedSessionExec);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Selected session exec: %@", selectedSessionExec);
         // Save the selected session
         [self saveLastSession:selectedSessionExec];
     } else {
-        NSLog(@"[DEBUG] Invalid session index: %ld (count: %lu)", (long)idx, (unsigned long)[availableSessionExecs count]);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Invalid session index: %ld (count: %lu)", (long)idx, (unsigned long)[availableSessionExecs count]);
     }
 }
 
 - (void)resetLoginWindow
 {
-    NSLog(@"[DEBUG] Resetting login window state");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Resetting login window state");
     
     // Reset session tracking variables
     sessionPid = 0;
@@ -2202,7 +2202,7 @@ static bool isDetachedDaemon(const char *comm)
     NSString *lastUser = [self loadLastLoggedInUser];
     if (lastUser) {
         [usernameField setStringValue:lastUser];
-        NSLog(@"[DEBUG] Pre-filled username field with last logged-in user: %@", lastUser);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Pre-filled username field with last logged-in user: %@", lastUser);
         // If username is pre-filled, focus on password field
         [loginWindow makeFirstResponder:passwordField];
     } else {
@@ -2235,7 +2235,7 @@ static bool isDetachedDaemon(const char *comm)
     [loginWindow makeMainWindow];
     [NSApp activateIgnoringOtherApps:YES];
     
-    NSLog(@"[DEBUG] Login window reset complete - ready for next user");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Login window reset complete - ready for next user");
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
@@ -2255,11 +2255,11 @@ static bool isDetachedDaemon(const char *comm)
 - (void)saveLastLoggedInUser:(NSString *)username
 {
     if (!username || [username length] == 0) {
-        NSLog(@"[DEBUG] No username provided to save");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] No username provided to save");
         return;
     }
     
-    NSLog(@"[DEBUG] Saving last logged-in user: %@", username);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Saving last logged-in user: %@", username);
     
     // Save to system-wide plist since LoginWindow runs as root
     NSString *plistPath = [self getLoginWindowPreferencesPath];
@@ -2269,7 +2269,7 @@ static bool isDetachedDaemon(const char *comm)
     NSFileManager *fm = [NSFileManager defaultManager];
     NSError *error = nil;
     if (![fm createDirectoryAtPath:plistDir withIntermediateDirectories:YES attributes:nil error:&error]) {
-        NSLog(@"[DEBUG] Failed to create directory %@: %@", plistDir, error);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to create directory %@: %@", plistDir, error);
         return;
     }
     
@@ -2281,15 +2281,15 @@ static bool isDetachedDaemon(const char *comm)
     [plistData setObject:username forKey:@"lastLoggedInUser"];
     
     if ([plistData writeToFile:plistPath atomically:YES]) {
-        NSLog(@"[DEBUG] Successfully saved last logged-in user to %@", plistPath);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Successfully saved last logged-in user to %@", plistPath);
     } else {
-        NSLog(@"[DEBUG] Failed to save last logged-in user to %@", plistPath);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to save last logged-in user to %@", plistPath);
     }
 }
 
 - (NSString *)loadLastLoggedInUser
 {
-    NSLog(@"[DEBUG] Loading last logged-in user from system-wide plist");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Loading last logged-in user from system-wide plist");
     
     NSString *plistPath = [self getLoginWindowPreferencesPath];
     NSDictionary *plistData = [NSDictionary dictionaryWithContentsOfFile:plistPath];
@@ -2297,22 +2297,22 @@ static bool isDetachedDaemon(const char *comm)
     NSString *lastUser = [plistData objectForKey:@"lastLoggedInUser"];
     
     if (lastUser && [lastUser length] > 0) {
-        NSLog(@"[DEBUG] Loaded last logged-in user: %@", lastUser);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Loaded last logged-in user: %@", lastUser);
         return lastUser;
     }
     
-    NSLog(@"[DEBUG] No last logged-in user found in system-wide plist");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] No last logged-in user found in system-wide plist");
     return nil;
 }
 
 - (void)saveLastSession:(NSString *)sessionExec
 {
     if (!sessionExec || [sessionExec length] == 0) {
-        NSLog(@"[DEBUG] No session exec provided to save");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] No session exec provided to save");
         return;
     }
     
-    NSLog(@"[DEBUG] Saving last chosen session: %@", sessionExec);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Saving last chosen session: %@", sessionExec);
     
     // Save to system-wide plist since LoginWindow runs as root
     NSString *plistPath = [self getLoginWindowPreferencesPath];
@@ -2322,7 +2322,7 @@ static bool isDetachedDaemon(const char *comm)
     NSFileManager *fm = [NSFileManager defaultManager];
     NSError *error = nil;
     if (![fm createDirectoryAtPath:plistDir withIntermediateDirectories:YES attributes:nil error:&error]) {
-        NSLog(@"[DEBUG] Failed to create directory %@: %@", plistDir, error);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to create directory %@: %@", plistDir, error);
         return;
     }
     
@@ -2334,15 +2334,15 @@ static bool isDetachedDaemon(const char *comm)
     [plistData setObject:sessionExec forKey:@"lastSession"];
     
     if ([plistData writeToFile:plistPath atomically:YES]) {
-        NSLog(@"[DEBUG] Successfully saved last chosen session to %@", plistPath);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Successfully saved last chosen session to %@", plistPath);
     } else {
-        NSLog(@"[DEBUG] Failed to save last chosen session to %@", plistPath);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to save last chosen session to %@", plistPath);
     }
 }
 
 - (NSString *)loadLastSession
 {
-    NSLog(@"[DEBUG] Loading last chosen session from system-wide plist");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Loading last chosen session from system-wide plist");
     
     NSString *plistPath = [self getLoginWindowPreferencesPath];
     NSDictionary *plistData = [NSDictionary dictionaryWithContentsOfFile:plistPath];
@@ -2350,17 +2350,17 @@ static bool isDetachedDaemon(const char *comm)
     NSString *lastSession = [plistData objectForKey:@"lastSession"];
     
     if (lastSession && [lastSession length] > 0) {
-        NSLog(@"[DEBUG] Loaded last chosen session: %@", lastSession);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Loaded last chosen session: %@", lastSession);
         return lastSession;
     }
     
-    NSLog(@"[DEBUG] No last chosen session found in system-wide plist");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] No last chosen session found in system-wide plist");
     return nil;
 }
 
 - (BOOL)isXServerRunning
 {
-    NSLog(@"[DEBUG] Checking if X server is running");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Checking if X server is running");
     
     // Try to connect to display :0 to check if X server is running
     const char *display_name = ":0";
@@ -2370,26 +2370,26 @@ static bool isDetachedDaemon(const char *comm)
     Display *testDisplay = safeXOpenDisplay(display_name, 2);  // 2 second timeout
     if (testDisplay != NULL) {
         XCloseDisplay(testDisplay);
-        NSLog(@"[DEBUG] X server is running on %s", display_name);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server is running on %s", display_name);
         return YES;
     } else {
-        NSLog(@"[DEBUG] X server is not running on %s", display_name);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server is not running on %s", display_name);
         return NO;
     }
 }
 
 - (BOOL)startXServer
 {
-    NSLog(@"[DEBUG] Starting X server");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Starting X server");
     
     // Only wait for /tmp if X is not already running
     if (![self isXServerRunning]) {
         // Wait for /tmp to be writable (up to 20 seconds)
         // This is important on BSD systems where filesystems may still be mounting
-        NSLog(@"[DEBUG] X not running yet, checking if /tmp is writable...");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X not running yet, checking if /tmp is writable...");
         waitForTmpWritable(20);
     } else {
-        NSLog(@"[DEBUG] X server already running, skipping /tmp check");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server already running, skipping /tmp check");
     }
     
     // Clean up any existing X server processes first
@@ -2407,11 +2407,11 @@ static bool isDetachedDaemon(const char *comm)
     }
     
     if (!xserverPath) {
-        NSLog(@"[DEBUG] X server not found in standard locations");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server not found in standard locations");
         return NO;
     }
     
-    NSLog(@"[DEBUG] Found X server at: %@", xserverPath);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Found X server at: %@", xserverPath);
     
     // Create X authority file using libXau (no external xauth command needed)
     NSString *authFile = @"/var/run/loginwindow.auth";
@@ -2423,7 +2423,7 @@ static bool isDetachedDaemon(const char *comm)
     generate_xauth_cookie(g_xserver_cookie);
     g_xserver_cookie_valid = YES;
     
-    NSLog(@"[DEBUG] Generated X server cookie for unix socket use");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Generated X server cookie for unix socket use");
     
     // Note: Unix socket authentication uses file permissions, not cookies
     // The cookie is only stored for reference, not written to a file
@@ -2433,16 +2433,16 @@ static bool isDetachedDaemon(const char *comm)
     NSString *xorgLogOldPath = @"/var/log/Xorg.0.log.old";
     
     if ([[NSFileManager defaultManager] fileExistsAtPath:xorgLogPath]) {
-        NSLog(@"[DEBUG] Moving existing X server log to %@", xorgLogOldPath);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Moving existing X server log to %@", xorgLogOldPath);
         // Remove old backup if it exists
         [[NSFileManager defaultManager] removeItemAtPath:xorgLogOldPath error:nil];
         // Move current log to backup
         NSError *moveError = nil;
         if (![[NSFileManager defaultManager] moveItemAtPath:xorgLogPath toPath:xorgLogOldPath error:&moveError]) {
-            NSLog(@"[DEBUG] Failed to rotate X server log: %@", moveError.localizedDescription);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to rotate X server log: %@", moveError.localizedDescription);
             // Continue anyway - not a fatal error
         } else {
-            NSLog(@"[DEBUG] Successfully rotated X server log");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Successfully rotated X server log");
         }
     }
     
@@ -2515,14 +2515,14 @@ static bool isDetachedDaemon(const char *comm)
         exit(1);
     } else if (xserver_pid > 0) {
         // Parent process
-        NSLog(@"[DEBUG] X server started with PID: %d", xserver_pid);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server started with PID: %d", xserver_pid);
         
         // Store the PID and mark that we started it
         xServerPid = xserver_pid;
         didStartXServer = YES;
         
         // Wait for X server to start up properly with timeout
-        NSLog(@"[DEBUG] Waiting for X server to accept connections");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Waiting for X server to accept connections");
         int attempts = 0;
         int maxAttempts = 120; // 120 seconds timeout like the reference implementation
         
@@ -2533,7 +2533,7 @@ static bool isDetachedDaemon(const char *comm)
             
             if (result == xserver_pid) {
                 // X server died
-                NSLog(@"[DEBUG] X server died during startup");
+                NSDebugLLog(@"gwcomp", @"[DEBUG] X server died during startup");
                 didStartXServer = NO;
                 xServerPid =  0;
                 return NO;
@@ -2541,7 +2541,7 @@ static bool isDetachedDaemon(const char *comm)
             
             // Try to connect to X server
             if ([self isXServerRunning]) {
-                NSLog(@"[DEBUG] X server successfully started and ready");
+                NSDebugLLog(@"gwcomp", @"[DEBUG] X server successfully started and ready");
             return YES;
             }
             
@@ -2550,11 +2550,11 @@ static bool isDetachedDaemon(const char *comm)
             
             if (attempts % 10 == 0) {
                 sleep(1); // Sleep for 1 second every 10 attempts
-                NSLog(@"[DEBUG] Still waiting for X server (attempt %d/%d)", attempts, maxAttempts);
+                NSDebugLLog(@"gwcomp", @"[DEBUG] Still waiting for X server (attempt %d/%d)", attempts, maxAttempts);
             }
         }
         
-        NSLog(@"[DEBUG] X server failed to become ready within timeout");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server failed to become ready within timeout");
         // Kill the X server since it's not responding
         if (kill(xServerPid, SIGTERM) == 0) {
             sleep(2);
@@ -2564,26 +2564,26 @@ static bool isDetachedDaemon(const char *comm)
         xServerPid = 0;
         return NO;
     } else {
-        NSLog(@"[DEBUG] Failed to fork for X server: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to fork for X server: %s", strerror(errno));
         return NO;
     }
 }
 
 - (void)ensureXServerRunning
 {
-    NSLog(@"[DEBUG] Ensuring X server is running");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Ensuring X server is running");
     
     if ([self isXServerRunning]) {
-        NSLog(@"[DEBUG] X server is already running");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server is already running");
         return;
     }
     
-    NSLog(@"[DEBUG] X server is not running, attempting to start it");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] X server is not running, attempting to start it");
     
     if ([self startXServer]) {
-        NSLog(@"[DEBUG] Successfully started X server");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Successfully started X server");
     } else {
-        NSLog(@"[DEBUG] Failed to start X server - continuing anyway");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to start X server - continuing anyway");
         // We continue even if X server fails to start, as the user might want to
         // use a different display manager or start X manually
     }
@@ -2592,15 +2592,15 @@ static bool isDetachedDaemon(const char *comm)
 - (void)stopXServerIfStartedByUs
 {
     if (!didStartXServer || xServerPid <= 0) {
-        NSLog(@"[DEBUG] X server was not started by us, not stopping it");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server was not started by us, not stopping it");
         return;
     }
     
-    NSLog(@"[DEBUG] Stopping X server that we started (PID: %d)", xServerPid);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Stopping X server that we started (PID: %d)", xServerPid);
     
     // Send SIGTERM first for graceful shutdown
     if (kill(xServerPid, SIGTERM) == 0) {
-        NSLog(@"[DEBUG] Sent SIGTERM to X server, waiting for it to exit");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Sent SIGTERM to X server, waiting for it to exit");
         
         // Wait up to 5 seconds for graceful shutdown
         int attempts = 0;
@@ -2609,13 +2609,13 @@ static bool isDetachedDaemon(const char *comm)
             pid_t result = waitpid(xServerPid, &status, WNOHANG);
             
             if (result == xServerPid) {
-                NSLog(@"[DEBUG] X server exited gracefully");
+                NSDebugLLog(@"gwcomp", @"[DEBUG] X server exited gracefully");
                 didStartXServer = NO;
                 xServerPid = 0;
                 return;
             } else if (result == -1) {
                 // Process doesn't exist anymore
-                NSLog(@"[DEBUG] X server process no longer exists");
+                NSDebugLLog(@"gwcomp", @"[DEBUG] X server process no longer exists");
                 didStartXServer = NO;
                 xServerPid = 0;
                 return;
@@ -2626,15 +2626,15 @@ static bool isDetachedDaemon(const char *comm)
         }
         
         // If still running, send SIGKILL
-        NSLog(@"[DEBUG] X server didn't exit gracefully, sending SIGKILL");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] X server didn't exit gracefully, sending SIGKILL");
         if (kill(xServerPid, SIGKILL) == 0) {
-            NSLog(@"[DEBUG] Sent SIGKILL to X server");
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Sent SIGKILL to X server");
             waitpid(xServerPid, NULL, 0); // Wait for it to die
         } else {
-            NSLog(@"[DEBUG] Failed to send SIGKILL to X server: %s", strerror(errno));
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to send SIGKILL to X server: %s", strerror(errno));
         }
     } else {
-        NSLog(@"[DEBUG] Failed to send SIGTERM to X server: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to send SIGTERM to X server: %s", strerror(errno));
     }
     
     didStartXServer = NO;
@@ -2643,7 +2643,7 @@ static bool isDetachedDaemon(const char *comm)
 
 - (void)cleanupExistingXServer
 {
-    NSLog(@"[DEBUG] Cleaning up any existing X server processes");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Cleaning up any existing X server processes");
     
     // Clean up lock files and sockets for display :0
     unlink("/tmp/.X0-lock");
@@ -2656,18 +2656,18 @@ static bool isDetachedDaemon(const char *comm)
     // Wait a moment for cleanup
     usleep(500000); // 0.5 seconds
     
-    NSLog(@"[DEBUG] X server cleanup complete");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] X server cleanup complete");
 }
 
 - (void)killProcessesMatchingPattern:(NSString *)pattern displayNumber:(NSString *)displayNum
 {
-    NSLog(@"[DEBUG] Looking for processes matching pattern: %@", pattern);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Looking for processes matching pattern: %@", pattern);
     
 #if defined(__linux__)
     // Linux implementation using /proc filesystem
     DIR *proc_dir = opendir("/proc");
     if (!proc_dir) {
-        NSLog(@"[DEBUG] Failed to open /proc directory: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to open /proc directory: %s", strerror(errno));
         return;
     }
     
@@ -2714,12 +2714,12 @@ static bool isDetachedDaemon(const char *comm)
         if ([cmdlineStr rangeOfString:pattern].location != NSNotFound &&
             [cmdlineStr rangeOfString:displayNum].location != NSNotFound) {
             
-            NSLog(@"[DEBUG] Found X server process: PID=%d, Command=%s", pid, cmdline);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Found X server process: PID=%d, Command=%s", pid, cmdline);
             
             // Try SIGTERM first, then SIGKILL
             if (kill(pid, SIGTERM) != 0) {
                 if (errno != ESRCH) {
-                    NSLog(@"[DEBUG] SIGTERM failed for PID %d, trying SIGKILL: %s", pid, strerror(errno));
+                    NSDebugLLog(@"gwcomp", @"[DEBUG] SIGTERM failed for PID %d, trying SIGKILL: %s", pid, strerror(errno));
                     kill(pid, SIGKILL);
                 }
             } else {
@@ -2741,24 +2741,24 @@ static bool isDetachedDaemon(const char *comm)
     size_t size = 0;
     
     if (sysctl(mib, 3, NULL, &size, NULL, 0) != 0) {
-        NSLog(@"[DEBUG] Failed to get process list size: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to get process list size: %s", strerror(errno));
         return;
     }
     
     struct kinfo_proc *procs = malloc(size);
     if (!procs) {
-        NSLog(@"[DEBUG] Failed to allocate memory for process list");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to allocate memory for process list");
         return;
     }
     
     if (sysctl(mib, 3, procs, &size, NULL, 0) != 0) {
-        NSLog(@"[DEBUG] Failed to get process list: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Failed to get process list: %s", strerror(errno));
         free(procs);
         return;
     }
     
     int numProcs = size / sizeof(struct kinfo_proc);
-    NSLog(@"[DEBUG] Checking %d processes for X server cleanup", numProcs);
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Checking %d processes for X server cleanup", numProcs);
     
     for (int i = 0; i < numProcs; i++) {
         pid_t pid = procs[i].ki_pid;
@@ -2808,12 +2808,12 @@ static bool isDetachedDaemon(const char *comm)
         if ([cmdlineStr rangeOfString:pattern].location != NSNotFound &&
             [cmdlineStr rangeOfString:displayNum].location != NSNotFound) {
             
-            NSLog(@"[DEBUG] Found X server process: PID=%d, Command=%@", pid, cmdlineStr);
+            NSDebugLLog(@"gwcomp", @"[DEBUG] Found X server process: PID=%d, Command=%@", pid, cmdlineStr);
             
             // Try SIGTERM first, then SIGKILL
             if (kill(pid, SIGTERM) != 0) {
                 if (errno != ESRCH) {
-                    NSLog(@"[DEBUG] SIGTERM failed for PID %d, trying SIGKILL: %s", pid, strerror(errno));
+                    NSDebugLLog(@"gwcomp", @"[DEBUG] SIGTERM failed for PID %d, trying SIGKILL: %s", pid, strerror(errno));
                     kill(pid, SIGKILL);
                 }
             } else {
@@ -2833,15 +2833,15 @@ static bool isDetachedDaemon(const char *comm)
  
 - (void)shakeWindow
 {
-    NSLog(@"[DEBUG] shakeWindow called");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] shakeWindow called");
     @try {
         if (!loginWindow) {
-            NSLog(@"[WARNING] loginWindow is NULL, cannot shake");
+            NSDebugLLog(@"gwcomp", @"[WARNING] loginWindow is NULL, cannot shake");
             return;
         }
         
         NSRect originalFrame = [loginWindow frame];
-        NSLog(@"[DEBUG] Original frame: x=%.1f, y=%.1f", originalFrame.origin.x, originalFrame.origin.y);
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Original frame: x=%.1f, y=%.1f", originalFrame.origin.x, originalFrame.origin.y);
         
         // Simple shake without NSViewAnimation to avoid potential crashes
         CGFloat shakeDistance = 10.0;
@@ -2864,9 +2864,9 @@ static bool isDetachedDaemon(const char *comm)
         
         // Return to original position
         [loginWindow setFrameOrigin:originalFrame.origin];
-        NSLog(@"[DEBUG] Window shake complete");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] Window shake complete");
     } @catch (NSException *exception) {
-        NSLog(@"[ERROR] Exception in shakeWindow: %@", exception);
+        NSDebugLLog(@"gwcomp", @"[ERROR] Exception in shakeWindow: %@", exception);
     }
 }
 
@@ -2884,7 +2884,7 @@ static bool isDetachedDaemon(const char *comm)
     
     [loginButton setEnabled:shouldEnable];
     
-    NSLog(@"[DEBUG] Login button state updated - username: %s, password: %s, enabled: %s",
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Login button state updated - username: %s, password: %s, enabled: %s",
           hasUsername ? "yes" : "no",
           hasPassword ? "yes" : "no", 
           shouldEnable ? "yes" : "no");
@@ -2901,11 +2901,11 @@ static bool isDetachedDaemon(const char *comm)
 
 - (BOOL)control:(NSControl *)control textView:(NSTextView *)textView doCommandBySelector:(SEL)commandSelector
 {
-    NSLog(@"[DEBUG] Key command received: %@", NSStringFromSelector(commandSelector));
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Key command received: %@", NSStringFromSelector(commandSelector));
     
     // Handle ESC key (cancelOperation:)
     if (commandSelector == @selector(cancelOperation:)) {
-        NSLog(@"[DEBUG] ESC key pressed, clearing fields and shaking");
+        NSDebugLLog(@"gwcomp", @"[DEBUG] ESC key pressed, clearing fields and shaking");
         [self clearFieldsAndShake];
         return YES;  // Consume the event
     }
@@ -2915,7 +2915,7 @@ static bool isDetachedDaemon(const char *comm)
 
 - (void)clearFieldsAndShake
 {
-    NSLog(@"[DEBUG] Clearing fields and shaking window");
+    NSDebugLLog(@"gwcomp", @"[DEBUG] Clearing fields and shaking window");
     
     // Clear both username and password fields
     [usernameField setStringValue:@""];

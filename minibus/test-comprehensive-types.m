@@ -9,7 +9,7 @@
 
 int main() {
     @autoreleasepool {
-        NSLog(@"Testing comprehensive D-Bus type support...");
+        NSDebugLLog(@"gwcomp", @"Testing comprehensive D-Bus type support...");
         
         // Test variant parsing - don't pre-set signature, let it auto-generate
         MBMessage *variantMsg = [[MBMessage alloc] init];
@@ -26,20 +26,20 @@ int main() {
         variantMsg.signature = [MBMessage signatureForArguments:variantArgs];
         
         NSData *serialized = [variantMsg serialize];
-        NSLog(@"Serialized variant message: %lu bytes", [serialized length]);
+        NSDebugLLog(@"gwcomp", @"Serialized variant message: %lu bytes", [serialized length]);
         
         NSUInteger offset = 0;
         MBMessage *parsed = [MBMessage messageFromData:serialized offset:&offset];
         
         if (parsed) {
-            NSLog(@"✓ Variant message parsed successfully");
-            NSLog(@"  Arguments count: %lu", [parsed.arguments count]);
+            NSDebugLLog(@"gwcomp", @"✓ Variant message parsed successfully");
+            NSDebugLLog(@"gwcomp", @"  Arguments count: %lu", [parsed.arguments count]);
             if ([parsed.arguments count] > 0) {
-                NSLog(@"  First argument: %@ (type: %@)", 
+                NSDebugLLog(@"gwcomp", @"  First argument: %@ (type: %@)", 
                       parsed.arguments[0], [parsed.arguments[0] class]);
             }
         } else {
-            NSLog(@"✗ Failed to parse variant message");
+            NSDebugLLog(@"gwcomp", @"✗ Failed to parse variant message");
         }
         
         // Test array of dictionaries a{sv}
@@ -60,19 +60,19 @@ int main() {
         dictArrayMsg.arguments = @[testDictArray];
         
         NSData *dictSerialized = [dictArrayMsg serialize];
-        NSLog(@"Serialized dictionary array message: %lu bytes", [dictSerialized length]);
+        NSDebugLLog(@"gwcomp", @"Serialized dictionary array message: %lu bytes", [dictSerialized length]);
         
         offset = 0;
         MBMessage *dictParsed = [MBMessage messageFromData:dictSerialized offset:&offset];
         
         if (dictParsed) {
-            NSLog(@"✓ Dictionary array message parsed successfully");
-            NSLog(@"  Arguments count: %lu", [dictParsed.arguments count]);
+            NSDebugLLog(@"gwcomp", @"✓ Dictionary array message parsed successfully");
+            NSDebugLLog(@"gwcomp", @"  Arguments count: %lu", [dictParsed.arguments count]);
             if ([dictParsed.arguments count] > 0) {
-                NSLog(@"  First argument type: %@", [dictParsed.arguments[0] class]);
+                NSDebugLLog(@"gwcomp", @"  First argument type: %@", [dictParsed.arguments[0] class]);
             }
         } else {
-            NSLog(@"✗ Failed to parse dictionary array message");
+            NSDebugLLog(@"gwcomp", @"✗ Failed to parse dictionary array message");
         }
         
         // Test multiple data types
@@ -96,31 +96,31 @@ int main() {
         multiTypeMsg.arguments = testArgs;
         multiTypeMsg.signature = [MBMessage signatureForArguments:testArgs];
         
-        NSLog(@"Generated signature: %@", multiTypeMsg.signature);
+        NSDebugLLog(@"gwcomp", @"Generated signature: %@", multiTypeMsg.signature);
         
         NSData *multiSerialized = [multiTypeMsg serialize];
-        NSLog(@"Serialized multi-type message: %lu bytes", [multiSerialized length]);
+        NSDebugLLog(@"gwcomp", @"Serialized multi-type message: %lu bytes", [multiSerialized length]);
         
         offset = 0;
         MBMessage *multiParsed = [MBMessage messageFromData:multiSerialized offset:&offset];
         
         if (multiParsed) {
-            NSLog(@"✓ Multi-type message parsed successfully");
-            NSLog(@"  Signature: %@", multiParsed.signature);
-            NSLog(@"  Arguments count: %lu", [multiParsed.arguments count]);
+            NSDebugLLog(@"gwcomp", @"✓ Multi-type message parsed successfully");
+            NSDebugLLog(@"gwcomp", @"  Signature: %@", multiParsed.signature);
+            NSDebugLLog(@"gwcomp", @"  Arguments count: %lu", [multiParsed.arguments count]);
             for (NSUInteger i = 0; i < [multiParsed.arguments count]; i++) {
-                NSLog(@"    Arg[%lu]: %@ (type: %@)", 
+                NSDebugLLog(@"gwcomp", @"    Arg[%lu]: %@ (type: %@)", 
                       i, multiParsed.arguments[i], [multiParsed.arguments[i] class]);
             }
         } else {
-            NSLog(@"✗ Failed to parse multi-type message");
+            NSDebugLLog(@"gwcomp", @"✗ Failed to parse multi-type message");
         }
         
         [variantMsg release];
         [dictArrayMsg release];
         [multiTypeMsg release];
         
-        NSLog(@"Comprehensive D-Bus type test completed.");
+        NSDebugLLog(@"gwcomp", @"Comprehensive D-Bus type test completed.");
         return 0;
     }
 }

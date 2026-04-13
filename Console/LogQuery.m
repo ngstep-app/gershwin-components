@@ -75,7 +75,7 @@
                             options:NSRegularExpressionCaseInsensitive
                             error:&error];
             if (error) {
-                NSLog(@"Failed to compile process regex: %@", error);
+                NSDebugLLog(@"gwcomp", @"Failed to compile process regex: %@", error);
             }
         }
     }
@@ -121,7 +121,7 @@
                            options:NSRegularExpressionCaseInsensitive
                            error:&error];
             if (error) {
-                NSLog(@"Failed to compile regex pattern: %@", error);
+                NSDebugLLog(@"gwcomp", @"Failed to compile regex pattern: %@", error);
             }
         }
     }

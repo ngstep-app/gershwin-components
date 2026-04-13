@@ -30,7 +30,7 @@
         return _contentView;
     }
 
-    NSLog(@"DRIIntroStep: creating stepView");
+    NSDebugLLog(@"gwcomp", @"DRIIntroStep: creating stepView");
 
     // Match installer card inner area (approx 354x204)
     _contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
@@ -107,12 +107,12 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"DRIIntroStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"DRIIntroStep: stepWillAppear");
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"DRIIntroStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"DRIIntroStep: stepDidAppear");
 }
 
 #pragma mark - System Checks
@@ -135,11 +135,11 @@
         output = [output stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
         BOOL isFreeBSD = [output isEqualToString:@"FreeBSD"];
-        NSLog(@"DRIIntroStep: system check - uname -s returned: %@ (FreeBSD: %@)", output, isFreeBSD ? @"YES" : @"NO");
+        NSDebugLLog(@"gwcomp", @"DRIIntroStep: system check - uname -s returned: %@ (FreeBSD: %@)", output, isFreeBSD ? @"YES" : @"NO");
         return isFreeBSD;
 
     } @catch (NSException *exception) {
-        NSLog(@"DRIIntroStep: system check failed: %@", exception.reason);
+        NSDebugLLog(@"gwcomp", @"DRIIntroStep: system check failed: %@", exception.reason);
         return NO;
     }
 }
@@ -169,12 +169,12 @@
         [timeoutTimer invalidate];
 
         BOOL hasNetwork = ([task terminationStatus] == 0);
-        NSLog(@"DRIIntroStep: network check - host github.com returned status %d (connected: %@)",
+        NSDebugLLog(@"gwcomp", @"DRIIntroStep: network check - host github.com returned status %d (connected: %@)",
               [task terminationStatus], hasNetwork ? @"YES" : @"NO");
         return hasNetwork;
 
     } @catch (NSException *exception) {
-        NSLog(@"DRIIntroStep: network check failed: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"DRIIntroStep: network check failed: %@", [exception reason]);
         return NO;
     }
 }
@@ -183,7 +183,7 @@
 {
     NSTask *task = [timer userInfo];
     if ([task isRunning]) {
-        NSLog(@"DRIIntroStep: network check timed out");
+        NSDebugLLog(@"gwcomp", @"DRIIntroStep: network check timed out");
         [task terminate];
     }
 }
@@ -200,7 +200,7 @@
     NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfFileSystemForPath:checkPath error:&error];
 
     if (error) {
-        NSLog(@"DRIIntroStep: disk space check failed: %@", error.localizedDescription);
+        NSDebugLLog(@"gwcomp", @"DRIIntroStep: disk space check failed: %@", error.localizedDescription);
         return NO;
     }
 
@@ -209,7 +209,7 @@
     long long requiredBytes = 1024 * 1024 * 1024; // 1GB minimum
 
     BOOL hasSpace = (freeBytesLL >= requiredBytes);
-    NSLog(@"DRIIntroStep: disk space check - free: %lld bytes, required: %lld bytes (sufficient: %@)",
+    NSDebugLLog(@"gwcomp", @"DRIIntroStep: disk space check - free: %lld bytes, required: %lld bytes (sufficient: %@)",
           freeBytesLL, requiredBytes, hasSpace ? @"YES" : @"NO");
 
     return hasSpace;

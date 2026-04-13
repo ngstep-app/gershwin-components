@@ -48,14 +48,14 @@
 - (void)assistantWindowDidFinish:(GSAssistantWindow *)window {
     (void)window;
     /* The user clicked Restart on the completion step - execute shutdown -r now */
-    NSLog(@"InstallationDelegate: assistantWindowDidFinish - restarting system");
+    NSDebugLLog(@"gwcomp", @"InstallationDelegate: assistantWindowDidFinish - restarting system");
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"/usr/bin/env"];
     [task setArguments:@[@"sudo", @"shutdown", @"-r", @"now"]];
     @try {
         [task launch];
     } @catch (NSException *ex) {
-        NSLog(@"InstallationDelegate: restart failed: %@", ex);
+        NSDebugLLog(@"gwcomp", @"InstallationDelegate: restart failed: %@", ex);
     }
     [task release];
     [NSApp terminate:nil];
@@ -82,7 +82,7 @@
     (void)window;
     /* Update the confirm step with the currently selected disk */
     if (_confirmStep && step == (id<GSAssistantStepProtocol>)_confirmStep) {
-        NSLog(@"InstallationDelegate: updating confirm step with disk %@", _selectedDisk.devicePath);
+        NSDebugLLog(@"gwcomp", @"InstallationDelegate: updating confirm step with disk %@", _selectedDisk.devicePath);
         [_confirmStep updateWithDisk:_selectedDisk];
     }
 }
@@ -92,7 +92,7 @@
     (void)window;
     /* Auto-start installation when the progress step becomes visible */
     if (_progressStep && step == (id<GSAssistantStepProtocol>)_progressStep) {
-        NSLog(@"InstallationDelegate: progress step appeared, starting installation to %@",
+        NSDebugLLog(@"gwcomp", @"InstallationDelegate: progress step appeared, starting installation to %@",
               _selectedDisk.devicePath);
         [_progressStep startInstallationToDisk:_selectedDisk source:_imageSourcePath];
     }
@@ -102,18 +102,18 @@
     (void)step;
     [_selectedDisk release];
     _selectedDisk = [disk retain];
-    NSLog(@"InstallationDelegate: disk selected: %@", _selectedDisk.devicePath);
+    NSDebugLLog(@"gwcomp", @"InstallationDelegate: disk selected: %@", _selectedDisk.devicePath);
 }
 
 - (void)installTypeStep:(id)step didSelectImageSource:(NSString *)imageSourcePath {
     (void)step;
     [_imageSourcePath release];
     _imageSourcePath = [imageSourcePath copy];
-    NSLog(@"InstallationDelegate: image source path set to %@", _imageSourcePath ?: @"(none)");
+    NSDebugLLog(@"gwcomp", @"InstallationDelegate: image source path set to %@", _imageSourcePath ?: @"(none)");
 }
 
 - (void)installProgressDidFinish:(BOOL)success {
-    NSLog(@"InstallationDelegate: installation finished, success=%d", success);
+    NSDebugLLog(@"gwcomp", @"InstallationDelegate: installation finished, success=%d", success);
     if (success && _assistantWindow) {
         /* Auto-advance to the framework's completion step (green checkmark) */
         [_assistantWindow goToNextStep];
@@ -232,7 +232,7 @@ int main(int argc, const char *argv[]) {
         /* Check for image-based installation source before building UI */
         NSString *imageSource = IACheckImageSourceAvailable();
         BOOL imageAvailable = (imageSource != nil && [imageSource length] > 0);
-        NSLog(@"Image source available: %@ (%@)", imageAvailable ? @"YES" : @"NO",
+        NSDebugLLog(@"gwcomp", @"Image source available: %@ (%@)", imageAvailable ? @"YES" : @"NO",
               imageSource ?: @"none");
         
         IAWelcomeStep *welcomeStep = [[IAWelcomeStep alloc] init];

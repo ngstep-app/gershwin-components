@@ -69,7 +69,7 @@
 
 - (void)loadWithManager:(id)manager
 {
-    NSLog(@"SystemMonitorProvider: Loading system monitor");
+    NSDebugLLog(@"gwcomp", @"SystemMonitorProvider: Loading system monitor");
     self.manager = manager;
 
     /* Create detail menu */
@@ -95,7 +95,7 @@
     NSSize size = [@"CPU 100% RAM 100%" sizeWithAttributes:attrs];
     self.cachedFixedWidth = ceil(size.width) + 16.0;
 
-    NSLog(@"SystemMonitorProvider: Computed fixed width: %.0f", self.cachedFixedWidth);
+    NSDebugLLog(@"gwcomp", @"SystemMonitorProvider: Computed fixed width: %.0f", self.cachedFixedWidth);
 
     /* Initial update */
     [self update];
@@ -110,7 +110,7 @@
 
 - (void)handleClick
 {
-    NSLog(@"SystemMonitorProvider: Clicked (menu will be shown automatically)");
+    NSDebugLLog(@"gwcomp", @"SystemMonitorProvider: Clicked (menu will be shown automatically)");
 }
 
 - (NSMenu *)menu
@@ -120,7 +120,7 @@
 
 - (void)unload
 {
-    NSLog(@"SystemMonitorProvider: Unloading");
+    NSDebugLLog(@"gwcomp", @"SystemMonitorProvider: Unloading");
     self.detailMenu = nil;
     self.perCoreCPU = nil;
 }
@@ -133,7 +133,7 @@
 {
     FILE *fp = fopen("/proc/stat", "r");
     if (!fp) {
-        NSLog(@"SystemMonitorProvider: Failed to open /proc/stat");
+        NSDebugLLog(@"gwcomp", @"SystemMonitorProvider: Failed to open /proc/stat");
         return;
     }
     
@@ -187,7 +187,7 @@
 {
     FILE *fp = fopen("/proc/meminfo", "r");
     if (!fp) {
-        NSLog(@"SystemMonitorProvider: Failed to open /proc/meminfo");
+        NSDebugLLog(@"gwcomp", @"SystemMonitorProvider: Failed to open /proc/meminfo");
         return;
     }
     
@@ -295,13 +295,13 @@
 - (void)updateCPUUsage
 {
     self.cpuUsage = 0.0;
-    NSLog(@"SystemMonitorProvider: CPU monitoring not supported on this platform");
+    NSDebugLLog(@"gwcomp", @"SystemMonitorProvider: CPU monitoring not supported on this platform");
 }
 
 - (void)updateRAMUsage
 {
     self.ramUsage = 0.0;
-    NSLog(@"SystemMonitorProvider: RAM monitoring not supported on this platform");
+    NSDebugLLog(@"gwcomp", @"SystemMonitorProvider: RAM monitoring not supported on this platform");
 }
 
 #endif

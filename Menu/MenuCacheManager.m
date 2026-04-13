@@ -96,7 +96,7 @@
         [self.cache removeAllObjects];
         [self.lruOrder removeAllObjects];
         
-        NSLog(@"MenuCacheManager: CACHING DISABLED (maxSize=0 maxAge=0)");
+        NSDebugLLog(@"gwcomp", @"MenuCacheManager: CACHING DISABLED (maxSize=0 maxAge=0)");
     }
     return self;
 }
@@ -135,7 +135,7 @@
     MenuCacheEntry *entry = [self.cache objectForKey:windowKey];
     
     if (entry) {
-        NSLog(@"MenuCacheManager: Invalidating cache for window %lu (%@)", 
+        NSDebugLLog(@"gwcomp", @"MenuCacheManager: Invalidating cache for window %lu (%@)", 
               windowId, [entry applicationName] ?: @"Unknown App");
         
         [self.cache removeObjectForKey:windowKey];
@@ -149,7 +149,7 @@
         return;
     }
     
-    NSLog(@"MenuCacheManager: Invalidating cache for application: %@", applicationName);
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Invalidating cache for application: %@", applicationName);
     
     NSMutableArray *windowsToRemove = [NSMutableArray array];
     
@@ -165,7 +165,7 @@
         [self invalidateCacheForWindow:windowId];
     }
     
-    NSLog(@"MenuCacheManager: Invalidated %lu cached menus for application %@", 
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Invalidated %lu cached menus for application %@", 
           (unsigned long)[windowsToRemove count], applicationName);
 }
 
@@ -175,7 +175,7 @@
     [self.cache removeAllObjects];
     [self.lruOrder removeAllObjects];
     
-    NSLog(@"MenuCacheManager: Cleared entire cache (%lu entries)", (unsigned long)count);
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Cleared entire cache (%lu entries)", (unsigned long)count);
 }
 
 #pragma mark - Cache Management
@@ -183,7 +183,7 @@
 - (void)setMaxCacheSize:(NSUInteger)maxSize
 {
     _maxCacheSize = maxSize;
-    NSLog(@"MenuCacheManager: Set max cache size to %lu", (unsigned long)maxSize);
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Set max cache size to %lu", (unsigned long)maxSize);
     
     // Evict entries if we're now over the limit
     while ([self.cache count] > _maxCacheSize && [self.lruOrder count] > 0) {
@@ -194,7 +194,7 @@
 - (void)setMaxCacheAge:(NSTimeInterval)maxAge
 {
     _maxCacheAge = maxAge;
-    NSLog(@"MenuCacheManager: Set max cache age to %.1fs", maxAge);
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Set max cache age to %.1fs", maxAge);
 }
 
 - (void)performMaintenance
@@ -212,12 +212,12 @@
     // Remove stale entries
     for (NSNumber *windowKey in staleWindows) {
         unsigned long windowId = [windowKey unsignedLongValue];
-        NSLog(@"MenuCacheManager: Removing stale cache entry for window %lu", windowId);
+        NSDebugLLog(@"gwcomp", @"MenuCacheManager: Removing stale cache entry for window %lu", windowId);
         [self invalidateCacheForWindow:windowId];
     }
     
     if ([staleWindows count] > 0) {
-        NSLog(@"MenuCacheManager: Maintenance removed %lu stale entries", 
+        NSDebugLLog(@"gwcomp", @"MenuCacheManager: Maintenance removed %lu stale entries", 
               (unsigned long)[staleWindows count]);
     }
     
@@ -239,7 +239,7 @@
     unsigned long windowId = [lruWindowKey unsignedLongValue];
     
     MenuCacheEntry *entry = [self.cache objectForKey:lruWindowKey];
-    NSLog(@"MenuCacheManager: Evicting LRU entry for window %lu (%@)", 
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Evicting LRU entry for window %lu (%@)", 
           windowId, [entry applicationName] ?: @"Unknown App");
     
     [self.cache removeObjectForKey:lruWindowKey];
@@ -276,26 +276,26 @@
 {
     NSDictionary *stats = [self getCacheStatistics];
     
-    NSLog(@"MenuCacheManager: === CACHE STATISTICS ===");
-    NSLog(@"MenuCacheManager: Cache size: %@ / %@", stats[@"cacheSize"], stats[@"maxCacheSize"]);
-    NSLog(@"MenuCacheManager: Cache hits: %@, misses: %@, evictions: %@", 
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: === CACHE STATISTICS ===");
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Cache size: %@ / %@", stats[@"cacheSize"], stats[@"maxCacheSize"]);
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Cache hits: %@, misses: %@, evictions: %@", 
           stats[@"cacheHits"], stats[@"cacheMisses"], stats[@"cacheEvictions"]);
-    NSLog(@"MenuCacheManager: Hit ratio: %.1f%% (%@ total requests)", 
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Hit ratio: %.1f%% (%@ total requests)", 
           [stats[@"hitRatio"] doubleValue], stats[@"totalRequests"]);
-    NSLog(@"MenuCacheManager: Max cache age: %.1fs", [stats[@"maxCacheAge"] doubleValue]);
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Max cache age: %.1fs", [stats[@"maxCacheAge"] doubleValue]);
     
     // Log current cache contents
     if ([self.cache count] > 0) {
-        NSLog(@"MenuCacheManager: Cached windows:");
+        NSDebugLLog(@"gwcomp", @"MenuCacheManager: Cached windows:");
         for (NSNumber *windowKey in self.lruOrder) {
             MenuCacheEntry *entry = [self.cache objectForKey:windowKey];
-            NSLog(@"MenuCacheManager:   Window %@ (%@): %lu items, age %.1fs, accessed %lu times",
+            NSDebugLLog(@"gwcomp", @"MenuCacheManager:   Window %@ (%@): %lu items, age %.1fs, accessed %lu times",
                   windowKey, [entry applicationName] ?: @"Unknown",
                   (unsigned long)[[entry menu] numberOfItems],
                   [entry age], (unsigned long)[entry accessCount]);
         }
     }
-    NSLog(@"MenuCacheManager: ========================");
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: ========================");
 }
 
 #pragma mark - Window Lifecycle
@@ -308,7 +308,7 @@
     if (entry) {
         [entry touch];
         [self moveToFront:windowKey];
-        NSLog(@"MenuCacheManager: Window %lu became active, moved to cache front", windowId);
+        NSDebugLLog(@"gwcomp", @"MenuCacheManager: Window %lu became active, moved to cache front", windowId);
     }
 }
 
@@ -320,12 +320,12 @@
 
 - (void)applicationSwitched:(NSString *)fromApp toApp:(NSString *)toApp
 {
-    NSLog(@"MenuCacheManager: Application switched from '%@' to '%@'", 
+    NSDebugLLog(@"gwcomp", @"MenuCacheManager: Application switched from '%@' to '%@'", 
           fromApp ?: @"Unknown", toApp ?: @"Unknown");
     
     // For complex applications like GIMP, increase cache persistence
     if ([self isComplexApplication:toApp]) {
-        NSLog(@"MenuCacheManager: Detected complex application '%@', using extended cache persistence", toApp);
+        NSDebugLLog(@"gwcomp", @"MenuCacheManager: Detected complex application '%@', using extended cache persistence", toApp);
         // Complex apps get longer cache time
         // This is handled per-entry in the cache logic
     }

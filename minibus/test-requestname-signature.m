@@ -10,16 +10,16 @@
 #import "MBMessage.h"
 
 int main() {
-    NSLog(@"Testing RequestName signature fix...");
+    NSDebugLLog(@"gwcomp", @"Testing RequestName signature fix...");
     
     MBClient *client = [[MBClient alloc] init];
     if (![client connectToPath:@"/tmp/minibus-socket"]) {
-        NSLog(@"Failed to connect to MiniBus");
+        NSDebugLLog(@"gwcomp", @"Failed to connect to MiniBus");
         return 1;
     }
     
     // Test RequestName call 
-    NSLog(@"Calling RequestName for com.test.SignatureTest...");
+    NSDebugLLog(@"gwcomp", @"Calling RequestName for com.test.SignatureTest...");
     
     MBMessage *reply = [client callMethod:@"org.freedesktop.DBus"
                                      path:@"/org/freedesktop/DBus"
@@ -28,18 +28,18 @@ int main() {
                                 arguments:@[@"com.test.SignatureTest", @0]
                                   timeout:5.0];
     if (reply) {
-        NSLog(@"Got reply:");
-        NSLog(@"  Type: %lu", (unsigned long)reply.type);
-        NSLog(@"  Signature: '%@'", reply.signature);
-        NSLog(@"  Arguments: %@", reply.arguments);
+        NSDebugLLog(@"gwcomp", @"Got reply:");
+        NSDebugLLog(@"gwcomp", @"  Type: %lu", (unsigned long)reply.type);
+        NSDebugLLog(@"gwcomp", @"  Signature: '%@'", reply.signature);
+        NSDebugLLog(@"gwcomp", @"  Arguments: %@", reply.arguments);
         
         if ([reply.signature isEqualToString:@"u"]) {
-            NSLog(@"SUCCESS: RequestName returns correct signature 'u' (uint32)");
+            NSDebugLLog(@"gwcomp", @"SUCCESS: RequestName returns correct signature 'u' (uint32)");
         } else {
-            NSLog(@"FAILED: RequestName returns incorrect signature '%@' (expected 'u')", reply.signature);
+            NSDebugLLog(@"gwcomp", @"FAILED: RequestName returns incorrect signature '%@' (expected 'u')", reply.signature);
         }
     } else {
-        NSLog(@"No reply received");
+        NSDebugLLog(@"gwcomp", @"No reply received");
     }
     
     [client disconnect];

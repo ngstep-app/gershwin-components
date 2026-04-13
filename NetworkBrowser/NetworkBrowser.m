@@ -206,7 +206,7 @@
           NSNetService *typeService = [types objectAtIndex: selectedRow];
           NSString *typeName = [typeService name];
 
-          NSLog(@"Selected type row %ld: %@", selectedRow, typeName);
+          NSDebugLLog(@"gwcomp", @"Selected type row %ld: %@", selectedRow, typeName);
 
           if (serviceBrowser)
             {
@@ -215,7 +215,7 @@
             }
 
           NSString *searchType = [NSString stringWithFormat: @"%@._tcp", typeName];
-          NSLog(@"Starting search for type: %@", searchType);
+          NSDebugLLog(@"gwcomp", @"Starting search for type: %@", searchType);
 
           serviceBrowser = [[NSNetServiceBrowser alloc] init];
           [serviceBrowser setDelegate: self];
@@ -260,12 +260,12 @@
 
 - (void)netServiceBrowserWillSearch:(NSNetServiceBrowser *)aNetServiceBrowser
 {
-  NSLog(@"Starting to search for network services...");
+  NSDebugLLog(@"gwcomp", @"Starting to search for network services...");
 }
 
 - (void)netServiceBrowserDidStopSearch:(NSNetServiceBrowser *)aNetServiceBrowser
 {
-  NSLog(@"Stopped searching for network services");
+  NSDebugLLog(@"gwcomp", @"Stopped searching for network services");
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)aNetServiceBrowser
@@ -274,7 +274,7 @@
 {
   if (aNetServiceBrowser == typeBrowser)
     {
-      NSLog(@"Found service type: %@", [aNetService name]);
+      NSDebugLLog(@"gwcomp", @"Found service type: %@", [aNetService name]);
       for (NSNetService *existing in types)
         {
           if ([[existing name] isEqual: [aNetService name]])
@@ -285,7 +285,7 @@
     }
   else if (aNetServiceBrowser == serviceBrowser)
     {
-      NSLog(@"Found service: %@", [aNetService name]);
+      NSDebugLLog(@"gwcomp", @"Found service: %@", [aNetService name]);
       [aNetService setDelegate: self];
       [aNetService resolve];
       for (NSNetService *existing in services)
@@ -304,7 +304,7 @@
 {
   if (aNetServiceBrowser == typeBrowser)
     {
-      NSLog(@"Service type removed: %@", [aNetService name]);
+      NSDebugLLog(@"gwcomp", @"Service type removed: %@", [aNetService name]);
       for (NSNetService *existing in [NSArray arrayWithArray: types])
         {
           if ([[existing name] isEqual: [aNetService name]])
@@ -316,7 +316,7 @@
     }
   else if (aNetServiceBrowser == serviceBrowser)
     {
-      NSLog(@"Service removed: %@", [aNetService name]);
+      NSDebugLLog(@"gwcomp", @"Service removed: %@", [aNetService name]);
       for (NSNetService *existing in [NSArray arrayWithArray: services])
         {
           if ([[existing name] isEqual: [aNetService name]])
@@ -332,7 +332,7 @@
 - (void)netServiceBrowser:(NSNetServiceBrowser *)aNetServiceBrowser
   didNotSearch:(NSDictionary *)errorDict
 {
-  NSLog(@"Error searching for services: %@", errorDict);
+  NSDebugLLog(@"gwcomp", @"Error searching for services: %@", errorDict);
 }
 
 - (void)createMenu

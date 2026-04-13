@@ -11,50 +11,50 @@
 
 - (id)initWithBundle:(NSBundle *)bundle
 {
-    NSLog(@"StartupDiskPane: initWithBundle called with bundle = %@", bundle);
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: initWithBundle called with bundle = %@", bundle);
     self = [super initWithBundle:bundle];
     if (self) {
-        NSLog(@"StartupDiskPane: initWithBundle succeeded, checking efibootmgr permissions");
+        NSDebugLLog(@"gwcomp", @"StartupDiskPane: initWithBundle succeeded, checking efibootmgr permissions");
         
-        NSLog(@"StartupDiskPane: efibootmgr permissions check passed");
+        NSDebugLLog(@"gwcomp", @"StartupDiskPane: efibootmgr permissions check passed");
     } else {
-        NSLog(@"StartupDiskPane: initWithBundle failed - super initWithBundle returned nil");
+        NSDebugLLog(@"gwcomp", @"StartupDiskPane: initWithBundle failed - super initWithBundle returned nil");
     }
     return self;
 }
 
 - (NSView *)loadMainView
 {
-    NSLog(@"StartupDiskPane: loadMainView called");
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: loadMainView called");
     
     // Create the main view if it doesn't exist
     if (![self mainView]) {
-        NSLog(@"StartupDiskPane: No main view exists, creating one");
+        NSDebugLLog(@"gwcomp", @"StartupDiskPane: No main view exists, creating one");
         NSView *view = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)];
         [self setMainView:view];
         [view release];
-        NSLog(@"StartupDiskPane: Created main view with frame: %@", NSStringFromRect([view frame]));
+        NSDebugLLog(@"gwcomp", @"StartupDiskPane: Created main view with frame: %@", NSStringFromRect([view frame]));
     }
     
     NSView *mainView = [super loadMainView];
-    NSLog(@"StartupDiskPane: super loadMainView completed, returned view = %@", mainView);
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: super loadMainView completed, returned view = %@", mainView);
     [self mainViewDidLoad];
     return mainView;
 }
 
 - (void)mainViewDidLoad
 {
-    NSLog(@"StartupDiskPane: mainViewDidLoad called");
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: mainViewDidLoad called");
     
     NSView *mainView = [self mainView];
-    NSLog(@"StartupDiskPane: mainView = %@", mainView);
-    NSLog(@"StartupDiskPane: mainView frame = %@", NSStringFromRect([mainView frame]));
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: mainView = %@", mainView);
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: mainView frame = %@", NSStringFromRect([mainView frame]));
     
     startupDiskController = [[StartupDiskController alloc] init];
-    NSLog(@"StartupDiskPane: Created startupDiskController = %@", startupDiskController);
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: Created startupDiskController = %@", startupDiskController);
     
     [startupDiskController setMainView:mainView];
-    NSLog(@"StartupDiskPane: Set main view on controller");
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: Set main view on controller");
     
     // Set up a timer to refresh the boot entries periodically
     refreshTimer = [NSTimer scheduledTimerWithTimeInterval:5.0
@@ -62,18 +62,18 @@
                                                   selector:@selector(refreshBootEntries)
                                                   userInfo:nil
                                                    repeats:YES];
-    NSLog(@"StartupDiskPane: Created refresh timer = %@", refreshTimer);
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: Created refresh timer = %@", refreshTimer);
     
-    NSLog(@"StartupDiskPane: About to call refreshBootEntries");
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: About to call refreshBootEntries");
     [self refreshBootEntries];
-    NSLog(@"StartupDiskPane: mainViewDidLoad completed");
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: mainViewDidLoad completed");
 }
 
 - (void)refreshBootEntries
 {
-    NSLog(@"StartupDiskPane: refreshBootEntries called");
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: refreshBootEntries called");
     [startupDiskController refreshBootEntries];
-    NSLog(@"StartupDiskPane: refreshBootEntries completed");
+    NSDebugLLog(@"gwcomp", @"StartupDiskPane: refreshBootEntries completed");
 }
 
 - (void)willUnselect

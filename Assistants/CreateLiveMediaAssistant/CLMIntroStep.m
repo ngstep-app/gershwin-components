@@ -17,7 +17,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"CLMIntroStep: init");
+        NSDebugLLog(@"gwcomp", @"CLMIntroStep: init");
         [self setupView];
     }
     return self;
@@ -25,7 +25,7 @@
 
 - (void)setupView
 {
-    NSLog(@"CLMIntroStep: setupView");
+    NSDebugLLog(@"gwcomp", @"CLMIntroStep: setupView");
     
     // Match installer card inner area (approx 354x204)
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
@@ -90,17 +90,17 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"CLMIntroStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"CLMIntroStep: stepWillAppear");
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"CLMIntroStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"CLMIntroStep: stepDidAppear");
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"CLMIntroStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"CLMIntroStep: stepWillDisappear");
 }
 
 @end

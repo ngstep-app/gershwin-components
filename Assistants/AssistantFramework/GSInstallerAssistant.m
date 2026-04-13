@@ -34,7 +34,7 @@ NSView *createColoredBox(NSRect frame, NSColor *color) {
                          icon:(NSImage *)icon
                         steps:(NSArray<id<GSAssistantStepProtocol>> *)steps {
     
-    NSLog(@"[GSModernInstallerWindow] Initializing installer assistant with title: '%@'", title);
+    NSDebugLLog(@"gwcomp", @"[GSModernInstallerWindow] Initializing installer assistant with title: '%@'", title);
     
     // Create fixed-size window matching installer design
     NSRect windowFrame = NSMakeRect(0, 0, GSInstallerWindowWidth, GSInstallerWindowHeight);
@@ -65,7 +65,7 @@ NSView *createColoredBox(NSRect frame, NSColor *color) {
 }
 
 - (void)dealloc {
-    NSLog(@"[GSInstallerAssistantWindow] Deallocating installer assistant");
+    NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantWindow] Deallocating installer assistant");
     [_installerTitle release];
     [_installerIcon release];
     [_steps release];
@@ -91,7 +91,7 @@ NSView *createColoredBox(NSRect frame, NSColor *color) {
     [window setResizable:NO];
     [window center];
     
-    NSLog(@"[GSInstallerAssistantWindow] Window setup complete, size: %.0fx%.0f", 
+    NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantWindow] Window setup complete, size: %.0fx%.0f", 
           GSInstallerWindowWidth, GSInstallerWindowHeight);
 }
 
@@ -128,7 +128,7 @@ NSView *createColoredBox(NSRect frame, NSColor *color) {
     [_buttonAreaView setAutoresizingMask:NSViewWidthSizable];
     [_mainContainerView addSubview:_buttonAreaView];
     
-    NSLog(@"[GSInstallerAssistantWindow] Main layout created - Sidebar: %.0fx%.0f, Content: %.0fx%.0f", 
+    NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantWindow] Main layout created - Sidebar: %.0fx%.0f, Content: %.0fx%.0f", 
           GSInstallerSidebarWidth, contentHeight, contentWidth, contentHeight);
 }
 
@@ -155,7 +155,7 @@ NSView *createColoredBox(NSRect frame, NSColor *color) {
     [_sidebarView addSubview:separatorView];
     [separatorView release];
     
-    NSLog(@"[GSModernInstallerWindow] Sidebar setup complete with %lu step indicators", 
+    NSDebugLLog(@"gwcomp", @"[GSModernInstallerWindow] Sidebar setup complete with %lu step indicators", 
           (unsigned long)_stepIndicatorViews.count);
 }
 
@@ -271,7 +271,7 @@ NSView *createColoredBox(NSRect frame, NSColor *color) {
     [_goBackButton setEnabled:NO]; // Disabled initially
     [_buttonAreaView addSubview:_goBackButton];
     
-    NSLog(@"[GSInstallerAssistantWindow] Button area setup complete");
+    NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantWindow] Button area setup complete");
 }
 
 - (void)setupContentArea {
@@ -315,11 +315,11 @@ NSView *createColoredBox(NSRect frame, NSColor *color) {
 
 - (void)goToStep:(NSInteger)stepIndex {
     if (stepIndex < 0 || stepIndex >= _steps.count) {
-        NSLog(@"[GSInstallerAssistantWindow] Invalid step index: %ld", (long)stepIndex);
+        NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantWindow] Invalid step index: %ld", (long)stepIndex);
         return;
     }
     
-    NSLog(@"[GSInstallerAssistantWindow] Going to step %ld", (long)stepIndex);
+    NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantWindow] Going to step %ld", (long)stepIndex);
     
     _currentStepIndex = stepIndex;
     [self setupContentArea];
@@ -362,21 +362,21 @@ NSView *createColoredBox(NSRect frame, NSColor *color) {
 #pragma mark - Button Actions
 
 - (void)optionsButtonClicked:(id)sender {
-    NSLog(@"[GSInstallerAssistantWindow] Options button clicked");
+    NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantWindow] Options button clicked");
     // Handle options - to be implemented based on specific step needs
 }
 
 - (void)goBackButtonClicked:(id)sender {
-    NSLog(@"[GSInstallerAssistantWindow] Go Back button clicked");
+    NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantWindow] Go Back button clicked");
     [self previousStep];
 }
 
 - (void)continueButtonClicked:(id)sender {
-    NSLog(@"[GSInstallerAssistantWindow] Continue button clicked");
+    NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantWindow] Continue button clicked");
     
     if (_currentStepIndex == _steps.count - 1) {
         // Last step - handle completion
-        NSLog(@"[GSInstallerAssistantWindow] Installation complete, initiating restart");
+        NSDebugLLog(@"gwcomp", @"[GSInstallerAssistantWindow] Installation complete, initiating restart");
         // Handle restart or completion
     } else {
         [self nextStep];
@@ -619,7 +619,7 @@ NSView *createColoredBox(NSRect frame, NSColor *color) {
     [_statusLabel setStringValue:status];
     [_timeRemainingLabel setStringValue:timeString];
     
-    NSLog(@"[GSInstallationProgressStep] Progress updated: %.1f%% - %@", progress, status);
+    NSDebugLLog(@"gwcomp", @"[GSInstallationProgressStep] Progress updated: %.1f%% - %@", progress, status);
 }
 
 - (void)dealloc {

@@ -189,7 +189,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
                                 icon:(nullable NSImage *)icon
                                steps:(NSArray<id<GSAssistantStepProtocol>> *)steps {
     
-    NSLog(@"[GSAssistantWindow] Initializing with layout style %ld, title: '%@', steps count: %lu", 
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Initializing with layout style %ld, title: '%@', steps count: %lu", 
           (long)layoutStyle, title, (unsigned long)steps.count);
     
     // Determine window dimensions based on layout style
@@ -273,7 +273,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     _contentView = [[NSView alloc] init];
     window.contentView = _contentView;
     
-    NSLog(@"[GSAssistantWindow] Window setup complete with layout style %ld, size: %.0fx%.0f", 
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Window setup complete with layout style %ld, size: %.0fx%.0f", 
           (long)_layoutStyle, _windowWidth, _windowHeight);
 }
 
@@ -445,17 +445,17 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
 #pragma mark - Button Actions
 
 - (void)cancelButtonClicked:(id)sender {
-    NSLog(@"[GSAssistantWindow] Cancel button clicked from default layout");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Cancel button clicked from default layout");
     [self cancelAssistant];
 }
 
 - (void)backButtonClicked:(id)sender {
-    NSLog(@"[GSAssistantWindow] Back button clicked from default layout");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Back button clicked from default layout");
     [self goToPreviousStep];
 }
 
 - (void)continueButtonClicked:(id)sender {
-    NSLog(@"[GSAssistantWindow] Continue button clicked from default layout");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Continue button clicked from default layout");
     [self goToNextStep];
 }
 
@@ -772,7 +772,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
 }
 
 - (void)autoCompleteWithSuccessMessage:(NSString *)message {
-    NSLog(@"[GSAssistantWindow] Auto-completing with success message: %@", message);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Auto-completing with success message: %@", message);
     
     // Create a completion step that auto-hides navigation buttons
     GSCompletionStep *successStep = [[GSCompletionStep alloc] initWithCompletionMessage:message success:YES];
@@ -786,7 +786,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     _currentIndex = 0;
     [self showCurrentStep];
     
-    NSLog(@"[GSAssistantWindow] Auto-completion step displayed");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Auto-completion step displayed");
 }
 
 #pragma mark - Installer Layout Methods
@@ -833,7 +833,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
         [_contentWatermarkImageView setAutoresizingMask:(NSViewMaxXMargin | NSViewMinYMargin | NSViewMaxYMargin)];
         // Place at the very back so it shines through both sidebar and content card
         [_contentView addSubview:_contentWatermarkImageView positioned:NSWindowBelow relativeTo:nil];
-        NSLog(@"[GSAssistantWindow] Global watermark added (whole dialog), frame %@", NSStringFromRect(wmFrame));
+        NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Global watermark added (whole dialog), frame %@", NSStringFromRect(wmFrame));
     }
 
     [_contentView addSubview:_sidebarView];
@@ -841,7 +841,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     // Create step indicators
     [self createInstallerStepIndicators];
     
-    NSLog(@"[GSAssistantWindow] Installer sidebar setup complete (no background, no separators)");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Installer sidebar setup complete (no background, no separators)");
 }
 
 - (void)setupInstallerContentView {
@@ -853,7 +853,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     _mainContentView = [[NSView alloc] initWithFrame:contentFrame];
     [_contentView addSubview:_mainContentView];
 
-    NSLog(@"[GSAssistantWindow] Content view setup. assistantIcon=%@", _assistantIcon);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Content view setup. assistantIcon=%@", _assistantIcon);
 
     CGFloat cw = [_mainContentView frame].size.width;
     CGFloat ch = [_mainContentView frame].size.height;
@@ -871,7 +871,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     [_installerContentCardView setAutoresizingMask:(NSViewWidthSizable | NSViewHeightSizable)];
     [_mainContentView addSubview:_installerContentCardView];
 
-    NSLog(@"[GSAssistantWindow] Installer content area setup complete (card only; watermark handled globally). card=%@", _installerContentCardView);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Installer content area setup complete (card only; watermark handled globally). card=%@", _installerContentCardView);
 }
 
 - (void)setupInstallerButtonArea {
@@ -914,7 +914,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     [_backButton setEnabled:NO];
     [_installerButtonAreaView addSubview:_backButton];
     
-    NSLog(@"[GSAssistantWindow] Installer button area setup complete (flat)");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Installer button area setup complete (flat)");
 }
 
 - (void)createInstallerStepIndicators {
@@ -949,7 +949,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
         [_stepIndicatorViews addObject:stepRow];
     }
 
-    NSLog(@"[GSAssistantWindow] Created %lu step indicators", (unsigned long)_stepIndicatorViews.count);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Created %lu step indicators", (unsigned long)_stepIndicatorViews.count);
 }
 
 - (void)updateInstallerStepIndicators {
@@ -1074,7 +1074,7 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
     id<GSAssistantStepProtocol> step = [self currentStep];
     if (!step) return;
     
-    NSLog(@"[GSAssistantWindow] Updating installer navigation buttons for step %ld", (long)_currentIndex);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Updating installer navigation buttons for step %ld", (long)_currentIndex);
     
     BOOL canContinue = [step canContinue];
     BOOL isLastStep = ((NSUInteger)_currentIndex == _stepsArray.count - 1);
@@ -1122,24 +1122,24 @@ static const CGFloat GSAssistantWindowMinHeight = 450.0;
 #pragma mark - Installer Button Actions
 
 - (void)continueClicked:(id)sender {
-    NSLog(@"[GSAssistantWindow] Continue button clicked from installer layout");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Continue button clicked from installer layout");
     [self goToNextStep];
 }
 
 - (void)backClicked:(id)sender {
-    NSLog(@"[GSAssistantWindow] Back button clicked from installer layout");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Back button clicked from installer layout");
     [self goToPreviousStep];
 }
 
 - (void)optionsButtonClicked:(id)sender {
-    NSLog(@"[GSAssistantWindow] Options button clicked");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Options button clicked");
     // Handle options - to be implemented based on specific step needs
 }
 
 #pragma mark - NSWindowDelegate
 
 - (void)windowWillClose:(NSNotification *)notification {
-    NSLog(@"[GSAssistantWindow] Window closing - user requested shutdown");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantWindow] Window closing - user requested shutdown");
     [NSApp terminate:nil];
 }
 

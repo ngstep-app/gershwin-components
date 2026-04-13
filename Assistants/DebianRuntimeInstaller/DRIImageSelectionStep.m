@@ -17,7 +17,7 @@
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"DRIImageSelectionStep: init");
+        NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: init");
         self.stepTitle = @"Select Debian Runtime Image";
         self.stepDescription = @"Choose a runtime image to install";
     }
@@ -28,7 +28,7 @@
 #pragma clang diagnostic ignored "-Wobjc-missing-super-calls"
 - (void)dealloc
 {
-    NSLog(@"DRIImageSelectionStep: dealloc");
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: dealloc");
     // Release retained subviews
     if (_urlField) { _urlField = nil; }
     if (_prereleaseCheckbox) { _prereleaseCheckbox = nil; }
@@ -38,7 +38,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"DRIImageSelectionStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: stepWillAppear");
     [super stepWillAppear];
     
     // Check network connectivity
@@ -57,7 +57,7 @@
         [[NSFileManager defaultManager] fileExistsAtPath:@"/compat/linux"] ||
         [[NSFileManager defaultManager] fileExistsAtPath:@"/compat/ubuntu"]) {
         
-        NSLog(@"DRIImageSelectionStep: Linux runtime already exists, showing alert");
+        NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: Linux runtime already exists, showing alert");
         
         NSAlert *alert = [[NSAlert alloc] init];
         [alert setMessageText:@"Linux Runtime Already Installed"]; 
@@ -72,14 +72,14 @@
 
 - (void)stepDidAppear
 {
-    NSLog(@"DRIImageSelectionStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: stepDidAppear");
 }
 
 #pragma mark - Action Methods
 
 - (void)urlFieldChanged:(id)sender
 {
-    NSLog(@"DRIImageSelectionStep: URL field changed");
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: URL field changed");
     // Clear table selection when custom URL is entered
     if ([_urlField stringValue].length > 0) {
         _selectedImageURL = nil;
@@ -89,26 +89,26 @@
 
 - (void)refreshButtonClicked:(id)sender
 {
-    NSLog(@"DRIImageSelectionStep: refresh button clicked");
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: refresh button clicked");
     [self refreshItems]; // Use base class method
 }
 
 - (void)prereleaseCheckboxChanged:(id)sender
 {
-    NSLog(@"DRIImageSelectionStep: prerelease checkbox changed");
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: prerelease checkbox changed");
     [self refreshItems]; // Use base class method
 }
 
 - (void)loadItems
 {
-    NSLog(@"DRIImageSelectionStep: loadItems (called by base class)");
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: loadItems (called by base class)");
     
     // Clear existing items
     [self.items removeAllObjects];
     
     // Check network connectivity first
     if (![GSNetworkUtilities checkInternetConnectivity]) {
-        NSLog(@"DRIImageSelectionStep: No internet connectivity, using fallback data");
+        NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: No internet connectivity, using fallback data");
         // Could add fallback data here if needed
         return;
     }
@@ -138,7 +138,7 @@
         [self.items addObject:item];
     }
     
-    NSLog(@"DRIImageSelectionStep: loaded %lu items", (unsigned long)self.items.count);
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: loaded %lu items", (unsigned long)self.items.count);
     
     // Refresh the table view
     [self.arrayController rearrangeObjects];
@@ -146,12 +146,12 @@
 
 - (void)selectionDidChange
 {
-    NSLog(@"DRIImageSelectionStep: selectionDidChange");
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: selectionDidChange");
     
     if (self.selectedItem) {
         NSDictionary *imageInfo = (NSDictionary *)self.selectedItem;
         _selectedImageURL = imageInfo[@"url"]; 
-        NSLog(@"DRIImageSelectionStep: selected image: %@", _selectedImageURL);
+        NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: selected image: %@", _selectedImageURL);
         
         // Clear custom URL when selecting from table
         [_urlField setStringValue:NSLocalizedString(@"", @"")];
@@ -203,7 +203,7 @@
 
 - (void)setupTableColumns
 {
-    NSLog(@"DRIImageSelectionStep: setupTableColumns");
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: setupTableColumns");
     [self addTableColumn:@"name" title:@"Name" width:200 keyPath:@"name"]; 
     [self addTableColumn:@"sizeFormatted" title:@"Size" width:80 keyPath:@"sizeFormatted"]; 
     [self addTableColumn:@"dateFormatted" title:@"Date" width:120 keyPath:@"dateFormatted"]; 
@@ -211,7 +211,7 @@
 
 - (void)setupAdditionalViews:(NSView *)containerView
 {
-    NSLog(@"DRIImageSelectionStep: setupAdditionalViews");
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: setupAdditionalViews");
     
     // Ensure the table fits inside the installer card (354x204). Use standard margins.
     NSScrollView *scrollView = [self.tableView enclosingScrollView];
@@ -265,7 +265,7 @@
     BOOL hasCustomURL = ([customURL length] > 0 && [customURL hasPrefix:@"http"]);
     BOOL canContinue = hasSelectedImage || hasCustomURL;
     
-    NSLog(@"DRIImageSelectionStep: canContinue called - selectedItem=%@ customURL='%@' result=%@", 
+    NSDebugLLog(@"gwcomp", @"DRIImageSelectionStep: canContinue called - selectedItem=%@ customURL='%@' result=%@", 
           self.selectedItem ? @"YES" : @"NO", customURL, canContinue ? @"YES" : @"NO");
     
     return canContinue;

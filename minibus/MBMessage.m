@@ -217,15 +217,15 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
 
 - (NSData *)serialize
 {
-    NSLog(@"Serializing message type=%d, replySerial=%lu", (int)_type, (unsigned long)_replySerial);
+    NSDebugLLog(@"gwcomp", @"Serializing message type=%d, replySerial=%lu", (int)_type, (unsigned long)_replySerial);
     
     // CRITICAL FIX: Validate message before serialization
     // Don't serialize messages with invalid variant signatures  
     if (_signature && [_signature isEqualToString:@"v"]) {
         if (!_arguments || [_arguments count] == 0 || [_arguments containsObject:[NSNull null]]) {
-            NSLog(@"ERROR: Refusing to serialize message with empty variant signature 'v'");
-            NSLog(@"       This would create an invalid D-Bus message");
-            NSLog(@"       Type=%d, Serial=%lu, Destination=%@", (int)_type, (unsigned long)_serial, _destination);
+            NSDebugLLog(@"gwcomp", @"ERROR: Refusing to serialize message with empty variant signature 'v'");
+            NSDebugLLog(@"gwcomp", @"       This would create an invalid D-Bus message");
+            NSDebugLLog(@"gwcomp", @"       Type=%d, Serial=%lu, Destination=%@", (int)_type, (unsigned long)_serial, _destination);
             return nil; // Return nil to prevent sending invalid message
         }
     }
@@ -255,7 +255,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     // Header fields array length (just the data length, not including padding)
     uint32_t fieldsLength = (uint32_t)[headerFieldsData length];
     
-    NSLog(@"Header fields data length: %u bytes", fieldsLength);
+    NSDebugLLog(@"gwcomp", @"Header fields data length: %u bytes", fieldsLength);
     
     // Write fixed header
     [message appendBytes:&endian length:1];
@@ -275,7 +275,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     // Add body
     [message appendData:body];
     
-    NSLog(@"Final message length: %lu bytes", (unsigned long)[message length]);
+    NSDebugLLog(@"gwcomp", @"Final message length: %lu bytes", (unsigned long)[message length]);
     return message;
 }
 
@@ -499,7 +499,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
             
             if (isStruct) {
                 // Serialize as STRUCT - align to 8-byte boundary
-                NSLog(@"DEBUG: Serializing STRUCT with %lu fields", [array count]);
+                NSDebugLLog(@"gwcomp", @"DEBUG: Serializing STRUCT with %lu fields", [array count]);
                 
                 addPadding(bodyData, 8);
                 
@@ -547,7 +547,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                         }
                     } else {
                         // Other field types - skip for now
-                        NSLog(@"DEBUG: Skipping unsupported struct field type: %@", [field class]);
+                        NSDebugLLog(@"gwcomp", @"DEBUG: Skipping unsupported struct field type: %@", [field class]);
                     }
                 }
             } else {
@@ -639,7 +639,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
             for (NSString *key in dict) {
                 // CRITICAL: Skip invalid dictionary entries that could cause GLib crashes
                 if (!key || [key length] == 0) {
-                    NSLog(@"WARNING: Skipping invalid dictionary key (empty or nil)");
+                    NSDebugLLog(@"gwcomp", @"WARNING: Skipping invalid dictionary key (empty or nil)");
                     continue;
                 }
                 
@@ -647,7 +647,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                 
                 // CRITICAL: Ensure we have a valid value
                 if (!value) {
-                    NSLog(@"WARNING: Skipping dictionary entry '%@' with nil value", key);
+                    NSDebugLLog(@"gwcomp", @"WARNING: Skipping dictionary entry '%@' with nil value", key);
                     continue;
                 }
                 
@@ -680,7 +680,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
     
     if (value == nil || value == [NSNull null]) {
         // Serialize nil as empty string variant
-        NSLog(@"DEBUG: Serializing null/nil value as empty string variant");
+        NSDebugLLog(@"gwcomp", @"DEBUG: Serializing null/nil value as empty string variant");
         [self serializeVariantWithSignature:@"s" value:@"" toData:data];
         return;
     }
@@ -760,7 +760,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                                toData:(NSMutableData *)data
 {
     if (!signature || [signature length] == 0) {
-        NSLog(@"ERROR: Cannot serialize variant with empty signature");
+        NSDebugLLog(@"gwcomp", @"ERROR: Cannot serialize variant with empty signature");
         return;
     }
     
@@ -848,7 +848,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         }
         
         default:
-            NSLog(@"ERROR: Unsupported type '%c' in signature '%@'", typeChar, signature);
+            NSDebugLLog(@"gwcomp", @"ERROR: Unsupported type '%c' in signature '%@'", typeChar, signature);
             break;
     }
 }
@@ -1004,63 +1004,63 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                 endianness:(uint8_t)endianness 
                   message:(MBMessage *)message
 {
-    NSLog(@"DEBUG: parseHeaderFields called - pos=%lu, length=%lu", pos, length);
+    NSDebugLLog(@"gwcomp", @"DEBUG: parseHeaderFields called - pos=%lu, length=%lu", pos, length);
     const uint8_t *bytes = [data bytes];
     NSUInteger endPos = pos + length;
     
     // DEBUG: Hex dump of header fields data
-    NSLog(@"DEBUG: Header fields hex dump:");
+    NSDebugLLog(@"gwcomp", @"DEBUG: Header fields hex dump:");
     for (NSUInteger i = pos; i < endPos && i < pos + 64; i += 16) {
         NSMutableString *hexLine = [NSMutableString string];
         for (NSUInteger j = i; j < i + 16 && j < endPos; j++) {
             [hexLine appendFormat:@"%02x ", bytes[j]];
         }
-        NSLog(@"  %04lx: %@", i - pos, hexLine);
+        NSDebugLLog(@"gwcomp", @"  %04lx: %@", i - pos, hexLine);
     }
     
     int fieldCount = 0;
     
     // Header fields are an array of (BYTE, VARIANT) structs
     while (pos < endPos) {
-        NSLog(@"DEBUG: Field %d - pos=%lu, endPos=%lu", fieldCount, pos, endPos);
+        NSDebugLLog(@"gwcomp", @"DEBUG: Field %d - pos=%lu, endPos=%lu", fieldCount, pos, endPos);
         if (pos + 8 > endPos) {
-            NSLog(@"DEBUG: Not enough bytes for field alignment, breaking");
+            NSDebugLLog(@"gwcomp", @"DEBUG: Not enough bytes for field alignment, breaking");
             break; // Need at least 8 bytes for alignment
         }
         
         // Align to 8-byte boundary for struct
         NSUInteger oldPos = pos;
         pos = alignTo(pos, 8);
-        NSLog(@"DEBUG: Aligned from %lu to %lu", oldPos, pos);
+        NSDebugLLog(@"gwcomp", @"DEBUG: Aligned from %lu to %lu", oldPos, pos);
         if (pos >= endPos) {
-            NSLog(@"DEBUG: Alignment pushed past end, breaking");
+            NSDebugLLog(@"gwcomp", @"DEBUG: Alignment pushed past end, breaking");
             break;
         }
         
         // Read field code (BYTE)
         uint8_t fieldCode = bytes[pos];
         pos++;
-        NSLog(@"DEBUG: Field code: %u", fieldCode);
+        NSDebugLLog(@"gwcomp", @"DEBUG: Field code: %u", fieldCode);
         
         // Read variant signature length
         if (pos >= endPos) {
-            NSLog(@"DEBUG: No space for signature length, breaking");
+            NSDebugLLog(@"gwcomp", @"DEBUG: No space for signature length, breaking");
             break;
         }
         uint8_t sigLen = bytes[pos];
         pos++;
-        NSLog(@"DEBUG: Signature length: %u", sigLen);
+        NSDebugLLog(@"gwcomp", @"DEBUG: Signature length: %u", sigLen);
         
         // Read signature
         if (pos + sigLen + 1 > endPos) {
-            NSLog(@"DEBUG: Not enough space for signature, breaking");
+            NSDebugLLog(@"gwcomp", @"DEBUG: Not enough space for signature, breaking");
             break; // +1 for null terminator
         }
         NSString *signature = [[NSString alloc] initWithBytes:bytes + pos 
                                                        length:sigLen 
                                                      encoding:NSUTF8StringEncoding];
         pos += sigLen + 1; // Skip null terminator
-        NSLog(@"DEBUG: Signature: '%@'", signature);
+        NSDebugLLog(@"gwcomp", @"DEBUG: Signature: '%@'", signature);
         
         fieldCount++;
         
@@ -1072,7 +1072,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
                                   endianness:endianness 
                                bytesConsumed:&bytesConsumed];
         
-        NSLog(@"DEBUG: Parsed value: '%@', consumed %lu bytes", value, bytesConsumed);
+        NSDebugLLog(@"gwcomp", @"DEBUG: Parsed value: '%@', consumed %lu bytes", value, bytesConsumed);
         
         // Update position with consumed bytes
         pos += bytesConsumed;
@@ -1103,7 +1103,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
             case DBUS_HEADER_FIELD_SIGNATURE:
                 // Validate signature field - reject invalid "v" signatures
                 if (value && [value isEqualToString:@"v"]) {
-                    NSLog(@"WARNING: Received message with invalid signature 'v', replacing with empty");
+                    NSDebugLLog(@"gwcomp", @"WARNING: Received message with invalid signature 'v', replacing with empty");
                     message.signature = @"";
                 } else {
                     message.signature = value;
@@ -1201,7 +1201,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
         
         default:
             // Unsupported type - skip it
-            NSLog(@"WARNING: Unsupported type '%c' in signature '%@'", typeChar, signature);
+            NSDebugLLog(@"gwcomp", @"WARNING: Unsupported type '%c' in signature '%@'", typeChar, signature);
             return nil;
     }
 }
@@ -1233,7 +1233,7 @@ static void addPadding(NSMutableData *data, NSUInteger alignment) {
             [arguments addObject:value];
         } else {
             // If we can't parse a value, stop parsing
-            NSLog(@"WARNING: Failed to parse argument %lu of signature '%@'", i, signature);
+            NSDebugLLog(@"gwcomp", @"WARNING: Failed to parse argument %lu of signature '%@'", i, signature);
             break;
         }
         

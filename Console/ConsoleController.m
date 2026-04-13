@@ -195,7 +195,7 @@ static ConsoleController *sharedInstance = nil;
         [task launch];
         [NSApp terminate:nil];
     } @catch (NSException *exception) {
-        NSLog(@"Failed to relaunch with sudo: %@", exception);
+        NSDebugLLog(@"gwcomp", @"Failed to relaunch with sudo: %@", exception);
     }
     
     [task release];
@@ -824,7 +824,7 @@ static ConsoleController *sharedInstance = nil;
 
 - (void)logSource:(LogSource *)source didEncounterError:(NSError *)error
 {
-    NSLog(@"Log source %@ error: %@", [source name], error);
+    NSDebugLLog(@"gwcomp", @"Log source %@ error: %@", [source name], error);
 }
 
 // MARK: - UI Updates
@@ -1279,7 +1279,7 @@ static ConsoleController *sharedInstance = nil;
 - (void)showAlertForLogEntry:(LogEntry *)entry
 {
     // Show notification or badge
-    NSLog(@"Alert: %@", [entry message]);
+    NSDebugLLog(@"gwcomp", @"Alert: %@", [entry message]);
     [NSApp requestUserAttention:NSInformationalRequest];
 }
 

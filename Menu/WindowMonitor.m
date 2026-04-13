@@ -64,7 +64,7 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         // Create serial queue for X11 operations
         _x11Queue = dispatch_queue_create("org.gnustep.menu.windowmonitor", DISPATCH_QUEUE_SERIAL);
         
-        NSLog(@"WindowMonitor: Initialized");
+        NSDebugLLog(@"gwcomp", @"WindowMonitor: Initialized");
     }
     return self;
 }
@@ -77,11 +77,11 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
 - (BOOL)startMonitoring
 {
     if (_monitoring) {
-        NSLog(@"WindowMonitor: Already monitoring");
+        NSDebugLLog(@"gwcomp", @"WindowMonitor: Already monitoring");
         return YES;
     }
 
-    NSLog(@"WindowMonitor: Starting event-driven monitoring using GCD");
+    NSDebugLLog(@"gwcomp", @"WindowMonitor: Starting event-driven monitoring using GCD");
 
     // Initialize all X11 operations on the dedicated serial queue to ensure
     // the Display is only used from one thread (avoids Xlib thread-safety issues)
@@ -90,7 +90,7 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         // Open X11 display on the X11 queue thread
         _display = XOpenDisplay(NULL);
         if (!_display) {
-            NSLog(@"WindowMonitor: ERROR - Cannot open X11 display");
+            NSDebugLLog(@"gwcomp", @"WindowMonitor: ERROR - Cannot open X11 display");
             initSuccess = NO;
             return;
         }
@@ -105,12 +105,12 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         XSelectInput(_display, _rootWindow, PropertyChangeMask | SubstructureNotifyMask);
 
         int x11Fd = ConnectionNumber(_display);
-        NSLog(@"WindowMonitor: X11 file descriptor: %d", x11Fd);
+        NSDebugLLog(@"gwcomp", @"WindowMonitor: X11 file descriptor: %d", x11Fd);
 
         // Create GCD dispatch source for X11 file descriptor on the same queue
         _x11EventSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_READ, x11Fd, 0, _x11Queue);
         if (!_x11EventSource) {
-            NSLog(@"WindowMonitor: ERROR - Failed to create dispatch source");
+            NSDebugLLog(@"gwcomp", @"WindowMonitor: ERROR - Failed to create dispatch source");
             XCloseDisplay(_display);
             _display = NULL;
             initSuccess = NO;
@@ -127,7 +127,7 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
 
         // Set cancel handler
         dispatch_source_set_cancel_handler(_x11EventSource, ^{
-            NSLog(@"WindowMonitor: Dispatch source cancelled");
+            NSDebugLLog(@"gwcomp", @"WindowMonitor: Dispatch source cancelled");
         });
 
         // Start monitoring
@@ -139,7 +139,7 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
     if (!initSuccess) return NO;
 
     _monitoring = YES;
-    NSLog(@"WindowMonitor: Monitoring started - event-driven, zero-polling");
+    NSDebugLLog(@"gwcomp", @"WindowMonitor: Monitoring started - event-driven, zero-polling");
 
     // Get initial active window (runs on the X11 queue)
     dispatch_async(_x11Queue, ^{
@@ -173,14 +173,14 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
             Window affected = (event.type == DestroyNotify) ? event.xdestroywindow.window : event.xunmap.window;
             if (affected != 0 && affected == _currentActiveWindow) {
                 // Window that was active is now gone - check what the new active window is
-                NSLog(@"WindowMonitor: Active window %lu destroyed/unmapped - checking for new active window", affected);
+                NSDebugLLog(@"gwcomp", @"WindowMonitor: Active window %lu destroyed/unmapped - checking for new active window", affected);
                 [self checkActiveWindow];
             }
         }
     }
     
     if (eventsProcessed >= MAX_EVENTS_PER_BATCH && XPending(_display) > 0) {
-        NSLog(@"WindowMonitor: Hit event batch limit (%d), %d events still pending - will process on next fd-ready",
+        NSDebugLLog(@"gwcomp", @"WindowMonitor: Hit event batch limit (%d), %d events still pending - will process on next fd-ready",
               MAX_EVENTS_PER_BATCH, XPending(_display));
     }
 }
@@ -209,10 +209,10 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         BOOL canGetAttrs = XGetWindowAttributes(_display, (Window)newActiveWindow, &attrs);
         
         if (canGetAttrs && attrs.map_state == IsUnmapped) {
-            NSLog(@"WindowMonitor: Initial active window %lu is unmapped", newActiveWindow);
+            NSDebugLLog(@"gwcomp", @"WindowMonitor: Initial active window %lu is unmapped", newActiveWindow);
             newActiveWindow = 0;
         } else if (!canGetAttrs) {
-            NSLog(@"WindowMonitor: Cannot get attributes for initial window %lu - trusting WM", newActiveWindow);
+            NSDebugLLog(@"gwcomp", @"WindowMonitor: Cannot get attributes for initial window %lu - trusting WM", newActiveWindow);
         }
         
         if (newActiveWindow != 0) {
@@ -259,13 +259,13 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         
         if (canGetAttrs && attrs.map_state == IsUnmapped) {
             // Window is explicitly unmapped - this is a valid "no window" state
-            NSLog(@"WindowMonitor: Active window %lu is unmapped - treating as no active window", newActiveWindow);
+            NSDebugLLog(@"gwcomp", @"WindowMonitor: Active window %lu is unmapped - treating as no active window", newActiveWindow);
             newActiveWindow = 0;
         } else if (!canGetAttrs) {
             // Can't get attributes - might be during WM operation
             // Only ignore if we get a BadWindow error, otherwise keep it
             // For now, trust the window manager's report
-            NSLog(@"WindowMonitor: Cannot get attributes for active window %lu - trusting WM report anyway", newActiveWindow);
+            NSDebugLLog(@"gwcomp", @"WindowMonitor: Cannot get attributes for active window %lu - trusting WM report anyway", newActiveWindow);
         }
         
         // Select for events on this window if we can
@@ -275,7 +275,7 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
     }
     
     if (newActiveWindow != _currentActiveWindow) {
-        NSLog(@"WindowMonitor: Active window changed from %lu to %lu", _currentActiveWindow, newActiveWindow);
+        NSDebugLLog(@"gwcomp", @"WindowMonitor: Active window changed from %lu to %lu", _currentActiveWindow, newActiveWindow);
         _currentActiveWindow = newActiveWindow;
         
         NSDictionary *userInfo = @{@"windowId": @(newActiveWindow)};
@@ -303,7 +303,7 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
     }
     
     _monitoring = NO;
-    NSLog(@"WindowMonitor: Stopped monitoring");
+    NSDebugLLog(@"gwcomp", @"WindowMonitor: Stopped monitoring");
 }
 
 // Compatibility Accessors

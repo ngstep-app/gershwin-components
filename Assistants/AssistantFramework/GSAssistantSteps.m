@@ -37,7 +37,7 @@ static NSBundle *getFrameworkBundle() {
 - (instancetype)initWithTitle:(NSString *)title 
                   description:(NSString *)description 
                          view:(NSView *)view {
-    NSLog(@"[GSAssistantStep] Initializing step with title: '%@', description: '%@', view: %@", title, description, view);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantStep] Initializing step with title: '%@', description: '%@', view: %@", title, description, view);
     self = [super init];
     if (self) {
         _title = [title copy];
@@ -48,7 +48,7 @@ static NSBundle *getFrameworkBundle() {
         _canReturn = YES;
         _progress = 0.0;
     }
-    NSLog(@"[GSAssistantStep] Step initialized successfully");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantStep] Step initialized successfully");
     return self;
 }
 
@@ -62,8 +62,8 @@ static NSBundle *getFrameworkBundle() {
 }
 
 - (NSView *)stepView {
-    NSLog(@"[GSAssistantStep] stepView called on step: %@", self);
-    NSLog(@"[GSAssistantStep] Returning view: %@ with frame: %@", self.view, NSStringFromRect(self.view.frame));
+    NSDebugLLog(@"gwcomp", @"[GSAssistantStep] stepView called on step: %@", self);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantStep] Returning view: %@ with frame: %@", self.view, NSStringFromRect(self.view.frame));
     return self.view;
 }
 
@@ -104,12 +104,12 @@ static NSBundle *getFrameworkBundle() {
 }
 
 - (NSView *)createIntroductionViewWithMessage:(NSString *)message features:(NSArray<NSString *> *)features {
-    NSLog(@"[GSIntroductionStep] Creating introduction view with message: %@", message);
+    NSDebugLLog(@"gwcomp", @"[GSIntroductionStep] Creating introduction view with message: %@", message);
     
     // Create container with explicit frame instead of relying solely on Auto Layout
     NSView *containerView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
     containerView.translatesAutoresizingMaskIntoConstraints = NO;
-    NSLog(@"[GSIntroductionStep] Created container view with frame: %@", NSStringFromRect(containerView.frame));
+    NSDebugLLog(@"gwcomp", @"[GSIntroductionStep] Created container view with frame: %@", NSStringFromRect(containerView.frame));
     
     // Welcome message with explicit frame positioning - moved much lower
     NSTextField *messageLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 180, 360, 40)];
@@ -122,7 +122,7 @@ static NSBundle *getFrameworkBundle() {
     messageLabel.font = [NSFont systemFontOfSize:14.0];
     messageLabel.stringValue = message ?: GSLocalizedString(@"Welcome to the setup assistant.", @"Default welcome message");
     [containerView addSubview:messageLabel];
-    NSLog(@"[GSIntroductionStep] Added message label: %@", messageLabel);
+    NSDebugLLog(@"gwcomp", @"[GSIntroductionStep] Added message label: %@", messageLabel);
     
     CGFloat currentY = 130; // Moved down from 200 to 130
     
@@ -138,7 +138,7 @@ static NSBundle *getFrameworkBundle() {
         featuresLabel.font = [NSFont boldSystemFontOfSize:12.0];
         featuresLabel.stringValue = GSLocalizedString(@"This assistant will help you:", @"Features list header");
         [containerView addSubview:featuresLabel];
-        NSLog(@"[GSIntroductionStep] Added features label");
+        NSDebugLLog(@"gwcomp", @"[GSIntroductionStep] Added features label");
         
         currentY -= 30;
         
@@ -153,13 +153,13 @@ static NSBundle *getFrameworkBundle() {
             featureLabel.font = [NSFont systemFontOfSize:12.0];
             featureLabel.stringValue = [NSString stringWithFormat:@"• %@", feature];
             [containerView addSubview:featureLabel];
-            NSLog(@"[GSIntroductionStep] Added feature: %@", feature);
+            NSDebugLLog(@"gwcomp", @"[GSIntroductionStep] Added feature: %@", feature);
             
             currentY -= 25;
         }
     }
     
-    NSLog(@"[GSIntroductionStep] Introduction view creation complete, container has %lu subviews", (unsigned long)containerView.subviews.count);
+    NSDebugLLog(@"gwcomp", @"[GSIntroductionStep] Introduction view creation complete, container has %lu subviews", (unsigned long)containerView.subviews.count);
     return containerView;
 }
 
@@ -302,7 +302,7 @@ static NSBundle *getFrameworkBundle() {
     // Check for auto-completion when progress reaches 100%
     if (_autoCompleteOnFinish && progress >= 1.0) {
         if (self.assistantWindow != nil) {
-            NSLog(@"[GSProgressStep] Auto-completing: progress=%.2f, autoComplete=%d", progress, _autoCompleteOnFinish);
+            NSDebugLLog(@"gwcomp", @"[GSProgressStep] Auto-completing: progress=%.2f, autoComplete=%d", progress, _autoCompleteOnFinish);
                  // Delay auto-completion slightly to let users see the 100% progress
         NSString *message = _completionMessage ?: GSLocalizedString(@"Setup completed successfully!", @"Default completion message");
         [NSTimer scheduledTimerWithTimeInterval:1.5
@@ -405,22 +405,22 @@ static NSBundle *getFrameworkBundle() {
                                  stringByAppendingPathComponent:@"GSAssistantFramework.framework"];
         if (frameworkPath && [[NSFileManager defaultManager] fileExistsAtPath:frameworkPath]) {
             frameworkBundle = [NSBundle bundleWithPath:frameworkPath];
-            NSLog(@"[GSCompletionStep] Found framework bundle at: %@", frameworkPath);
+            NSDebugLLog(@"gwcomp", @"[GSCompletionStep] Found framework bundle at: %@", frameworkPath);
         } else {
-            NSLog(@"[GSCompletionStep] Framework bundle not found at expected path: %@", frameworkPath);
+            NSDebugLLog(@"gwcomp", @"[GSCompletionStep] Framework bundle not found at expected path: %@", frameworkPath);
         }
     }
     
     NSString *iconPath = nil;
     if (frameworkBundle) {
         iconPath = [frameworkBundle pathForResource:iconFileName ofType:@"png"];
-        NSLog(@"[GSCompletionStep] Looking for %@.png in framework bundle: %@", iconFileName, iconPath);
+        NSDebugLLog(@"gwcomp", @"[GSCompletionStep] Looking for %@.png in framework bundle: %@", iconFileName, iconPath);
     }
     
     // If not found in framework, try main bundle as fallback
     if (!iconPath) {
         iconPath = [[NSBundle mainBundle] pathForResource:iconFileName ofType:@"png"];
-        NSLog(@"[GSCompletionStep] Fallback: Looking for %@.png in main bundle: %@", iconFileName, iconPath);
+        NSDebugLLog(@"gwcomp", @"[GSCompletionStep] Fallback: Looking for %@.png in main bundle: %@", iconFileName, iconPath);
     }
     
     if (iconPath) {
@@ -488,7 +488,7 @@ static NSBundle *getFrameworkBundle() {
 @implementation GSWelcomeStep
 
 - (instancetype)initWithContent:(NSString *)content {
-    NSLog(@"[GSWelcomeStep] Initializing welcome step with content length: %lu", (unsigned long)content.length);
+    NSDebugLLog(@"gwcomp", @"[GSWelcomeStep] Initializing welcome step with content length: %lu", (unsigned long)content.length);
     
     NSView *welcomeView = [self createContentViewWithText:content title:@"Welcome"];
     
@@ -500,7 +500,7 @@ static NSBundle *getFrameworkBundle() {
         self.stepType = GSAssistantStepTypeWelcome;
         self.canProceed = YES; // Welcome pages can always be continued
     }
-    NSLog(@"[GSWelcomeStep] Welcome step initialized successfully");
+    NSDebugLLog(@"gwcomp", @"[GSWelcomeStep] Welcome step initialized successfully");
     return self;
 }
 
@@ -553,7 +553,7 @@ static NSBundle *getFrameworkBundle() {
 @implementation GSReadMeStep
 
 - (instancetype)initWithContent:(NSString *)content {
-    NSLog(@"[GSReadMeStep] Initializing read me step with content length: %lu", (unsigned long)content.length);
+    NSDebugLLog(@"gwcomp", @"[GSReadMeStep] Initializing read me step with content length: %lu", (unsigned long)content.length);
     
     NSView *readMeView = [self createContentViewWithText:content title:@"Read Me"];
     
@@ -565,7 +565,7 @@ static NSBundle *getFrameworkBundle() {
         self.stepType = GSAssistantStepTypeReadMe;
         self.canProceed = YES; // Read me pages can always be continued
     }
-    NSLog(@"[GSReadMeStep] Read me step initialized successfully");
+    NSDebugLLog(@"gwcomp", @"[GSReadMeStep] Read me step initialized successfully");
     return self;
 }
 
@@ -618,7 +618,7 @@ static NSBundle *getFrameworkBundle() {
 @implementation GSLicenseStep
 
 - (instancetype)initWithContent:(NSString *)content requiresAcceptance:(BOOL)requiresAcceptance {
-    NSLog(@"[GSLicenseStep] Initializing license step with content length: %lu, requires acceptance: %@", 
+    NSDebugLLog(@"gwcomp", @"[GSLicenseStep] Initializing license step with content length: %lu, requires acceptance: %@", 
           (unsigned long)content.length, requiresAcceptance ? @"YES" : @"NO");
     
     NSView *licenseView = [self createLicenseViewWithText:content requiresAcceptance:requiresAcceptance];
@@ -632,7 +632,7 @@ static NSBundle *getFrameworkBundle() {
         self.stepType = GSAssistantStepTypeLicense;
         self.canProceed = !requiresAcceptance; // Can only proceed if acceptance not required or checkbox is checked
     }
-    NSLog(@"[GSLicenseStep] License step initialized successfully");
+    NSDebugLLog(@"gwcomp", @"[GSLicenseStep] License step initialized successfully");
     return self;
 }
 
@@ -697,7 +697,7 @@ static NSBundle *getFrameworkBundle() {
 }
 
 - (void)acceptanceChanged:(NSButton *)sender {
-    NSLog(@"[GSLicenseStep] License acceptance changed to: %@", sender.state == NSOnState ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"[GSLicenseStep] License acceptance changed to: %@", sender.state == NSOnState ? @"YES" : @"NO");
     self.canProceed = (sender.state == NSOnState);
     
     // Notify the assistant window to update navigation buttons

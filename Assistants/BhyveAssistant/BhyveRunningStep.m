@@ -20,7 +20,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"BhyveRunningStep: init");
+        NSDebugLLog(@"gwcomp", @"BhyveRunningStep: init");
         [self setupView];
     }
     return self;
@@ -28,7 +28,7 @@
 
 - (void)setupView
 {
-    NSLog(@"BhyveRunningStep: setupView");
+    NSDebugLLog(@"gwcomp", @"BhyveRunningStep: setupView");
     
     // Match installer card inner area (approx 354x204)
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
@@ -85,7 +85,7 @@
 
 - (void)updateStatus:(NSString *)status
 {
-    NSLog(@"BhyveRunningStep: updateStatus: %@", status);
+    NSDebugLLog(@"gwcomp", @"BhyveRunningStep: updateStatus: %@", status);
     
     // Ensure we're on the main thread for UI updates
     if (![NSThread isMainThread]) {
@@ -103,7 +103,7 @@
 
 - (void)showLog:(id)sender
 {
-    NSLog(@"BhyveRunningStep: showLog");
+    NSDebugLLog(@"gwcomp", @"BhyveRunningStep: showLog");
     
     if (_controller) {
         [_controller showVMLog];
@@ -135,7 +135,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"BhyveRunningStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"BhyveRunningStep: stepWillAppear");
     
     // Update VM info display
     if (_controller) {
@@ -149,7 +149,7 @@
         
         // If VM is not already running, start it automatically
         if (!_controller.vmRunning) {
-            NSLog(@"BhyveRunningStep: Auto-starting VM");
+            NSDebugLLog(@"gwcomp", @"BhyveRunningStep: Auto-starting VM");
             [self updateStatus:NSLocalizedString(@"Auto-starting virtual machine...", @"Auto-starting status")];
             
             // Check bhyve availability first
@@ -171,12 +171,12 @@
 
 - (void)stepDidAppear
 {
-    NSLog(@"BhyveRunningStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"BhyveRunningStep: stepDidAppear");
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"BhyveRunningStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"BhyveRunningStep: stepWillDisappear");
 }
 
 @end

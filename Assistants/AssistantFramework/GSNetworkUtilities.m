@@ -22,7 +22,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"GSDownloader: init");
+        NSDebugLLog(@"gwcomp", @"GSDownloader: init");
         _isDownloading = NO;
         _totalBytes = 0;
         _receivedBytes = 0;
@@ -32,10 +32,10 @@
 
 - (void)downloadFromURL:(NSString *)url toPath:(NSString *)path
 {
-    NSLog(@"GSDownloader: downloadFromURL: %@ toPath: %@", url, path);
+    NSDebugLLog(@"gwcomp", @"GSDownloader: downloadFromURL: %@ toPath: %@", url, path);
     
     if (_isDownloading) {
-        NSLog(@"GSDownloader: Already downloading, cancelling current download");
+        NSDebugLLog(@"gwcomp", @"GSDownloader: Already downloading, cancelling current download");
         [self cancelDownload];
     }
     
@@ -56,7 +56,7 @@
 
 - (void)copyLocalFile
 {
-    NSLog(@"GSDownloader: copyLocalFile");
+    NSDebugLLog(@"gwcomp", @"GSDownloader: copyLocalFile");
     
     // Extract file path from file:// URL
     NSString *sourcePath = [_sourceURL substringFromIndex:7]; // Remove "file://"
@@ -66,7 +66,7 @@
     // Get file size first
     NSDictionary *attributes = [fileManager attributesOfItemAtPath:sourcePath error:nil];
     if (!attributes) {
-        NSLog(@"GSDownloader: Error getting file attributes");
+        NSDebugLLog(@"gwcomp", @"GSDownloader: Error getting file attributes");
         [_delegate downloadCompleted:NO error:@"Could not read source file"];
         _isDownloading = NO;
         return;
@@ -86,7 +86,7 @@
 
 - (void)performFileCopy:(NSString *)sourcePath
 {
-    NSLog(@"GSDownloader: performFileCopy: %@", sourcePath);
+    NSDebugLLog(@"gwcomp", @"GSDownloader: performFileCopy: %@", sourcePath);
     
     NSFileManager *fileManager = [NSFileManager defaultManager];
     
@@ -151,7 +151,7 @@
 
 - (void)downloadRemoteFile
 {
-    NSLog(@"GSDownloader: downloadRemoteFile using NSURLConnection");
+    NSDebugLLog(@"gwcomp", @"GSDownloader: downloadRemoteFile using NSURLConnection");
     
     // Create the request
     NSURL *url = [NSURL URLWithString:_sourceURL];
@@ -161,7 +161,7 @@
     // Create destination file
     NSFileManager *fileManager = [NSFileManager defaultManager];
     if (![fileManager createFileAtPath:_destinationPath contents:nil attributes:nil]) {
-        NSLog(@"GSDownloader: Could not create destination file");
+        NSDebugLLog(@"gwcomp", @"GSDownloader: Could not create destination file");
         [_delegate downloadCompleted:NO error:@"Could not create destination file"];
         _isDownloading = NO;
         return;
@@ -169,7 +169,7 @@
     
     _outputFile = [NSFileHandle fileHandleForWritingAtPath:_destinationPath];
     if (!_outputFile) {
-        NSLog(@"GSDownloader: Could not open destination file for writing");
+        NSDebugLLog(@"gwcomp", @"GSDownloader: Could not open destination file for writing");
         [_delegate downloadCompleted:NO error:@"Could not open destination file for writing"];
         _isDownloading = NO;
         return;
@@ -178,7 +178,7 @@
     // Start the connection
     _connection = [[NSURLConnection alloc] initWithRequest:request delegate:self];
     if (!_connection) {
-        NSLog(@"GSDownloader: Could not create NSURLConnection");
+        NSDebugLLog(@"gwcomp", @"GSDownloader: Could not create NSURLConnection");
         [_outputFile closeFile];
         _outputFile = nil;
         [_delegate downloadCompleted:NO error:@"Could not create network connection"];
@@ -190,14 +190,14 @@
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
-    NSLog(@"GSDownloader: didReceiveResponse");
+    NSDebugLLog(@"gwcomp", @"GSDownloader: didReceiveResponse");
     
     if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
         NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
         NSInteger statusCode = [httpResponse statusCode];
         
         if (statusCode >= 400) {
-            NSLog(@"GSDownloader: HTTP error %ld", (long)statusCode);
+            NSDebugLLog(@"gwcomp", @"GSDownloader: HTTP error %ld", (long)statusCode);
             [self cancelDownload];
             [_delegate downloadCompleted:NO error:[NSString stringWithFormat:@"HTTP error %ld", (long)statusCode]];
             return;
@@ -207,7 +207,7 @@
     _totalBytes = [response expectedContentLength];
     _receivedBytes = 0;
     
-    NSLog(@"GSDownloader: Expected content length: %lld bytes", _totalBytes);
+    NSDebugLLog(@"gwcomp", @"GSDownloader: Expected content length: %lld bytes", _totalBytes);
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
@@ -234,7 +234,7 @@
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
 {
-    NSLog(@"GSDownloader: connectionDidFinishLoading");
+    NSDebugLLog(@"gwcomp", @"GSDownloader: connectionDidFinishLoading");
     
     [_outputFile closeFile];
     _outputFile = nil;
@@ -250,7 +250,7 @@
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
 {
-    NSLog(@"GSDownloader: didFailWithError: %@", [error localizedDescription]);
+    NSDebugLLog(@"gwcomp", @"GSDownloader: didFailWithError: %@", [error localizedDescription]);
     
     [_outputFile closeFile];
     _outputFile = nil;
@@ -269,7 +269,7 @@
 
 - (void)cancelDownload
 {
-    NSLog(@"GSDownloader: cancelDownload");
+    NSDebugLLog(@"gwcomp", @"GSDownloader: cancelDownload");
     
     _isDownloading = NO;
     
@@ -292,7 +292,7 @@
                  returningResponse:(NSHTTPURLResponse **)response 
                              error:(NSError **)error
 {
-    NSLog(@"GSHTTPClient: sendSynchronousRequest to %@", [[request URL] absoluteString]);
+    NSDebugLLog(@"gwcomp", @"GSHTTPClient: sendSynchronousRequest to %@", [[request URL] absoluteString]);
     
     NSHTTPURLResponse *urlResponse = nil;
     NSError *urlError = nil;
@@ -340,7 +340,7 @@
 
 + (BOOL)checkInternetConnectivityToHost:(NSString *)host port:(int)port timeout:(int)timeout
 {
-    NSLog(@"GSNetworkUtilities: checkInternetConnectivity to %@:%d", host, port);
+    NSDebugLLog(@"gwcomp", @"GSNetworkUtilities: checkInternetConnectivity to %@:%d", host, port);
     
     // Use a simple command-line approach for internet checking
     NSTask *task = [[NSTask alloc] init];
@@ -361,11 +361,11 @@
         connected = (exitStatus == 0);
     }
     @catch (NSException *exception) {
-        NSLog(@"GSNetworkUtilities: Error checking internet connection: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"GSNetworkUtilities: Error checking internet connection: %@", [exception reason]);
         connected = NO;
     }
     
-    NSLog(@"GSNetworkUtilities: Internet connection check result: %d", connected);
+    NSDebugLLog(@"gwcomp", @"GSNetworkUtilities: Internet connection check result: %d", connected);
     return connected;
 }
 

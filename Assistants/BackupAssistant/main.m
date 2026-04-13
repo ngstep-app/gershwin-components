@@ -20,18 +20,18 @@
 
 @implementation BAApplicationDelegate
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
-    NSLog(@"BackupAssistant: Last window closed, terminating application");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: Last window closed, terminating application");
     return YES;
 }
 @end
 
 int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) argv[])
 {
-    NSLog(@"BackupAssistant: main() starting");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: main() starting");
     
     // Check if running as root
     if (getuid() != 0) {
-        NSLog(@"BackupAssistant: Not running as root, re-executing with sudo -A -E");
+        NSDebugLLog(@"gwcomp", @"BackupAssistant: Not running as root, re-executing with sudo -A -E");
         
         @autoreleasepool {
             // Build the sudo command with current executable path
@@ -54,7 +54,7 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
                 int exitStatus = [task terminationStatus];
                 return exitStatus;
             } @catch (NSException *exception) {
-                NSLog(@"ERROR: Failed to re-execute with sudo: %@", [exception reason]);
+                NSDebugLLog(@"gwcomp", @"ERROR: Failed to re-execute with sudo: %@", [exception reason]);
                 
                 // Fall back to showing error
                 NSRunAlertPanel(@"Root Privileges Required",
@@ -81,6 +81,6 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
         [app run];
     }
     
-    NSLog(@"BackupAssistant: main() exiting");
+    NSDebugLLog(@"gwcomp", @"BackupAssistant: main() exiting");
     return 0;
 }

@@ -318,7 +318,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
     if (XGetWindowAttributes(display, window, &attrs) == 0 || x11_error_occurred) {
         static unsigned long lastLogWindow = 0;
         if (lastLogWindow != windowId) {
-             NSLog(@"GTKMenuImporter: Window %lu not ready/valid%s in immediate scan, skipping", 
+             NSDebugLLog(@"gwcomp", @"GTKMenuImporter: Window %lu not ready/valid%s in immediate scan, skipping", 
               windowId, x11_error_occurred ? " (X11 error)" : "");
              lastLogWindow = windowId;
         }
@@ -373,7 +373,7 @@ static int x11ErrorHandler(Display *display, XErrorEvent *error) {
         // Log this clearly so we know why GTK import for GIMP etc might fail
         static unsigned long lastLogWindow = 0;
         if (lastLogWindow != windowId) {
-             NSLog(@"GTKMenuImporter: Window %lu has no GTK menu properties (bus/path missing)", windowId);
+             NSDebugLLog(@"gwcomp", @"GTKMenuImporter: Window %lu has no GTK menu properties (bus/path missing)", windowId);
              lastLogWindow = windowId;
         }
     }

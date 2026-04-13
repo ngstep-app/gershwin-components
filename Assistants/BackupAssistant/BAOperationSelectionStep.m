@@ -70,7 +70,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"BAOperationSelectionStep: Step will appear");
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Step will appear");
     
     // Stop any disk refresh timers from the previous step
     [_controller stopDiskRefreshTimers];
@@ -80,12 +80,12 @@
 
 - (void)updateOperationOptions
 {
-    NSLog(@"BAOperationSelectionStep: Updating operation options");
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Updating operation options");
     
     // Update disk info
     NSString *diskInfo = [NSString stringWithFormat:NSLocalizedString(@"Selected disk: %@", @"Selected disk info"), _controller.selectedDiskDevice];
     [_diskInfoLabel setStringValue:diskInfo];
-    NSLog(@"BAOperationSelectionStep: Set disk info: %@", diskInfo);
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Set disk info: %@", diskInfo);
     
     // Clear existing matrix if it exists
     if (_operationMatrix) {
@@ -95,7 +95,7 @@
     
     // Create new matrix based on disk analysis
     BADiskAnalysisResult result = _controller.diskAnalysisResult;
-    NSLog(@"BAOperationSelectionStep: Disk analysis result: %d", (int)result);
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Disk analysis result: %d", (int)result);
     NSMutableArray *operations = [NSMutableArray array];
     
     if (result == BADiskAnalysisResultEmpty) {
@@ -134,7 +134,7 @@
         [_warningLabel setStringValue:NSLocalizedString(@"Note: Restoring will overwrite files. Destroying will permanently erase the existing backup!", @"Multiple operations warning")];
     }
     
-    NSLog(@"BAOperationSelectionStep: Created %lu operations", (unsigned long)[operations count]);
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Created %lu operations", (unsigned long)[operations count]);
     
     // Calculate matrix dimensions properly
     NSUInteger operationCount = [operations count];
@@ -142,7 +142,7 @@
     CGFloat matrixHeight = operationCount * cellHeight; // Simple calculation
     CGFloat matrixY = 60;  // Moved up to give more space
     
-    NSLog(@"BAOperationSelectionStep: Matrix frame: x=20, y=%f, width=350, height=%f", matrixY, matrixHeight);
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Matrix frame: x=20, y=%f, width=350, height=%f", matrixY, matrixHeight);
     
     // Create operation matrix
     _operationMatrix = [[NSMatrix alloc] initWithFrame:NSMakeRect(20, matrixY, 350, matrixHeight)];
@@ -167,14 +167,14 @@
         [cell setTag:[[operation objectForKey:@"type"] integerValue]];
         [cell setFont:[NSFont systemFontOfSize:13]];
         [cell setAlignment:NSTextAlignmentLeft];
-        NSLog(@"BAOperationSelectionStep: Added operation %lu: %@", (unsigned long)i, [operation objectForKey:@"title"]);
+        NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Added operation %lu: %@", (unsigned long)i, [operation objectForKey:@"title"]);
     }
     
     [_containerView addSubview:_operationMatrix];
-    NSLog(@"BAOperationSelectionStep: Added matrix to container view with %lu operations", (unsigned long)[operations count]);
-    NSLog(@"BAOperationSelectionStep: Container frame: %@", NSStringFromRect([_containerView frame]));
-    NSLog(@"BAOperationSelectionStep: Matrix frame: %@", NSStringFromRect([_operationMatrix frame]));
-    NSLog(@"BAOperationSelectionStep: Matrix cell count: %ld rows, %ld cols", (long)[_operationMatrix numberOfRows], (long)[_operationMatrix numberOfColumns]);
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Added matrix to container view with %lu operations", (unsigned long)[operations count]);
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Container frame: %@", NSStringFromRect([_containerView frame]));
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Matrix frame: %@", NSStringFromRect([_operationMatrix frame]));
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Matrix cell count: %ld rows, %ld cols", (long)[_operationMatrix numberOfRows], (long)[_operationMatrix numberOfColumns]);
     
     // Force the matrix to layout and display properly
     [_operationMatrix setNeedsDisplay:YES];
@@ -194,7 +194,7 @@
     NSInteger selectedTag = [[_operationMatrix selectedCell] tag];
     _controller.selectedOperation = (BAOperationType)selectedTag;
     
-    NSLog(@"BAOperationSelectionStep: Selected operation: %ld", (long)selectedTag);
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Selected operation: %ld", (long)selectedTag);
     
     // Enable continue button
     self.canProceed = (_controller.selectedOperation != BAOperationTypeNone);
@@ -206,30 +206,30 @@
 
 - (void)stepWillDisappear
 {
-    NSLog(@"BAOperationSelectionStep: stepWillDisappear called");
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: stepWillDisappear called");
     
     // If mount operation is selected, skip configuration and go directly to progress
     if (_controller.selectedOperation == BAOperationTypeMountBackup) {
-        NSLog(@"BAOperationSelectionStep: Mount operation selected, attempting to skip configuration step");
+        NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Mount operation selected, attempting to skip configuration step");
         
         if (self.assistantWindow) {
             // Get current step index
             NSInteger currentIndex = [self.assistantWindow.steps indexOfObject:self];
-            NSLog(@"BAOperationSelectionStep: Current step index: %ld", (long)currentIndex);
+            NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Current step index: %ld", (long)currentIndex);
             
             if (currentIndex != NSNotFound && currentIndex + 2 < (NSInteger)[self.assistantWindow.steps count]) {
-                NSLog(@"BAOperationSelectionStep: Scheduling jump to progress step at index %ld", (long)(currentIndex + 2));
+                NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Scheduling jump to progress step at index %ld", (long)(currentIndex + 2));
                 
                 // Use performSelector to ensure the current step transition completes first
                 [self performSelector:@selector(performStepSkip:) 
                            withObject:@(currentIndex + 2) 
                            afterDelay:0.1];
             } else {
-                NSLog(@"BAOperationSelectionStep: ERROR - Invalid step indices for skipping (current: %ld, total: %lu)", 
+                NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: ERROR - Invalid step indices for skipping (current: %ld, total: %lu)", 
                       (long)currentIndex, (unsigned long)[self.assistantWindow.steps count]);
             }
         } else {
-            NSLog(@"BAOperationSelectionStep: ERROR - No assistant window reference");
+            NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: ERROR - No assistant window reference");
         }
     }
 }
@@ -237,7 +237,7 @@
 - (void)performStepSkip:(NSNumber *)targetIndexNumber
 {
     NSInteger targetIndex = [targetIndexNumber integerValue];
-    NSLog(@"BAOperationSelectionStep: Executing jump to progress step at index %ld", (long)targetIndex);
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Executing jump to progress step at index %ld", (long)targetIndex);
     
     if (self.assistantWindow) {
         [self.assistantWindow goToStepAtIndex:targetIndex];
@@ -254,28 +254,28 @@
 
 - (BOOL)validateStep
 {
-    NSLog(@"BAOperationSelectionStep: validateStep called, operation: %ld", (long)_controller.selectedOperation);
+    NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: validateStep called, operation: %ld", (long)_controller.selectedOperation);
     
     // If mount operation is selected, skip configuration and go directly to progress
     if (_controller.selectedOperation == BAOperationTypeMountBackup) {
-        NSLog(@"BAOperationSelectionStep: Mount operation selected, skipping configuration step");
+        NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Mount operation selected, skipping configuration step");
         
         // Tell the assistant window to skip the next step (configuration)
         if (self.assistantWindow) {
             // Get current step index and skip configuration step
             NSInteger currentIndex = [self.assistantWindow.steps indexOfObject:self];
-            NSLog(@"BAOperationSelectionStep: Current step index: %ld", (long)currentIndex);
+            NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Current step index: %ld", (long)currentIndex);
             
             if (currentIndex != NSNotFound && currentIndex + 2 < (NSInteger)[self.assistantWindow.steps count]) {
-                NSLog(@"BAOperationSelectionStep: Jumping to progress step at index %ld", (long)(currentIndex + 2));
+                NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: Jumping to progress step at index %ld", (long)(currentIndex + 2));
                 // Skip configuration step (index + 1) and go to progress step (index + 2)
                 [self.assistantWindow goToStepAtIndex:(currentIndex + 2)];
                 return NO; // Don't use normal navigation
             } else {
-                NSLog(@"BAOperationSelectionStep: ERROR - Invalid step indices for skipping");
+                NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: ERROR - Invalid step indices for skipping");
             }
         } else {
-            NSLog(@"BAOperationSelectionStep: ERROR - No assistant window reference");
+            NSDebugLLog(@"gwcomp", @"BAOperationSelectionStep: ERROR - No assistant window reference");
         }
     }
     

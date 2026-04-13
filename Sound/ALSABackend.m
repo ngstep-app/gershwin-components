@@ -567,12 +567,12 @@ static NSString *const kMicControl = @"Mic";
     NSString *output = [self runCommand:amixerPath withArguments:args];
     
     if (!output) {
-        NSLog(@"ALSABackend: setMixerControl: FAILED - %@=%@ on card %d", 
+        NSDebugLLog(@"gwcomp", @"ALSABackend: setMixerControl: FAILED - %@=%@ on card %d", 
               control, value, cardIndex);
         return NO;
     }
     
-    NSLog(@"ALSABackend: setMixerControl: SUCCESS - %@=%@ on card %d", 
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setMixerControl: SUCCESS - %@=%@ on card %d", 
           control, value, cardIndex);
     return YES;
 }
@@ -583,7 +583,7 @@ static NSString *const kMicControl = @"Mic";
                             toValue:(NSString *)value 
                               onCard:(int)cardIndex
 {
-    NSLog(@"ALSABackend: switchALSAControlImmediately: %@ = %@ on card %d", 
+    NSDebugLLog(@"gwcomp", @"ALSABackend: switchALSAControlImmediately: %@ = %@ on card %d", 
           controlName, value, cardIndex);
     
     // Run amixer with explicit card specification for immediate switching
@@ -593,24 +593,24 @@ static NSString *const kMicControl = @"Mic";
     NSString *output = [self runCommand:amixerPath withArguments:args];
     
     if (output == nil) {
-        NSLog(@"ALSABackend: switchALSAControlImmediately: FAILED");
+        NSDebugLLog(@"gwcomp", @"ALSABackend: switchALSAControlImmediately: FAILED");
         return NO;
     }
     
-    NSLog(@"ALSABackend: switchALSAControlImmediately: SUCCESS");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: switchALSAControlImmediately: SUCCESS");
     return YES;
 }
 
 - (NSArray *)getAvailableALSAControls:(int)cardIndex
 {
-    NSLog(@"ALSABackend: getAvailableALSAControls: card %d", cardIndex);
+    NSDebugLLog(@"gwcomp", @"ALSABackend: getAvailableALSAControls: card %d", cardIndex);
     
     NSString *cardStr = [NSString stringWithFormat:@"%d", cardIndex];
     NSString *output = [self runCommand:amixerPath 
                           withArguments:@[@"-c", cardStr, @"scontrols"]];
     
     if (!output) {
-        NSLog(@"ALSABackend: getAvailableALSAControls: FAILED - no output from amixer");
+        NSDebugLLog(@"gwcomp", @"ALSABackend: getAvailableALSAControls: FAILED - no output from amixer");
         return nil;
     }
     
@@ -631,7 +631,7 @@ static NSString *const kMicControl = @"Mic";
                     NSMakeRange(quoteStart.location + 1,
                                quoteEnd.location - quoteStart.location - 1)];
                 [controls addObject:name];
-                NSLog(@"ALSABackend:   found control: %@", name);
+                NSDebugLLog(@"gwcomp", @"ALSABackend:   found control: %@", name);
             }
         }
     }
@@ -681,9 +681,9 @@ static NSString *const kMicControl = @"Mic";
 
 - (BOOL)setDefaultOutputDevice:(AudioDevice *)device
 {
-    NSLog(@"ALSABackend: setDefaultOutputDevice: %@", device ? device.name : @"(nil)");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setDefaultOutputDevice: %@", device ? device.name : @"(nil)");
     if (!device) {
-        NSLog(@"ALSABackend: setDefaultOutputDevice: FAILED - device is nil");
+        NSDebugLLog(@"gwcomp", @"ALSABackend: setDefaultOutputDevice: FAILED - device is nil");
         return NO;
     }
     
@@ -694,13 +694,13 @@ static NSString *const kMicControl = @"Mic";
             [defaultOutput release];
             defaultOutput = [dev retain];
             currentOutputCard = dev.cardIndex;
-            NSLog(@"ALSABackend:   set card index to %d", currentOutputCard);
+            NSDebugLLog(@"gwcomp", @"ALSABackend:   set card index to %d", currentOutputCard);
         }
     }
     
     // Save to configuration
     BOOL success = [self saveDefaultDevice:device isOutput:YES];
-    NSLog(@"ALSABackend: setDefaultOutputDevice: %@", success ? @"SUCCESS" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setDefaultOutputDevice: %@", success ? @"SUCCESS" : @"FAILED");
     return success;
 }
 
@@ -728,9 +728,9 @@ static NSString *const kMicControl = @"Mic";
 
 - (BOOL)setDefaultInputDevice:(AudioDevice *)device
 {
-    NSLog(@"ALSABackend: setDefaultInputDevice: %@", device ? device.name : @"(nil)");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setDefaultInputDevice: %@", device ? device.name : @"(nil)");
     if (!device) {
-        NSLog(@"ALSABackend: setDefaultInputDevice: FAILED - device is nil");
+        NSDebugLLog(@"gwcomp", @"ALSABackend: setDefaultInputDevice: FAILED - device is nil");
         return NO;
     }
     
@@ -740,12 +740,12 @@ static NSString *const kMicControl = @"Mic";
             [defaultInput release];
             defaultInput = [dev retain];
             currentInputCard = dev.cardIndex;
-            NSLog(@"ALSABackend:   set card index to %d", currentInputCard);
+            NSDebugLLog(@"gwcomp", @"ALSABackend:   set card index to %d", currentInputCard);
         }
     }
     
     BOOL success = [self saveDefaultDevice:device isOutput:NO];
-    NSLog(@"ALSABackend: setDefaultInputDevice: %@", success ? @"SUCCESS" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setDefaultInputDevice: %@", success ? @"SUCCESS" : @"FAILED");
     return success;
 }
 
@@ -804,13 +804,13 @@ static NSString *const kMicControl = @"Mic";
 
 - (BOOL)setOutputVolume:(float)volume
 {
-    NSLog(@"ALSABackend: setOutputVolume: %.2f", volume);
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setOutputVolume: %.2f", volume);
     if (volume < 0.0) volume = 0.0;
     if (volume > 1.0) volume = 1.0;
 
     int percent = (int)(volume * 100);
     NSString *value = [NSString stringWithFormat:@"%d%%", percent];
-    NSLog(@"ALSABackend:   setting to %@, card %d", value, currentOutputCard);
+    NSDebugLLog(@"gwcomp", @"ALSABackend:   setting to %@, card %d", value, currentOutputCard);
 
     NSString *controlName = [self preferredMixerControlNameForDevice:defaultOutput isOutput:YES];
     if (!controlName) {
@@ -838,7 +838,7 @@ static NSString *const kMicControl = @"Mic";
         defaultOutput.volumeControl.identifier = controlName;
     }
 
-    NSLog(@"ALSABackend: setOutputVolume: %@", success ? @"SUCCESS" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setOutputVolume: %@", success ? @"SUCCESS" : @"FAILED");
 
     if (success && playVolumeChangeFeedback) {
         [self playVolumeFeedback];
@@ -890,9 +890,9 @@ static NSString *const kMicControl = @"Mic";
 
 - (BOOL)setOutputMuted:(BOOL)muted
 {
-    NSLog(@"ALSABackend: setOutputMuted: %@", muted ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setOutputMuted: %@", muted ? @"YES" : @"NO");
     NSString *value = muted ? @"mute" : @"unmute";
-    NSLog(@"ALSABackend:   setting to %@, card %d", value, currentOutputCard);
+    NSDebugLLog(@"gwcomp", @"ALSABackend:   setting to %@, card %d", value, currentOutputCard);
 
     NSString *controlName = [self preferredMixerControlNameForDevice:defaultOutput isOutput:YES];
     if (!controlName) {
@@ -920,7 +920,7 @@ static NSString *const kMicControl = @"Mic";
         defaultOutput.volumeControl.identifier = controlName;
     }
 
-    NSLog(@"ALSABackend: setOutputMuted: %@", success ? @"SUCCESS" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setOutputMuted: %@", success ? @"SUCCESS" : @"FAILED");
     return success;
 }
 
@@ -933,9 +933,9 @@ static NSString *const kMicControl = @"Mic";
 
 - (BOOL)setOutputBalance:(float)balance
 {
-    NSLog(@"ALSABackend: setOutputBalance: %.2f", balance);
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setOutputBalance: %.2f", balance);
     // TODO: Implement by adjusting left/right channel volumes
-    NSLog(@"ALSABackend: setOutputBalance: SUCCESS (not yet implemented)");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setOutputBalance: SUCCESS (not yet implemented)");
     return YES;
 }
 
@@ -984,13 +984,13 @@ static NSString *const kMicControl = @"Mic";
 
 - (BOOL)setInputVolume:(float)volume
 {
-    NSLog(@"ALSABackend: setInputVolume: %.2f", volume);
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setInputVolume: %.2f", volume);
     if (volume < 0.0) volume = 0.0;
     if (volume > 1.0) volume = 1.0;
 
     int percent = (int)(volume * 100);
     NSString *value = [NSString stringWithFormat:@"%d%%", percent];
-    NSLog(@"ALSABackend:   setting to %@, card %d", value, currentInputCard);
+    NSDebugLLog(@"gwcomp", @"ALSABackend:   setting to %@, card %d", value, currentInputCard);
 
     NSString *controlName = [self preferredMixerControlNameForDevice:defaultInput isOutput:NO];
     if (!controlName) {
@@ -1018,7 +1018,7 @@ static NSString *const kMicControl = @"Mic";
         defaultInput.volumeControl.identifier = controlName;
     }
 
-    NSLog(@"ALSABackend: setInputVolume: %@", success ? @"SUCCESS" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setInputVolume: %@", success ? @"SUCCESS" : @"FAILED");
     return success;
 }
 
@@ -1065,9 +1065,9 @@ static NSString *const kMicControl = @"Mic";
 
 - (BOOL)setInputMuted:(BOOL)muted
 {
-    NSLog(@"ALSABackend: setInputMuted: %@", muted ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setInputMuted: %@", muted ? @"YES" : @"NO");
     NSString *value = muted ? @"mute" : @"unmute";
-    NSLog(@"ALSABackend:   setting to %@, card %d", value, currentInputCard);
+    NSDebugLLog(@"gwcomp", @"ALSABackend:   setting to %@, card %d", value, currentInputCard);
 
     NSString *controlName = [self preferredMixerControlNameForDevice:defaultInput isOutput:NO];
     if (!controlName) {
@@ -1095,7 +1095,7 @@ static NSString *const kMicControl = @"Mic";
         defaultInput.volumeControl.identifier = controlName;
     }
 
-    NSLog(@"ALSABackend: setInputMuted: %@", success ? @"SUCCESS" : @"FAILED");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: setInputMuted: %@", success ? @"SUCCESS" : @"FAILED");
     return success;
 }
 
@@ -1248,7 +1248,7 @@ static NSString *const kMicControl = @"Mic";
         NSArray *files = [fm contentsOfDirectoryAtPath:dir error:NULL];
 
         if (!files) {
-            NSLog(@"ALSABackend: loadAlertSounds: could not scan %@", dir);
+            NSDebugLLog(@"gwcomp", @"ALSABackend: loadAlertSounds: could not scan %@", dir);
             continue;
         }
 
@@ -1272,7 +1272,7 @@ static NSString *const kMicControl = @"Mic";
         return [a.displayName compare:b.displayName];
     }];
 
-    NSLog(@"ALSABackend: loadAlertSounds: found %lu alert sounds",
+    NSDebugLLog(@"gwcomp", @"ALSABackend: loadAlertSounds: found %lu alert sounds",
           (unsigned long)[cachedAlertSounds count]);
 
     // Set first sound as current if none selected
@@ -1332,12 +1332,12 @@ static NSString *const kMicControl = @"Mic";
 
 - (BOOL)playAlertSound:(AlertSound *)sound
 {
-    NSLog(@"ALSABackend: playAlertSound: called");
-    NSLog(@"ALSABackend:   sound = %@, name = %@, path = %@", 
+    NSDebugLLog(@"gwcomp", @"ALSABackend: playAlertSound: called");
+    NSDebugLLog(@"gwcomp", @"ALSABackend:   sound = %@, name = %@, path = %@", 
           sound, sound.name, sound.path);
     
     if (!sound) {
-        NSLog(@"ALSABackend:   sound is nil, calling NSBeep()");
+        NSDebugLLog(@"gwcomp", @"ALSABackend:   sound is nil, calling NSBeep()");
         // Play system beep
         NSBeep();
         return YES;
@@ -1350,8 +1350,8 @@ static NSString *const kMicControl = @"Mic";
                           [NSString stringWithFormat:@"plughw:%d", currentOutputCard] :
                           @"default";
         
-        NSLog(@"ALSABackend:   playing file: %@", sound.path);
-        NSLog(@"ALSABackend:   using device: %@, aplayPath: %@", device, aplayPath);
+        NSDebugLLog(@"gwcomp", @"ALSABackend:   playing file: %@", sound.path);
+        NSDebugLLog(@"gwcomp", @"ALSABackend:   using device: %@, aplayPath: %@", device, aplayPath);
         
         // Run aplay in background
         NSTask *task = [[NSTask alloc] init];
@@ -1360,9 +1360,9 @@ static NSString *const kMicControl = @"Mic";
 
         @try {
             [task launch];
-            NSLog(@"ALSABackend:   aplay launched successfully");
+            NSDebugLLog(@"gwcomp", @"ALSABackend:   aplay launched successfully");
         } @catch (NSException *e) {
-            NSLog(@"ALSABackend:   Failed to play sound: %@", e);
+            NSDebugLLog(@"gwcomp", @"ALSABackend:   Failed to play sound: %@", e);
             [task release];
             NSBeep();
             return NO;
@@ -1374,7 +1374,7 @@ static NSString *const kMicControl = @"Mic";
         return YES;
     }
     
-    NSLog(@"ALSABackend:   no valid path, falling back to NSBeep()");
+    NSDebugLLog(@"gwcomp", @"ALSABackend:   no valid path, falling back to NSBeep()");
     // Fall back to system beep
     NSBeep();
     return YES;
@@ -1517,7 +1517,7 @@ static NSString *const kMicControl = @"Mic";
                     error:&error];
     
     if (error) {
-        NSLog(@"Failed to write .asoundrc: %@", error);
+        NSDebugLLog(@"gwcomp", @"Failed to write .asoundrc: %@", error);
     }
     
     // Save to our preferences file
@@ -1529,11 +1529,11 @@ static NSString *const kMicControl = @"Mic";
 - (BOOL)forceImmediateOutputDeviceSwitch:(AudioDevice *)device
 {
     if (!device) {
-        NSLog(@"ALSABackend: forceImmediateOutputDeviceSwitch: FAILED - device is nil");
+        NSDebugLLog(@"gwcomp", @"ALSABackend: forceImmediateOutputDeviceSwitch: FAILED - device is nil");
         return NO;
     }
     
-    NSLog(@"ALSABackend: forceImmediateOutputDeviceSwitch: %@ (card %d, device %d)", 
+    NSDebugLLog(@"gwcomp", @"ALSABackend: forceImmediateOutputDeviceSwitch: %@ (card %d, device %d)", 
           device.name, device.cardIndex, device.deviceIndex);
     
     // Step 1: Unmute the destination device if possible
@@ -1542,16 +1542,16 @@ static NSString *const kMicControl = @"Mic";
         if ([self setMixerControl:controlName 
                             value:@"unmute" 
                              card:device.cardIndex]) {
-            NSLog(@"ALSABackend:   unmuted %@", controlName);
+            NSDebugLLog(@"gwcomp", @"ALSABackend:   unmuted %@", controlName);
             break;
         }
     }
     
     // Step 2: Silence other output devices to force switching
-    NSLog(@"ALSABackend:   silencing other output devices...");
+    NSDebugLLog(@"gwcomp", @"ALSABackend:   silencing other output devices...");
     for (AudioDevice *otherDevice in cachedOutputDevices) {
         if (otherDevice.cardIndex != device.cardIndex) {
-            NSLog(@"ALSABackend:   muting card %d", otherDevice.cardIndex);
+            NSDebugLLog(@"gwcomp", @"ALSABackend:   muting card %d", otherDevice.cardIndex);
             [self setMixerControl:kMasterControl 
                             value:@"mute" 
                              card:otherDevice.cardIndex];
@@ -1564,18 +1564,18 @@ static NSString *const kMicControl = @"Mic";
     // Step 4: Update default device settings
     [self setDefaultOutputDevice:device];
     
-    NSLog(@"ALSABackend: forceImmediateOutputDeviceSwitch: SUCCESS");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: forceImmediateOutputDeviceSwitch: SUCCESS");
     return YES;
 }
 
 - (BOOL)forceImmediateInputDeviceSwitch:(AudioDevice *)device
 {
     if (!device) {
-        NSLog(@"ALSABackend: forceImmediateInputDeviceSwitch: FAILED - device is nil");
+        NSDebugLLog(@"gwcomp", @"ALSABackend: forceImmediateInputDeviceSwitch: FAILED - device is nil");
         return NO;
     }
     
-    NSLog(@"ALSABackend: forceImmediateInputDeviceSwitch: %@ (card %d, device %d)", 
+    NSDebugLLog(@"gwcomp", @"ALSABackend: forceImmediateInputDeviceSwitch: %@ (card %d, device %d)", 
           device.name, device.cardIndex, device.deviceIndex);
     
     // Step 1: Enable the destination device input
@@ -1584,16 +1584,16 @@ static NSString *const kMicControl = @"Mic";
         if ([self setMixerControl:controlName 
                             value:@"cap" 
                              card:device.cardIndex]) {
-            NSLog(@"ALSABackend:   enabled capture on %@", controlName);
+            NSDebugLLog(@"gwcomp", @"ALSABackend:   enabled capture on %@", controlName);
             break;
         }
     }
     
     // Step 2: Disable input capture on other devices
-    NSLog(@"ALSABackend:   disabling capture on other input devices...");
+    NSDebugLLog(@"gwcomp", @"ALSABackend:   disabling capture on other input devices...");
     for (AudioDevice *otherDevice in cachedInputDevices) {
         if (otherDevice.cardIndex != device.cardIndex) {
-            NSLog(@"ALSABackend:   disabling capture on card %d", otherDevice.cardIndex);
+            NSDebugLLog(@"gwcomp", @"ALSABackend:   disabling capture on card %d", otherDevice.cardIndex);
             [self setMixerControl:kCaptureControl 
                             value:@"nocap" 
                              card:otherDevice.cardIndex];
@@ -1606,7 +1606,7 @@ static NSString *const kMicControl = @"Mic";
     // Step 3: Update default device settings
     [self setDefaultInputDevice:device];
     
-    NSLog(@"ALSABackend: forceImmediateInputDeviceSwitch: SUCCESS");
+    NSDebugLLog(@"gwcomp", @"ALSABackend: forceImmediateInputDeviceSwitch: SUCCESS");
     return YES;
 }
 
@@ -1733,7 +1733,7 @@ static NSString *const kMicControl = @"Mic";
         @try {
             [task launch];
         } @catch (NSException *e) {
-            NSLog(@"Failed to run command %@: %@", command, e);
+            NSDebugLLog(@"gwcomp", @"Failed to run command %@: %@", command, e);
             [task release];
             return nil;
         }
@@ -1745,7 +1745,7 @@ static NSString *const kMicControl = @"Mic";
         if ([task terminationStatus] != 0) {
             NSString *errorOutput = [[NSString alloc] initWithData:errorData 
                                                            encoding:NSUTF8StringEncoding];
-            NSLog(@"Command %@ exited with status %d, stderr: %@", 
+            NSDebugLLog(@"gwcomp", @"Command %@ exited with status %d, stderr: %@", 
                   command, [task terminationStatus], errorOutput);
             [errorOutput release];
             [task release];
@@ -1766,7 +1766,7 @@ static NSString *const kMicControl = @"Mic";
 
 - (void)reportErrorWithMessage:(NSString *)message
 {
-    NSLog(@"ALSABackend error: %@", message);
+    NSDebugLLog(@"gwcomp", @"ALSABackend error: %@", message);
     
     if ([delegate respondsToSelector:@selector(soundBackend:didEncounterError:)]) {
         NSError *error = [NSError errorWithDomain:@"ALSABackend" 

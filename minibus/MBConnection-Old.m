@@ -25,7 +25,7 @@
         _authProcessed = NO;
         
         // Note: D-Bus spec says client sends null byte first, not server
-        NSLog(@"New connection created for socket %d", _socket);
+        NSDebugLLog(@"gwcomp", @"New connection created for socket %d", _socket);
     }
     return self;
 }
@@ -44,11 +44,11 @@
     
     NSData *data = [message serialize];
     if (!data) {
-        NSLog(@"Failed to serialize message");
+        NSDebugLLog(@"gwcomp", @"Failed to serialize message");
         return NO;
     }
     
-    NSLog(@"Sending reply message: %@ (%lu bytes)", message, (unsigned long)[data length]);
+    NSDebugLLog(@"gwcomp", @"Sending reply message: %@ (%lu bytes)", message, (unsigned long)[data length]);
     
     // Debug: show first 32 bytes of reply
     if ([data length] > 0) {
@@ -57,7 +57,7 @@
         for (NSUInteger i = 0; i < MIN([data length], 32); i++) {
             [hexString appendFormat:@"%02x ", bytes[i]];
         }
-        NSLog(@"Reply bytes: %@", hexString);
+        NSDebugLLog(@"gwcomp", @"Reply bytes: %@", hexString);
     }
     
     return [MBTransport sendData:data onSocket:_socket];
@@ -73,7 +73,7 @@
     NSData *newData = [MBTransport receiveDataFromSocket:_socket];
     if (newData == nil) {
         // Connection closed or real error - close this connection
-        NSLog(@"Connection closed on socket %d", _socket);
+        NSDebugLLog(@"gwcomp", @"Connection closed on socket %d", _socket);
         [self close];
         return @[];
     }
@@ -89,7 +89,7 @@
     if (_state == MBConnectionStateWaitingForAuth) {
         if ([self handleAuthentication]) {
             _state = MBConnectionStateWaitingForHello;
-            NSLog(@"Authentication completed, state changed to WaitingForHello, buffer has %lu bytes", (unsigned long)[_readBuffer length]);
+            NSDebugLLog(@"gwcomp", @"Authentication completed, state changed to WaitingForHello, buffer has %lu bytes", (unsigned long)[_readBuffer length]);
             // If there's message data in buffer after auth, process it now
             // Don't return early - continue to message processing
         } else {
@@ -99,7 +99,7 @@
     
     // Parse messages from buffer
     if ([_readBuffer length] > 0) {
-        NSLog(@"Received %lu bytes for message parsing", (unsigned long)[_readBuffer length]);
+        NSDebugLLog(@"gwcomp", @"Received %lu bytes for message parsing", (unsigned long)[_readBuffer length]);
         
         // Debug: show raw message bytes
         const uint8_t *bytes = [_readBuffer bytes];
@@ -107,7 +107,7 @@
         for (NSUInteger i = 0; i < MIN([_readBuffer length], 32); i++) {
             [hexString appendFormat:@"%02x ", bytes[i]];
         }
-        NSLog(@"Message bytes: %@", hexString);
+        NSDebugLLog(@"gwcomp", @"Message bytes: %@", hexString);
     }
     
     NSArray *messages = [MBMessage messagesFromData:_readBuffer];
@@ -138,8 +138,8 @@
             [printableString appendString:@"."];
         }
     }
-    NSLog(@"Raw auth data hex: %@", hexString);
-    NSLog(@"Raw auth data printable: %@", printableString);
+    NSDebugLLog(@"gwcomp", @"Raw auth data hex: %@", hexString);
+    NSDebugLLog(@"gwcomp", @"Raw auth data printable: %@", printableString);
     
     const char *beginPattern = "BEGIN";
     NSUInteger beginPatternLen = strlen(beginPattern);
@@ -195,7 +195,7 @@
                     NSString *response = @"OK 12345678901234567890123456789012\r\n";
                     NSData *responseData = [response dataUsingEncoding:NSUTF8StringEncoding];
                     BOOL sent = [MBTransport sendData:responseData onSocket:_socket];
-                    NSLog(@"Sent AUTH OK response: %@", sent ? @"SUCCESS" : @"FAILED");
+                    NSDebugLLog(@"gwcomp", @"Sent AUTH OK response: %@", sent ? @"SUCCESS" : @"FAILED");
                     _authProcessed = YES;
                 }
                 
@@ -204,11 +204,11 @@
                     NSString *response = @"OK\r\n";
                     NSData *responseData = [response dataUsingEncoding:NSUTF8StringEncoding];
                     BOOL sent = [MBTransport sendData:responseData onSocket:_socket];
-                    NSLog(@"Sent NEGOTIATE_UNIX_FD response: %@", sent ? @"SUCCESS" : @"FAILED");
+                    NSDebugLLog(@"gwcomp", @"Sent NEGOTIATE_UNIX_FD response: %@", sent ? @"SUCCESS" : @"FAILED");
                 }
                 
                 if ([line hasPrefix:@"CANCEL"] || [line hasPrefix:@"ERROR"]) {
-                    NSLog(@"Authentication cancelled or error for connection %d, line: '%@'", _socket, line);
+                    NSDebugLLog(@"gwcomp", @"Authentication cancelled or error for connection %d, line: '%@'", _socket, line);
                     [self close];
                     return NO;
                 }
@@ -231,13 +231,13 @@
     if (!authString) {
         authString = [[NSString alloc] initWithData:authBuffer encoding:NSISOLatin1StringEncoding];
         if (!authString) {
-            NSLog(@"Failed to decode auth data");
+            NSDebugLLog(@"gwcomp", @"Failed to decode auth data");
             return NO;
         }
     }
     
-    NSLog(@"Auth buffer: '%@'", authString);
-    NSLog(@"Processing auth lines...");
+    NSDebugLLog(@"gwcomp", @"Auth buffer: '%@'", authString);
+    NSDebugLLog(@"gwcomp", @"Processing auth lines...");
     
     // Process auth commands
     NSArray *lines = [authString componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
@@ -245,7 +245,7 @@
     
     for (NSString *line in lines) {
         line = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        NSLog(@"Processing auth line: '%@'", line);
+        NSDebugLLog(@"gwcomp", @"Processing auth line: '%@'", line);
         
         if ([line hasPrefix:@"AUTH EXTERNAL"]) {
             // Extract the hex-encoded UID if provided
@@ -263,7 +263,7 @@
                     [decodedUID appendFormat:@"%c", (char)charValue];
                 }
                 claimedUID = [decodedUID intValue];
-                NSLog(@"Client claims UID: %d", claimedUID);
+                NSDebugLLog(@"gwcomp", @"Client claims UID: %d", claimedUID);
             }
             
             // Verify socket credentials
@@ -271,14 +271,14 @@
                 NSString *response = @"OK 12345678901234567890123456789012\r\n";
                 NSData *responseData = [response dataUsingEncoding:NSUTF8StringEncoding];
                 BOOL sent = [MBTransport sendData:responseData onSocket:_socket];
-                NSLog(@"Sent EXTERNAL AUTH OK response: %@", sent ? @"SUCCESS" : @"FAILED");
+                NSDebugLLog(@"gwcomp", @"Sent EXTERNAL AUTH OK response: %@", sent ? @"SUCCESS" : @"FAILED");
                 hasProcessedAuth = YES;
                 _authProcessed = YES;
             } else {
                 NSString *response = @"REJECTED EXTERNAL\r\n";
                 NSData *responseData = [response dataUsingEncoding:NSUTF8StringEncoding];
                 [MBTransport sendData:responseData onSocket:_socket];
-                NSLog(@"Rejected EXTERNAL authentication - UID mismatch");
+                NSDebugLLog(@"gwcomp", @"Rejected EXTERNAL authentication - UID mismatch");
                 [self close];
                 return NO;
             }
@@ -287,7 +287,7 @@
             NSString *response = @"OK 12345678901234567890123456789012\r\n";
             NSData *responseData = [response dataUsingEncoding:NSUTF8StringEncoding];
             BOOL sent = [MBTransport sendData:responseData onSocket:_socket];
-            NSLog(@"Sent AUTH OK response: %@", sent ? @"SUCCESS" : @"FAILED");
+            NSDebugLLog(@"gwcomp", @"Sent AUTH OK response: %@", sent ? @"SUCCESS" : @"FAILED");
             hasProcessedAuth = YES;
             _authProcessed = YES;
         }
@@ -297,23 +297,23 @@
             NSString *response = @"ERROR \"Unix FD passing not supported\"\r\n";
             NSData *responseData = [response dataUsingEncoding:NSUTF8StringEncoding];
             BOOL sent = [MBTransport sendData:responseData onSocket:_socket];
-            NSLog(@"Sent NEGOTIATE_UNIX_FD response: %@", sent ? @"SUCCESS" : @"FAILED");
+            NSDebugLLog(@"gwcomp", @"Sent NEGOTIATE_UNIX_FD response: %@", sent ? @"SUCCESS" : @"FAILED");
         }
         
         if ([line hasPrefix:@"BEGIN"]) {
-            NSLog(@"Received BEGIN - authentication completed");
+            NSDebugLLog(@"gwcomp", @"Received BEGIN - authentication completed");
             // No response needed for BEGIN, just complete authentication
         }
         
         if ([line hasPrefix:@"CANCEL"] || [line hasPrefix:@"ERROR"]) {
-            NSLog(@"Authentication cancelled or error for connection %d, line: '%@'", _socket, line);
+            NSDebugLLog(@"gwcomp", @"Authentication cancelled or error for connection %d, line: '%@'", _socket, line);
             [self close];
             return NO;
         }
     }
     
     if (!hasProcessedAuth && !_authProcessed) {
-        NSLog(@"No AUTH command processed yet");
+        NSDebugLLog(@"gwcomp", @"No AUTH command processed yet");
         return NO;
     }
     
@@ -321,7 +321,7 @@
     if (messageStart < rawLength) {
         NSData *messageData = [NSData dataWithBytes:rawBytes + messageStart 
                                              length:rawLength - messageStart];
-        NSLog(@"BEGIN found, preserving %lu bytes of message data", (unsigned long)[messageData length]);
+        NSDebugLLog(@"gwcomp", @"BEGIN found, preserving %lu bytes of message data", (unsigned long)[messageData length]);
         
         // Debug: show what we're preserving
         if ([messageData length] > 0) {
@@ -330,17 +330,17 @@
             for (NSUInteger i = 0; i < MIN([messageData length], 32); i++) {
                 [hexString appendFormat:@"%02x ", msgBytes[i]];
             }
-            NSLog(@"Preserved message data: %@", hexString);
+            NSDebugLLog(@"gwcomp", @"Preserved message data: %@", hexString);
         }
         
         // Replace buffer with preserved message data
         [_readBuffer setData:messageData];
     } else {
-        NSLog(@"BEGIN found, no message data to preserve");
+        NSDebugLLog(@"gwcomp", @"BEGIN found, no message data to preserve");
         [_readBuffer setData:[NSData data]];
     }
     
-    NSLog(@"Authentication completed for connection %d", _socket);
+    NSDebugLLog(@"gwcomp", @"Authentication completed for connection %d", _socket);
     return YES;
 }
 
@@ -350,17 +350,17 @@
     socklen_t len = sizeof(cred);
     
     if (getsockopt(socket, SOL_SOCKET, SO_PEERCRED, &cred, &len) == 0) {
-        NSLog(@"Socket credentials: pid=%d uid=%d gid=%d, claimed uid=%d", 
+        NSDebugLLog(@"gwcomp", @"Socket credentials: pid=%d uid=%d gid=%d, claimed uid=%d", 
               cred.pid, cred.uid, cred.gid, claimedUID);
         return (cred.uid == claimedUID);
     } else {
-        NSLog(@"Failed to get socket credentials: %s", strerror(errno));
+        NSDebugLLog(@"gwcomp", @"Failed to get socket credentials: %s", strerror(errno));
         // Fallback - allow if we can't verify
         return YES;
     }
 #else
     // No socket credential support, allow authentication
-    NSLog(@"No socket credential support, allowing authentication");
+    NSDebugLLog(@"gwcomp", @"No socket credential support, allowing authentication");
     return YES;
 #endif
 }

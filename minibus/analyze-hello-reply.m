@@ -15,16 +15,16 @@ int main(int argc, char *argv[]) {
                                                         arguments:@[@":1.1"]];
         reply.sender = @"org.freedesktop.DBus";
         
-        NSLog(@"MiniBus Hello Reply Message:");
-        NSLog(@"Type: %d", reply.type);
-        NSLog(@"Reply Serial: %lu", reply.replySerial);  
-        NSLog(@"Sender: %@", reply.sender);
-        NSLog(@"Arguments: %@", reply.arguments);
-        NSLog(@"Signature: %@", reply.signature);
+        NSDebugLLog(@"gwcomp", @"MiniBus Hello Reply Message:");
+        NSDebugLLog(@"gwcomp", @"Type: %d", reply.type);
+        NSDebugLLog(@"gwcomp", @"Reply Serial: %lu", reply.replySerial);  
+        NSDebugLLog(@"gwcomp", @"Sender: %@", reply.sender);
+        NSDebugLLog(@"gwcomp", @"Arguments: %@", reply.arguments);
+        NSDebugLLog(@"gwcomp", @"Signature: %@", reply.signature);
         
         // Serialize it to see the raw bytes
         NSData *data = [reply serialize];
-        NSLog(@"Serialized size: %lu bytes", [data length]);
+        NSDebugLLog(@"gwcomp", @"Serialized size: %lu bytes", [data length]);
         
         // Print hex dump
         const uint8_t *bytes = [data bytes];
@@ -33,14 +33,14 @@ int main(int argc, char *argv[]) {
             [hex appendFormat:@"%02x ", bytes[i]];
             if ((i + 1) % 16 == 0) [hex appendString:@"\n"];
         }
-        NSLog(@"Raw bytes:\n%@", hex);
+        NSDebugLLog(@"gwcomp", @"Raw bytes:\n%@", hex);
         
         // Parse it back to verify
         MBMessage *parsed = [MBMessage messageFromData:data atOffset:0];
         if (parsed) {
-            NSLog(@"Successfully parsed back: %@", parsed);
+            NSDebugLLog(@"gwcomp", @"Successfully parsed back: %@", parsed);
         } else {
-            NSLog(@"Failed to parse back!");
+            NSDebugLLog(@"gwcomp", @"Failed to parse back!");
         }
     }
     return 0;

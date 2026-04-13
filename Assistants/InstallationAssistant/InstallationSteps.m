@@ -30,7 +30,7 @@ static BOOL IAIsFreeBSD(void)
      * Detect real FreeBSD by checking for freebsd-version or /etc/rc.conf
      * combined with sysctl kern.ostype. */
     if (access("/bin/freebsd-version", X_OK) == 0) {
-        NSLog(@"IAIsFreeBSD: detected FreeBSD via /bin/freebsd-version");
+        NSDebugLLog(@"gwcomp", @"IAIsFreeBSD: detected FreeBSD via /bin/freebsd-version");
         return YES;
     }
     if (access("/etc/rc.conf", R_OK) == 0 && access("/sbin/sysctl", X_OK) == 0) {
@@ -44,7 +44,7 @@ static BOOL IAIsFreeBSD(void)
                 if (nl) *nl = '\0';
                 if (strcmp(buf, "FreeBSD") == 0) {
                     pclose(fp);
-                    NSLog(@"IAIsFreeBSD: detected FreeBSD via sysctl kern.ostype");
+                    NSDebugLLog(@"gwcomp", @"IAIsFreeBSD: detected FreeBSD via sysctl kern.ostype");
                     return YES;
                 }
             }
@@ -60,16 +60,16 @@ static BOOL IAIsFreeBSD(void)
 NSString *IAInstallerScriptPath(void)
 {
     NSString *scriptName = IAIsFreeBSD() ? @"installer-FreeBSD" : @"installer-Linux";
-    NSLog(@"IAInstallerScriptPath: selected script %@", scriptName);
+    NSDebugLLog(@"gwcomp", @"IAInstallerScriptPath: selected script %@", scriptName);
 
     NSString *path = [[NSBundle mainBundle] pathForResource:scriptName ofType:@"sh"];
     if (!path) {
-        NSLog(@"IAInstallerScriptPath: script %@.sh not found in bundle, searching in Resources/", scriptName);
+        NSDebugLLog(@"gwcomp", @"IAInstallerScriptPath: script %@.sh not found in bundle, searching in Resources/", scriptName);
         NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
         path = [bundlePath stringByAppendingPathComponent:
                 [NSString stringWithFormat:@"Resources/%@.sh", scriptName]];
     }
-    NSLog(@"IAInstallerScriptPath: using script at %@", path);
+    NSDebugLLog(@"gwcomp", @"IAInstallerScriptPath: using script at %@", path);
     return path;
 }
 
@@ -80,7 +80,7 @@ NSString *IAInstallerScriptPath(void)
 NSString *IACheckImageSourceAvailable(void)
 {
     NSString *scriptPath = IAInstallerScriptPath();
-    NSLog(@"IACheckImageSourceAvailable: running %@ --check-image-source", scriptPath);
+    NSDebugLLog(@"gwcomp", @"IACheckImageSourceAvailable: running %@ --check-image-source", scriptPath);
 
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:scriptPath];
@@ -98,7 +98,7 @@ NSString *IACheckImageSourceAvailable(void)
         [task waitUntilExit];
 
         NSString *outStr = outData ? [[[NSString alloc] initWithData:outData encoding:NSUTF8StringEncoding] autorelease] : @"";
-        NSLog(@"IACheckImageSourceAvailable: script output: %@", outStr);
+        NSDebugLLog(@"gwcomp", @"IACheckImageSourceAvailable: script output: %@", outStr);
 
         NSArray *lines = [outStr componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
         for (NSString *line in lines) {
@@ -112,11 +112,11 @@ NSString *IACheckImageSourceAvailable(void)
             }
         }
     } @catch (NSException *ex) {
-        NSLog(@"IACheckImageSourceAvailable: exception: %@", ex);
+        NSDebugLLog(@"gwcomp", @"IACheckImageSourceAvailable: exception: %@", ex);
     }
     [task release];
 
-    NSLog(@"IACheckImageSourceAvailable: result = %@", result ?: @"(none)");
+    NSDebugLLog(@"gwcomp", @"IACheckImageSourceAvailable: result = %@", result ?: @"(none)");
     return result;
 }
 
@@ -521,13 +521,13 @@ NSString *IACheckImageSourceAvailable(void)
         [_imageSourceLabel setStringValue:[NSString stringWithFormat:
             NSLocalizedString(@"Image source detected: %@", @""), _detectedImageSource]];
         [_imageSourceLabel setTextColor:[NSColor controlTextColor]];
-        NSLog(@"IAInstallTypeStep: image source available at %@", _detectedImageSource);
+        NSDebugLLog(@"gwcomp", @"IAInstallTypeStep: image source available at %@", _detectedImageSource);
     } else {
         _imageSourceAvailable = NO;
         [_imageRadio setEnabled:NO];
         [_imageSourceLabel setStringValue:NSLocalizedString(@"No installation media detected", @"")];
         [_imageSourceLabel setTextColor:[NSColor grayColor]];
-        NSLog(@"IAInstallTypeStep: no image source available");
+        NSDebugLLog(@"gwcomp", @"IAInstallTypeStep: no image source available");
     }
 }
 
@@ -634,14 +634,14 @@ NSString *IACheckImageSourceAvailable(void)
 
 - (void)refreshDiskList
 {
-    NSLog(@"IADiskSelectionStep: refreshDiskList");
+    NSDebugLLog(@"gwcomp", @"IADiskSelectionStep: refreshDiskList");
     [_diagnostics setString:@""];
     [_statusLabel setStringValue:NSLocalizedString(@"Scanning for disks...", @"")];
     [_spinner startAnimation:nil];
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSString *scriptPath = IAInstallerScriptPath();
-        NSLog(@"IADiskSelectionStep: using script %@", scriptPath);
+        NSDebugLLog(@"gwcomp", @"IADiskSelectionStep: using script %@", scriptPath);
         NSTask *task = [[NSTask alloc] init];
         [task setLaunchPath:scriptPath];
         [task setArguments:@[@"--list-disks", @"--debug"]];
@@ -721,7 +721,7 @@ NSString *IACheckImageSourceAvailable(void)
             }
             [_statusLabel setStringValue:[NSString stringWithFormat:NSLocalizedString(@"Found %lu disk(s)", @""), (unsigned long)[_disks count]]];
             [_tableView reloadData];
-            NSLog(@"IADiskSelectionStep: found %lu disk(s)", (unsigned long)[_disks count]);
+            NSDebugLLog(@"gwcomp", @"IADiskSelectionStep: found %lu disk(s)", (unsigned long)[_disks count]);
         } else {
             [_diagnostics appendString:@"Unexpected JSON output from script\n"];
             if (jsonError) [_diagnostics appendFormat:@"JSON error: %@\n", [jsonError localizedDescription]];
@@ -1057,11 +1057,11 @@ NSString *IACheckImageSourceAvailable(void)
 - (void)startInstallationToDisk:(IADiskInfo *)disk source:(NSString *)sourcePathOrNil
 {
     if (!disk) {
-        NSLog(@"IAInstallProgressStep: ERROR - no disk provided");
+        NSDebugLLog(@"gwcomp", @"IAInstallProgressStep: ERROR - no disk provided");
         return;
     }
     if (_isRunning) {
-        NSLog(@"IAInstallProgressStep: already running, ignoring duplicate start");
+        NSDebugLLog(@"gwcomp", @"IAInstallProgressStep: already running, ignoring duplicate start");
         return;
     }
 
@@ -1089,7 +1089,7 @@ NSString *IACheckImageSourceAvailable(void)
                                                 repeats:YES] retain];
 
     NSString *scriptPath = IAInstallerScriptPath();
-    NSLog(@"IAInstallProgressStep: launching installer %@", scriptPath);
+    NSDebugLLog(@"gwcomp", @"IAInstallProgressStep: launching installer %@", scriptPath);
 
     NSMutableArray *taskArgs = [NSMutableArray array];
     /* If not running as root, use sudo */
@@ -1098,10 +1098,10 @@ NSString *IACheckImageSourceAvailable(void)
         launchBinary = @"/usr/bin/env";
         [taskArgs addObject:@"sudo"];
         [taskArgs addObject:scriptPath];
-        NSLog(@"IAInstallProgressStep: not root (uid=%u), wrapping in sudo", getuid());
+        NSDebugLLog(@"gwcomp", @"IAInstallProgressStep: not root (uid=%u), wrapping in sudo", getuid());
     } else {
         launchBinary = scriptPath;
-        NSLog(@"IAInstallProgressStep: running as root");
+        NSDebugLLog(@"gwcomp", @"IAInstallProgressStep: running as root");
     }
 
     [taskArgs addObjectsFromArray:@[@"--noninteractive", @"--disk", disk.devicePath, @"--debug"]];
@@ -1109,7 +1109,7 @@ NSString *IACheckImageSourceAvailable(void)
     if (sourcePathOrNil && [sourcePathOrNil length] > 0) {
         [taskArgs addObject:@"--source"];
         [taskArgs addObject:sourcePathOrNil];
-        NSLog(@"IAInstallProgressStep: using image source %@", sourcePathOrNil);
+        NSDebugLLog(@"gwcomp", @"IAInstallProgressStep: using image source %@", sourcePathOrNil);
     }
 
     [self _appendLog:[NSString stringWithFormat:@"--- Installation started ---\n"]];
@@ -1141,10 +1141,10 @@ NSString *IACheckImageSourceAvailable(void)
 
     @try {
         [_installerTask launch];
-        NSLog(@"IAInstallProgressStep: task launched (PID %d)",
+        NSDebugLLog(@"gwcomp", @"IAInstallProgressStep: task launched (PID %d)",
               [_installerTask processIdentifier]);
     } @catch (NSException *ex) {
-        NSLog(@"IAInstallProgressStep: launch failed: %@", ex);
+        NSDebugLLog(@"gwcomp", @"IAInstallProgressStep: launch failed: %@", ex);
         [[NSNotificationCenter defaultCenter] removeObserver:self
                                                         name:NSFileHandleReadCompletionNotification
                                                       object:readHandle];
@@ -1258,7 +1258,7 @@ NSString *IACheckImageSourceAvailable(void)
 {
     NSTask *task = [notification object];
     int status = [task terminationStatus];
-    NSLog(@"IAInstallProgressStep: task terminated with status %d", status);
+    NSDebugLLog(@"gwcomp", @"IAInstallProgressStep: task terminated with status %d", status);
 
     [_etaTimer invalidate];
     [_etaTimer release];

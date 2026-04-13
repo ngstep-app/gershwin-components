@@ -16,7 +16,7 @@
                                                    encoding:NSUTF8StringEncoding 
                                                       error:&error];
     if (!content) {
-        NSLog(@"Failed to read service file %@: %@", filePath, error.localizedDescription);
+        NSDebugLLog(@"gwcomp", @"Failed to read service file %@: %@", filePath, error.localizedDescription);
         return nil;
     }
     

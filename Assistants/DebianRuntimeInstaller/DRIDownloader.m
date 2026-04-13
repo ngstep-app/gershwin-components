@@ -27,7 +27,7 @@
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"DRIDownloader: init");
+        NSDebugLLog(@"gwcomp", @"DRIDownloader: init");
         
         _isDownloading = NO;
         _progress = 0.0;
@@ -40,7 +40,7 @@
 
 - (void)dealloc
 {
-    NSLog(@"DRIDownloader: dealloc");
+    NSDebugLLog(@"gwcomp", @"DRIDownloader: dealloc");
     [self cancelDownload];
     [_downloadedData release];
     [super dealloc];
@@ -48,16 +48,16 @@
 
 - (void)downloadFileFromURL:(NSString *)urlString toPath:(NSString *)destinationPath
 {
-    NSLog(@"[DRIDownloader] *** downloadFileFromURL: %@ to: %@", urlString, destinationPath);
+    NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** downloadFileFromURL: %@ to: %@", urlString, destinationPath);
     
     if (_isDownloading) {
-        NSLog(@"[DRIDownloader] *** Download already in progress, canceling previous download");
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** Download already in progress, canceling previous download");
         [self cancelDownload];
     }
     
     NSURL *url = [NSURL URLWithString:urlString];
     if (!url) {
-        NSLog(@"[DRIDownloader] *** ERROR: Invalid URL: %@", urlString);
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** ERROR: Invalid URL: %@", urlString);
         NSError *error = [NSError errorWithDomain:@"DRIDownloader" 
                                              code:1001 
                                          userInfo:@{NSLocalizedDescriptionKey: @"Invalid download URL"}];
@@ -72,7 +72,7 @@
                                    withIntermediateDirectories:YES 
                                                     attributes:nil 
                                                          error:&dirError]) {
-        NSLog(@"[DRIDownloader] *** ERROR: Failed to create destination directory: %@", dirError.localizedDescription);
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** ERROR: Failed to create destination directory: %@", dirError.localizedDescription);
         [self.delegate downloader:self didFailWithError:dirError];
         return;
     }
@@ -92,14 +92,14 @@
     [request setTimeoutInterval:3600.0]; // 1 hour timeout
     
     // Start connection-based download (more reliable than NSURLDownload in GNUstep)
-    NSLog(@"[DRIDownloader] *** Starting NSURLConnection download");
+    NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** Starting NSURLConnection download");
     _connection = [[NSURLConnection alloc] initWithRequest:request delegate:self];
     
     if (_connection) {
         _isDownloading = YES;
-        NSLog(@"[DRIDownloader] *** NSURLConnection started successfully");
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** NSURLConnection started successfully");
     } else {
-        NSLog(@"[DRIDownloader] *** ERROR: Failed to create NSURLConnection");
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** ERROR: Failed to create NSURLConnection");
         NSError *error = [NSError errorWithDomain:@"DRIDownloader" 
                                              code:1002 
                                          userInfo:@{NSLocalizedDescriptionKey: @"Failed to create connection"}];
@@ -109,10 +109,10 @@
 
 - (void)cancelDownload
 {
-    NSLog(@"[DRIDownloader] *** Canceling download");
+    NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** Canceling download");
     
     if (_connection) {
-        NSLog(@"[DRIDownloader] *** Canceling NSURLConnection");
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** Canceling NSURLConnection");
         [_connection cancel];
         [_connection release];
         _connection = nil;
@@ -122,9 +122,9 @@
     if (_destinationPath && [[NSFileManager defaultManager] fileExistsAtPath:_destinationPath]) {
         NSError *error;
         if ([[NSFileManager defaultManager] removeItemAtPath:_destinationPath error:&error]) {
-            NSLog(@"[DRIDownloader] *** Cleaned up partial download file: %@", _destinationPath);
+            NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** Cleaned up partial download file: %@", _destinationPath);
         } else {
-            NSLog(@"[DRIDownloader] *** Failed to cleanup partial download: %@", error.localizedDescription);
+            NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** Failed to cleanup partial download: %@", error.localizedDescription);
         }
     }
     
@@ -139,24 +139,24 @@
     _bytesDownloaded = 0;
     _expectedBytes = 0;
     
-    NSLog(@"[DRIDownloader] *** Download cancellation complete");
+    NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** Download cancellation complete");
 }
 
 #pragma mark - NSURLConnection Delegate Methods
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
-    NSLog(@"[DRIDownloader] *** didReceiveResponse called! Response: %@", response);
+    NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** didReceiveResponse called! Response: %@", response);
     _expectedBytes = [response expectedContentLength];
-    NSLog(@"[DRIDownloader] *** expected length: %lld", _expectedBytes);
+    NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** expected length: %lld", _expectedBytes);
     
     if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
         NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
-        NSLog(@"[DRIDownloader] *** HTTP Status: %ld", (long)[httpResponse statusCode]);
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** HTTP Status: %ld", (long)[httpResponse statusCode]);
         
         // Check for HTTP errors
         if ([httpResponse statusCode] >= 400) {
-            NSLog(@"[DRIDownloader] *** HTTP Error: %ld", (long)[httpResponse statusCode]);
+            NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** HTTP Error: %ld", (long)[httpResponse statusCode]);
             [_connection cancel];
             NSError *error = [NSError errorWithDomain:@"DRIDownloader" 
                                                  code:[httpResponse statusCode] 
@@ -167,10 +167,10 @@
     }
     
     if (_expectedBytes > 0) {
-        NSLog(@"[DRIDownloader] *** Calling delegate didStartDownloadWithExpectedSize");
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** Calling delegate didStartDownloadWithExpectedSize");
         [self.delegate downloader:self didStartDownloadWithExpectedSize:_expectedBytes];
     } else {
-        NSLog(@"[DRIDownloader] *** Expected size is 0 or unknown");
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** Expected size is 0 or unknown");
         [self.delegate downloader:self didStartDownloadWithExpectedSize:0];
     }
     
@@ -182,7 +182,7 @@
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
 {
     NSUInteger length = [data length];
-    NSLog(@"[DRIDownloader] *** didReceiveData: %lu bytes", (unsigned long)length);
+    NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** didReceiveData: %lu bytes", (unsigned long)length);
     
     // Append data to our buffer
     [_downloadedData appendData:data];
@@ -194,20 +194,20 @@
         _progress = 0.0;
     }
     
-    NSLog(@"[DRIDownloader] *** progress: %.1f%% (%lld / %lld bytes)", 
+    NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** progress: %.1f%% (%lld / %lld bytes)", 
           _progress * 100.0, _bytesDownloaded, _expectedBytes);
     
     if (self.delegate && [self.delegate respondsToSelector:@selector(downloader:didUpdateProgress:bytesDownloaded:)]) {
-        NSLog(@"[DRIDownloader] *** Calling delegate didUpdateProgress");
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** Calling delegate didUpdateProgress");
         [self.delegate downloader:self didUpdateProgress:_progress bytesDownloaded:_bytesDownloaded];
     } else {
-        NSLog(@"[DRIDownloader] *** ERROR: No delegate or delegate doesn't respond to didUpdateProgress");
+        NSDebugLLog(@"gwcomp", @"[DRIDownloader] *** ERROR: No delegate or delegate doesn't respond to didUpdateProgress");
     }
 }
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
 {
-    NSLog(@"DRIDownloader: download completed, writing to: %@", _destinationPath);
+    NSDebugLLog(@"gwcomp", @"DRIDownloader: download completed, writing to: %@", _destinationPath);
     
     // Write the downloaded data to file
     NSError *writeError;
@@ -216,12 +216,12 @@
         if ([[NSFileManager defaultManager] fileExistsAtPath:_destinationPath]) {
             NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:_destinationPath error:nil];
             long long fileSize = [[attributes objectForKey:NSFileSize] longLongValue];
-            NSLog(@"DRIDownloader: final file size: %lld bytes", fileSize);
+            NSDebugLLog(@"gwcomp", @"DRIDownloader: final file size: %lld bytes", fileSize);
             
             _isDownloading = NO;
             [self.delegate downloader:self didCompleteWithFilePath:_destinationPath];
         } else {
-            NSLog(@"DRIDownloader: written file not found at expected location");
+            NSDebugLLog(@"gwcomp", @"DRIDownloader: written file not found at expected location");
             _isDownloading = NO;
             NSError *error = [NSError errorWithDomain:@"DRIDownloader" 
                                                  code:1003 
@@ -229,7 +229,7 @@
             [self.delegate downloader:self didFailWithError:error];
         }
     } else {
-        NSLog(@"DRIDownloader: failed to write downloaded data: %@", writeError.localizedDescription);
+        NSDebugLLog(@"gwcomp", @"DRIDownloader: failed to write downloaded data: %@", writeError.localizedDescription);
         _isDownloading = NO;
         [self.delegate downloader:self didFailWithError:writeError];
     }
@@ -242,7 +242,7 @@
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
 {
-    NSLog(@"DRIDownloader: download failed with error: %@", error.localizedDescription);
+    NSDebugLLog(@"gwcomp", @"DRIDownloader: download failed with error: %@", error.localizedDescription);
     _isDownloading = NO;
     
     [self.delegate downloader:self didFailWithError:error];

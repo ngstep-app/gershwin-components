@@ -47,67 +47,67 @@
 
 - (void)startDiscovery
 {
-  NSLog(@"========================================");
-  NSLog(@"NetworkBrowser Service Discovery Test");
-  NSLog(@"========================================");
-  NSLog(@"");
-  NSLog(@"Environment: Headless mode (no network)");
-  NSLog(@"Looking for HTTP services (_services._dns-sd._udp.local)...");
-  NSLog(@"");
+  NSDebugLLog(@"gwcomp", @"========================================");
+  NSDebugLLog(@"gwcomp", @"NetworkBrowser Service Discovery Test");
+  NSDebugLLog(@"gwcomp", @"========================================");
+  NSDebugLLog(@"gwcomp", @"");
+  NSDebugLLog(@"gwcomp", @"Environment: Headless mode (no network)");
+  NSDebugLLog(@"gwcomp", @"Looking for HTTP services (_services._dns-sd._udp.local)...");
+  NSDebugLLog(@"gwcomp", @"");
   
-  NSLog(@"Note: Real service discovery would work if:");
-  NSLog(@"  1. Application runs with GUI (AppKit/AppKit2)");
-  NSLog(@"  2. mDNS services are available on network");
-  NSLog(@"  3. libdns_sd is properly linked");
-  NSLog(@"");
-  NSLog(@"Simulating discovery for testing purposes...");
-  NSLog(@"");
+  NSDebugLLog(@"gwcomp", @"Note: Real service discovery would work if:");
+  NSDebugLLog(@"gwcomp", @"  1. Application runs with GUI (AppKit/AppKit2)");
+  NSDebugLLog(@"gwcomp", @"  2. mDNS services are available on network");
+  NSDebugLLog(@"gwcomp", @"  3. libdns_sd is properly linked");
+  NSDebugLLog(@"gwcomp", @"");
+  NSDebugLLog(@"gwcomp", @"Simulating discovery for testing purposes...");
+  NSDebugLLog(@"gwcomp", @"");
   
   [self simulateDiscovery];
 }
 
 - (void)simulateDiscovery
 {
-  NSLog(@"[SIM] Searching local network...");
+  NSDebugLLog(@"gwcomp", @"[SIM] Searching local network...");
   
   // In real environment, NSNetServiceBrowser would discover actual services
   // For this test, we demonstrate the infrastructure is working
-  NSLog(@"[SIM] Would discover services here if network was available");
+  NSDebugLLog(@"gwcomp", @"[SIM] Would discover services here if network was available");
 }
 
 - (void)printServices
 {
-  NSLog(@"");
-  NSLog(@"========== DISCOVERED SERVICES ==========");
+  NSDebugLLog(@"gwcomp", @"");
+  NSDebugLLog(@"gwcomp", @"========== DISCOVERED SERVICES ==========");
   
   if ([services count] == 0)
     {
-      NSLog(@"No services found on the network.");
+      NSDebugLLog(@"gwcomp", @"No services found on the network.");
     }
   else
     {
-      NSLog(@"Found %lu service(s):\n", (unsigned long)[services count]);
+      NSDebugLLog(@"gwcomp", @"Found %lu service(s):\n", (unsigned long)[services count]);
       
       for (NSUInteger i = 0; i < [services count]; i++)
         {
           NSNetService *service = [services objectAtIndex: i];
-          NSLog(@"[%lu] %@", (unsigned long)i + 1, [service name]);
-          NSLog(@"    Type: %@", [service type]);
-          NSLog(@"    Domain: %@", [service domain]);
+          NSDebugLLog(@"gwcomp", @"[%lu] %@", (unsigned long)i + 1, [service name]);
+          NSDebugLLog(@"gwcomp", @"    Type: %@", [service type]);
+          NSDebugLLog(@"gwcomp", @"    Domain: %@", [service domain]);
           
           if ([service hostName])
             {
-              NSLog(@"    Host: %@", [service hostName]);
+              NSDebugLLog(@"gwcomp", @"    Host: %@", [service hostName]);
             }
           
           if ([service port] > 0)
             {
-              NSLog(@"    Port: %ld", (long)[service port]);
+              NSDebugLLog(@"gwcomp", @"    Port: %ld", (long)[service port]);
             }
           
           if ([service addresses] && [[service addresses] count] > 0)
             {
-              NSLog(@"    Addresses:");
+              NSDebugLLog(@"gwcomp", @"    Addresses:");
               for (NSData *addressData in [service addresses])
                 {
                   struct sockaddr *sa = (struct sockaddr *)[addressData bytes];
@@ -117,13 +117,13 @@
                     {
                       struct sockaddr_in *sin = (struct sockaddr_in *)sa;
                       inet_ntop(AF_INET, &sin->sin_addr, addr_str, INET6_ADDRSTRLEN);
-                      NSLog(@"      - IPv4: %s", addr_str);
+                      NSDebugLLog(@"gwcomp", @"      - IPv4: %s", addr_str);
                     }
                   else if (sa->sa_family == AF_INET6)
                     {
                       struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sa;
                       inet_ntop(AF_INET6, &sin6->sin6_addr, addr_str, INET6_ADDRSTRLEN);
-                      NSLog(@"      - IPv6: [%s]", addr_str);
+                      NSDebugLLog(@"gwcomp", @"      - IPv6: [%s]", addr_str);
                     }
                 }
             }
@@ -131,7 +131,7 @@
           NSDictionary *dict = [NSNetService dictionaryFromTXTRecordData: [service TXTRecordData]];
           if (dict && [dict count] > 0)
             {
-              NSLog(@"    Properties:");
+              NSDebugLLog(@"gwcomp", @"    Properties:");
               for (NSString *key in [dict allKeys])
                 {
                   NSData *value = [dict objectForKey: key];
@@ -140,28 +140,28 @@
                     {
                       valueStr = [[NSString alloc] initWithFormat: @"<binary data: %lu bytes>", (unsigned long)[value length]];
                     }
-                  NSLog(@"      %@: %@", key, valueStr);
+                  NSDebugLLog(@"gwcomp", @"      %@: %@", key, valueStr);
                   RELEASE(valueStr);
                 }
             }
           
-          NSLog(@"");
+          NSDebugLLog(@"gwcomp", @"");
         }
     }
   
-  NSLog(@"=========================================");
+  NSDebugLLog(@"gwcomp", @"=========================================");
 }
 
 /* NSNetServiceBrowserDelegate methods */
 
 - (void)netServiceBrowserWillSearch:(NSNetServiceBrowser *)aNetServiceBrowser
 {
-  NSLog(@"  → Starting mDNS service discovery...");
+  NSDebugLLog(@"gwcomp", @"  → Starting mDNS service discovery...");
 }
 
 - (void)netServiceBrowserDidStopSearch:(NSNetServiceBrowser *)aNetServiceBrowser
 {
-  NSLog(@"Service discovery stopped.");
+  NSDebugLLog(@"gwcomp", @"Service discovery stopped.");
   [self printServices];
   
   /* Exit the run loop */
@@ -172,7 +172,7 @@
            didFindService:(NSNetService *)aNetService
                moreComing:(BOOL)moreComing
 {
-  NSLog(@"  ✓ Found: %@ (%@)", [aNetService name], [aNetService domain]);
+  NSDebugLLog(@"gwcomp", @"  ✓ Found: %@ (%@)", [aNetService name], [aNetService domain]);
   
   if (![services containsObject: aNetService])
     {
@@ -186,14 +186,14 @@
          didRemoveService:(NSNetService *)aNetService
                moreComing:(BOOL)moreComing
 {
-  NSLog(@"  ✗ Removed: %@", [aNetService name]);
+  NSDebugLLog(@"gwcomp", @"  ✗ Removed: %@", [aNetService name]);
   [services removeObject: aNetService];
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)aNetServiceBrowser
  didNotSearch:(NSDictionary *)errorDict
 {
-  NSLog(@"ERROR searching for services: %@", errorDict);
+  NSDebugLLog(@"gwcomp", @"ERROR searching for services: %@", errorDict);
 }
 
 @end
@@ -204,42 +204,42 @@ int main(int argc, char *argv[])
   
   @try
     {
-      NSLog(@"[TEST] Initializing...");
+      NSDebugLLog(@"gwcomp", @"[TEST] Initializing...");
       
       ServiceDiscoveryTest *test = [[ServiceDiscoveryTest alloc] init];
       if (!test)
         {
-          NSLog(@"ERROR: Failed to create test instance");
+          NSDebugLLog(@"gwcomp", @"ERROR: Failed to create test instance");
           [pool drain];
           return 1;
         }
       
-      NSLog(@"[TEST] Starting discovery...");
+      NSDebugLLog(@"gwcomp", @"[TEST] Starting discovery...");
       [test startDiscovery];
-      NSLog(@"[TEST] Discovery started");
+      NSDebugLLog(@"gwcomp", @"[TEST] Discovery started");
       
       /* Run for 10 seconds */
       NSDate *stopDate = [NSDate dateWithTimeIntervalSinceNow: 10.0];
       int iterations = 0;
       
-      NSLog(@"[TEST] Entering runloop...");
+      NSDebugLLog(@"gwcomp", @"[TEST] Entering runloop...");
       while ([stopDate compare: [NSDate date]] == NSOrderedDescending)
         {
           iterations++;
           if (iterations % 10 == 0)
-            NSLog(@"[TEST] Runloop iteration %d", iterations);
+            NSDebugLLog(@"gwcomp", @"[TEST] Runloop iteration %d", iterations);
           [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.1]];
         }
       
-      NSLog(@"[TEST] Exited runloop after %d iterations", iterations);
+      NSDebugLLog(@"gwcomp", @"[TEST] Exited runloop after %d iterations", iterations);
       [test printServices];
       [test release];
-      NSLog(@"[TEST] Test completed");
+      NSDebugLLog(@"gwcomp", @"[TEST] Test completed");
     }
   @catch (NSException *exception)
     {
-      NSLog(@"[TEST] Exception: %@", exception);
-      NSLog(@"[TEST] Backtrace: %@", [exception callStackSymbols]);
+      NSDebugLLog(@"gwcomp", @"[TEST] Exception: %@", exception);
+      NSDebugLLog(@"gwcomp", @"[TEST] Backtrace: %@", [exception callStackSymbols]);
     }
   
   [pool drain];

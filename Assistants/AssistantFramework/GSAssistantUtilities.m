@@ -460,12 +460,12 @@
 }
 
 + (instancetype)builder {
-    NSLog(@"[GSAssistantBuilder] Creating new builder instance");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Creating new builder instance");
     return [[self alloc] init];
 }
 
 - (instancetype)init {
-    NSLog(@"[GSAssistantBuilder] Initializing builder");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Initializing builder");
     self = [super init];
     if (self) {
         _layoutStyle = GSAssistantLayoutStyleInstaller; // Force installer layout as default and only option
@@ -474,64 +474,64 @@
         _allowCancel = YES;
         _steps = [[NSMutableArray alloc] init];
         _includeLocalizedContent = NO; // Default to NO
-        NSLog(@"[GSAssistantBuilder] Builder initialized");
+        NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Builder initialized");
     }
     return self;
 }
 
 - (instancetype)withTitle:(NSString *)title {
-    NSLog(@"[GSAssistantBuilder] Setting title: %@", title);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Setting title: %@", title);
     _title = [title copy];
     return self;
 }
 
 - (instancetype)withIcon:(NSImage *)icon {
-    NSLog(@"[GSAssistantBuilder] Setting icon: %@", icon);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Setting icon: %@", icon);
     _icon = icon;
     return self;
 }
 
 - (instancetype)withLayoutStyle:(GSAssistantLayoutStyle)layoutStyle {
-    NSLog(@"[GSAssistantBuilder] Setting layout style: %ld", (long)layoutStyle);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Setting layout style: %ld", (long)layoutStyle);
     _layoutStyle = layoutStyle;
     return self;
 }
 
 - (instancetype)withAnimationType:(GSAssistantAnimationType)animationType {
-    NSLog(@"[GSAssistantBuilder] Setting animation type: %ld", (long)animationType);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Setting animation type: %ld", (long)animationType);
     _animationType = animationType;
     return self;
 }
 
 - (instancetype)withProgressBar:(BOOL)showProgress {
-    NSLog(@"[GSAssistantBuilder] Setting progress bar: %@", showProgress ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Setting progress bar: %@", showProgress ? @"YES" : @"NO");
     _showProgress = showProgress;
     return self;
 }
 
 - (instancetype)allowingCancel:(BOOL)allowCancel {
-    NSLog(@"[GSAssistantBuilder] Setting allow cancel: %@", allowCancel ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Setting allow cancel: %@", allowCancel ? @"YES" : @"NO");
     _allowCancel = allowCancel;
     return self;
 }
 
 - (instancetype)withAutoLocalizedContent:(BOOL)includeLocalizedContent {
-    NSLog(@"[GSAssistantBuilder] Setting auto localized content: %@", includeLocalizedContent ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Setting auto localized content: %@", includeLocalizedContent ? @"YES" : @"NO");
     _includeLocalizedContent = includeLocalizedContent;
     return self;
 }
 
 - (instancetype)addIntroductionWithMessage:(NSString *)message features:(NSArray<NSString *> *)features {
-    NSLog(@"[GSAssistantBuilder] Adding introduction step with message: %@", message);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Adding introduction step with message: %@", message);
     GSIntroductionStep *step = [[GSIntroductionStep alloc] initWithWelcomeMessage:message featureList:features];
-    NSLog(@"[GSAssistantBuilder] Created introduction step: %@", step);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Created introduction step: %@", step);
     [_steps addObject:step];
-    NSLog(@"[GSAssistantBuilder] Now have %lu steps", (unsigned long)_steps.count);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Now have %lu steps", (unsigned long)_steps.count);
     return self;
 }
 
 - (instancetype)addStep:(id<GSAssistantStepProtocol>)step {
-    NSLog(@"[GSAssistantBuilder] Adding generic step: %@", step);
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Adding generic step: %@", step);
     [_steps addObject:step];
     return self;
 }
@@ -549,30 +549,30 @@
 }
 
 - (GSAssistantWindow *)build {
-    NSLog(@"[GSAssistantBuilder] Building assistant window");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Building assistant window");
     
     // Always auto-insert localized content steps at the beginning if they exist
-    NSLog(@"[GSAssistantBuilder] Auto-detecting and inserting localized content steps");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Auto-detecting and inserting localized content steps");
     NSMutableArray *localizedSteps = [[NSMutableArray alloc] init];
     
     // Add Welcome step if content exists
     id<GSAssistantStepProtocol> welcomeStep = [GSLocalizedContentManager createWelcomeStep];
     if (welcomeStep) {
-        NSLog(@"[GSAssistantBuilder] Adding Welcome step");
+        NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Adding Welcome step");
         [localizedSteps addObject:welcomeStep];
     }
     
     // Add Read Me step if content exists
     id<GSAssistantStepProtocol> readMeStep = [GSLocalizedContentManager createReadMeStep];
     if (readMeStep) {
-        NSLog(@"[GSAssistantBuilder] Adding Read Me step");
+        NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Adding Read Me step");
         [localizedSteps addObject:readMeStep];
     }
     
     // Add License step if content exists
     id<GSAssistantStepProtocol> licenseStep = [GSLocalizedContentManager createLicenseStep];
     if (licenseStep) {
-        NSLog(@"[GSAssistantBuilder] Adding License step");
+        NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Adding License step");
         [localizedSteps addObject:licenseStep];
     }
     
@@ -584,9 +584,9 @@
         
         _steps = allSteps;
         
-        NSLog(@"[GSAssistantBuilder] Total steps after adding localized content: %lu", (unsigned long)_steps.count);
+        NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Total steps after adding localized content: %lu", (unsigned long)_steps.count);
     } else {
-        NSLog(@"[GSAssistantBuilder] No localized content found, proceeding with existing steps");
+        NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] No localized content found, proceeding with existing steps");
     }
     
     GSAssistantWindow *assistant = [[GSAssistantWindow alloc] initWithLayoutStyle:_layoutStyle
@@ -597,7 +597,7 @@
     assistant.showsProgressBar = _showProgress;
     assistant.allowsCancel = _allowCancel;
     
-    NSLog(@"[GSAssistantBuilder] Assistant window created, showing first step");
+    NSDebugLLog(@"gwcomp", @"[GSAssistantBuilder] Assistant window created, showing first step");
     // Show the first step immediately after creating the window
     [assistant showCurrentStep];
     
@@ -748,7 +748,7 @@ static NSString *s_forcedLocale = nil;
 + (NSString *)currentLocale {
     // Check for explicit locale override via static variable (for testing)
     if (s_forcedLocale && s_forcedLocale.length > 0) {
-        NSLog(@"[GSLocalizedContentManager] Using forced locale: %@", s_forcedLocale);
+        NSDebugLLog(@"gwcomp", @"[GSLocalizedContentManager] Using forced locale: %@", s_forcedLocale);
         return s_forcedLocale;
     }
     
@@ -760,11 +760,11 @@ static NSString *s_forcedLocale = nil;
         NSArray *components = [language componentsSeparatedByString:@"-"];
         NSString *langCode = components[0];
         
-        NSLog(@"[GSLocalizedContentManager] Detected locale: %@ (from preferred languages: %@)", langCode, preferredLanguages);
+        NSDebugLLog(@"gwcomp", @"[GSLocalizedContentManager] Detected locale: %@ (from preferred languages: %@)", langCode, preferredLanguages);
         return langCode;
     }
     
-    NSLog(@"[GSLocalizedContentManager] Defaulting to English locale");
+    NSDebugLLog(@"gwcomp", @"[GSLocalizedContentManager] Defaulting to English locale");
     return @"en"; // Default to English
 }
 
@@ -806,7 +806,7 @@ static NSString *s_forcedLocale = nil;
                                                       error:&error];
     
     if (error) {
-        NSLog(@"[GSLocalizedContentManager] Error reading %@.txt for locale %@: %@", resource, locale, error.localizedDescription);
+        NSDebugLLog(@"gwcomp", @"[GSLocalizedContentManager] Error reading %@.txt for locale %@: %@", resource, locale, error.localizedDescription);
         return nil;
     }
     
@@ -879,12 +879,12 @@ static NSString *s_forcedLocale = nil;
 #pragma mark - Unified Localization
 
 + (void)forceLocale:(NSString *)locale {
-    NSLog(@"[GSLocalizedContentManager] Forcing locale to: %@", locale);
+    NSDebugLLog(@"gwcomp", @"[GSLocalizedContentManager] Forcing locale to: %@", locale);
     s_forcedLocale = [locale copy];
 }
 
 + (void)clearForcedLocale {
-    NSLog(@"[GSLocalizedContentManager] Clearing forced locale");
+    NSDebugLLog(@"gwcomp", @"[GSLocalizedContentManager] Clearing forced locale");
     s_forcedLocale = nil;
 }
 

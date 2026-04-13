@@ -64,7 +64,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         registered = [connection registerName:kGershwinMenuServerName];
     } @catch (NSException *e) {
         registered = NO;
-        NSLog(@"GNUStepMenuImporter: Exception while registering server name: %@", e);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception while registering server name: %@", e);
     }
 
     // Keep the connection reference even if registration failed. We'll retry and use
@@ -72,7 +72,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
     self.menuServerConnection = connection;
 
     if (!registered) {
-        NSLog(@"GNUStepMenuImporter: Failed to register GNUstep menu server name %@", kGershwinMenuServerName);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Failed to register GNUstep menu server name %@", kGershwinMenuServerName);
         // Schedule retries with exponential backoff and proactively scan clients as a fallback
         [self scheduleRegisterRetryWithAttempt:1];
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -87,11 +87,11 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         @try {
             [[NSRunLoop currentRunLoop] addPort:receivePort forMode:NSRunLoopCommonModes];
         } @catch (NSException *e) {
-            NSLog(@"GNUStepMenuImporter: Exception adding receive port to run loop: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception adding receive port to run loop: %@", e);
         }
     }
 
-    NSLog(@"GNUStepMenuImporter: Registered GNUstep menu server as %@ with receive port added to run loop", kGershwinMenuServerName);
+    NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Registered GNUstep menu server as %@ with receive port added to run loop", kGershwinMenuServerName);
 
     // Immediately attempt to import menus for already-mapped windows (Desktop, etc.)
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -107,7 +107,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
 {
     const NSInteger MAX_ATTEMPTS = 6;
     if (attempt > MAX_ATTEMPTS) {
-        NSLog(@"GNUStepMenuImporter: Abandoning register retries after %ld attempts", (long)attempt - 1);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Abandoning register retries after %ld attempts", (long)attempt - 1);
         return;
     }
 
@@ -138,11 +138,11 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
                         @try {
                             [[NSRunLoop currentRunLoop] addPort:receivePort forMode:NSRunLoopCommonModes];
                         } @catch (NSException *ex) {
-                            NSLog(@"GNUStepMenuImporter: Exception adding receive port during retry: %@", ex);
+                            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception adding receive port during retry: %@", ex);
                         }
                     });
                 }
-                NSLog(@"GNUStepMenuImporter: Successfully registered GNUstep menu server after %ld attempts", (long)attempt);
+                NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Successfully registered GNUstep menu server after %ld attempts", (long)attempt);
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [self scanForExistingMenuServices];
                 });
@@ -158,7 +158,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
             registered = [connection registerName:kGershwinMenuServerName];
         } @catch (NSException *e) {
             registered = NO;
-            NSLog(@"GNUStepMenuImporter: Exception while retrying register: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception while retrying register: %@", e);
         }
 
         if (registered) {
@@ -169,11 +169,11 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
                     @try {
                         [[NSRunLoop currentRunLoop] addPort:receivePort forMode:NSRunLoopCommonModes];
                     } @catch (NSException *e) {
-                        NSLog(@"GNUStepMenuImporter: Exception adding receive port during retry: %@", e);
+                        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception adding receive port during retry: %@", e);
                     }
                 });
             }
-            NSLog(@"GNUStepMenuImporter: Successfully registered GNUstep menu server after %ld attempts", (long)attempt);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Successfully registered GNUstep menu server after %ld attempts", (long)attempt);
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self scanForExistingMenuServices];
             });
@@ -182,7 +182,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
             [self scheduleRegisterRetryWithAttempt:attempt + 1];
         }
     } @catch (NSException *e) {
-        NSLog(@"GNUStepMenuImporter: Exception in attemptRegisterRetry: %@", e);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception in attemptRegisterRetry: %@", e);
         [self scheduleRegisterRetryWithAttempt:attempt + 1];
     }
 }
@@ -199,7 +199,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
      * underlying numeric type. */
     for (NSNumber *storedKey in self.menusByWindow) {
         if ([storedKey unsignedLongValue] == windowId) {
-            NSLog(@"GNUStepMenuImporter: Found menu for window %lu via numeric comparison (key type mismatch: stored=%@ lookup=%@)",
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Found menu for window %lu via numeric comparison (key type mismatch: stored=%@ lookup=%@)",
                   windowId, [storedKey className], [key className]);
             /* Re-store under the canonical key so future lookups are fast */
             self.menusByWindow[key] = self.menusByWindow[storedKey];
@@ -218,7 +218,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         // Using static to avoid spamming the log every frame/check
         static unsigned long lastProbedWindow = 0;
         if (lastProbedWindow != windowId) {
-             NSLog(@"GNUStepMenuImporter: Probing GNUstep client %@ for window %lu", clientName, windowId);
+             NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Probing GNUstep client %@ for window %lu", clientName, windowId);
              lastProbedWindow = windowId;
         }
 
@@ -232,7 +232,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
                         // Log success if we connect
                         static unsigned long lastConnectedWindow = 0;
                         if (lastConnectedWindow != windowId) {
-                             NSLog(@"GNUStepMenuImporter: Connected to %@ for window %lu", clientName, windowId);
+                             NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Connected to %@ for window %lu", clientName, windowId);
                              lastConnectedWindow = windowId;
                         }
 
@@ -245,23 +245,23 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
                         // Request update
                         [(id)proxy requestMenuUpdateForWindow:@(windowId)];
                     } else {
-                        NSLog(@"GNUStepMenuImporter: Failed to get root proxy for client %@", clientName);
+                        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Failed to get root proxy for client %@", clientName);
                     }
                 } else {
                     // Only log connection failure once per window to avoid spam
                     // (Scanning logic might retry, so we want to see it at least once)
                      static unsigned long lastFailedWindow = 0;
                      if (lastFailedWindow != windowId) {
-                          NSLog(@"GNUStepMenuImporter: Failed to connect to client name %@", clientName);
+                          NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Failed to connect to client name %@", clientName);
                           lastFailedWindow = windowId;
                      }
                 }
             } @catch (NSException *e) {
-                NSLog(@"GNUStepMenuImporter: Exception probing client %@: %@", clientName, e);
+                NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception probing client %@: %@", clientName, e);
             }
         });
     } else {
-        NSLog(@"GNUStepMenuImporter: Could not determine PID for window %lu", windowId);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Could not determine PID for window %lu", windowId);
     }
     
     return NO;
@@ -300,7 +300,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
     [self.lastMenuUpdateTimeByWindow removeObjectForKey:windowKey];
 
     if (self.appMenuWidget && self.appMenuWidget.currentWindowId == windowId) {
-        NSLog(@"GNUStepMenuImporter: Current menu window %lu unregistered - refreshing menu", windowId);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Current menu window %lu unregistered - refreshing menu", windowId);
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.appMenuWidget updateForActiveWindow];
         });
@@ -411,12 +411,12 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
             if (windowId && [(id)windowId isProxy]) {
                 NSConnection *conn = [(NSDistantObject *)windowId connectionForProxy];
                 if (!conn || [conn isValid] == NO) {
-                    NSLog(@"GNUStepMenuImporter: windowId proxy has invalid connection");
+                    NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: windowId proxy has invalid connection");
                     hasInvalidProxies = YES;
                 }
             }
         } @catch (NSException *e) {
-            NSLog(@"GNUStepMenuImporter: Exception validating windowId proxy: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception validating windowId proxy: %@", e);
             hasInvalidProxies = YES;
         }
         
@@ -424,12 +424,12 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
             if (menuData && [(id)menuData isProxy]) {
                 NSConnection *conn = [(NSDistantObject *)menuData connectionForProxy];
                 if (!conn || [conn isValid] == NO) {
-                    NSLog(@"GNUStepMenuImporter: menuData proxy has invalid connection");
+                    NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: menuData proxy has invalid connection");
                     hasInvalidProxies = YES;
                 }
             }
         } @catch (NSException *e) {
-            NSLog(@"GNUStepMenuImporter: Exception validating menuData proxy: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception validating menuData proxy: %@", e);
             hasInvalidProxies = YES;
         }
         
@@ -437,17 +437,17 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
             if (clientName && [(id)clientName isProxy]) {
                 NSConnection *conn = [(NSDistantObject *)clientName connectionForProxy];
                 if (!conn || [conn isValid] == NO) {
-                    NSLog(@"GNUStepMenuImporter: clientName proxy has invalid connection");
+                    NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: clientName proxy has invalid connection");
                     hasInvalidProxies = YES;
                 }
             }
         } @catch (NSException *e) {
-            NSLog(@"GNUStepMenuImporter: Exception validating clientName proxy: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception validating clientName proxy: %@", e);
             hasInvalidProxies = YES;
         }
         
         if (hasInvalidProxies) {
-            NSLog(@"GNUStepMenuImporter: Rejecting updateMenuForWindow call due to invalid proxy connections");
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Rejecting updateMenuForWindow call due to invalid proxy connections");
             return;
         }
 
@@ -456,11 +456,11 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
             if (!windowId || ![windowId isKindOfClass:[NSNumber class]] ||
                 !menuData || ![menuData isKindOfClass:[NSDictionary class]] ||
                 !clientName || ![clientName isKindOfClass:[NSString class]]) {
-                NSLog(@"GNUStepMenuImporter: Invalid update payload (types) - windowId:%@ menuData:%@ clientName:%@", windowId, [menuData class], [clientName class]);
+                NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Invalid update payload (types) - windowId:%@ menuData:%@ clientName:%@", windowId, [menuData class], [clientName class]);
                 return;
             }
         } @catch (NSException *e) {
-            NSLog(@"GNUStepMenuImporter: Exception in parameter validation: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception in parameter validation: %@", e);
             return;
         }
 
@@ -469,7 +469,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         @try {
             safeWindowId = [windowId copy];
         } @catch (NSException *e) {
-            NSLog(@"GNUStepMenuImporter: Exception copying windowId: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception copying windowId: %@", e);
             return;
         }
         
@@ -477,7 +477,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         @try {
             safeClientName = [clientName copy];
         } @catch (NSException *e) {
-            NSLog(@"GNUStepMenuImporter: Exception copying clientName: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception copying clientName: %@", e);
             return;
         }
         
@@ -498,11 +498,11 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
                 safeMenuData = [menuData copy];
             }
         } @catch (NSException *ex) {
-            NSLog(@"GNUStepMenuImporter: Failed to copy menuData safely: %@", ex);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Failed to copy menuData safely: %@", ex);
             @try {
                 safeMenuData = [menuData copy];
             } @catch (NSException *e2) {
-                NSLog(@"GNUStepMenuImporter: Exception copying menuData as fallback: %@", e2);
+                NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception copying menuData as fallback: %@", e2);
                 return;
             }
         }
@@ -520,8 +520,8 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"GNUStepMenuImporter: Exception in updateMenuForWindow:menuData:clientName: - %@", exception);
-        NSLog(@"GNUStepMenuImporter: This is likely a distributed objects issue with corrupted proxies");
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception in updateMenuForWindow:menuData:clientName: - %@", exception);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: This is likely a distributed objects issue with corrupted proxies");
         // Don't re-throw - just log and return to prevent crashes
     }
 }
@@ -534,7 +534,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
 
     // Safety: ensure this runs on main thread
     if (![NSThread isMainThread]) {
-        NSLog(@"GNUStepMenuImporter: WARNING - processMenuUpdateWithPayload executing off main thread!");
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: WARNING - processMenuUpdateWithPayload executing off main thread!");
     }
 
     NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
@@ -543,19 +543,19 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         startupTime = now;
     }
     if ((now - startupTime) < 15.0 && [self.lastMenuDataByWindow objectForKey:windowId]) {
-        NSLog(@"GNUStepMenuImporter: Suppressing repeated menu updates during startup for window %@", windowId);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Suppressing repeated menu updates during startup for window %@", windowId);
         return;
     }
 
     NSNumber *lastTime = [self.lastMenuUpdateTimeByWindow objectForKey:windowId];
     if (lastTime && (now - [lastTime doubleValue]) < 1.0) {
-        NSLog(@"GNUStepMenuImporter: Throttling rapid menu update for window %@", windowId);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Throttling rapid menu update for window %@", windowId);
         return;
     }
 
     NSDictionary *lastMenuData = [self.lastMenuDataByWindow objectForKey:windowId];
     if (lastMenuData && [lastMenuData isEqual:menuData]) {
-        NSLog(@"GNUStepMenuImporter: Skipping duplicate menu update for window %@", windowId);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Skipping duplicate menu update for window %@", windowId);
         return;
     }
 
@@ -566,7 +566,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
                            clientName:clientName
                                 path:@[]];
     if (!menu) {
-        NSLog(@"GNUStepMenuImporter: Failed to build menu for window %@", windowId);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Failed to build menu for window %@", windowId);
         return;
     }
 
@@ -598,12 +598,12 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
             if (windowId && [(id)windowId isProxy]) {
                 NSConnection *conn = [(NSDistantObject *)windowId connectionForProxy];
                 if (!conn || [conn isValid] == NO) {
-                    NSLog(@"GNUStepMenuImporter: unregisterWindow windowId proxy has invalid connection");
+                    NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: unregisterWindow windowId proxy has invalid connection");
                     hasInvalidProxies = YES;
                 }
             }
         } @catch (NSException *e) {
-            NSLog(@"GNUStepMenuImporter: Exception validating unregisterWindow windowId proxy: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception validating unregisterWindow windowId proxy: %@", e);
             hasInvalidProxies = YES;
         }
         
@@ -611,17 +611,17 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
             if (clientName && [(id)clientName isProxy]) {
                 NSConnection *conn = [(NSDistantObject *)clientName connectionForProxy];
                 if (!conn || [conn isValid] == NO) {
-                    NSLog(@"GNUStepMenuImporter: unregisterWindow clientName proxy has invalid connection");
+                    NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: unregisterWindow clientName proxy has invalid connection");
                     hasInvalidProxies = YES;
                 }
             }
         } @catch (NSException *e) {
-            NSLog(@"GNUStepMenuImporter: Exception validating unregisterWindow clientName proxy: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception validating unregisterWindow clientName proxy: %@", e);
             hasInvalidProxies = YES;
         }
         
         if (hasInvalidProxies) {
-            NSLog(@"GNUStepMenuImporter: Rejecting unregisterWindow call due to invalid proxy connections");
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Rejecting unregisterWindow call due to invalid proxy connections");
             return;
         }
 
@@ -633,13 +633,13 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
 
             [self unregisterWindow:[windowId unsignedLongValue]];
         } @catch (NSException *e) {
-            NSLog(@"GNUStepMenuImporter: Exception in unregisterWindow parameter processing: %@", e);
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception in unregisterWindow parameter processing: %@", e);
             return;
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"GNUStepMenuImporter: Exception in unregisterWindow:clientName: - %@", exception);
-        NSLog(@"GNUStepMenuImporter: This is likely a distributed objects issue with corrupted proxies");
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Exception in unregisterWindow:clientName: - %@", exception);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: This is likely a distributed objects issue with corrupted proxies");
         // Don't re-throw - just log and return to prevent crashes
     }
 }
@@ -654,7 +654,7 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
     // Defensive checks: limit recursion depth to avoid stack overflows and avoid bad types
     const NSUInteger MAX_DEPTH = 64;
     if ([path count] > MAX_DEPTH) {
-        NSLog(@"GNUStepMenuImporter: menuFromData exceeded max depth (%lu) for window %lu", (unsigned long)MAX_DEPTH, windowId);
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: menuFromData exceeded max depth (%lu) for window %lu", (unsigned long)MAX_DEPTH, windowId);
         return nil;
     }
 

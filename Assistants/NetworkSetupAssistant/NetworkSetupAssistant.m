@@ -16,7 +16,7 @@
 
 @implementation NetworkSetupAppDelegate
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
-    NSLog(@"NetworkSetupAssistant: Last window closed, terminating application");
+    NSDebugLLog(@"gwcomp", @"NetworkSetupAssistant: Last window closed, terminating application");
     return YES;
 }
 @end
@@ -27,11 +27,11 @@
 @implementation NetworkSetupDelegate
 
 - (void)assistantWindowWillFinish:(GSAssistantWindow *)window {
-    NSLog(@"Network setup assistant will finish");
+    NSDebugLLog(@"gwcomp", @"Network setup assistant will finish");
 }
 
 - (void)assistantWindowDidFinish:(GSAssistantWindow *)window {
-    NSLog(@"Network setup assistant finished");
+    NSDebugLLog(@"gwcomp", @"Network setup assistant finished");
     [NSApp terminate:nil];
 }
 
@@ -59,61 +59,61 @@
 @implementation NetworkSetupAssistant
 
 + (void)showNetworkAssistant {
-    NSLog(@"[NetworkSetupAssistant] Starting showNetworkAssistant");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Starting showNetworkAssistant");
     NetworkSetupDelegate *delegate = [[NetworkSetupDelegate alloc] init];
-    NSLog(@"[NetworkSetupAssistant] Created delegate: %@", delegate);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Created delegate: %@", delegate);
     
     // Build the assistant using the builder
-    NSLog(@"[NetworkSetupAssistant] Creating builder...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating builder...");
     GSAssistantBuilder *builder = [GSAssistantBuilder builder];
-    NSLog(@"[NetworkSetupAssistant] Created builder: %@", builder);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Created builder: %@", builder);
     
     
-    NSLog(@"[NetworkSetupAssistant] Setting title...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Setting title...");
     [builder withTitle:NSLocalizedString(@"Network Setup Assistant", @"")];
     
-    NSLog(@"[NetworkSetupAssistant] Setting icon...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Setting icon...");
     [builder withIcon:[NSImage imageNamed:@"NSApplicationIcon"]];
     
-    NSLog(@"[NetworkSetupAssistant] Adding network config step...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Adding network config step...");
     NSNetworkConfigStep *networkConfigStep = [[NSNetworkConfigStep alloc] init];
     [builder addStep:networkConfigStep];
     [networkConfigStep release];
     
-    NSLog(@"[NetworkSetupAssistant] Adding auth config step...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Adding auth config step...");
     NSAuthConfigStep *authConfigStep = [[NSAuthConfigStep alloc] init];
     [builder addStep:authConfigStep];
     [authConfigStep release];
     
-    NSLog(@"[NetworkSetupAssistant] Adding progress step...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Adding progress step...");
     [builder addProgressStep:@"Applying Network Settings" 
            description:@"Configuring network interfaces..."];
     
-    NSLog(@"[NetworkSetupAssistant] Adding completion step...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Adding completion step...");
     [builder addCompletionWithMessage:@"Network setup completed successfully! Your network is now configured." 
            success:YES];
     
-    NSLog(@"[NetworkSetupAssistant] Building assistant...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Building assistant...");
     GSAssistantWindow *assistant = [builder build];
-    NSLog(@"[NetworkSetupAssistant] Built assistant: %@", assistant);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Built assistant: %@", assistant);
     
-    NSLog(@"[NetworkSetupAssistant] Setting delegate...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Setting delegate...");
     assistant.delegate = delegate;
     
-    NSLog(@"[NetworkSetupAssistant] Showing window...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Showing window...");
     [assistant showWindow:nil];
-    NSLog(@"[NetworkSetupAssistant] Making window key and front...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Making window key and front...");
     [assistant.window makeKeyAndOrderFront:nil];
-    NSLog(@"[NetworkSetupAssistant] Assistant window should now be visible");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Assistant window should now be visible");
 }
 
 + (NSView *)createNetworkConfigView {
-    NSLog(@"[NetworkSetupAssistant] Creating network config view container...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating network config view container...");
     NSView *container = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
-    NSLog(@"[NetworkSetupAssistant] Container created with frame: %@", NSStringFromRect(container.frame));
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Container created with frame: %@", NSStringFromRect(container.frame));
     
     // Interface selection
-    NSLog(@"[NetworkSetupAssistant] Creating interface label...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating interface label...");
     NSTextField *interfaceLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 260, 100, 20)];
     interfaceLabel.editable = NO;
     interfaceLabel.selectable = NO;
@@ -122,17 +122,17 @@
     interfaceLabel.drawsBackground = NO;
     interfaceLabel.backgroundColor = [NSColor clearColor];
     interfaceLabel.stringValue = @"Interface:";
-    NSLog(@"[NetworkSetupAssistant] Interface label created: %@", interfaceLabel);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Interface label created: %@", interfaceLabel);
     
-    NSLog(@"[NetworkSetupAssistant] Creating interface popup...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating interface popup...");
     NSPopUpButton *interfacePopup = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(130, 258, 200, 24)];
     [interfacePopup addItemWithTitle:NSLocalizedString(@"Ethernet (eth0)", @"")];
     [interfacePopup addItemWithTitle:NSLocalizedString(@"Wi-Fi (wlan0)", @"")];
     [interfacePopup addItemWithTitle:NSLocalizedString(@"Loopback (lo)", @"")];
-    NSLog(@"[NetworkSetupAssistant] Interface popup created: %@", interfacePopup);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Interface popup created: %@", interfacePopup);
     
     // IP configuration
-    NSLog(@"[NetworkSetupAssistant] Creating IP config label...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating IP config label...");
     NSTextField *ipLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 220, 100, 20)];
     ipLabel.editable = NO;
     ipLabel.selectable = NO;
@@ -141,26 +141,26 @@
     ipLabel.drawsBackground = NO;
     ipLabel.backgroundColor = [NSColor clearColor];
     ipLabel.stringValue = @"IP Address:";
-    NSLog(@"[NetworkSetupAssistant] IP label created: %@", ipLabel);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] IP label created: %@", ipLabel);
     
-    NSLog(@"[NetworkSetupAssistant] Creating IP field...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating IP field...");
     NSTextField *ipField = [[NSTextField alloc] initWithFrame:NSMakeRect(130, 220, 200, 22)];
     ipField.placeholderString = @"192.168.1.100";
-    NSLog(@"[NetworkSetupAssistant] IP field created: %@", ipField);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] IP field created: %@", ipField);
     
     // Add all subviews
-    NSLog(@"[NetworkSetupAssistant] Adding subviews to container...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Adding subviews to container...");
     [container addSubview:interfaceLabel];
-    NSLog(@"[NetworkSetupAssistant] Added interface label");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Added interface label");
     [container addSubview:interfacePopup];
-    NSLog(@"[NetworkSetupAssistant] Added interface popup");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Added interface popup");
     [container addSubview:ipLabel];
-    NSLog(@"[NetworkSetupAssistant] Added IP label");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Added IP label");
     [container addSubview:ipField];
-    NSLog(@"[NetworkSetupAssistant] Added IP field");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Added IP field");
     
-    NSLog(@"[NetworkSetupAssistant] Container now has %lu subviews", (unsigned long)container.subviews.count);
-    NSLog(@"[NetworkSetupAssistant] Network config view creation complete");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Container now has %lu subviews", (unsigned long)container.subviews.count);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Network config view creation complete");
     
     return container;
 }
@@ -201,12 +201,12 @@
 }
 
 + (NSView *)createAuthConfigView {
-    NSLog(@"[NetworkSetupAssistant] Creating auth config view container...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating auth config view container...");
     NSView *container = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
-    NSLog(@"[NetworkSetupAssistant] Container created with frame: %@", NSStringFromRect(container.frame));
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Container created with frame: %@", NSStringFromRect(container.frame));
     
     // Username field
-    NSLog(@"[NetworkSetupAssistant] Creating username label...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating username label...");
     NSTextField *usernameLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 260, 100, 20)];
     usernameLabel.editable = NO;
     usernameLabel.selectable = NO;
@@ -215,15 +215,15 @@
     usernameLabel.drawsBackground = NO;
     usernameLabel.backgroundColor = [NSColor clearColor];
     usernameLabel.stringValue = @"Username:";
-    NSLog(@"[NetworkSetupAssistant] Username label created: %@", usernameLabel);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Username label created: %@", usernameLabel);
     
-    NSLog(@"[NetworkSetupAssistant] Creating username field...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating username field...");
     NSTextField *usernameField = [[NSTextField alloc] initWithFrame:NSMakeRect(130, 260, 200, 22)];
     usernameField.placeholderString = @"Enter network username";
-    NSLog(@"[NetworkSetupAssistant] Username field created: %@", usernameField);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Username field created: %@", usernameField);
     
     // Password field
-    NSLog(@"[NetworkSetupAssistant] Creating password label...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating password label...");
     NSTextField *passwordLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 220, 100, 20)];
     passwordLabel.editable = NO;
     passwordLabel.selectable = NO;
@@ -232,26 +232,26 @@
     passwordLabel.drawsBackground = NO;
     passwordLabel.backgroundColor = [NSColor clearColor];
     passwordLabel.stringValue = @"Password:";
-    NSLog(@"[NetworkSetupAssistant] Password label created: %@", passwordLabel);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Password label created: %@", passwordLabel);
     
-    NSLog(@"[NetworkSetupAssistant] Creating password field...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Creating password field...");
     NSSecureTextField *passwordField = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(130, 220, 200, 22)];
     passwordField.placeholderString = @"Enter network password";
-    NSLog(@"[NetworkSetupAssistant] Password field created: %@", passwordField);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Password field created: %@", passwordField);
     
     // Add all subviews
-    NSLog(@"[NetworkSetupAssistant] Adding subviews to container...");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Adding subviews to container...");
     [container addSubview:usernameLabel];
-    NSLog(@"[NetworkSetupAssistant] Added username label");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Added username label");
     [container addSubview:usernameField];
-    NSLog(@"[NetworkSetupAssistant] Added username field");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Added username field");
     [container addSubview:passwordLabel];
-    NSLog(@"[NetworkSetupAssistant] Added password label");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Added password label");
     [container addSubview:passwordField];
-    NSLog(@"[NetworkSetupAssistant] Added password field");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Added password field");
     
-    NSLog(@"[NetworkSetupAssistant] Container now has %lu subviews", (unsigned long)container.subviews.count);
-    NSLog(@"[NetworkSetupAssistant] Auth config view creation complete");
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Container now has %lu subviews", (unsigned long)container.subviews.count);
+    NSDebugLLog(@"gwcomp", @"[NetworkSetupAssistant] Auth config view creation complete");
     
     return container;
 }

@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
         reply.destination = @":1.1";
         
         NSData *serialized = [reply serialize];
-        NSLog(@"Serialized %lu bytes", (unsigned long)[serialized length]);
+        NSDebugLLog(@"gwcomp", @"Serialized %lu bytes", (unsigned long)[serialized length]);
         
         // Print hex dump
         const uint8_t *bytes = [serialized bytes];

@@ -52,7 +52,7 @@ static const CGFloat kTableRowHeight = 18.0;
         if ([ossBackend isAvailable]) {
             backend = ossBackend;
             backend.delegate = self;
-            NSLog(@"SoundController: Using OSS backend version %@",
+            NSDebugLLog(@"gwcomp", @"SoundController: Using OSS backend version %@",
                   [backend backendVersion]);
         } else {
             [ossBackend release];
@@ -65,7 +65,7 @@ static const CGFloat kTableRowHeight = 18.0;
             if ([alsaBackend isAvailable]) {
                 backend = alsaBackend;
                 backend.delegate = self;
-                NSLog(@"SoundController: Using ALSA backend version %@",
+                NSDebugLLog(@"gwcomp", @"SoundController: Using ALSA backend version %@",
                       [backend backendVersion]);
             } else {
                 [alsaBackend release];
@@ -79,7 +79,7 @@ static const CGFloat kTableRowHeight = 18.0;
             if ([ossBackend isAvailable]) {
                 backend = ossBackend;
                 backend.delegate = self;
-                NSLog(@"SoundController: Using OSS backend version %@",
+                NSDebugLLog(@"gwcomp", @"SoundController: Using OSS backend version %@",
                       [backend backendVersion]);
             } else {
                 [ossBackend release];
@@ -88,7 +88,7 @@ static const CGFloat kTableRowHeight = 18.0;
 #endif
 
         if (backend == nil) {
-            NSLog(@"SoundController: No audio backend available");
+            NSDebugLLog(@"gwcomp", @"SoundController: No audio backend available");
         }
     }
     return self;
@@ -709,11 +709,11 @@ static const CGFloat kTableRowHeight = 18.0;
 
     // Skip if a refresh is already in progress to avoid queueing up stale work
     if (isRefreshing) {
-        NSLog(@"SoundController: refreshDevices skipped - already in progress");
+        NSDebugLLog(@"gwcomp", @"SoundController: refreshDevices skipped - already in progress");
         return;
     }
 
-    NSLog(@"SoundController: refreshDevices called");
+    NSDebugLLog(@"gwcomp", @"SoundController: refreshDevices called");
     isRefreshing = YES;
 
     // Dispatch blocking backend operations to background queue
@@ -751,10 +751,10 @@ static const CGFloat kTableRowHeight = 18.0;
             // Subsequent device selections will now trigger actual device switches and audio changes
             if (isInitializing) {
                 isInitializing = NO;
-                NSLog(@"SoundController: refreshDevices completed initialization phase");
+                NSDebugLLog(@"gwcomp", @"SoundController: refreshDevices completed initialization phase");
             }
 
-            NSLog(@"SoundController: refreshDevices completed");
+            NSDebugLLog(@"gwcomp", @"SoundController: refreshDevices completed");
         });
         } // @autoreleasepool
     });
@@ -765,7 +765,7 @@ static const CGFloat kTableRowHeight = 18.0;
     [outputDevices removeAllObjects];
     [outputDevices addObjectsFromArray:[backend outputDevices]];
     
-    NSLog(@"SoundController: updateOutputDeviceList - found %lu output devices", 
+    NSDebugLLog(@"gwcomp", @"SoundController: updateOutputDeviceList - found %lu output devices", 
           (unsigned long)[outputDevices count]);
     
     // Show/hide no devices placeholder
@@ -845,7 +845,7 @@ static const CGFloat kTableRowHeight = 18.0;
     [inputDevices removeAllObjects];
     [inputDevices addObjectsFromArray:[backend inputDevices]];
     
-    NSLog(@"SoundController: updateInputDeviceList - found %lu input devices", 
+    NSDebugLLog(@"gwcomp", @"SoundController: updateInputDeviceList - found %lu input devices", 
           (unsigned long)[inputDevices count]);
     
     // Show/hide no devices placeholder
@@ -964,11 +964,11 @@ static const CGFloat kTableRowHeight = 18.0;
 - (BOOL)selectOutputDevice:(AudioDevice *)device
 {
     if (!device) {
-        NSLog(@"SoundController: selectOutputDevice: FAILED - device is nil");
+        NSDebugLLog(@"gwcomp", @"SoundController: selectOutputDevice: FAILED - device is nil");
         return NO;
     }
 
-    NSLog(@"SoundController: selectOutputDevice: %@", device.name);
+    NSDebugLLog(@"gwcomp", @"SoundController: selectOutputDevice: %@", device.name);
     [selectedOutputDevice release];
     selectedOutputDevice = [device retain];
 
@@ -978,7 +978,7 @@ static const CGFloat kTableRowHeight = 18.0;
         dispatch_async(backendQueue, ^{
             @autoreleasepool {
             BOOL success = [backend forceImmediateOutputDeviceSwitch:retained];
-            NSLog(@"SoundController: forceImmediateOutputDeviceSwitch: %@", success ? @"SUCCESS" : @"FAILED");
+            NSDebugLLog(@"gwcomp", @"SoundController: forceImmediateOutputDeviceSwitch: %@", success ? @"SUCCESS" : @"FAILED");
             [retained release];
             // Fetch control values while still on background queue
             float vol = [backend outputVolume];
@@ -996,11 +996,11 @@ static const CGFloat kTableRowHeight = 18.0;
 - (BOOL)selectInputDevice:(AudioDevice *)device
 {
     if (!device) {
-        NSLog(@"SoundController: selectInputDevice: FAILED - device is nil");
+        NSDebugLLog(@"gwcomp", @"SoundController: selectInputDevice: FAILED - device is nil");
         return NO;
     }
 
-    NSLog(@"SoundController: selectInputDevice: %@", device.name);
+    NSDebugLLog(@"gwcomp", @"SoundController: selectInputDevice: %@", device.name);
     [selectedInputDevice release];
     selectedInputDevice = [device retain];
 
@@ -1010,7 +1010,7 @@ static const CGFloat kTableRowHeight = 18.0;
         dispatch_async(backendQueue, ^{
             @autoreleasepool {
             BOOL success = [backend forceImmediateInputDeviceSwitch:retained];
-            NSLog(@"SoundController: forceImmediateInputDeviceSwitch: %@", success ? @"SUCCESS" : @"FAILED");
+            NSDebugLLog(@"gwcomp", @"SoundController: forceImmediateInputDeviceSwitch: %@", success ? @"SUCCESS" : @"FAILED");
             [retained release];
             // Fetch control values while still on background queue
             float vol = [backend inputVolume];
@@ -1091,17 +1091,17 @@ static const CGFloat kTableRowHeight = 18.0;
 - (void)tableViewSelectionDidChange:(NSNotification *)notification
 {
     NSTableView *tableView = [notification object];
-    NSLog(@"SoundController: tableViewSelectionDidChange:");
+    NSDebugLLog(@"gwcomp", @"SoundController: tableViewSelectionDidChange:");
     
     if (tableView == outputDevicesTable) {
-        NSLog(@"SoundController:   output devices table");
+        NSDebugLLog(@"gwcomp", @"SoundController:   output devices table");
         NSInteger row = [tableView selectedRow];
-        NSLog(@"SoundController:   selected row = %ld", (long)row);
+        NSDebugLLog(@"gwcomp", @"SoundController:   selected row = %ld", (long)row);
         if (row >= 0 && row < (NSInteger)[outputDevices count]) {
             AudioDevice *device = [outputDevices objectAtIndex:row];
-            NSLog(@"SoundController:   selecting device: %@", device.name);
+            NSDebugLLog(@"gwcomp", @"SoundController:   selecting device: %@", device.name);
             BOOL success = [self selectOutputDevice:device];
-            NSLog(@"SoundController:   selectOutputDevice: %@", success ? @"SUCCESS" : @"FAILED");
+            NSDebugLLog(@"gwcomp", @"SoundController:   selectOutputDevice: %@", success ? @"SUCCESS" : @"FAILED");
             if (!success) {
                 NSRunAlertPanel(@"Device Error", 
                               @"Could not select the output device. Please check your audio hardware and ALSA configuration.",
@@ -1109,14 +1109,14 @@ static const CGFloat kTableRowHeight = 18.0;
             }
         }
     } else if (tableView == inputDevicesTable) {
-        NSLog(@"SoundController:   input devices table");
+        NSDebugLLog(@"gwcomp", @"SoundController:   input devices table");
         NSInteger row = [tableView selectedRow];
-        NSLog(@"SoundController:   selected row = %ld", (long)row);
+        NSDebugLLog(@"gwcomp", @"SoundController:   selected row = %ld", (long)row);
         if (row >= 0 && row < (NSInteger)[inputDevices count]) {
             AudioDevice *device = [inputDevices objectAtIndex:row];
-            NSLog(@"SoundController:   selecting device: %@", device.name);
+            NSDebugLLog(@"gwcomp", @"SoundController:   selecting device: %@", device.name);
             BOOL success = [self selectInputDevice:device];
-            NSLog(@"SoundController:   selectInputDevice: %@", success ? @"SUCCESS" : @"FAILED");
+            NSDebugLLog(@"gwcomp", @"SoundController:   selectInputDevice: %@", success ? @"SUCCESS" : @"FAILED");
             if (!success) {
                 NSRunAlertPanel(@"Device Error", 
                               @"Could not select the input device. Please check your audio input hardware and ALSA configuration.",
@@ -1124,7 +1124,7 @@ static const CGFloat kTableRowHeight = 18.0;
             }
         }
     } else if (tableView == alertSoundsTable) {
-        NSLog(@"SoundController:   alert sounds table (no auto-play)");
+        NSDebugLLog(@"gwcomp", @"SoundController:   alert sounds table (no auto-play)");
         // Don't auto-play on selection change, only on explicit action
     }
 }
@@ -1133,25 +1133,25 @@ static const CGFloat kTableRowHeight = 18.0;
 
 - (IBAction)alertSoundSelected:(id)sender
 {
-    NSLog(@"SoundController: UI ACTION - alertSoundSelected:");
+    NSDebugLLog(@"gwcomp", @"SoundController: UI ACTION - alertSoundSelected:");
     NSInteger row = [alertSoundsTable selectedRow];
-    NSLog(@"SoundController:   selected row = %ld, alertSounds count = %lu",
+    NSDebugLLog(@"gwcomp", @"SoundController:   selected row = %ld, alertSounds count = %lu",
           (long)row, (unsigned long)[alertSounds count]);
     if (row >= 0 && row < (NSInteger)[alertSounds count]) {
         AlertSound *sound = [alertSounds objectAtIndex:row];
-        NSLog(@"SoundController:   sound name = %@, path = %@", sound.name, sound.path);
+        NSDebugLLog(@"gwcomp", @"SoundController:   sound name = %@, path = %@", sound.name, sound.path);
         [selectedAlertSound release];
         selectedAlertSound = [sound retain];
 
         // Dispatch playback and save to background queue
         AlertSound *retained = [sound retain];
         dispatch_async(backendQueue, ^{
-            NSLog(@"SoundController:   calling playAlertSound:");
+            NSDebugLLog(@"gwcomp", @"SoundController:   calling playAlertSound:");
             BOOL success = [backend playAlertSound:retained];
-            NSLog(@"SoundController:   playAlertSound: %@", success ? @"SUCCESS" : @"FAILED");
+            NSDebugLLog(@"gwcomp", @"SoundController:   playAlertSound: %@", success ? @"SUCCESS" : @"FAILED");
 
             BOOL saved = [backend setCurrentAlertSound:retained];
-            NSLog(@"SoundController:   setCurrentAlertSound: %@", saved ? @"SUCCESS" : @"FAILED");
+            NSDebugLLog(@"gwcomp", @"SoundController:   setCurrentAlertSound: %@", saved ? @"SUCCESS" : @"FAILED");
             [retained release];
             if (!success) {
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -1185,7 +1185,7 @@ static const CGFloat kTableRowHeight = 18.0;
     dispatch_source_set_event_handler(alertVolumeTimer, ^{
         float vol = pendingAlertVolume;
         BOOL success = [backend setAlertVolume:vol];
-        NSLog(@"SoundController: setAlertVolume: %.2f %@", vol,
+        NSDebugLLog(@"gwcomp", @"SoundController: setAlertVolume: %.2f %@", vol,
               success ? @"SUCCESS" : @"FAILED");
         if (!success) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -1200,12 +1200,12 @@ static const CGFloat kTableRowHeight = 18.0;
 
 - (IBAction)playUIEffectsChanged:(id)sender
 {
-    NSLog(@"SoundController: UI ACTION - playUIEffectsChanged:");
+    NSDebugLLog(@"gwcomp", @"SoundController: UI ACTION - playUIEffectsChanged:");
     BOOL play = ([playUIEffectsCheckbox state] == NSOnState);
-    NSLog(@"SoundController:   play = %@", play ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"SoundController:   play = %@", play ? @"YES" : @"NO");
     dispatch_async(backendQueue, ^{
         BOOL success = [backend setPlayUserInterfaceSoundEffects:play];
-        NSLog(@"SoundController:   setPlayUserInterfaceSoundEffects: %@", success ? @"SUCCESS" : @"FAILED");
+        NSDebugLLog(@"gwcomp", @"SoundController:   setPlayUserInterfaceSoundEffects: %@", success ? @"SUCCESS" : @"FAILED");
         if (!success) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 NSRunAlertPanel(@"Settings Error",
@@ -1218,12 +1218,12 @@ static const CGFloat kTableRowHeight = 18.0;
 
 - (IBAction)playVolumeFeedbackChanged:(id)sender
 {
-    NSLog(@"SoundController: UI ACTION - playVolumeFeedbackChanged:");
+    NSDebugLLog(@"gwcomp", @"SoundController: UI ACTION - playVolumeFeedbackChanged:");
     BOOL play = ([playVolumeFeedbackCheckbox state] == NSOnState);
-    NSLog(@"SoundController:   play = %@", play ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"SoundController:   play = %@", play ? @"YES" : @"NO");
     dispatch_async(backendQueue, ^{
         BOOL success = [backend setPlayFeedbackWhenVolumeIsChanged:play];
-        NSLog(@"SoundController:   setPlayFeedbackWhenVolumeIsChanged: %@", success ? @"SUCCESS" : @"FAILED");
+        NSDebugLLog(@"gwcomp", @"SoundController:   setPlayFeedbackWhenVolumeIsChanged: %@", success ? @"SUCCESS" : @"FAILED");
         if (!success) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 NSRunAlertPanel(@"Settings Error",
@@ -1236,17 +1236,17 @@ static const CGFloat kTableRowHeight = 18.0;
 
 - (void)alertSoundsTableDoubleClicked:(id)sender
 {
-    NSLog(@"SoundController: UI ACTION - alertSoundsTableDoubleClicked:");
+    NSDebugLLog(@"gwcomp", @"SoundController: UI ACTION - alertSoundsTableDoubleClicked:");
     // Play the selected sound on double-click
     NSInteger row = [alertSoundsTable clickedRow];
-    NSLog(@"SoundController:   clicked row = %ld", (long)row);
+    NSDebugLLog(@"gwcomp", @"SoundController:   clicked row = %ld", (long)row);
     if (row >= 0 && row < (NSInteger)[alertSounds count]) {
         AlertSound *sound = [[alertSounds objectAtIndex:row] retain];
-        NSLog(@"SoundController:   sound name = %@, path = %@", sound.name, sound.path);
+        NSDebugLLog(@"gwcomp", @"SoundController:   sound name = %@, path = %@", sound.name, sound.path);
         dispatch_async(backendQueue, ^{
             BOOL success = [backend playAlertSound:sound];
             [sound release];
-            NSLog(@"SoundController:   playAlertSound: %@", success ? @"SUCCESS" : @"FAILED");
+            NSDebugLLog(@"gwcomp", @"SoundController:   playAlertSound: %@", success ? @"SUCCESS" : @"FAILED");
             if (!success) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     NSRunAlertPanel(@"Sound Error",
@@ -1262,7 +1262,7 @@ static const CGFloat kTableRowHeight = 18.0;
 
 - (IBAction)outputDeviceSelected:(id)sender
 {
-    NSLog(@"SoundController: UI ACTION - outputDeviceSelected:");
+    NSDebugLLog(@"gwcomp", @"SoundController: UI ACTION - outputDeviceSelected:");
     // Selection is handled in tableViewSelectionDidChange
 }
 
@@ -1307,7 +1307,7 @@ static const CGFloat kTableRowHeight = 18.0;
         // before this timer fired
         float vol = pendingOutputVolume;
         BOOL success = [backend setOutputVolume:vol];
-        NSLog(@"SoundController: setOutputVolume: %.2f %@", vol,
+        NSDebugLLog(@"gwcomp", @"SoundController: setOutputVolume: %.2f %@", vol,
               success ? @"SUCCESS" : @"FAILED");
         if (!success) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -1322,12 +1322,12 @@ static const CGFloat kTableRowHeight = 18.0;
 
 - (IBAction)outputMuteChanged:(id)sender
 {
-    NSLog(@"SoundController: UI ACTION - outputMuteChanged: (tag=%ld)", (long)[sender tag]);
+    NSDebugLLog(@"gwcomp", @"SoundController: UI ACTION - outputMuteChanged: (tag=%ld)", (long)[sender tag]);
     if (isUpdatingUI) return;
 
     BOOL muted = ([(NSButton *)sender state] == NSOnState);
     BOOL fromEffectsTab = ([sender tag] == 100);
-    NSLog(@"SoundController:   muted = %@", muted ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"SoundController:   muted = %@", muted ? @"YES" : @"NO");
 
     // Sync the other mute checkbox immediately for responsive UI
     if (!fromEffectsTab) {
@@ -1344,7 +1344,7 @@ static const CGFloat kTableRowHeight = 18.0;
 
     dispatch_async(backendQueue, ^{
         BOOL success = [backend setOutputMuted:muted];
-        NSLog(@"SoundController:   setOutputMuted: %@", success ? @"SUCCESS" : @"FAILED");
+        NSDebugLLog(@"gwcomp", @"SoundController:   setOutputMuted: %@", success ? @"SUCCESS" : @"FAILED");
         if (!success) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 NSRunAlertPanel(@"Mute Error",
@@ -1357,14 +1357,14 @@ static const CGFloat kTableRowHeight = 18.0;
 
 - (IBAction)outputBalanceChanged:(id)sender
 {
-    NSLog(@"SoundController: UI ACTION - outputBalanceChanged:");
+    NSDebugLLog(@"gwcomp", @"SoundController: UI ACTION - outputBalanceChanged:");
     if (isUpdatingUI) return;
 
     float balance = [outputBalanceSlider floatValue];
-    NSLog(@"SoundController:   balance = %.2f", balance);
+    NSDebugLLog(@"gwcomp", @"SoundController:   balance = %.2f", balance);
     dispatch_async(backendQueue, ^{
         BOOL success = [backend setOutputBalance:balance];
-        NSLog(@"SoundController:   setOutputBalance: %@", success ? @"SUCCESS" : @"FAILED");
+        NSDebugLLog(@"gwcomp", @"SoundController:   setOutputBalance: %@", success ? @"SUCCESS" : @"FAILED");
         if (!success) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 NSRunAlertPanel(@"Balance Error",
@@ -1379,7 +1379,7 @@ static const CGFloat kTableRowHeight = 18.0;
 
 - (IBAction)inputDeviceSelected:(id)sender
 {
-    NSLog(@"SoundController: UI ACTION - inputDeviceSelected:");
+    NSDebugLLog(@"gwcomp", @"SoundController: UI ACTION - inputDeviceSelected:");
     // Selection is handled in tableViewSelectionDidChange
 }
 
@@ -1406,7 +1406,7 @@ static const CGFloat kTableRowHeight = 18.0;
     dispatch_source_set_event_handler(inputVolumeTimer, ^{
         float vol = pendingInputVolume;
         BOOL success = [backend setInputVolume:vol];
-        NSLog(@"SoundController: setInputVolume: %.2f %@", vol,
+        NSDebugLLog(@"gwcomp", @"SoundController: setInputVolume: %.2f %@", vol,
               success ? @"SUCCESS" : @"FAILED");
         if (!success) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -1421,14 +1421,14 @@ static const CGFloat kTableRowHeight = 18.0;
 
 - (IBAction)inputMuteChanged:(id)sender
 {
-    NSLog(@"SoundController: UI ACTION - inputMuteChanged:");
+    NSDebugLLog(@"gwcomp", @"SoundController: UI ACTION - inputMuteChanged:");
     if (isUpdatingUI) return;
 
     BOOL muted = ([inputMuteCheckbox state] == NSOnState);
-    NSLog(@"SoundController:   muted = %@", muted ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"SoundController:   muted = %@", muted ? @"YES" : @"NO");
     dispatch_async(backendQueue, ^{
         BOOL success = [backend setInputMuted:muted];
-        NSLog(@"SoundController:   setInputMuted: %@", success ? @"SUCCESS" : @"FAILED");
+        NSDebugLLog(@"gwcomp", @"SoundController:   setInputMuted: %@", success ? @"SUCCESS" : @"FAILED");
         if (!success) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 NSRunAlertPanel(@"Mute Error",
@@ -1494,7 +1494,7 @@ static const CGFloat kTableRowHeight = 18.0;
 
 - (void)soundBackend:(id<SoundBackend>)aBackend didEncounterError:(NSError *)error
 {
-    NSLog(@"Sound backend error: %@", error);
+    NSDebugLLog(@"gwcomp", @"Sound backend error: %@", error);
 }
 
 #pragma mark - Delegate Helpers

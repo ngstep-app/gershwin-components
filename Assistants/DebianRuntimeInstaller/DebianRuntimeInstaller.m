@@ -24,7 +24,7 @@
 
 @implementation DebianRuntimeAppDelegate
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
-    NSLog(@"DebianRuntimeInstaller: Last window closed, terminating application");
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstaller: Last window closed, terminating application");
     return YES;
 }
 @end
@@ -111,7 +111,7 @@
         return _contentView;
     }
     
-    NSLog(@"IntroStep: creating stepView");
+    NSDebugLLog(@"gwcomp", @"IntroStep: creating stepView");
     
     // Main content view
     _contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 480, 320)];
@@ -163,12 +163,12 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"IntroStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"IntroStep: stepWillAppear");
 }
 
 - (void)stepDidAppear
 {
-    NSLog(@"IntroStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"IntroStep: stepDidAppear");
 }
 
 @end
@@ -191,7 +191,7 @@
         return _contentView;
     }
     
-    NSLog(@"ImageSelectionStep: creating stepView");
+    NSDebugLLog(@"gwcomp", @"ImageSelectionStep: creating stepView");
     
     _availableImages = [[NSMutableArray alloc] init];
     
@@ -271,7 +271,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"ImageSelectionStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"ImageSelectionStep: stepWillAppear");
     // Ensure UI is set up first
     if (!_contentView) {
         [self stepView]; // This will initialize the UI
@@ -281,14 +281,14 @@
 
 - (void)refreshImageList:(id)sender
 {
-    NSLog(@"ImageSelectionStep: refreshImageList");
+    NSDebugLLog(@"gwcomp", @"ImageSelectionStep: refreshImageList");
     
     // Check if Linux runtime already exists
     if ([[NSFileManager defaultManager] fileExistsAtPath:@"/compat/debian.img"] ||
         [[NSFileManager defaultManager] fileExistsAtPath:@"/compat/linux"] ||
         [[NSFileManager defaultManager] fileExistsAtPath:@"/compat/ubuntu"]) {
         
-        NSLog(@"ImageSelectionStep: Linux runtime already exists, showing alert");
+        NSDebugLLog(@"gwcomp", @"ImageSelectionStep: Linux runtime already exists, showing alert");
         [_availableImages removeAllObjects];
         if (_imageTableView) {
             [_imageTableView reloadData];
@@ -302,14 +302,14 @@
     }
     
     // Fetch from GitHub API (placeholder for now)
-    NSLog(@"ImageSelectionStep: calling fetchGitHubReleases");
+    NSDebugLLog(@"gwcomp", @"ImageSelectionStep: calling fetchGitHubReleases");
     [self fetchGitHubReleases];
 }
 
 - (void)fetchGitHubReleases
 {
     // For now, let's provide a fallback list of images since GitHub API may not work in all environments
-    NSLog(@"fetchGitHubReleases: providing fallback image list");
+    NSDebugLLog(@"gwcomp", @"fetchGitHubReleases: providing fallback image list");
     
     NSMutableArray *mockReleases = [[NSMutableArray alloc] init];
     
@@ -350,35 +350,35 @@
 
 - (void)processReleases:(NSArray *)releases
 {
-    NSLog(@"processReleases: processing %lu releases", (unsigned long)[releases count]);
+    NSDebugLLog(@"gwcomp", @"processReleases: processing %lu releases", (unsigned long)[releases count]);
     
     if (!_availableImages) {
         _availableImages = [[NSMutableArray alloc] init];
-        NSLog(@"processReleases: initialized _availableImages");
+        NSDebugLLog(@"gwcomp", @"processReleases: initialized _availableImages");
     }
     
     [_availableImages removeAllObjects];
     
     BOOL showPrereleases = _prereleaseCheckbox ? ([_prereleaseCheckbox state] == NSOnState) : NO;
-    NSLog(@"processReleases: showPrereleases = %@", showPrereleases ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"processReleases: showPrereleases = %@", showPrereleases ? @"YES" : @"NO");
     
     for (NSDictionary *release in releases) {
         NSNumber *prerelease = release[@"prerelease"];
         
         if (!showPrereleases && [prerelease boolValue]) {
-            NSLog(@"processReleases: skipping prerelease %@", release[@"name"]);
+            NSDebugLLog(@"gwcomp", @"processReleases: skipping prerelease %@", release[@"name"]);
             continue; // Skip prereleases if not showing them
         }
         
         NSArray *assets = release[@"assets"];
-        NSLog(@"processReleases: release '%@' has %lu assets", release[@"name"], (unsigned long)[assets count]);
+        NSDebugLLog(@"gwcomp", @"processReleases: release '%@' has %lu assets", release[@"name"], (unsigned long)[assets count]);
         
         for (NSDictionary *asset in assets) {
             NSString *downloadURL = asset[@"browser_download_url"];
-            NSLog(@"processReleases: checking asset URL: %@", downloadURL);
+            NSDebugLLog(@"gwcomp", @"processReleases: checking asset URL: %@", downloadURL);
             
             if ([downloadURL hasSuffix:@".img"]) {
-                NSLog(@"processReleases: adding asset: %@", asset[@"name"]);
+                NSDebugLLog(@"gwcomp", @"processReleases: adding asset: %@", asset[@"name"]);
                 
                 NSMutableDictionary *imageInfo = [[NSMutableDictionary alloc] init];
                 imageInfo[@"name"] = release[@"name"] ?: asset[@"name"];
@@ -413,11 +413,11 @@
         }
     }
     
-    NSLog(@"processReleases: final image count: %lu", (unsigned long)[_availableImages count]);
+    NSDebugLLog(@"gwcomp", @"processReleases: final image count: %lu", (unsigned long)[_availableImages count]);
     if (_imageTableView) {
         [_imageTableView reloadData];
     } else {
-        NSLog(@"processReleases: warning - _imageTableView is nil, cannot reload data");
+        NSDebugLLog(@"gwcomp", @"processReleases: warning - _imageTableView is nil, cannot reload data");
     }
 }
 
@@ -425,16 +425,16 @@
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView
 {
     NSInteger count = [_availableImages count];
-    NSLog(@"numberOfRowsInTableView: returning %ld rows", (long)count);
+    NSDebugLLog(@"gwcomp", @"numberOfRowsInTableView: returning %ld rows", (long)count);
     return count;
 }
 
 - (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row
 {
-    NSLog(@"objectValueForTableColumn: row %ld, column %@", (long)row, [tableColumn identifier]);
+    NSDebugLLog(@"gwcomp", @"objectValueForTableColumn: row %ld, column %@", (long)row, [tableColumn identifier]);
     
     if (row >= (NSInteger)[_availableImages count]) {
-        NSLog(@"objectValueForTableColumn: row %ld out of bounds", (long)row);
+        NSDebugLLog(@"gwcomp", @"objectValueForTableColumn: row %ld out of bounds", (long)row);
         return NSLocalizedString(@"", @"");
     }
     
@@ -459,7 +459,7 @@
     if (selectedRow >= 0 && selectedRow < (NSInteger)[_availableImages count]) {
         NSDictionary *imageInfo = _availableImages[selectedRow];
         _selectedImageURL = imageInfo[@"url"];
-        NSLog(@"Selected image: %@", _selectedImageURL);
+        NSDebugLLog(@"gwcomp", @"Selected image: %@", _selectedImageURL);
     } else {
         _selectedImageURL = nil;
     }
@@ -522,7 +522,7 @@
         return _contentView;
     }
     
-    NSLog(@"ConfirmationStep: creating stepView");
+    NSDebugLLog(@"gwcomp", @"ConfirmationStep: creating stepView");
     
     _contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 480, 320)];
     
@@ -553,7 +553,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"ConfirmationStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"ConfirmationStep: stepWillAppear");
     [self updateSummary];
 }
 
@@ -640,7 +640,7 @@
         return _contentView;
     }
     
-    NSLog(@"InstallationStep: creating stepView");
+    NSDebugLLog(@"gwcomp", @"InstallationStep: creating stepView");
     
     _contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 480, 320)];
     
@@ -701,7 +701,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"InstallationStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"InstallationStep: stepWillAppear");
     _installationCompleted = NO;
     
     // Reset progress bar to 0
@@ -722,7 +722,7 @@
 
 - (void)stepDidAppear
 {
-    NSLog(@"InstallationStep: stepDidAppear - starting installation");
+    NSDebugLLog(@"gwcomp", @"InstallationStep: stepDidAppear - starting installation");
     
     // Initialize the installer
     if (!_installer) {
@@ -744,7 +744,7 @@
 
 - (void)startRealInstallation:(NSString *)imagePath
 {
-    NSLog(@"InstallationStep: startRealInstallation with path: %@", imagePath);
+    NSDebugLLog(@"gwcomp", @"InstallationStep: startRealInstallation with path: %@", imagePath);
     
     // For demonstration, create a dummy image file
     if (![[NSFileManager defaultManager] fileExistsAtPath:imagePath]) {
@@ -761,7 +761,7 @@
 
 - (void)installer:(id)installer didStartInstallationWithMessage:(NSString *)message
 {
-    NSLog(@"InstallationStep: didStartInstallationWithMessage: %@", message);
+    NSDebugLLog(@"gwcomp", @"InstallationStep: didStartInstallationWithMessage: %@", message);
     [self logMessage:message];
     [_statusLabel setStringValue:message];
     [_progressBar setDoubleValue:10];
@@ -769,7 +769,7 @@
 
 - (void)installer:(id)installer didUpdateProgress:(NSString *)message
 {
-    NSLog(@"InstallationStep: didUpdateProgress: %@", message);
+    NSDebugLLog(@"gwcomp", @"InstallationStep: didUpdateProgress: %@", message);
     [self logMessage:message];
     [_statusLabel setStringValue:message];
     
@@ -803,7 +803,7 @@
 
 - (void)installer:(id)installer didCompleteSuccessfully:(BOOL)success withMessage:(NSString *)message
 {
-    NSLog(@"InstallationStep: didCompleteSuccessfully: %@ withMessage: %@", success ? @"YES" : @"NO", message);
+    NSDebugLLog(@"gwcomp", @"InstallationStep: didCompleteSuccessfully: %@ withMessage: %@", success ? @"YES" : @"NO", message);
     
     if (success) {
         [self logMessage:@"✓ Installation completed successfully!"];
@@ -812,17 +812,17 @@
         _installationCompleted = YES;
         
         // Show success page using the proper method
-        NSLog(@"Attempting to show success page...");
+        NSDebugLLog(@"gwcomp", @"Attempting to show success page...");
         if (_assistantWindow) {
-            NSLog(@"Assistant window exists, checking for success page methods...");
+            NSDebugLLog(@"gwcomp", @"Assistant window exists, checking for success page methods...");
             if ([_assistantWindow respondsToSelector:@selector(showSuccessPageWithTitle:message:)]) {
-                NSLog(@"Calling showSuccessPageWithTitle:message:");
+                NSDebugLLog(@"gwcomp", @"Calling showSuccessPageWithTitle:message:");
                 [_assistantWindow showSuccessPageWithTitle:@"Installation Complete" message:message];
             } else if ([_assistantWindow respondsToSelector:@selector(showSuccessPageWithMessage:)]) {
-                NSLog(@"Calling showSuccessPageWithMessage:");
+                NSDebugLLog(@"gwcomp", @"Calling showSuccessPageWithMessage:");
                 [_assistantWindow showSuccessPageWithMessage:message];
             } else {
-                NSLog(@"No success page methods found, available methods:");
+                NSDebugLLog(@"gwcomp", @"No success page methods found, available methods:");
                 // List available methods for debugging
                 unsigned int methodCount;
                 Method *methods = class_copyMethodList([_assistantWindow class], &methodCount);
@@ -830,19 +830,19 @@
                     SEL selector = method_getName(methods[i]);
                     NSString *methodName = NSStringFromSelector(selector);
                     if ([methodName containsString:@"success"] || [methodName containsString:@"Success"]) {
-                        NSLog(@"Found success-related method: %@", methodName);
+                        NSDebugLLog(@"gwcomp", @"Found success-related method: %@", methodName);
                     }
                 }
                 free(methods);
                 
                 // Try to proceed to next step instead
-                NSLog(@"Attempting to proceed to completion step...");
+                NSDebugLLog(@"gwcomp", @"Attempting to proceed to completion step...");
                 if ([_assistantWindow respondsToSelector:@selector(goToNextStep)]) {
                     [_assistantWindow goToNextStep];
                 }
             }
         } else {
-            NSLog(@"Warning: Assistant window is nil");
+            NSDebugLLog(@"gwcomp", @"Warning: Assistant window is nil");
         }
     } else {
         [self logMessage:[NSString stringWithFormat:@"✗ Installation failed: %@", message]];
@@ -850,19 +850,19 @@
         _installationCompleted = NO;
         
         // Show error page
-        NSLog(@"Attempting to show error page...");
+        NSDebugLLog(@"gwcomp", @"Attempting to show error page...");
         if (_assistantWindow) {
             if ([_assistantWindow respondsToSelector:@selector(showErrorPageWithTitle:message:)]) {
-                NSLog(@"Calling showErrorPageWithTitle:message:");
+                NSDebugLLog(@"gwcomp", @"Calling showErrorPageWithTitle:message:");
                 [_assistantWindow showErrorPageWithTitle:NSLocalizedString(@"Installation Failed", @"") message:message];
             } else if ([_assistantWindow respondsToSelector:@selector(showErrorPageWithMessage:)]) {
-                NSLog(@"Calling showErrorPageWithMessage:");
+                NSDebugLLog(@"gwcomp", @"Calling showErrorPageWithMessage:");
                 [_assistantWindow showErrorPageWithMessage:message];
             } else {
-                NSLog(@"No error page methods found");
+                NSDebugLLog(@"gwcomp", @"No error page methods found");
             }
         } else {
-            NSLog(@"Warning: Assistant window is nil for error case");
+            NSDebugLLog(@"gwcomp", @"Warning: Assistant window is nil for error case");
         }
     }
 }
@@ -904,7 +904,7 @@
         return _contentView;
     }
     
-    NSLog(@"CompletionStep: creating stepView");
+    NSDebugLLog(@"gwcomp", @"CompletionStep: creating stepView");
     
     _contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 480, 320)];
     
@@ -955,7 +955,7 @@
 
 - (void)stepWillAppear
 {
-    NSLog(@"CompletionStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"CompletionStep: stepWillAppear");
 }
 
 @end
@@ -969,7 +969,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"DebianRuntimeInstallerController: init");
+        NSDebugLLog(@"gwcomp", @"DebianRuntimeInstallerController: init");
         _selectedImageURL = @"";
         _showPrereleases = NO;
         _installationSuccessful = NO;
@@ -979,12 +979,12 @@
 
 - (void)dealloc
 {
-    NSLog(@"DebianRuntimeInstallerController: dealloc");
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstallerController: dealloc");
 }
 
 - (void)showAssistant
 {
-    NSLog(@"DebianRuntimeInstallerController: showAssistant");
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstallerController: showAssistant");
     
     // Create steps
     NSArray *steps = @[
@@ -1006,38 +1006,38 @@
 
 - (void)assistantWindow:(GSAssistantWindow *)window willShowStep:(id<GSAssistantStepProtocol>)step
 {
-    NSLog(@"DebianRuntimeInstallerController: willShowStep: %@", [step stepTitle]);
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstallerController: willShowStep: %@", [step stepTitle]);
     // Framework now automatically calls step lifecycle methods
 }
 
 - (void)assistantWindow:(GSAssistantWindow *)window didShowStep:(id<GSAssistantStepProtocol>)step
 {
-    NSLog(@"DebianRuntimeInstallerController: didShowStep: %@", [step stepTitle]);
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstallerController: didShowStep: %@", [step stepTitle]);
     // Framework now automatically calls step lifecycle methods
 }
 
 - (BOOL)assistantWindowShouldContinue:(GSAssistantWindow *)window
 {
-    NSLog(@"DebianRuntimeInstallerController: shouldContinue");
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstallerController: shouldContinue");
     return YES;
 }
 
 - (BOOL)assistantWindowShouldGoBack:(GSAssistantWindow *)window
 {
-    NSLog(@"DebianRuntimeInstallerController: shouldGoBack");
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstallerController: shouldGoBack");
     return YES;
 }
 
 - (void)assistantWindow:(GSAssistantWindow *)window didFinishWithResult:(BOOL)success
 {
-    NSLog(@"DebianRuntimeInstallerController: didFinishWithResult: %@", success ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstallerController: didFinishWithResult: %@", success ? @"YES" : @"NO");
     [[window window] orderOut:nil];
     [NSApp terminate:nil];
 }
 
 - (BOOL)assistantWindow:(GSAssistantWindow *)window shouldCancelWithConfirmation:(BOOL)showConfirmation
 {
-    NSLog(@"DebianRuntimeInstallerController: shouldCancelWithConfirmation: %@", showConfirmation ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstallerController: shouldCancelWithConfirmation: %@", showConfirmation ? @"YES" : @"NO");
     [[window window] orderOut:nil];
     [NSApp terminate:nil];
     return YES;
@@ -1051,7 +1051,7 @@
 
 int main(int argc, const char *argv[])
 {
-    NSLog(@"DebianRuntimeInstaller: main() started");
+    NSDebugLLog(@"gwcomp", @"DebianRuntimeInstaller: main() started");
     
     @autoreleasepool {
         [NSApplication sharedApplication];

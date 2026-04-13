@@ -17,7 +17,7 @@ static Display *display = NULL;
     if (!display) {
         display = XOpenDisplay(NULL);
         if (!display) {
-            NSLog(@"[X11Support] Failed to open X display");
+            NSDebugLLog(@"gwcomp", @"[X11Support] Failed to open X display");
         }
     }
     return display;

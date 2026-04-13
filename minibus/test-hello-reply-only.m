@@ -16,12 +16,12 @@ int main(int argc, char *argv[]) {
         reply.destination = @":1.0";  // Reply is addressed to the client
         // Note: Real dbus-daemon Hello replies do NOT include sender field
         
-        NSLog(@"Hello Reply Properties:");
-        NSLog(@"  Type: %d", reply.type);
-        NSLog(@"  Reply Serial: %ld", reply.replySerial);
-        NSLog(@"  Destination: %@", reply.destination);
-        NSLog(@"  Signature: %@", reply.signature);
-        NSLog(@"  Arguments: %@", reply.arguments);
+        NSDebugLLog(@"gwcomp", @"Hello Reply Properties:");
+        NSDebugLLog(@"gwcomp", @"  Type: %d", reply.type);
+        NSDebugLLog(@"gwcomp", @"  Reply Serial: %ld", reply.replySerial);
+        NSDebugLLog(@"gwcomp", @"  Destination: %@", reply.destination);
+        NSDebugLLog(@"gwcomp", @"  Signature: %@", reply.signature);
+        NSDebugLLog(@"gwcomp", @"  Arguments: %@", reply.arguments);
         
         NSData *data = [reply serialize];
         

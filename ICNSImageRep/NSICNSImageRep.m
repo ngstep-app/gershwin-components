@@ -15,7 +15,7 @@
 
 + (void)load
 {
-    NSLog(@"Registering NSICNSImageRep");
+    NSDebugLLog(@"gwcomp", @"Registering NSICNSImageRep");
     [NSImageRep registerImageRepClass:[NSICNSImageRep class]];
 }
 
@@ -55,7 +55,7 @@
     
     if (status != ICNS_STATUS_OK)
     {
-        NSLog(@"Failed to read ICNS family: %d", status);
+        NSDebugLLog(@"gwcomp", @"Failed to read ICNS family: %d", status);
         [self release];
         return nil;
     }
@@ -115,14 +115,14 @@
 
     if ([_representations count] == 0)
     {
-        NSLog(@"No valid ICNS representations found");
+        NSDebugLLog(@"gwcomp", @"No valid ICNS representations found");
         [self release];
         return nil;
     }
 
     [self setSize:largestSize];
     
-    NSLog(@"Successfully loaded ICNS with %lu representations, size: %.0fx%.0f",
+    NSDebugLLog(@"gwcomp", @"Successfully loaded ICNS with %lu representations, size: %.0fx%.0f",
           (unsigned long)[_representations count], largestSize.width, largestSize.height);
     
     return self;

@@ -15,7 +15,7 @@
 
 int main(int argc, char *argv[]) {
     @autoreleasepool {
-        NSLog(@"Testing complex signature 'a(ssasib)' parsing...");
+        NSDebugLLog(@"gwcomp", @"Testing complex signature 'a(ssasib)' parsing...");
         
         // Try to parse a message with the problematic signature
         // This signature represents: array of (string, string, array of strings, int32, boolean)
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
         [testData appendBytes:&str1Len length:4];
         [testData appendBytes:"test1" length:6]; // +1 for null terminator
         
-        NSLog(@"Created test data with %lu bytes", [testData length]);
+        NSDebugLLog(@"gwcomp", @"Created test data with %lu bytes", [testData length]);
         
         // Test our parsing function directly
         NSUInteger pos = 0;
@@ -46,9 +46,9 @@ int main(int argc, char *argv[]) {
                                                      endianness:'l'];
         
         if (result) {
-            NSLog(@"SUCCESS: Parsed arguments: %@", result);
+            NSDebugLLog(@"gwcomp", @"SUCCESS: Parsed arguments: %@", result);
         } else {
-            NSLog(@"FAILED: Could not parse arguments");
+            NSDebugLLog(@"gwcomp", @"FAILED: Could not parse arguments");
         }
     }
     

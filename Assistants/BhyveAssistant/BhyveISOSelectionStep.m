@@ -20,7 +20,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"BhyveISOSelectionStep: init");
+        NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: init");
         [self setupView];
     }
     return self;
@@ -28,7 +28,7 @@
 
 - (void)setupView
 {
-    NSLog(@"BhyveISOSelectionStep: setupView");
+    NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: setupView");
     
     // Match installer card inner area (approx 354x204)
     _stepView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 354, 204)];
@@ -92,7 +92,7 @@
 
 - (void)browseForISO:(id)sender
 {
-    NSLog(@"BhyveISOSelectionStep: browseForISO");
+    NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: browseForISO");
     
     NSOpenPanel *panel = [NSOpenPanel openPanel];
     [panel setCanChooseFiles:YES];
@@ -109,7 +109,7 @@
             NSURL *selectedURL = [urls objectAtIndex:0];
             NSString *selectedPath = [selectedURL path];
         
-        NSLog(@"BhyveISOSelectionStep: Selected ISO: %@", selectedPath);
+        NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: Selected ISO: %@", selectedPath);
         
         // Update controller
         if (_controller) {
@@ -137,9 +137,9 @@
                     [_fileSizeLabel setStringValue:[NSString stringWithFormat:@"Size: %lld MB", sizeInMB]];
                 }
                 
-                NSLog(@"BhyveISOSelectionStep: ISO size: %lld bytes (%lld MB)", [fileSize longLongValue], sizeInMB);
+                NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: ISO size: %lld bytes (%lld MB)", [fileSize longLongValue], sizeInMB);
             } else {
-                NSLog(@"BhyveISOSelectionStep: Error getting file attributes: %@", [error localizedDescription]);
+                NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: Error getting file attributes: %@", [error localizedDescription]);
                 [_controller setSelectedISOSize:0];
             }
         }
@@ -158,11 +158,11 @@
     }
     NSWindowController *wc = [window windowController];
     if ([wc isKindOfClass:[GSAssistantWindow class]]) {
-        NSLog(@"BhyveISOSelectionStep: requesting navigation button update");
+        NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: requesting navigation button update");
         GSAssistantWindow *assistantWindow = (GSAssistantWindow *)wc;
         [assistantWindow updateNavigationButtons];
     } else {
-        NSLog(@"BhyveISOSelectionStep: could not find GSAssistantWindow to update navigation (wc=%@)", wc);
+        NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: could not find GSAssistantWindow to update navigation (wc=%@)", wc);
     }
 }
 
@@ -187,13 +187,13 @@
 {
     // Can continue only if an ISO is selected
     BOOL hasISO = _controller && _controller.selectedISOPath && [_controller.selectedISOPath length] > 0;
-    NSLog(@"BhyveISOSelectionStep: canContinue = %@", hasISO ? @"YES" : @"NO");
+    NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: canContinue = %@", hasISO ? @"YES" : @"NO");
     return hasISO;
 }
 
 - (void)stepWillAppear
 {
-    NSLog(@"BhyveISOSelectionStep: stepWillAppear");
+    NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: stepWillAppear");
     
     // Update UI if ISO already selected
     if (_controller && _controller.selectedISOPath && [_controller.selectedISOPath length] > 0) {
@@ -209,12 +209,12 @@
 
 - (void)stepDidAppear
 {
-    NSLog(@"BhyveISOSelectionStep: stepDidAppear");
+    NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: stepDidAppear");
 }
 
 - (void)stepWillDisappear
 {
-    NSLog(@"BhyveISOSelectionStep: stepWillDisappear");
+    NSDebugLLog(@"gwcomp", @"BhyveISOSelectionStep: stepWillDisappear");
 }
 
 @end

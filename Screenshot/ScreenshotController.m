@@ -282,12 +282,12 @@
 #pragma mark - Screenshot Actions
 
 - (IBAction)takeWindowScreenshot:(id)sender {
-    NSLog(@"=== takeWindowScreenshot started ===");
+    NSDebugLLog(@"gwcomp", @"=== takeWindowScreenshot started ===");
     [self setScreenshotMode:ScreenshotModeWindow];
     
     // Use the delayed selection flow (which lets user click on window to capture)
     int delay = [delayField intValue];
-    NSLog(@"Performing window screenshot with delay=%d", delay);
+    NSDebugLLog(@"gwcomp", @"Performing window screenshot with delay=%d", delay);
     [self performDelayedSelection:delay mode:ScreenshotModeWindow];
 }
 
@@ -431,7 +431,7 @@
 }
 
 - (void)captureScreenshotWithRect:(CaptureRect)rect mode:(ScreenshotMode)mode delay:(int)delay {
-    NSLog(@"=== captureScreenshotWithRect called: rect=(%d,%d,%d,%d), mode=%d, delay=%d ===", 
+    NSDebugLLog(@"gwcomp", @"=== captureScreenshotWithRect called: rect=(%d,%d,%d,%d), mode=%d, delay=%d ===", 
           rect.x, rect.y, rect.width, rect.height, mode, delay);
     
     CaptureMode captureMode;
@@ -450,13 +450,13 @@
     }
     
     // Capture the image
-    NSLog(@"Calling captureImageWithMode");
+    NSDebugLLog(@"gwcomp", @"Calling captureImageWithMode");
     NSImage *image = [ScreenshotCapture captureImageWithMode:captureMode delay:delay rect:rect];
-    NSLog(@"captureImageWithMode returned: image=%@", image);
+    NSDebugLLog(@"gwcomp", @"captureImageWithMode returned: image=%@", image);
     
     // Flash the screen after capture for visual feedback
     if (captureMode == CaptureFullScreen || captureMode == CaptureArea || captureMode == CaptureWindow) {
-        NSLog(@"Flashing fullscreen");
+        NSDebugLLog(@"gwcomp", @"Flashing fullscreen");
         [self flashScreenFullscreen];
     }
     
@@ -542,48 +542,48 @@
 
 
 - (BOOL)copyImageToClipboardAndReturnSuccess {
-    NSLog(@"=== Copy to Clipboard Started ===");
+    NSDebugLLog(@"gwcomp", @"=== Copy to Clipboard Started ===");
     
     if (!capturedImagePNG) {
-        NSLog(@"ERROR: No PNG data available to copy");
+        NSDebugLLog(@"gwcomp", @"ERROR: No PNG data available to copy");
         return NO;
     }
     
-    NSLog(@"PNG data size: %lu bytes", (unsigned long)[capturedImagePNG length]);
+    NSDebugLLog(@"gwcomp", @"PNG data size: %lu bytes", (unsigned long)[capturedImagePNG length]);
     
     // Set GNUstep pasteboard for clipboard
-    NSLog(@"Setting GNUstep pasteboard");
+    NSDebugLLog(@"gwcomp", @"Setting GNUstep pasteboard");
     NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
     if (!pasteboard) {
-        NSLog(@"ERROR: Failed to get pasteboard");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to get pasteboard");
         return NO;
     }
     
-    NSLog(@"Declaring PNG type on pasteboard");
+    NSDebugLLog(@"gwcomp", @"Declaring PNG type on pasteboard");
     NSArray *types = [NSArray arrayWithObject:NSPasteboardTypePNG];
     
     @try {
         [pasteboard declareTypes:types owner:nil];
-        NSLog(@"Declared NSPasteboardTypePNG");
+        NSDebugLLog(@"gwcomp", @"Declared NSPasteboardTypePNG");
     } @catch (NSException *exception) {
-        NSLog(@"EXCEPTION in declareTypes: %@", exception);
+        NSDebugLLog(@"gwcomp", @"EXCEPTION in declareTypes: %@", exception);
         return NO;
     }
     
-    NSLog(@"Setting PNG data on pasteboard");
+    NSDebugLLog(@"gwcomp", @"Setting PNG data on pasteboard");
     @try {
         BOOL pngSuccess = [pasteboard setData:capturedImagePNG forType:NSPasteboardTypePNG];
-        NSLog(@"PNG setData result: %d", pngSuccess);
+        NSDebugLLog(@"gwcomp", @"PNG setData result: %d", pngSuccess);
         
         if (pngSuccess) {
-            NSLog(@"=== Copy to Clipboard Completed Successfully ===");
+            NSDebugLLog(@"gwcomp", @"=== Copy to Clipboard Completed Successfully ===");
             return YES;
         } else {
-            NSLog(@"ERROR: Failed to set PNG data on pasteboard");
+            NSDebugLLog(@"gwcomp", @"ERROR: Failed to set PNG data on pasteboard");
             return NO;
         }
     } @catch (NSException *exception) {
-        NSLog(@"EXCEPTION in setData: %@", exception);
+        NSDebugLLog(@"gwcomp", @"EXCEPTION in setData: %@", exception);
         return NO;
     }
 }
@@ -665,7 +665,7 @@
     if (statusLabel) {
         [statusLabel setStringValue:status];
     } else {
-        NSLog(@"Screenshot: %@", status);
+        NSDebugLLog(@"gwcomp", @"Screenshot: %@", status);
     }
 }
 
@@ -712,37 +712,37 @@
 
 - (void)generatePNGData {
     if (!capturedImage) {
-        NSLog(@"ERROR: Cannot generate PNG data - no captured image");
+        NSDebugLLog(@"gwcomp", @"ERROR: Cannot generate PNG data - no captured image");
         return;
     }
     
-    NSLog(@"Generating PNG data from captured image");
+    NSDebugLLog(@"gwcomp", @"Generating PNG data from captured image");
     NSData *imageData = [capturedImage TIFFRepresentation];
     NSBitmapImageRep *bitmap = [NSBitmapImageRep imageRepWithData:imageData];
     
     if (!bitmap) {
-        NSLog(@"ERROR: Failed to create bitmap from TIFF");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to create bitmap from TIFF");
         return;
     }
     
     NSData *pngData = [bitmap representationUsingType:NSPNGFileType properties:nil];
     if (!pngData) {
-        NSLog(@"ERROR: Failed to get PNG representation");
+        NSDebugLLog(@"gwcomp", @"ERROR: Failed to get PNG representation");
         return;
     }
     
     [capturedImagePNG release];
     capturedImagePNG = [pngData retain];
-    NSLog(@"PNG data generated: %lu bytes", (unsigned long)[capturedImagePNG length]);
+    NSDebugLLog(@"gwcomp", @"PNG data generated: %lu bytes", (unsigned long)[capturedImagePNG length]);
 }
 
 - (BOOL)saveImageToFile:(NSString *)filepath {
     if (!capturedImagePNG) {
-        NSLog(@"ERROR: No PNG data available to save");
+        NSDebugLLog(@"gwcomp", @"ERROR: No PNG data available to save");
         return NO;
     }
     
-    NSLog(@"Saving PNG data to file: %@", filepath);
+    NSDebugLLog(@"gwcomp", @"Saving PNG data to file: %@", filepath);
     return [capturedImagePNG writeToFile:filepath atomically:YES];
 }
 

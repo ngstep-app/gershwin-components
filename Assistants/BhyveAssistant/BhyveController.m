@@ -48,7 +48,7 @@
 - (id)init
 {
     if (self = [super init]) {
-        NSLog(@"BhyveController: init");
+        NSDebugLLog(@"gwcomp", @"BhyveController: init");
         
         // Load user settings first
         [self loadUserSettings];
@@ -79,7 +79,7 @@
 
 - (void)dealloc
 {
-    NSLog(@"BhyveController: dealloc");
+    NSDebugLLog(@"gwcomp", @"BhyveController: dealloc");
     [self stopVirtualMachine];
     [self cleanupTemporaryFiles];
     [self closeLogWindow];
@@ -91,7 +91,7 @@
 
 - (void)showAssistant
 {
-    NSLog(@"BhyveController: showAssistant");
+    NSDebugLLog(@"gwcomp", @"BhyveController: showAssistant");
     
     // Check system requirements FIRST
     NSString *errorMessage = [self checkSystemRequirements];
@@ -129,7 +129,7 @@
 
 - (NSString *)checkSystemRequirements
 {
-    NSLog(@"BhyveController: checkSystemRequirements");
+    NSDebugLLog(@"gwcomp", @"BhyveController: checkSystemRequirements");
     
     // Check if we're on FreeBSD first
     NSTask *unameTask = [[NSTask alloc] init];
@@ -147,14 +147,14 @@
         NSString *osName = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
         osName = [osName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         
-        NSLog(@"BhyveController: Operating system: %@", osName);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Operating system: %@", osName);
         
         if (![osName isEqualToString:@"FreeBSD"]) {
             NSString *error = [NSString stringWithFormat:@"bhyve is only available on FreeBSD.\n\nCurrent operating system: %@\n\nThis assistant requires FreeBSD with bhyve support to create and run virtual machines.", osName];
             return error;
         }
     } @catch (NSException *exception) {
-        NSLog(@"BhyveController: Error checking OS: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Error checking OS: %@", [exception reason]);
         return @"Unable to determine the operating system.\n\nThis assistant requires FreeBSD with bhyve support.";
     }
     
@@ -192,13 +192,13 @@
         return @"libvncclient not found. VNC display support requires libvncclient. Please install it: sudo pkg install libvncserver";
     }
     
-    NSLog(@"BhyveController: All system requirements met");
+    NSDebugLLog(@"gwcomp", @"BhyveController: All system requirements met");
     return nil; // No error
 }
 
 - (void)showSystemRequirementsError:(NSString *)message
 {
-    NSLog(@"BhyveController: showSystemRequirementsError: %@", message);
+    NSDebugLLog(@"gwcomp", @"BhyveController: showSystemRequirementsError: %@", message);
     
     // Create a minimal assistant builder just to show the error page
     GSAssistantBuilder *builder = [GSAssistantBuilder builder];
@@ -214,97 +214,97 @@
     
     // Then immediately show the error page
     if ([_assistantWindow respondsToSelector:@selector(showErrorPageWithTitle:message:)]) {
-        NSLog(@"BhyveController: calling showErrorPageWithTitle:message:");
+        NSDebugLLog(@"gwcomp", @"BhyveController: calling showErrorPageWithTitle:message:");
         [_assistantWindow showErrorPageWithTitle:@"System Requirements Not Met" message:message];
     } else if ([_assistantWindow respondsToSelector:@selector(showErrorPageWithMessage:)]) {
-        NSLog(@"BhyveController: calling showErrorPageWithMessage:");
+        NSDebugLLog(@"gwcomp", @"BhyveController: calling showErrorPageWithMessage:");
         [_assistantWindow showErrorPageWithMessage:message];
     } else {
-        NSLog(@"BhyveController: assistant window doesn't respond to error page methods");
+        NSDebugLLog(@"gwcomp", @"BhyveController: assistant window doesn't respond to error page methods");
         // Fallback - just log the error
-        NSLog(@"BhyveController: System requirements error: %@", message);
+        NSDebugLLog(@"gwcomp", @"BhyveController: System requirements error: %@", message);
     }
 }
 
 - (BOOL)checkBhyveAvailable
 {
-    NSLog(@"BhyveController: checkBhyveAvailable");
+    NSDebugLLog(@"gwcomp", @"BhyveController: checkBhyveAvailable");
     
     // Check if bhyve command exists
     if (![[NSFileManager defaultManager] fileExistsAtPath:@"/usr/sbin/bhyve"]) {
-        NSLog(@"BhyveController: bhyve binary not found at /usr/sbin/bhyve");
+        NSDebugLLog(@"gwcomp", @"BhyveController: bhyve binary not found at /usr/sbin/bhyve");
         return NO;
     }
     
     // Check if bhyvectl exists
     if (![[NSFileManager defaultManager] fileExistsAtPath:@"/usr/sbin/bhyvectl"]) {
-        NSLog(@"BhyveController: bhyvectl binary not found at /usr/sbin/bhyvectl");
+        NSDebugLLog(@"gwcomp", @"BhyveController: bhyvectl binary not found at /usr/sbin/bhyvectl");
         return NO;
     }
     
-    NSLog(@"BhyveController: bhyve tools available");
+    NSDebugLLog(@"gwcomp", @"BhyveController: bhyve tools available");
     return YES;
 }
 
 - (BOOL)checkLibVNCClientAvailable
 {
-    NSLog(@"BhyveController: checkLibVNCClientAvailable");
+    NSDebugLLog(@"gwcomp", @"BhyveController: checkLibVNCClientAvailable");
     
     return [VNCClient isLibVNCClientAvailable];
 }
 
 - (BOOL)validateVMConfiguration
 {
-    NSLog(@"BhyveController: validateVMConfiguration");
+    NSDebugLLog(@"gwcomp", @"BhyveController: validateVMConfiguration");
     
     // Check if ISO is selected
     if (!_selectedISOPath || [_selectedISOPath length] == 0) {
-        NSLog(@"BhyveController: No ISO selected");
+        NSDebugLLog(@"gwcomp", @"BhyveController: No ISO selected");
         return NO;
     }
     
     // Check if ISO file exists
     if (![[NSFileManager defaultManager] fileExistsAtPath:_selectedISOPath]) {
-        NSLog(@"BhyveController: ISO file does not exist: %@", _selectedISOPath);
+        NSDebugLLog(@"gwcomp", @"BhyveController: ISO file does not exist: %@", _selectedISOPath);
         return NO;
     }
     
     // Check VM name
     if (!_vmName || [_vmName length] == 0) {
-        NSLog(@"BhyveController: No VM name specified");
+        NSDebugLLog(@"gwcomp", @"BhyveController: No VM name specified");
         return NO;
     }
     
     // Check memory allocation (minimum 512MB)
     if (_allocatedRAM < 512) {
-        NSLog(@"BhyveController: Insufficient RAM allocated: %ld MB", (long)_allocatedRAM);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Insufficient RAM allocated: %ld MB", (long)_allocatedRAM);
         return NO;
     }
     
     // Check CPU allocation (minimum 1)
     if (_allocatedCPUs < 1) {
-        NSLog(@"BhyveController: Invalid CPU count: %ld", (long)_allocatedCPUs);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Invalid CPU count: %ld", (long)_allocatedCPUs);
         return NO;
     }
     
     // Check if bhyve command exists
     if (![[NSFileManager defaultManager] fileExistsAtPath:@"/usr/sbin/bhyve"]) {
-        NSLog(@"BhyveController: bhyve command not found");
+        NSDebugLLog(@"gwcomp", @"BhyveController: bhyve command not found");
         return NO;
     }
     
     // Check if bhyvectl command exists  
     if (![[NSFileManager defaultManager] fileExistsAtPath:@"/usr/sbin/bhyvectl"]) {
-        NSLog(@"BhyveController: bhyvectl command not found");
+        NSDebugLLog(@"gwcomp", @"BhyveController: bhyvectl command not found");
         return NO;
     }
     
     // Check if running as root (bhyve typically requires root privileges)
     if (getuid() != 0) {
-        NSLog(@"BhyveController: ERROR - Not running as root, bhyve will fail");
+        NSDebugLLog(@"gwcomp", @"BhyveController: ERROR - Not running as root, bhyve will fail");
         return NO; // Fail validation if not root
     } else {
-        NSLog(@"BhyveController: Running as root - good");
+        NSDebugLLog(@"gwcomp", @"BhyveController: Running as root - good");
     }
     
     // Check if vmm kernel module is available
@@ -322,12 +322,12 @@
         int kldstatStatus = [kldstatTask terminationStatus];
         
         if (kldstatStatus != 0) {
-            NSLog(@"BhyveController: vmm kernel module not loaded, will attempt to load");
+            NSDebugLLog(@"gwcomp", @"BhyveController: vmm kernel module not loaded, will attempt to load");
         } else {
-            NSLog(@"BhyveController: vmm kernel module is loaded");
+            NSDebugLLog(@"gwcomp", @"BhyveController: vmm kernel module is loaded");
         }
     } @catch (NSException *exception) {
-        NSLog(@"BhyveController: Error checking vmm module: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Error checking vmm module: %@", [exception reason]);
         // Continue anyway
     }
     
@@ -351,15 +351,15 @@
             result = [result stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
             
             if ([result isEqualToString:@"1"]) {
-                NSLog(@"BhyveController: Hardware virtualization (VMX) is enabled");
+                NSDebugLLog(@"gwcomp", @"BhyveController: Hardware virtualization (VMX) is enabled");
             } else {
-                NSLog(@"BhyveController: WARNING - Hardware virtualization (VMX) may not be enabled");
+                NSDebugLLog(@"gwcomp", @"BhyveController: WARNING - Hardware virtualization (VMX) may not be enabled");
             }
         } else {
-            NSLog(@"BhyveController: Could not check hardware virtualization status");
+            NSDebugLLog(@"gwcomp", @"BhyveController: Could not check hardware virtualization status");
         }
     } @catch (NSException *exception) {
-        NSLog(@"BhyveController: Error checking hardware virtualization: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Error checking hardware virtualization: %@", [exception reason]);
     }
     
     return YES;
@@ -367,7 +367,7 @@
 
 - (NSString *)generateVMCommand
 {
-    NSLog(@"BhyveController: generateVMCommand");
+    NSDebugLLog(@"gwcomp", @"BhyveController: generateVMCommand");
     
     NSMutableString *command = [NSMutableString string];
     
@@ -400,7 +400,7 @@
         if ([_networkMode isEqualToString:@"bridge"] || [_networkMode isEqualToString:@"nat"]) {
             // For now, skip networking to avoid interface issues
             // [command appendString:@" -s 4:0,virtio-net"];
-            NSLog(@"BhyveController: Skipping network configuration to avoid interface issues");
+            NSDebugLLog(@"gwcomp", @"BhyveController: Skipping network configuration to avoid interface issues");
         }
         // Skip network entirely for "none" mode
         
@@ -430,9 +430,9 @@
         
         if (uefiPath) {
             [command appendFormat:@" -l bootrom,\"%@\"", uefiPath];
-            NSLog(@"BhyveController: Using UEFI firmware: %@", uefiPath);
+            NSDebugLLog(@"gwcomp", @"BhyveController: Using UEFI firmware: %@", uefiPath);
         } else {
-            NSLog(@"BhyveController: WARNING - UEFI firmware not found in standard locations");
+            NSDebugLLog(@"gwcomp", @"BhyveController: WARNING - UEFI firmware not found in standard locations");
             // Continue anyway - bhyve might have a default
         }
         
@@ -463,7 +463,7 @@
         if ([_networkMode isEqualToString:@"bridge"] || [_networkMode isEqualToString:@"nat"]) {
             // For now, skip networking to avoid interface issues
             // [command appendString:@" -s 4:0,virtio-net"];
-            NSLog(@"BhyveController: Skipping network configuration to avoid interface issues");
+            NSDebugLLog(@"gwcomp", @"BhyveController: Skipping network configuration to avoid interface issues");
         }
         
         // VNC - Use enhanced framebuffer device configuration
@@ -494,10 +494,10 @@
         
         if (uefiPath) {
             [command appendFormat:@" -l bootrom,\"%@\"", uefiPath];
-            NSLog(@"BhyveController: Using UEFI firmware: %@", uefiPath);
+            NSDebugLLog(@"gwcomp", @"BhyveController: Using UEFI firmware: %@", uefiPath);
         } else {
-            NSLog(@"BhyveController: WARNING - UEFI firmware not found, VM may not boot properly");
-            NSLog(@"BhyveController: Install with: pkg install bhyve-firmware");
+            NSDebugLLog(@"gwcomp", @"BhyveController: WARNING - UEFI firmware not found, VM may not boot properly");
+            NSDebugLLog(@"gwcomp", @"BhyveController: Install with: pkg install bhyve-firmware");
         }
         
         // VM name (must be last)
@@ -507,19 +507,19 @@
     // Don't redirect bhyve output so we can see errors for debugging
     // [command appendString:@" >/dev/null 2>&1"];
     
-    NSLog(@"BhyveController: Generated VM command: %@", command);
+    NSDebugLLog(@"gwcomp", @"BhyveController: Generated VM command: %@", command);
     return [NSString stringWithString:command];
 }
 
 - (BOOL)createVirtualDisk
 {
-    NSLog(@"BhyveController: createVirtualDisk");
+    NSDebugLLog(@"gwcomp", @"BhyveController: createVirtualDisk");
     
     NSString *diskPath = [NSString stringWithFormat:@"/tmp/%@.img", _vmName];
     
     // Check if disk already exists
     if ([[NSFileManager defaultManager] fileExistsAtPath:diskPath]) {
-        NSLog(@"BhyveController: Virtual disk already exists at %@", diskPath);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Virtual disk already exists at %@", diskPath);
         return YES;
     }
     
@@ -539,14 +539,14 @@
         if (exitStatus != 0) {
             NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
             NSString *errorOutput = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
-            NSLog(@"BhyveController: Failed to create virtual disk (exit code %d): %@", exitStatus, errorOutput);
+            NSDebugLLog(@"gwcomp", @"BhyveController: Failed to create virtual disk (exit code %d): %@", exitStatus, errorOutput);
             return NO;
         } else {
-            NSLog(@"BhyveController: Created virtual disk at %@ (%ld GB)", diskPath, (long)_diskSize);
+            NSDebugLLog(@"gwcomp", @"BhyveController: Created virtual disk at %@ (%ld GB)", diskPath, (long)_diskSize);
             return YES;
         }
     } @catch (NSException *exception) {
-        NSLog(@"BhyveController: Error creating virtual disk: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Error creating virtual disk: %@", [exception reason]);
         return NO;
     }
 }
@@ -555,17 +555,17 @@
 
 - (void)startVirtualMachine
 {
-    NSLog(@"BhyveController: startVirtualMachine");
+    NSDebugLLog(@"gwcomp", @"BhyveController: startVirtualMachine");
     
     if (_vmRunning) {
-        NSLog(@"BhyveController: VM is already running");
+        NSDebugLLog(@"gwcomp", @"BhyveController: VM is already running");
         return;
     }
     
     // Find an unused VNC port before starting VM
     NSInteger newVNCPort = [self findUnusedVNCPort];
     if (newVNCPort != _vncPort) {
-        NSLog(@"BhyveController: Using VNC port %ld instead of %ld", (long)newVNCPort, (long)_vncPort);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Using VNC port %ld instead of %ld", (long)newVNCPort, (long)_vncPort);
         [self setVncPort:newVNCPort];
     }
     
@@ -582,7 +582,7 @@
     
     // Generate VM command
     NSString *command = [self generateVMCommand];
-    NSLog(@"BhyveController: VM command: %@", command);
+    NSDebugLLog(@"gwcomp", @"BhyveController: VM command: %@", command);
     
     // Load bhyve kernel module if needed
     NSTask *kldloadTask = [[NSTask alloc] init];
@@ -594,12 +594,12 @@
         [kldloadTask waitUntilExit];
         int kldloadStatus = [kldloadTask terminationStatus];
         if (kldloadStatus == 0) {
-            NSLog(@"BhyveController: vmm module loaded successfully");
+            NSDebugLLog(@"gwcomp", @"BhyveController: vmm module loaded successfully");
         } else {
-            NSLog(@"BhyveController: vmm module load failed (exit code %d) - may already be loaded", kldloadStatus);
+            NSDebugLLog(@"gwcomp", @"BhyveController: vmm module load failed (exit code %d) - may already be loaded", kldloadStatus);
         }
     } @catch (NSException *exception) {
-        NSLog(@"BhyveController: Error loading vmm module: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Error loading vmm module: %@", [exception reason]);
         // Continue anyway - module might already be loaded
     }
     
@@ -614,12 +614,12 @@
     [_bhyveTask setStandardOutput:outputPipe];
     [_bhyveTask setStandardError:errorPipe];
     
-    NSLog(@"BhyveController: About to launch bhyve command: %@", command);
+    NSDebugLLog(@"gwcomp", @"BhyveController: About to launch bhyve command: %@", command);
     
     @try {
         [_bhyveTask launch];
         
-        NSLog(@"BhyveController: bhyve task launched with PID %d", [_bhyveTask processIdentifier]);
+        NSDebugLLog(@"gwcomp", @"BhyveController: bhyve task launched with PID %d", [_bhyveTask processIdentifier]);
         
         // Wait a moment to see if the process starts successfully
         [NSThread sleepForTimeInterval:1.0];
@@ -645,7 +645,7 @@
                 });
             }
             
-            NSLog(@"BhyveController: VM running with PID %d", [_bhyveTask processIdentifier]);
+            NSDebugLLog(@"gwcomp", @"BhyveController: VM running with PID %d", [_bhyveTask processIdentifier]);
         } else {
             // Process died immediately - check error output
             NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
@@ -692,7 +692,7 @@
                 [errorMessage appendString:@" No output captured from bhyve process."];
             }
             
-            NSLog(@"BhyveController: VM process died immediately (exit code %d): %@", exitStatus, fullOutput);
+            NSDebugLLog(@"gwcomp", @"BhyveController: VM process died immediately (exit code %d): %@", exitStatus, fullOutput);
             [self showVMError:[NSString stringWithString:errorMessage]];
             
             _vmRunning = NO;
@@ -700,7 +700,7 @@
         }
         
     } @catch (NSException *exception) {
-        NSLog(@"BhyveController: Error starting VM: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Error starting VM: %@", [exception reason]);
         [self showVMError:[NSString stringWithFormat:@"Failed to start VM: %@", [exception reason]]];
         _vmRunning = NO;
         _bhyveTask = nil;
@@ -709,7 +709,7 @@
 
 - (void)startVNCViewer
 {
-    NSLog(@"BhyveController: startVNCViewer");
+    NSDebugLLog(@"gwcomp", @"BhyveController: startVNCViewer");
     
     // Check if libvncclient is available first
     if (![self checkLibVNCClientAvailable]) {
@@ -739,7 +739,7 @@
 
 - (void)tryVNCConnectionWithRetry:(NSInteger)retryCount
 {
-    NSLog(@"BhyveController: tryVNCConnectionWithRetry: %ld", (long)retryCount);
+    NSDebugLLog(@"gwcomp", @"BhyveController: tryVNCConnectionWithRetry: %ld", (long)retryCount);
     
     if (retryCount >= 8) { // Increased max retries
         [self showVMError:[NSString stringWithFormat:@"Failed to connect to VNC server on 127.0.0.1:%ld after multiple attempts", (long)_vncPort]];
@@ -748,7 +748,7 @@
     
     // Check if VNC port is accepting connections
     if (![self isVNCServerRunning]) {
-        NSLog(@"BhyveController: VNC server not ready on port %ld, retrying in 3 seconds...", (long)_vncPort);
+        NSDebugLLog(@"gwcomp", @"BhyveController: VNC server not ready on port %ld, retrying in 3 seconds...", (long)_vncPort);
         [self showVMStatus:[NSString stringWithFormat:@"Waiting for VNC server... (attempt %ld/8)", (long)(retryCount + 1)]];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self retryVNCConnection:@(retryCount + 1)];
@@ -756,12 +756,12 @@
         return;
     }
     
-    NSLog(@"BhyveController: VNC server is ready, creating VNC window for 127.0.0.1:%ld", (long)_vncPort);
+    NSDebugLLog(@"gwcomp", @"BhyveController: VNC server is ready, creating VNC window for 127.0.0.1:%ld", (long)_vncPort);
     
     // Create VNC window with selected size
     NSSize vncSize = [self parseVNCWindowSize:_vncWindowSize];
     NSRect windowRect = NSMakeRect(100, 100, vncSize.width, vncSize.height);
-    NSLog(@"BhyveController: Creating VNC window with size: %.0fx%.0f", vncSize.width, vncSize.height);
+    NSDebugLLog(@"gwcomp", @"BhyveController: Creating VNC window with size: %.0fx%.0f", vncSize.width, vncSize.height);
     _vncWindow = [[VNCWindow alloc] initWithContentRect:windowRect 
                                                hostname:@"127.0.0.1" 
                                                    port:_vncPort];
@@ -784,7 +784,7 @@
                 [self showVNCConnectionInfo];
             });
         } else {
-            NSLog(@"BhyveController: VNC connection failed, retrying...");
+            NSDebugLLog(@"gwcomp", @"BhyveController: VNC connection failed, retrying...");
             [_vncWindow close];
             _vncWindow = nil;
             
@@ -835,20 +835,20 @@
     close(sockfd);
     
     if (result == 0) {
-        NSLog(@"BhyveController: VNC server is accepting connections on port %ld", (long)_vncPort);
+        NSDebugLLog(@"gwcomp", @"BhyveController: VNC server is accepting connections on port %ld", (long)_vncPort);
         return YES;
     } else {
-        NSLog(@"BhyveController: VNC server not ready on port %ld (errno: %d)", (long)_vncPort, errno);
+        NSDebugLLog(@"gwcomp", @"BhyveController: VNC server not ready on port %ld (errno: %d)", (long)_vncPort, errno);
         return NO;
     }
 }
 
 - (void)stopVirtualMachine
 {
-    NSLog(@"BhyveController: stopVirtualMachine");
+    NSDebugLLog(@"gwcomp", @"BhyveController: stopVirtualMachine");
     
     if (!_vmRunning) {
-        NSLog(@"BhyveController: VM is not running");
+        NSDebugLLog(@"gwcomp", @"BhyveController: VM is not running");
         return;
     }
     
@@ -879,7 +879,7 @@
         [destroyTask launch];
         [destroyTask waitUntilExit];
     } @catch (NSException *exception) {
-        NSLog(@"BhyveController: Error destroying VM: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Error destroying VM: %@", [exception reason]);
     }
     
     _vmRunning = NO;
@@ -890,7 +890,7 @@
 
 - (void)showVMStatus:(NSString *)message
 {
-    NSLog(@"BhyveController: showVMStatus: %@", message);
+    NSDebugLLog(@"gwcomp", @"BhyveController: showVMStatus: %@", message);
     
     // Update running step if available
     if (_runningStep) {
@@ -900,7 +900,7 @@
 
 - (void)showVMError:(NSString *)message
 {
-    NSLog(@"BhyveController: showVMError: %@", message);
+    NSDebugLLog(@"gwcomp", @"BhyveController: showVMError: %@", message);
     
     // Ensure we're on the main thread for UI updates
     if (![NSThread isMainThread]) {
@@ -916,7 +916,7 @@
     } else if ([_assistantWindow respondsToSelector:@selector(showErrorPageWithMessage:)]) {
         [_assistantWindow showErrorPageWithMessage:message];
     } else {
-        NSLog(@"BhyveController: Error - assistant window doesn't support error pages");
+        NSDebugLLog(@"gwcomp", @"BhyveController: Error - assistant window doesn't support error pages");
     }
 }
 
@@ -924,7 +924,7 @@
 
 - (void)showVMLog
 {
-    NSLog(@"BhyveController: showVMLog");
+    NSDebugLLog(@"gwcomp", @"BhyveController: showVMLog");
     
     if (_logWindow) {
         // Window already exists, just bring it to front
@@ -999,7 +999,7 @@
 
 - (void)closeLogWindow
 {
-    NSLog(@"BhyveController: closeLogWindow");
+    NSDebugLLog(@"gwcomp", @"BhyveController: closeLogWindow");
     
     if (_logWindow) {
         [_logWindow close];
@@ -1025,7 +1025,7 @@
 
 - (void)monitorVMOutput:(NSArray *)pipes
 {
-    NSLog(@"BhyveController: monitorVMOutput - starting background monitoring");
+    NSDebugLLog(@"gwcomp", @"BhyveController: monitorVMOutput - starting background monitoring");
     
     NSPipe *outputPipe = [pipes objectAtIndex:0];
     NSPipe *errorPipe = [pipes objectAtIndex:1];
@@ -1080,23 +1080,23 @@
     
     [self updateVMLog:@"\n=== VM Process Terminated ===\n"];
     
-    NSLog(@"BhyveController: monitorVMOutput - monitoring ended");
+    NSDebugLLog(@"gwcomp", @"BhyveController: monitorVMOutput - monitoring ended");
 }
 
 #pragma mark - Cleanup
 
 - (void)cleanupTemporaryFiles
 {
-    NSLog(@"BhyveController: cleanupTemporaryFiles");
+    NSDebugLLog(@"gwcomp", @"BhyveController: cleanupTemporaryFiles");
     
     // Remove virtual disk file
     NSString *diskPath = [NSString stringWithFormat:@"/tmp/%@.img", _vmName];
     if ([[NSFileManager defaultManager] fileExistsAtPath:diskPath]) {
         NSError *error = nil;
         if ([[NSFileManager defaultManager] removeItemAtPath:diskPath error:&error]) {
-            NSLog(@"BhyveController: Removed virtual disk: %@", diskPath);
+            NSDebugLLog(@"gwcomp", @"BhyveController: Removed virtual disk: %@", diskPath);
         } else {
-            NSLog(@"BhyveController: Failed to remove virtual disk %@: %@", diskPath, [error localizedDescription]);
+            NSDebugLLog(@"gwcomp", @"BhyveController: Failed to remove virtual disk %@: %@", diskPath, [error localizedDescription]);
         }
     }
     
@@ -1114,10 +1114,10 @@
         [destroyTask waitUntilExit];
         int exitStatus = [destroyTask terminationStatus];
         if (exitStatus == 0) {
-            NSLog(@"BhyveController: Cleaned up VM instance: %@", _vmName);
+            NSDebugLLog(@"gwcomp", @"BhyveController: Cleaned up VM instance: %@", _vmName);
         }
     } @catch (NSException *exception) {
-        NSLog(@"BhyveController: Error during VM cleanup: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Error during VM cleanup: %@", [exception reason]);
     }
 }
 
@@ -1125,14 +1125,14 @@
 
 - (void)assistantWindowWillFinish:(GSAssistantWindow *)window
 {
-    NSLog(@"BhyveController: assistantWindowWillFinish");
+    NSDebugLLog(@"gwcomp", @"BhyveController: assistantWindowWillFinish");
     [self stopVirtualMachine];
     [self cleanupTemporaryFiles];
 }
 
 - (void)assistantWindowDidFinish:(GSAssistantWindow *)window
 {
-    NSLog(@"BhyveController: assistantWindowDidFinish");
+    NSDebugLLog(@"gwcomp", @"BhyveController: assistantWindowDidFinish");
     [self stopVirtualMachine];
     [self cleanupTemporaryFiles];
     [[window window] close];
@@ -1141,7 +1141,7 @@
 
 - (void)assistantWindowDidCancel:(GSAssistantWindow *)window
 {
-    NSLog(@"BhyveController: assistantWindowDidCancel");
+    NSDebugLLog(@"gwcomp", @"BhyveController: assistantWindowDidCancel");
     [self stopVirtualMachine];
     [self cleanupTemporaryFiles];
     [[window window] close];
@@ -1150,7 +1150,7 @@
 
 - (BOOL)testBhyveBasicFunction
 {
-    NSLog(@"BhyveController: testBhyveBasicFunction");
+    NSDebugLLog(@"gwcomp", @"BhyveController: testBhyveBasicFunction");
     
     // Try to create and immediately destroy a test VM to check permissions
     NSTask *testTask = [[NSTask alloc] init];
@@ -1167,7 +1167,7 @@
         int testStatus = [testTask terminationStatus];
         
         if (testStatus == 0) {
-            NSLog(@"BhyveController: bhyve VM creation test successful");
+            NSDebugLLog(@"gwcomp", @"BhyveController: bhyve VM creation test successful");
             
             // Clean up test VM
             NSTask *destroyTask = [[NSTask alloc] init];
@@ -1178,17 +1178,17 @@
                 [destroyTask launch];
                 [destroyTask waitUntilExit];
             } @catch (NSException *exception) {
-                NSLog(@"BhyveController: Error cleaning up test VM: %@", [exception reason]);
+                NSDebugLLog(@"gwcomp", @"BhyveController: Error cleaning up test VM: %@", [exception reason]);
             }
             return YES;
         } else {
             NSData *errorData = [[testPipe fileHandleForReading] readDataToEndOfFile];
             NSString *errorOutput = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
-            NSLog(@"BhyveController: bhyve VM creation test failed (exit code %d): %@", testStatus, errorOutput);
+            NSDebugLLog(@"gwcomp", @"BhyveController: bhyve VM creation test failed (exit code %d): %@", testStatus, errorOutput);
             return NO;
         }
     } @catch (NSException *exception) {
-        NSLog(@"BhyveController: Error running bhyve test: %@", [exception reason]);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Error running bhyve test: %@", [exception reason]);
         return NO;
     }
 }
@@ -1197,7 +1197,7 @@
 
 - (NSString *)generateVNCFramebufferConfig
 {
-    NSLog(@"BhyveController: generateVNCFramebufferConfig for port %ld", (long)_vncPort);
+    NSDebugLLog(@"gwcomp", @"BhyveController: generateVNCFramebufferConfig for port %ld", (long)_vncPort);
     
     // Enhanced framebuffer configuration for better X11 compatibility
     // The 'wait' option helps with synchronization issues that can occur with X11
@@ -1218,13 +1218,13 @@
     // This provides absolute mouse positioning which works better than relative mouse in VNC
     [vncConfig appendString:@" -s 30:0,xhci,tablet"];
     
-    NSLog(@"BhyveController: VNC framebuffer config: %@", vncConfig);
+    NSDebugLLog(@"gwcomp", @"BhyveController: VNC framebuffer config: %@", vncConfig);
     return [NSString stringWithString:vncConfig];
 }
 
 - (void)showVNCConnectionInfo
 {
-    NSLog(@"BhyveController: showVNCConnectionInfo");
+    NSDebugLLog(@"gwcomp", @"BhyveController: showVNCConnectionInfo");
     
     if (!_enableVNC) {
         return;
@@ -1245,12 +1245,12 @@
 
 - (NSInteger)findUnusedVNCPort
 {
-    NSLog(@"BhyveController: findUnusedVNCPort");
+    NSDebugLLog(@"gwcomp", @"BhyveController: findUnusedVNCPort");
     
     // Start checking from port 5900 (standard VNC port)
     for (NSInteger port = 5900; port <= 5999; port++) {
         if ([self isPortAvailable:port]) {
-            NSLog(@"BhyveController: Found unused VNC port: %ld", (long)port);
+            NSDebugLLog(@"gwcomp", @"BhyveController: Found unused VNC port: %ld", (long)port);
             return port;
         }
     }
@@ -1258,12 +1258,12 @@
     // If no standard VNC ports available, try higher range
     for (NSInteger port = 6000; port <= 6099; port++) {
         if ([self isPortAvailable:port]) {
-            NSLog(@"BhyveController: Found unused VNC port in extended range: %ld", (long)port);
+            NSDebugLLog(@"gwcomp", @"BhyveController: Found unused VNC port in extended range: %ld", (long)port);
             return port;
         }
     }
     
-    NSLog(@"BhyveController: Warning - no unused VNC ports found, using 5900");
+    NSDebugLLog(@"gwcomp", @"BhyveController: Warning - no unused VNC ports found, using 5900");
     return 5900; // Fallback to standard port
 }
 
@@ -1291,7 +1291,7 @@
 
 - (void)loadUserSettings
 {
-    NSLog(@"BhyveController: loadUserSettings");
+    NSDebugLLog(@"gwcomp", @"BhyveController: loadUserSettings");
     
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
@@ -1354,13 +1354,13 @@
         _vncWindowSize = savedVNCWindowSize;
     }
     
-    NSLog(@"BhyveController: Loaded settings - ISO: %@, VM: %@, RAM: %ld MB, CPUs: %ld, Disk: %ld GB, Network: %@, Boot: %@, VNC Port: %ld, VNC Size: %@", 
+    NSDebugLLog(@"gwcomp", @"BhyveController: Loaded settings - ISO: %@, VM: %@, RAM: %ld MB, CPUs: %ld, Disk: %ld GB, Network: %@, Boot: %@, VNC Port: %ld, VNC Size: %@", 
           _selectedISOPath ? _selectedISOPath : @"(none)", _vmName, (long)_allocatedRAM, (long)_allocatedCPUs, (long)_diskSize, _networkMode, _bootMode, (long)_vncPort, _vncWindowSize);
 }
 
 - (void)saveUserSettings
 {
-    NSLog(@"BhyveController: saveUserSettings");
+    NSDebugLLog(@"gwcomp", @"BhyveController: saveUserSettings");
     
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
@@ -1399,7 +1399,7 @@
     
     [defaults synchronize];
     
-    NSLog(@"BhyveController: Saved settings - ISO: %@, VM: %@, RAM: %ld MB, CPUs: %ld, Disk: %ld GB, Network: %@, Boot: %@, VNC Port: %ld, VNC Size: %@", 
+    NSDebugLLog(@"gwcomp", @"BhyveController: Saved settings - ISO: %@, VM: %@, RAM: %ld MB, CPUs: %ld, Disk: %ld GB, Network: %@, Boot: %@, VNC Port: %ld, VNC Size: %@", 
           _selectedISOPath ? _selectedISOPath : @"(none)", _vmName, (long)_allocatedRAM, (long)_allocatedCPUs, (long)_diskSize, _networkMode, _bootMode, (long)_vncPort, _vncWindowSize);
 }
 
@@ -1503,7 +1503,7 @@
 
 - (NSSize)parseVNCWindowSize:(NSString *)sizeString
 {
-    NSLog(@"BhyveController: parseVNCWindowSize: %@", sizeString);
+    NSDebugLLog(@"gwcomp", @"BhyveController: parseVNCWindowSize: %@", sizeString);
     
     // Default size if parsing fails
     NSSize defaultSize = NSMakeSize(1024, 768);
@@ -1515,7 +1515,7 @@
     // Parse format like "1024 x 768"
     NSArray *components = [sizeString componentsSeparatedByString:@" x "];
     if ([components count] != 2) {
-        NSLog(@"BhyveController: Invalid VNC size format: %@", sizeString);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Invalid VNC size format: %@", sizeString);
         return defaultSize;
     }
     
@@ -1523,11 +1523,11 @@
     NSInteger height = [[components objectAtIndex:1] integerValue];
     
     if (width <= 0 || height <= 0) {
-        NSLog(@"BhyveController: Invalid VNC size values: %ldx%ld", (long)width, (long)height);
+        NSDebugLLog(@"gwcomp", @"BhyveController: Invalid VNC size values: %ldx%ld", (long)width, (long)height);
         return defaultSize;
     }
     
-    NSLog(@"BhyveController: Parsed VNC size: %ldx%ld", (long)width, (long)height);
+    NSDebugLLog(@"gwcomp", @"BhyveController: Parsed VNC size: %ldx%ld", (long)width, (long)height);
     return NSMakeSize(width, height);
 }
 
@@ -1535,7 +1535,7 @@
 
 - (void)vncWindowWillClose:(VNCWindow *)window
 {
-    NSLog(@"BhyveController: VNC window closing, stopping VM");
+    NSDebugLLog(@"gwcomp", @"BhyveController: VNC window closing, stopping VM");
     [self stopVirtualMachine];
 }
 

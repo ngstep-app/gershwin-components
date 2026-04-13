@@ -168,7 +168,7 @@ main(int argc, char** argv, char **env)
   
   if (procinfo == nil)
     {
-      NSLog(@"plistupdate: unable to get process information!");
+      NSDebugLLog(@"gwcomp", @"plistupdate: unable to get process information!");
       [pool release];
       exit(EXIT_FAILURE);
     }

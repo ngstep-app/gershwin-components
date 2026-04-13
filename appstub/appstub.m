@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
       // Convert to C string
       const char *command = [wrappedExec UTF8String];
       
-      NSLog(@"Executing: %s", command);
+      NSDebugLLog(@"gwcomp", @"Executing: %s", command);
 
       // Build argv array for exec
       char **newArgv = (char **)malloc((argc + 1) * sizeof(char *));
