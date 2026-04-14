@@ -27,6 +27,7 @@
 #import <X11/Xutil.h>
 #import <sys/select.h>
 #import <errno.h>
+#import <unistd.h>
 #import <dispatch/dispatch.h>
 
 @interface TimeMenuView : NSMenuView
@@ -194,80 +195,206 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     return color;
 }
 
-- (void)createPersistentStrutWindow
+- (NSArray *)menuBarX11Windows
 {
-    NSDebugLLog(@"gwcomp", @"MenuController: Creating persistent X11 strut window...");
-    
+    Display *display = [MenuUtils sharedDisplay];
+    if (!display) {
+        return @[];
+    }
+
+    pid_t pid = getpid();
+    NSString *menuBarTitle = [self.menuBar title];
+    NSArray *windows = [MenuUtils getAllWindows];
+    NSMutableArray *candidates = [NSMutableArray array];
     const CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight];
-    
-    // Open X11 display connection that will persist for the application lifetime
-    self.strutDisplay = XOpenDisplay(NULL);
-    if (!self.strutDisplay) {
-        NSDebugLLog(@"gwcomp", @"MenuController: Cannot open X11 display for strut window");
+
+    // Discover directly from root children first. This catches windows even when
+    // they are temporarily absent from _NET_CLIENT_LIST.
+    Window root = DefaultRootWindow(display);
+    Window rootRet = None;
+    Window parentRet = None;
+    Window *children = NULL;
+    unsigned int nchildren = 0;
+    if (XQueryTree(display, root, &rootRet, &parentRet, &children, &nchildren) != 0 && children) {
+        unsigned int i;
+        for (i = 0; i < nchildren; i++) {
+            Window w = children[i];
+            XWindowAttributes attrs;
+            if (XGetWindowAttributes(display, w, &attrs) == 0 || attrs.map_state == IsUnmapped) {
+                continue;
+            }
+
+            NSString *name = [MenuUtils getWindowProperty:(unsigned long)w atomName:@"_NET_WM_NAME"];
+            if (!name || [name length] == 0) {
+                name = [MenuUtils getWindowProperty:(unsigned long)w atomName:@"WM_NAME"];
+            }
+            if (!(menuBarTitle && [menuBarTitle length] > 0 && [name isEqualToString:menuBarTitle])) {
+                continue;
+            }
+
+            // Prefer top-strip windows with bar-like geometry.
+            if ((CGFloat)attrs.height > (menuBarHeight * 2.0) || attrs.width < 100) {
+                continue;
+            }
+
+            NSNumber *candidate = [NSNumber numberWithUnsignedLong:(unsigned long)w];
+            if (![candidates containsObject:candidate]) {
+                [candidates addObject:candidate];
+            }
+        }
+        XFree(children);
+    }
+
+    // Additional strategy: managed top-level clients titled like our menu bar.
+    // Some WMs/backends do not expose _NET_WM_PID for this window.
+    for (NSNumber *windowNum in windows) {
+        unsigned long xid = [windowNum unsignedLongValue];
+        NSString *name = [MenuUtils getWindowProperty:xid atomName:@"_NET_WM_NAME"];
+        if (!name || [name length] == 0) {
+            name = [MenuUtils getWindowProperty:xid atomName:@"WM_NAME"];
+        }
+
+        if (menuBarTitle && [menuBarTitle length] > 0 && [name isEqualToString:menuBarTitle]) {
+            XWindowAttributes attrs;
+            if (XGetWindowAttributes(display, (Window)xid, &attrs) != 0 && attrs.map_state != IsUnmapped) {
+                [candidates addObject:[NSNumber numberWithUnsignedLong:xid]];
+            }
+        }
+    }
+
+    // Secondary strategy: include mapped dock-like windows from this process.
+    Atom windowTypeAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
+    Atom dockAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DOCK", False);
+    for (NSNumber *windowNum in windows) {
+        unsigned long xid = [windowNum unsignedLongValue];
+        if ((pid_t)[MenuUtils getWindowPID:xid] != pid) {
+            continue;
+        }
+
+        Atom actualType;
+        int actualFormat;
+        unsigned long nitems = 0;
+        unsigned long bytesAfter = 0;
+        unsigned char *prop = NULL;
+        BOOL isDockType = NO;
+        if (XGetWindowProperty(display, (Window)xid, windowTypeAtom, 0, 8, False, XA_ATOM,
+                               &actualType, &actualFormat, &nitems, &bytesAfter, &prop) == Success && prop) {
+            Atom *atoms = (Atom *)prop;
+            unsigned long i;
+            for (i = 0; i < nitems; i++) {
+                if (atoms[i] == dockAtom) {
+                    isDockType = YES;
+                    break;
+                }
+            }
+            XFree(prop);
+        }
+
+        if (isDockType) {
+            XWindowAttributes attrs;
+            if (XGetWindowAttributes(display, (Window)xid, &attrs) != 0 && attrs.map_state != IsUnmapped) {
+                NSNumber *candidate = [NSNumber numberWithUnsignedLong:xid];
+                if (![candidates containsObject:candidate]) {
+                    [candidates addObject:candidate];
+                }
+            }
+        }
+    }
+
+    // Fallback: include any visible top-level window from this process.
+    for (NSNumber *windowNum in windows) {
+        unsigned long xid = [windowNum unsignedLongValue];
+        if ((pid_t)[MenuUtils getWindowPID:xid] != pid) {
+            continue;
+        }
+        XWindowAttributes attrs;
+        if (XGetWindowAttributes(display, (Window)xid, &attrs) != 0 && attrs.map_state != IsUnmapped) {
+            NSNumber *candidate = [NSNumber numberWithUnsignedLong:xid];
+            if (![candidates containsObject:candidate]) {
+                [candidates addObject:candidate];
+            }
+        }
+    }
+
+    return candidates;
+}
+
+- (void)applyMenuBarDockAndStrutProperties
+{
+    const CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight];
+    Display *display = [MenuUtils sharedDisplay];
+    if (!display) {
+        NSDebugLLog(@"gwcomp", @"MenuController: Cannot open X11 display to apply menu bar struts");
         return;
     }
-    
-    int screen = DefaultScreen(self.strutDisplay);
-    Window root = RootWindow(self.strutDisplay, screen);
-    unsigned int width = (unsigned int)self.screenSize.width;
-    unsigned int height = (unsigned int)menuBarHeight;
-    
-    // Create invisible strut window that reserves space but doesn't interfere with our menu
-    XSetWindowAttributes attrs;
-    attrs.override_redirect = False;
-    attrs.background_pixel = BlackPixel(self.strutDisplay, screen);
-    attrs.border_pixel = BlackPixel(self.strutDisplay, screen);
-    
-    // Create a 1x1 pixel window at the top-left corner to avoid visual interference
-    self.strutWindow = XCreateWindow(self.strutDisplay, root, 0, 0, 1, 1, 0, 
-                                   CopyFromParent, InputOutput, CopyFromParent, 
-                                   CWOverrideRedirect | CWBackPixel | CWBorderPixel, &attrs);
-    
-    if (self.strutWindow == None) {
-        NSDebugLLog(@"gwcomp", @"MenuController: Failed to create X11 strut window");
-        XCloseDisplay(self.strutDisplay);
-        self.strutDisplay = NULL;
+
+    if (!self.menuBar) {
+        NSDebugLLog(@"gwcomp", @"MenuController: No menuBar window to apply X11 struts");
         return;
     }
-    
-    // Set window type to dock
-    Atom windowTypeAtom = XInternAtom(self.strutDisplay, "_NET_WM_WINDOW_TYPE", False);
-    Atom dockAtom = XInternAtom(self.strutDisplay, "_NET_WM_WINDOW_TYPE_DOCK", False);
-    XChangeProperty(self.strutDisplay, self.strutWindow, windowTypeAtom, XA_ATOM, 32, 
-                   PropModeReplace, (unsigned char *)&dockAtom, 1);
-    
-    // Set WM_CLASS to "StrutPanel" to distinguish from our actual menu
-    XClassHint classHint;
-    classHint.res_name = "StrutPanel";
-    classHint.res_class = "StrutPanel";
-    XSetClassHint(self.strutDisplay, self.strutWindow, &classHint);
-    
-    // Set WM_NAME to "MenuBarStrut"
-    XStoreName(self.strutDisplay, self.strutWindow, "MenuBarStrut");
-    
-    // Set struts - this reserves the space for the full menu bar height
-    Atom strutAtom = XInternAtom(self.strutDisplay, "_NET_WM_STRUT", False);
-    Atom strutPartialAtom = XInternAtom(self.strutDisplay, "_NET_WM_STRUT_PARTIAL", False);
-    unsigned long strut[4] = {0, 0, height, 0}; // left, right, top, bottom
-    unsigned long strutPartial[12] = {0, 0, height, 0, 0, 0, 0, 0, 0, width - 1, 0, width - 1};
-    
-    XChangeProperty(self.strutDisplay, self.strutWindow, strutAtom, XA_CARDINAL, 32, 
-                   PropModeReplace, (unsigned char *)strut, 4);
-    XChangeProperty(self.strutDisplay, self.strutWindow, strutPartialAtom, XA_CARDINAL, 32, 
-                   PropModeReplace, (unsigned char *)strutPartial, 12);
-    
-    // Set window state to sticky but NOT above (we want our menu to be above it)
-    Atom stateAtom = XInternAtom(self.strutDisplay, "_NET_WM_STATE", False);
-    Atom stickyAtom = XInternAtom(self.strutDisplay, "_NET_WM_STATE_STICKY", False);
-    XChangeProperty(self.strutDisplay, self.strutWindow, stateAtom, XA_ATOM, 32, 
-                   PropModeReplace, (unsigned char *)&stickyAtom, 1);
-    
-    // Map the window to make the struts active
-    XMapWindow(self.strutDisplay, self.strutWindow);
-    XSync(self.strutDisplay, False);
-    
-    NSDebugLLog(@"gwcomp", @"MenuController: Created persistent X11 strut window (XID: %lu) - invisible 1x1 window with full-width struts",
-          (unsigned long)self.strutWindow);
+
+    NSArray *menuBarWindows = [self menuBarX11Windows];
+    if ([menuBarWindows count] == 0) {
+        NSDebugLLog(@"gwcomp", @"MenuController: Could not resolve menu bar X11 window id yet");
+        return;
+    }
+
+    Atom windowTypeAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
+    Atom dockAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DOCK", False);
+    Atom strutAtom = XInternAtom(display, "_NET_WM_STRUT", False);
+    Atom strutPartialAtom = XInternAtom(display, "_NET_WM_STRUT_PARTIAL", False);
+    Atom stateAtom = XInternAtom(display, "_NET_WM_STATE", False);
+    Atom stickyAtom = XInternAtom(display, "_NET_WM_STATE_STICKY", False);
+    Atom skipTaskbarAtom = XInternAtom(display, "_NET_WM_STATE_SKIP_TASKBAR", False);
+    Atom skipPagerAtom = XInternAtom(display, "_NET_WM_STATE_SKIP_PAGER", False);
+    Atom stateAtoms[3] = {stickyAtom, skipTaskbarAtom, skipPagerAtom};
+
+    Window root = DefaultRootWindow(display);
+    for (NSNumber *candidate in menuBarWindows) {
+        Window menuBarWindow = (Window)[candidate unsignedLongValue];
+        XWindowAttributes attrs;
+        if (XGetWindowAttributes(display, menuBarWindow, &attrs) == 0 || attrs.map_state == IsUnmapped) {
+            continue;
+        }
+
+        Window child = None;
+        int rootX = 0;
+        int rootY = 0;
+        if (XTranslateCoordinates(display, menuBarWindow, root, 0, 0, &rootX, &rootY, &child) == False) {
+            rootX = attrs.x;
+            rootY = attrs.y;
+        }
+
+        unsigned int width = (unsigned int)MAX((CGFloat)1.0, (CGFloat)attrs.width);
+        unsigned int height = (unsigned int)MAX((CGFloat)1.0, (CGFloat)attrs.height);
+        unsigned long startX = (rootX < 0) ? 0 : (unsigned long)rootX;
+        unsigned long endX = startX + (unsigned long)width - 1;
+        unsigned long topStrut = (rootY < 0) ? (unsigned long)height : (unsigned long)(rootY + (int)height);
+        unsigned int fallbackHeight = (unsigned int)MAX((CGFloat)1.0, menuBarHeight);
+        if (topStrut == 0) {
+            topStrut = fallbackHeight;
+        }
+
+        XChangeProperty(display, menuBarWindow, windowTypeAtom, XA_ATOM, 32,
+                        PropModeReplace, (unsigned char *)&dockAtom, 1);
+
+        unsigned long strut[4] = {0, 0, topStrut, 0};
+        unsigned long strutPartial[12] = {0, 0, topStrut, 0,
+                                          0, 0, 0, 0,
+                                          startX, endX, 0, 0};
+        XChangeProperty(display, menuBarWindow, strutAtom, XA_CARDINAL, 32,
+                        PropModeReplace, (unsigned char *)strut, 4);
+        XChangeProperty(display, menuBarWindow, strutPartialAtom, XA_CARDINAL, 32,
+                        PropModeReplace, (unsigned char *)strutPartial, 12);
+
+        XChangeProperty(display, menuBarWindow, stateAtom, XA_ATOM, 32,
+                        PropModeReplace, (unsigned char *)stateAtoms, 3);
+
+        NSDebugLLog(@"gwcomp", @"MenuController: Applied dock/strut properties to XID 0x%lx (root=(%d,%d) size=%ux%u top=%lu x-range=%lu..%lu)",
+              (unsigned long)menuBarWindow, rootX, rootY, width, height, topStrut, startX, endX);
+    }
+
+    XSync(display, False);
 }
 
 - (void)screenParametersChanged:(NSNotification *)notification
@@ -330,23 +457,8 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // Update the StatusItemManager's cached screen width
     [self.statusItemManager setScreenWidth:self.screenSize.width];
 
-    // Update strut properties to match new width
-    if (self.strutWindow != None && self.strutDisplay) {
-        unsigned int width = (unsigned int)self.screenSize.width;
-        unsigned int height = (unsigned int)menuBarHeight;
-
-        Atom strutAtom = XInternAtom(self.strutDisplay, "_NET_WM_STRUT", False);
-        Atom strutPartialAtom = XInternAtom(self.strutDisplay, "_NET_WM_STRUT_PARTIAL", False);
-        unsigned long strut[4] = {0, 0, height, 0};
-        unsigned long strutPartial[12] = {0, 0, height, 0, 0, 0, 0, 0, 0, width - 1, 0, width - 1};
-
-        XChangeProperty(self.strutDisplay, self.strutWindow, strutAtom, XA_CARDINAL, 32,
-                       PropModeReplace, (unsigned char *)strut, 4);
-        XChangeProperty(self.strutDisplay, self.strutWindow, strutPartialAtom, XA_CARDINAL, 32,
-                       PropModeReplace, (unsigned char *)strutPartial, 12);
-        XSync(self.strutDisplay, False);
-        NSDebugLLog(@"gwcomp", @"MenuController: Updated strut properties for new screen width: %u", width);
-    }
+    // Keep EWMH dock/strut properties synchronized with current geometry.
+    [self applyMenuBarDockAndStrutProperties];
 
     // Redraw
     [self.menuBar display];
@@ -416,18 +528,6 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     [self.windowMonitor stopMonitoring];
     self.windowMonitor = nil;
     
-    // Clean up persistent strut window
-    if (self.strutWindow != None && self.strutDisplay) {
-        XDestroyWindow(self.strutDisplay, self.strutWindow);
-        self.strutWindow = None;
-    }
-    
-    // Close strut X11 display
-    if (self.strutDisplay) {
-        XCloseDisplay(self.strutDisplay);
-        self.strutDisplay = NULL;
-    }
-    
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     
     [[MenuProtocolManager sharedManager] cleanup];
@@ -485,8 +585,8 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     
     NSDebugLLog(@"gwcomp", @"MenuController: Configured window properties");
     
-    // Create and maintain a persistent X11 window for struts
-    [self createPersistentStrutWindow];
+    // Reserve top-of-screen work area directly on the actual menu bar window.
+    [self applyMenuBarDockAndStrutProperties];
 
     // Position the window one menu height above the screen for animation effect
     [self.menuBar setFrameTopLeftPoint:NSMakePoint(self.screenFrame.origin.x,
@@ -563,6 +663,13 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // Show the window and slide it in from above with animation
     [self.menuBar makeKeyAndOrderFront:self];
     [self.menuBar orderFront:self];
+    // Re-apply several times after mapping so WMs that process struts only after
+    // specific map/property transitions reliably observe the reservation.
+    [self performSelector:@selector(applyMenuBarDockAndStrutProperties) withObject:nil afterDelay:0.05];
+    [self performSelector:@selector(applyMenuBarDockAndStrutProperties) withObject:nil afterDelay:0.2];
+    [self performSelector:@selector(applyMenuBarDockAndStrutProperties) withObject:nil afterDelay:0.5];
+    [self performSelector:@selector(applyMenuBarDockAndStrutProperties) withObject:nil afterDelay:1.0];
+    [self performSelector:@selector(applyMenuBarDockAndStrutProperties) withObject:nil afterDelay:2.0];
 
     // Register global Cmd-Space shortcut to toggle the Action Search panel (if available)
     // NOTE: What we call "Cmd" here is actually the "Alt" key technically but we refer to it as "Cmd" in the UI
@@ -1088,6 +1195,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         // Set final position (place menu bar at very top of the screen)
         [self.menuBar setFrameTopLeftPoint:NSMakePoint(self.screenFrame.origin.x,
                                                         self.screenFrame.origin.y + self.screenSize.height)];
+        [self applyMenuBarDockAndStrutProperties];
         [self revealAppMenuWidget];
         NSDebugLLog(@"gwcomp", @"MenuController: Menu slide-in animation completed");
     } else {

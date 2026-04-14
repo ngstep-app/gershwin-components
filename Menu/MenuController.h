@@ -43,8 +43,6 @@
 @property (nonatomic, assign) int dbusFileDescriptor;
 @property (nonatomic, strong) NSFileHandle *dbusFileHandle;
 @property (nonatomic, strong) NSTimer *dbusPollingTimer;
-@property (nonatomic, assign) Display *strutDisplay;
-@property (nonatomic, assign) Window strutWindow;
 @property (nonatomic, strong) NSTimer *slideInAnimationTimer;
 @property (nonatomic, assign) NSTimeInterval slideInStartTime;
 @property (nonatomic, assign) CGFloat slideInStartY;
@@ -61,7 +59,7 @@
 - (id)init;
 - (NSColor *)backgroundColor;
 - (NSColor *)transparentColor;
-- (void)createPersistentStrutWindow;
+- (void)applyMenuBarDockAndStrutProperties;
 - (void)createMenuBar;
 - (void)applicationDidFinishLaunching:(NSNotification *)notification;
 - (void)applicationWillTerminate:(NSNotification *)notification;
