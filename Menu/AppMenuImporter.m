@@ -8,6 +8,7 @@
 #import "DBusConnection.h"
 #import "GTKMenuParser.h"
 #import "DBusMenuParser.h"
+#import "MenuProfiler.h"
 #import <dispatch/dispatch.h>
 #import <X11/Xlib.h>
 #import <X11/Xatom.h>
@@ -79,11 +80,15 @@
 
 - (void)activeWindowChanged:(unsigned long)windowId
 {
+    MENU_PROFILE_BEGIN(AppMenuActiveWindowChanged);
+
     dispatch_async(_menuQueue, ^{
         self->_currentXID = windowId;
         [self _invalidateMenus];
         [self _scheduleImportForXID:windowId];
     });
+
+    MENU_PROFILE_END(AppMenuActiveWindowChanged);
 }
 
 - (void)cancelPendingImports
@@ -111,6 +116,8 @@
 
 - (void)_scheduleImportForXID:(unsigned long)windowId
 {
+    MENU_PROFILE_BEGIN(scheduleImportForXID);
+
     // 100ms delay to avoid GTK race condition
     dispatch_after(
         dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
@@ -133,6 +140,8 @@
             [self _tryCanonicalForXID:windowId];
         }
     );
+
+    MENU_PROFILE_END(scheduleImportForXID);
 }
 
 - (void)_handleGNUstepWindow:(unsigned long)windowId
@@ -148,6 +157,8 @@
 
 - (void)_tryCanonicalForXID:(unsigned long)windowId
 {
+    MENU_PROFILE_BEGIN(tryCanonicalForXID);
+
     // Try Canonical AppMenu Registrar using synchronous call
     // Note: This should be on a background queue already via _scheduleImportForXID
     NSArray *reply = nil;
@@ -188,6 +199,8 @@
             [self _fallbackToGTKPropertiesForXID:windowId];
         }
     });
+
+    MENU_PROFILE_END(tryCanonicalForXID);
 }
 
 - (void)_fallbackToGTKPropertiesForXID:(unsigned long)windowId
@@ -219,6 +232,8 @@
                               path:(NSString *)path
                             forXID:(unsigned long)windowId
 {
+    MENU_PROFILE_BEGIN(importGTKMenusWithService);
+
     NSDebugLLog(@"gwcomp", @"AppMenuImporter: Importing GTK menus from service: %@, path: %@", service, path);
     
     // Start menu tracking (synchronous, but we're already on background queue)
@@ -274,6 +289,8 @@
     
     // Subscribe to layout updates
     [self _subscribeToMenuUpdatesForService:service path:path windowId:windowId];
+
+    MENU_PROFILE_END(importGTKMenusWithService);
 }
 
 - (void)_subscribeToMenuUpdatesForService:(NSString *)service
@@ -297,12 +314,15 @@
 
 - (NSMenu *)_buildNSMenuFromGTKLayout:(NSArray *)layout
 {
+    MENU_PROFILE_BEGIN(buildNSMenuFromGTKLayout);
+
     // For now, return a placeholder menu
     // The actual GTK menu parsing is handled by GTKMenuImporter
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Application"];
     NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:@"Menu Loading..." action:nil keyEquivalent:@""];
     [item setEnabled:NO];
     [menu addItem:item];
+    MENU_PROFILE_END(buildNSMenuFromGTKLayout);
     return menu;
 }
 
@@ -357,6 +377,8 @@
 - (void)importMenuForWindow:(unsigned long)windowId
                  completion:(void(^)(NSMenu *menu, NSError *error))completion
 {
+    MENU_PROFILE_BEGIN(importMenuForWindow);
+
     // Check cache first
     NSMenu *cachedMenu = _menuCache[@(windowId)];
     if (cachedMenu) {
@@ -366,6 +388,7 @@
                 completion(cachedMenu, nil);
             });
         }
+        MENU_PROFILE_END(importMenuForWindow);
         return;
     }
     
@@ -393,6 +416,8 @@
             }
         );
     });
+
+    MENU_PROFILE_END(importMenuForWindow);
 }
 
 @end

@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import "MenuApplication.h"
 #import "MenuController.h"
+#import "MenuProfiler.h"
 #import <signal.h>
 #import <sys/types.h>
 #import <unistd.h>
@@ -118,6 +119,9 @@ int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) 
             NSApp = app;
             
             NSDebugLLog(@"gwcomp", @"Menu.app: About to start main run loop...");
+            
+            // Install profiling signal handler (SIGUSR1 dumps stats)
+            menuProfileInstallSignalHandler();
             
             // Run the application with better exception handling
             @try {

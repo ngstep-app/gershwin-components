@@ -11,6 +11,7 @@
 #import "DBusMenuShortcutParser.h"
 #import "DBusMenuActionHandler.h"
 #import "DBusSubmenuManager.h"
+#import "MenuProfiler.h"
 
 @implementation DBusMenuParser
 
@@ -33,6 +34,8 @@
                          objectPath:(NSString *)objectPath 
                      dbusConnection:(GNUDBusConnection *)dbusConnection
 {
+    MENU_PROFILE_BEGIN(parseMenu);
+    
     NSDebugLog(@"DBusMenuParser: ===== PARSING MENU STRUCTURE (with actions) =====");
     NSDebugLog(@"DBusMenuParser: Parsing menu structure from service: %@", serviceName);
     NSDebugLog(@"DBusMenuParser: Object path: %@", objectPath);
@@ -49,6 +52,7 @@
         NSDebugLog(@"DBusMenuParser: ERROR: Received NSNumber instead of array structure!");
         NSDebugLog(@"DBusMenuParser: This suggests the DBus method call failed or returned an error code");
         NSDebugLog(@"DBusMenuParser: Number value: %@", result);
+        MENU_PROFILE_END(parseMenu);
         return nil;
     }
     
@@ -61,6 +65,7 @@
         if ([result respondsToSelector:@selector(stringValue)]) {
             NSDebugLog(@"DBusMenuParser:   - String value: %@", [result stringValue]);
         }
+        MENU_PROFILE_END(parseMenu);
         return nil;
     }
     
@@ -74,6 +79,7 @@
             id item = [resultArray objectAtIndex:i];
             NSDebugLog(@"DBusMenuParser: Element[%lu]: %@ (%@)", i, item, [item class]);
         }
+        MENU_PROFILE_END(parseMenu);
         return nil;
     }
     
@@ -85,6 +91,7 @@
     if (![revisionObj isKindOfClass:[NSNumber class]]) {
         NSDebugLog(@"DBusMenuParser: ERROR: revision is %@, not NSNumber",
                    [revisionObj class]);
+        MENU_PROFILE_END(parseMenu);
         return nil;
     }
     NSNumber *revision = (NSNumber *)revisionObj;
@@ -119,6 +126,7 @@
         NSDebugLog(@"DBusMenuParser: Failed to parse layout item");
     }
     
+    MENU_PROFILE_END(parseMenu);
     return menu;
 }
 

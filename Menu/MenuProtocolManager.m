@@ -8,6 +8,7 @@
 #import "MenuProtocolManager.h"
 #import "AppMenuWidget.h"
 #import "DBusConnection.h"
+#import "MenuProfiler.h"
 #import <dispatch/dispatch.h>
 
 @implementation MenuProtocolManager {
@@ -32,7 +33,7 @@
         self.protocolHandlers = [[NSMutableArray alloc] initWithCapacity:2];
         self.windowToProtocolMap = [[NSMutableDictionary alloc] init];
         // Don't explicitly set weak property to nil - ARC will handle it
-        
+
         NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Initialized protocol manager");
     }
     return self;
@@ -116,6 +117,7 @@
 
 - (BOOL)hasMenuForWindow:(unsigned long)windowId
 {
+    MENU_PROFILE_BEGIN(protocolManagerHasMenuForWindow);
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
     NSNumber *protocolTypeNum = [self.windowToProtocolMap objectForKey:windowKey];
     
@@ -129,6 +131,7 @@
                 // Cached protocol no longer claims this window — clear stale mapping
                 [self.windowToProtocolMap removeObjectForKey:windowKey];
             }
+            MENU_PROFILE_END(protocolManagerHasMenuForWindow);
             return has;
         }
     }
@@ -140,11 +143,13 @@
             if ([handler hasMenuForWindow:windowId]) {
                 // Cache which protocol handles this window
                 [self.windowToProtocolMap setObject:[NSNumber numberWithUnsignedLong:i] forKey:windowKey];
+                MENU_PROFILE_END(protocolManagerHasMenuForWindow);
                 return YES;
             }
         }
     }
     
+    MENU_PROFILE_END(protocolManagerHasMenuForWindow);
     return NO;
 }
 
@@ -186,6 +191,7 @@
 
 - (NSMenu *)getMenuForWindow:(unsigned long)windowId
 {
+    MENU_PROFILE_BEGIN(protocolManagerGetMenuForWindow);
     @try {
         NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
         NSNumber *protocolTypeNum = [self.windowToProtocolMap objectForKey:windowKey];
@@ -208,12 +214,14 @@
                         menu = [self prependGNUstepStubIfNeeded:menu
                                                      forWindow:windowId
                                                 primaryHandler:handler];
+                    MENU_PROFILE_END(protocolManagerGetMenuForWindow);
                     return menu;
                 }
                 // Cached protocol returned nil — remove stale mapping so other protocols
                 // can be tried on the next call and we don't keep hitting a broken handler.
                 NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Cached protocol %@ returned nil for window %lu — clearing stale mapping", protoName, windowId);
                 [self.windowToProtocolMap removeObjectForKey:windowKey];
+                MENU_PROFILE_END(protocolManagerGetMenuForWindow);
                 return nil;
             }
         }
@@ -238,6 +246,7 @@
                         menu = [self prependGNUstepStubIfNeeded:menu
                                                      forWindow:windowId
                                                 primaryHandler:handler];
+                    MENU_PROFILE_END(protocolManagerGetMenuForWindow);
                     return menu;
                 }
             }
@@ -248,10 +257,12 @@
             NSDebugLLog(@"gwcomp", @"MenuProtocolManager: No protocol could provide menu for window %lu", windowId);
             lastFailedWindowId = windowId;
         }
+        MENU_PROFILE_END(protocolManagerGetMenuForWindow);
         return nil;
     }
     @catch (NSException *exception) {
         NSDebugLLog(@"gwcomp", @"MenuProtocolManager: Exception getting menu for window %lu: %@", windowId, exception);
+        MENU_PROFILE_END(protocolManagerGetMenuForWindow);
         return nil;
     }
 }

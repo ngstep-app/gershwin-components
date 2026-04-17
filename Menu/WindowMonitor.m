@@ -7,6 +7,7 @@
 #import "WindowMonitor.h"
 #import "MenuUtils.h"
 #import "MenuController.h"
+#import "MenuProfiler.h"
 #import <Foundation/Foundation.h>
 #import <X11/Xlib.h>
 #import <dispatch/dispatch.h>
@@ -76,8 +77,11 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
 
 - (BOOL)startMonitoring
 {
+    MENU_PROFILE_BEGIN(startMonitoring);
+
     if (_monitoring) {
         NSDebugLLog(@"gwcomp", @"WindowMonitor: Already monitoring");
+        MENU_PROFILE_END(startMonitoring);
         return YES;
     }
 
@@ -136,7 +140,10 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         initSuccess = YES;
     });
 
-    if (!initSuccess) return NO;
+    if (!initSuccess) {
+        MENU_PROFILE_END(startMonitoring);
+        return NO;
+    }
 
     _monitoring = YES;
     NSDebugLLog(@"gwcomp", @"WindowMonitor: Monitoring started - event-driven, zero-polling");
@@ -146,12 +153,18 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         [self checkInitialActiveWindow];
     });
 
+    MENU_PROFILE_END(startMonitoring);
     return YES;
 }
 
 - (void)processX11Events
 {
-    if (!_display) return;
+    MENU_PROFILE_BEGIN(processX11Events);
+
+    if (!_display) {
+        MENU_PROFILE_END(processX11Events);
+        return;
+    }
     
     // TIGHT-LOOP GUARD: Cap the number of events processed per invocation
     // to prevent unbounded spinning when events arrive faster than processing
@@ -183,11 +196,18 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         NSDebugLLog(@"gwcomp", @"WindowMonitor: Hit event batch limit (%d), %d events still pending - will process on next fd-ready",
               MAX_EVENTS_PER_BATCH, XPending(_display));
     }
+
+    MENU_PROFILE_END(processX11Events);
 }
 
 - (void)checkInitialActiveWindow
 {
-    if (!_display) return;
+    MENU_PROFILE_BEGIN(checkInitialActiveWindow);
+
+    if (!_display) {
+        MENU_PROFILE_END(checkInitialActiveWindow);
+        return;
+    }
     
     Atom actualType;
     int actualFormat;
@@ -228,11 +248,18 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
                                withObject:userInfo
                             waitUntilDone:NO];
     }
+
+    MENU_PROFILE_END(checkInitialActiveWindow);
 }
 
 - (void)checkActiveWindow
 {
-    if (!_display) return;
+    MENU_PROFILE_BEGIN(checkActiveWindow);
+
+    if (!_display) {
+        MENU_PROFILE_END(checkActiveWindow);
+        return;
+    }
     
     Atom actualType;
     int actualFormat;
@@ -286,6 +313,8 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         // Window hasn't changed - suppress notification to avoid spam
         // This can happen during WM operations or when we check after a window closes
     }
+
+    MENU_PROFILE_END(checkActiveWindow);
 }
 
 - (void)stopMonitoring

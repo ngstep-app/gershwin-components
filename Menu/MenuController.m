@@ -21,6 +21,7 @@
 #import "StatusItemView.h"
 #import "WindowMonitor.h"
 #import "AppMenuImporter.h"
+#import "MenuProfiler.h"
 #import "GNUstepGUI/GSTheme.h"
 #import <X11/Xlib.h>
 #import <X11/Xatom.h>
@@ -63,11 +64,14 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 #define DBUS_BACKOFF_INTERVAL 0.1              // 100ms cooldown after rapid fire
 
 - (void)dbusFileDescriptorReady:(NSNotification *)notification {
+    MENU_PROFILE_BEGIN(dbusFileDescriptorReady);
+
     // Always handle DBus traffic on the main thread to avoid races with UI work
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self dbusFileDescriptorReady:notification];
         });
+        MENU_PROFILE_END(dbusFileDescriptorReady);
         return;
     }
 
@@ -88,6 +92,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
                                               userInfo:nil
                                                repeats:NO];
             }
+                        MENU_PROFILE_END(dbusFileDescriptorReady);
             return;
         }
     } else {
@@ -123,10 +128,14 @@ static NSUInteger _rapidDbusNotificationCount = 0;
             self.dbusFileHandle = nil;
         }
     }
+
+    MENU_PROFILE_END(dbusFileDescriptorReady);
 }
 
 - (void)rearmDbusFileHandle:(NSTimer *)timer
 {
+    MENU_PROFILE_BEGIN(rearmDbusFileHandle);
+
     (void)timer;
     if (self.dbusFileHandle) {
         // Process any accumulated messages first
@@ -145,15 +154,20 @@ static NSUInteger _rapidDbusNotificationCount = 0;
             self.dbusFileHandle = nil;
         }
     }
+
+    MENU_PROFILE_END(rearmDbusFileHandle);
 }
 
 - (void)pollDBusMessages:(NSTimer *)timer
 {
+    MENU_PROFILE_BEGIN(pollDBusMessages);
+
     // Always handle DBus traffic on the main thread
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self pollDBusMessages:timer];
         });
+        MENU_PROFILE_END(pollDBusMessages);
         return;
     }
     
@@ -164,6 +178,8 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     @catch (NSException *exception) {
         NSDebugLLog(@"gwcomp", @"MenuController: Exception polling DBus messages: %@", exception);
     }
+
+    MENU_PROFILE_END(pollDBusMessages);
 }
 
 - (id)init
@@ -467,6 +483,8 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
+    MENU_PROFILE_BEGIN(applicationDidFinishLaunching);
+    
     NSDebugLLog(@"gwcomp", @"MenuController: Application did finish launching");
     
     [self.menuBar orderFront:self];
@@ -479,6 +497,8 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     
     // Call directly instead of using dispatch_async - the main queue might not process async blocks reliably
     [self registerDBusServiceWhenReady];
+    
+    MENU_PROFILE_END(applicationDidFinishLaunching);
 }
 
 - (void)registerDBusServiceWhenReady
@@ -736,16 +756,22 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
 - (void)updateActiveWindow
 {
+    MENU_PROFILE_BEGIN(updateActiveWindow);
+
     // Get the currently active window and update app menu
     if (self.appMenuWidget) {
         [self.appMenuWidget updateForActiveWindow];
     } else {
         NSDebugLLog(@"gwcomp", @"MenuController: self.appMenuWidget is nil");
     }
+
+    MENU_PROFILE_END(updateActiveWindow);
 }
 
 - (void)initializeProtocols
 {
+    MENU_PROFILE_BEGIN(initializeProtocols);
+
     NSDebugLLog(@"gwcomp", @"MenuController: Initializing all menu protocols...");
     
     NSDebugLLog(@"gwcomp", @"MenuController: About to call initializeAllProtocols...");
@@ -803,6 +829,8 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // This ensures thread safety - D-Bus is NOT thread-safe and must run on main thread only
     NSDebugLLog(@"gwcomp", @"MenuController: D-Bus initialization will continue via main thread run loop");
     NSDebugLLog(@"gwcomp", @"MenuController: File descriptor monitoring will handle D-Bus messages asynchronously");
+
+    MENU_PROFILE_END(initializeProtocols);
 }
 
 - (void)createProtocolManager
@@ -864,6 +892,8 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
 - (void)activeWindowChangedNotification:(NSNotification *)notification
 {
+    MENU_PROFILE_BEGIN(activeWindowChangedNotification);
+
     // TIGHT-LOOP GUARD: Throttle rapid window-change notifications to max once per 30ms
     NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
     if ((now - self.lastProcessedTime) < 0.03) {
@@ -871,17 +901,20 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         unsigned long windowId = windowIdNum ? [windowIdNum unsignedLongValue] : 0;
         // Allow through only if the window ID actually changed
         if (windowId == self.lastProcessedWindowId) {
+            MENU_PROFILE_END(activeWindowChangedNotification);
             return; // Duplicate notification within 30ms - skip
         }
     }
 
     NSNumber *lostIdNum = notification.userInfo[@"lostWindowId"];
     if (lostIdNum) {
+        MENU_PROFILE_BEGIN(activeWindowChangedNotificationLostWindow);
         unsigned long lostId = [lostIdNum unsignedLongValue];
         if (self.appMenuWidget && self.appMenuWidget.currentWindowId == lostId) {
             NSDebugLLog(@"gwcomp", @"MenuController: Currently shown window 0x%lx was explicitly lost (destroyed/unmapped) - clearing menu", lostId);
             [self.appMenuWidget clearMenuAndHideView];
         }
+        MENU_PROFILE_END(activeWindowChangedNotificationLostWindow);
     }
 
     // NOTE: We no longer check isWindowMapped here for the currently shown window.
@@ -897,14 +930,22 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     
     // Check if the focus changed to the Menu application itself.
     // If so, we ignore the change to keep the previous application's menu visible.
-    if (windowId != 0 && [NSApp windowWithWindowNumber:windowId] != nil) {
+    MENU_PROFILE_BEGIN(activeWindowChangedNotificationMenuWindowCheck);
+    NSWindow *menuWindow = nil;
+    if (windowId != 0) {
+        menuWindow = [NSApp windowWithWindowNumber:windowId];
+    }
+    MENU_PROFILE_END(activeWindowChangedNotificationMenuWindowCheck);
+    if (menuWindow != nil) {
         NSDebugLLog(@"gwcomp", @"MenuController: Focus changed to Menu app window (0x%lx) - ignoring to preserve current menu", windowId);
+        MENU_PROFILE_END(activeWindowChangedNotification);
         return;
     }
 
     // Similarly, ignore and preserve if the process that launched the old and new menu have the same PID.
     // This avoids flickering or clearing menus when switching between windows of the same application.
     if (windowId != 0 && self.appMenuWidget && self.appMenuWidget.currentWindowId != 0 && windowId != self.appMenuWidget.currentWindowId) {
+        MENU_PROFILE_BEGIN(activeWindowChangedNotificationPidCheck);
         pid_t oldPid = [MenuUtils getWindowPID:self.appMenuWidget.currentWindowId];
         pid_t newPid = [MenuUtils getWindowPID:windowId];
         if (oldPid != 0 && oldPid == newPid) {
@@ -913,8 +954,11 @@ static NSUInteger _rapidDbusNotificationCount = 0;
              self.lastProcessedWindowId = windowId;
              self.lastProcessedTime = [[NSDate date] timeIntervalSince1970];
              self.appMenuWidget.currentWindowId = windowId;
+             MENU_PROFILE_END(activeWindowChangedNotificationPidCheck);
+             MENU_PROFILE_END(activeWindowChangedNotification);
              return;
         }
+        MENU_PROFILE_END(activeWindowChangedNotificationPidCheck);
     }
 
     self.lastProcessedWindowId = windowId;
@@ -925,12 +969,18 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     NSDebugLLog(@"gwcomp", @"MenuController: Active window changed (notification) to 0x%lx", windowId);
 
     if (self.appMenuWidget) {
+        MENU_PROFILE_BEGIN(activeWindowChangedNotificationWidgetUpdate);
         [self.appMenuWidget updateForActiveWindowId:windowId];
+        MENU_PROFILE_END(activeWindowChangedNotificationWidgetUpdate);
     }
+
+    MENU_PROFILE_END(activeWindowChangedNotification);
 }
 
 - (void)windowValidationTick:(NSTimer *)timer
 {
+    MENU_PROFILE_BEGIN(windowValidationTick);
+
     @try {
         // Safety watchdog running on main thread to ensure menus are hidden when their windows disappear
         unsigned long activeWindow = 0;
@@ -947,10 +997,16 @@ static NSUInteger _rapidDbusNotificationCount = 0;
             NSDebugLog(@"MenuController: WindowMonitor does not implement getActiveWindow - falling back to 0");
         }
 
-        if (!self.appMenuWidget) return;
+        if (!self.appMenuWidget) {
+            MENU_PROFILE_END(windowValidationTick);
+            return;
+        }
 
         unsigned long shownWindow = self.appMenuWidget.currentWindowId;
-        if (shownWindow == 0) return; // no menu shown
+        if (shownWindow == 0) {
+            MENU_PROFILE_END(windowValidationTick);
+            return;
+        } // no menu shown
 
         NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
 
@@ -959,6 +1015,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         if (activeWindow != 0 && shownWindow != activeWindow) {
             // We've switched to a different window - the shown window ID is stale
             // Don't validate it, let the normal window change handling take care of it
+            MENU_PROFILE_END(windowValidationTick);
             return;
         }
 
@@ -968,6 +1025,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         if (shownWindow == activeWindow && self.appMenuWidget.currentMenu != nil) {
             // We have a menu for the current active window - keep it!
             // Don't validate with X11 calls that might fail during WM operations
+            MENU_PROFILE_END(windowValidationTick);
             return;
         }
 
@@ -980,6 +1038,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
             self.lastClearedWindowId = shownWindow;
             self.lastClearedTime = now;
             self.lastClearSuppressUntil = 0;
+            MENU_PROFILE_END(windowValidationTick);
             return;
         }
 
@@ -990,12 +1049,15 @@ static NSUInteger _rapidDbusNotificationCount = 0;
             self.lastClearedWindowId = shownWindow;
             self.lastClearedTime = now;
             self.lastClearSuppressUntil = 0;
+            MENU_PROFILE_END(windowValidationTick);
             return;
         }
     }
     @catch (NSException *ex) {
         NSDebugLLog(@"gwcomp", @"MenuController: Exception in windowValidationTick: %@", ex);
     }
+
+    MENU_PROFILE_END(windowValidationTick);
 }
 
 - (void)announceGlobalMenuSupport
@@ -1068,6 +1130,8 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
 - (void)scanForNewMenus
 {
+    MENU_PROFILE_BEGIN(scanForNewMenus);
+
     NSDebugLLog(@"gwcomp", @"MenuController: Scanning for new menu services");
     
     [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
@@ -1076,12 +1140,16 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     if (self.appMenuWidget) {
         [self.appMenuWidget updateForActiveWindow];
     }
+
+    MENU_PROFILE_END(scanForNewMenus);
 }
 
 #pragma mark - WindowMonitorDelegate
 
 - (void)activeWindowChanged:(unsigned long)windowId
 {
+    MENU_PROFILE_BEGIN(activeWindowChanged);
+
     NSDebugLog(@"MenuController: Active window changed to 0x%lx", windowId);
     
     // Update app menu widget on main thread
@@ -1097,6 +1165,8 @@ static NSUInteger _rapidDbusNotificationCount = 0;
             [[MenuProtocolManager sharedManager] scanForExistingMenuServices];
         }
     }
+
+    MENU_PROFILE_END(activeWindowChanged);
 }
 
 - (void)createTimeMenu

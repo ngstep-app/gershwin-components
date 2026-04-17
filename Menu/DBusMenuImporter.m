@@ -11,6 +11,7 @@
 #import "DBusSubmenuManager.h"
 #import "MenuUtils.h"
 #import "AppMenuWidget.h"
+#import "MenuProfiler.h"
 #import <dbus/dbus.h>
 #import <dispatch/dispatch.h>
 
@@ -164,10 +165,13 @@
 
 - (NSMenu *)getMenuForWindow:(unsigned long)windowId
 {
+    MENU_PROFILE_BEGIN(getMenuForWindow);
+
     // Early validation - skip only obvious invalid IDs (0). Some toolkits transiently
     // report windows as unmapped during creation, so don't hard-fail on isWindowValid.
     if (windowId == 0) {
         NSDebugLog(@"DBusMenuImporter: Window %lu is invalid (0), skipping menu lookup", windowId);
+        MENU_PROFILE_END(getMenuForWindow);
         return nil;
     }
     
@@ -178,6 +182,7 @@
     if (failTime) {
         NSTimeInterval age = -[failTime timeIntervalSinceNow];
         if (age < 30.0) {
+            MENU_PROFILE_END(getMenuForWindow);
             return nil; // Still within suppression window
         }
         [self.failedWindows removeObjectForKey:windowKey];
@@ -208,6 +213,7 @@
         // Re-register shortcuts
         [self reregisterShortcutsForMenu:legacyCachedMenu windowId:windowId];
         
+        MENU_PROFILE_END(getMenuForWindow);
         return legacyCachedMenu;
     }
     
@@ -251,22 +257,28 @@
         NSDebugLLog(@"gwcomp", @"DBusMenuImporter: Cached failure for window %lu (suppressed for 30s)", windowId);
         // For registered windows that fail to load, return nil instead of fallback
         // This indicates the application should handle its own menus
+        MENU_PROFILE_END(getMenuForWindow);
         return nil;
     }
-    
+
+    MENU_PROFILE_END(getMenuForWindow);
     return menu;
 }
 
 - (NSMenu *)loadMenuFromDBusForWindow:(unsigned long)windowId serviceName:(NSString *)serviceName objectPath:(NSString *)objectPath
 {
+    MENU_PROFILE_BEGIN(loadMenuFromDBusForWindow);
+
     // Validate inputs before making DBus calls
     if (!serviceName || [serviceName length] == 0 || !objectPath || [objectPath length] == 0) {
         NSDebugLog(@"DBusMenuImporter: Cannot load menu - invalid service name or object path");
+        MENU_PROFILE_END(loadMenuFromDBusForWindow);
         return nil;
     }
     
     if (!self.dbusConnection || ![self.dbusConnection isConnected]) {
         NSDebugLog(@"DBusMenuImporter: Cannot load menu - DBus connection not available");
+        MENU_PROFILE_END(loadMenuFromDBusForWindow);
         return nil;
     }
     
@@ -338,17 +350,20 @@
                                                selector:@selector(retryMenuLoad:)
                                                userInfo:userInfo
                                                 repeats:NO];
+                                MENU_PROFILE_END(loadMenuFromDBusForWindow);
                 return nil;
             } else {
                 NSDebugLog(@"DBusMenuImporter: Exceeded retries for window %lu - unregistering", windowId);
                 // Exceeded retries - unregister this window and stop waiting
                 [self unregisterWindow:windowId];
+                MENU_PROFILE_END(loadMenuFromDBusForWindow);
                 return nil;
             }
         }
     }
     @catch (NSException *exception) {
         NSDebugLog(@"DBusMenuImporter: Exception during DBus menu load from %@%@: %@", serviceName, objectPath, exception);
+        MENU_PROFILE_END(loadMenuFromDBusForWindow);
         return nil;
     }
     
@@ -395,20 +410,23 @@
         [menu addItem:editItem];
         [menu addItem:viewItem];
     }
-    
+
+    MENU_PROFILE_END(loadMenuFromDBusForWindow);
     return menu;
 }
 
 - (void)activateMenuItem:(NSMenuItem *)menuItem forWindow:(unsigned long)windowId
 {
+    MENU_PROFILE_BEGIN(activateMenuItem);
+
     NSDebugLog(@"DBusMenuImporter: Activating menu item '%@' for window %lu", [menuItem title], windowId);
-    
     NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
     NSString *serviceName = [self.registeredWindows objectForKey:windowKey];
     NSString *objectPath = [self.windowMenuPaths objectForKey:windowKey];
-    
+
     if (!serviceName || !objectPath) {
         NSDebugLog(@"DBusMenuImporter: No service/path found for window %lu", windowId);
+        MENU_PROFILE_END(activateMenuItem);
         return;
     }
     
@@ -426,6 +444,8 @@
                      objectPath:objectPath
                       interface:@"com.canonical.dbusmenu"
                       arguments:arguments];
+
+    MENU_PROFILE_END(activateMenuItem);
 }
 
 - (void)registerWindow:(unsigned long)windowId 
@@ -572,6 +592,8 @@
 // DBus method handlers
 - (void)handleDBusMethodCall:(NSDictionary *)callInfo
 {
+    MENU_PROFILE_BEGIN(handleDBusMethodCall);
+
     NSString *method = [callInfo objectForKey:@"method"];
     NSString *interface = [callInfo objectForKey:@"interface"];
     DBusMessage *message = (DBusMessage *)[[callInfo objectForKey:@"message"] pointerValue];
@@ -580,6 +602,7 @@
     
     if (![interface isEqualToString:@"com.canonical.AppMenu.Registrar"]) {
         NSDebugLog(@"DBusMenuImporter: Unknown interface: %@", interface);
+        MENU_PROFILE_END(handleDBusMethodCall);
         return;
     }
     
@@ -689,6 +712,8 @@
     } else {
         NSDebugLog(@"DBusMenuImporter: Unknown method: %@", method);
     }
+
+    MENU_PROFILE_END(handleDBusMethodCall);
 }
 
 - (void)handleRegisterWindow:(NSArray *)arguments
@@ -738,6 +763,8 @@
 
 - (void)scanForExistingMenuServices
 {
+    MENU_PROFILE_BEGIN(scanForExistingMenuServices);
+
     NSDebugLog(@"DBusMenuImporter: scanForExistingMenuServices STARTED");
     
     static int dbusScans = 0;
@@ -782,6 +809,8 @@
     }
     
     NSDebugLog(@"DBusMenuImporter: scanForExistingMenuServices COMPLETED");
+
+    MENU_PROFILE_END(scanForExistingMenuServices);
 }
 
 - (NSString *)getMenuServiceForWindow:(unsigned long)windowId
@@ -798,11 +827,19 @@
 
 - (void)retryMenuLoad:(NSTimer *)timer
 {
+    MENU_PROFILE_BEGIN(retryMenuLoad);
+
     NSDictionary *userInfo = [timer userInfo];
-    if (!userInfo) return;
+    if (!userInfo) {
+        MENU_PROFILE_END(retryMenuLoad);
+        return;
+    }
 
     NSNumber *windowKey = [userInfo objectForKey:@"windowId"];
-    if (!windowKey) return;
+    if (!windowKey) {
+        MENU_PROFILE_END(retryMenuLoad);
+        return;
+    }
 
     unsigned long windowId = [windowKey unsignedLongValue];
 
@@ -817,6 +854,7 @@
     if (!svc || !path) {
         NSDebugLog(@"DBusMenuImporter: Retry for window %@ aborted - registration missing", windowKey);
         [self.loadRetries removeObjectForKey:windowKey];
+        MENU_PROFILE_END(retryMenuLoad);
         return;
     }
 
@@ -824,6 +862,7 @@
     if ([self.failedWindows objectForKey:windowKey]) {
         NSDebugLog(@"DBusMenuImporter: Retry for window %@ aborted - in failure cache", windowKey);
         [self.loadRetries removeObjectForKey:windowKey];
+        MENU_PROFILE_END(retryMenuLoad);
         return;
     }
 
@@ -841,6 +880,8 @@
             });
         }
     }
+
+    MENU_PROFILE_END(retryMenuLoad);
 }
 
 - (NSMenu *)createTestMenu
@@ -888,21 +929,27 @@
 
 - (void)processDBusMessages
 {
+    MENU_PROFILE_BEGIN(processDBusMessages);
+
     // Always process DBus traffic on the main thread and avoid re-entrancy
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self processDBusMessages];
         });
+        MENU_PROFILE_END(processDBusMessages);
         return;
     }
 
     if (self.processingMessages || !_dbusConnection) {
+        MENU_PROFILE_END(processDBusMessages);
         return;
     }
 
     self.processingMessages = YES;
     [_dbusConnection processMessages];
     self.processingMessages = NO;
+
+    MENU_PROFILE_END(processDBusMessages);
 }
 
 - (void)showDBusErrorAndExit

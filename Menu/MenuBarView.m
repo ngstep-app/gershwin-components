@@ -6,6 +6,7 @@
 
 
 #import "MenuBarView.h"
+#import "MenuProfiler.h"
 
 @implementation MenuBarView
 
@@ -29,8 +30,11 @@
 
 - (void)drawRect:(NSRect)dirtyRect
 {
+    MENU_PROFILE_BEGIN(MenuBarViewDraw);
+    
     // Skip drawing if color hasn't changed and we don't need redraw
     if (!_needsRedraw && _cachedBackgroundColor == self.backgroundColor) {
+        MENU_PROFILE_END(MenuBarViewDraw);
         return;
     }
     
@@ -46,6 +50,8 @@
         [[NSColor colorWithCalibratedWhite:0.95 alpha:1.0] set];
         NSRectFill([self bounds]);
     }
+    
+    MENU_PROFILE_END(MenuBarViewDraw);
 }
 
 - (BOOL)isOpaque

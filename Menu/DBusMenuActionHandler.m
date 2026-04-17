@@ -8,6 +8,7 @@
 #import "DBusMenuActionHandler.h"
 #import "DBusConnection.h"
 #import "X11ShortcutManager.h"
+#import "MenuProfiler.h"
 
 // DBus info is stored on each NSMenuItem via -setRepresentedObject: with a
 // dictionary under the key "dbusInfo".  NSMenuItem copies retain the
@@ -70,6 +71,8 @@ static NSString *const kDBusInfoKey = @"dbusInfo";
 
 + (void)menuItemAction:(id)sender
 {
+    MENU_PROFILE_BEGIN(DBusMenuItemAction);
+    
     NSMenuItem *menuItem = (NSMenuItem *)sender;
 
     // Retrieve DBus connection info from the menu item's representedObject.
@@ -86,6 +89,7 @@ static NSString *const kDBusInfoKey = @"dbusInfo";
     if (!serviceName || !objectPath || !dbusConnection) {
         NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: ERROR: Missing DBus info for menu item '%@'", [menuItem title]);
         NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Service: %@, Path: %@, Connection: %@", serviceName, objectPath, dbusConnection);
+        MENU_PROFILE_END(DBusMenuItemAction);
         return;
     }
     
@@ -128,6 +132,8 @@ static NSString *const kDBusInfoKey = @"dbusInfo";
     } else {
         NSDebugLLog(@"gwcomp", @"DBusMenuActionHandler: Event method call failed or returned nil");
     }
+    
+    MENU_PROFILE_END(DBusMenuItemAction);
 }
 
 + (BOOL)shouldSwapCtrlAlt
