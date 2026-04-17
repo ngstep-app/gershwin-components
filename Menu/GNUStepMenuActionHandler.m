@@ -23,6 +23,11 @@ static NSLock *connectionCacheLock = nil;
     }
 }
 
++ (NSConnection *)cachedConnectionForClient:(NSString *)clientName
+{
+    return [self _getCachedConnectionForClient:clientName];
+}
+
 + (NSConnection *)_getCachedConnectionForClient:(NSString *)clientName
 {
     [connectionCacheLock lock];

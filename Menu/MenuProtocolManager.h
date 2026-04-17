@@ -29,6 +29,9 @@
 - (void)setAppMenuWidget:(AppMenuWidget *)widget;
 - (void)cleanup;
 - (void)processDBusMessages;
+// Synchronously refresh menu item enabled/state from the client just before
+// a submenu is displayed.  Implemented only by GNUStepMenuImporter.
+- (BOOL)refreshMenuStateForWindow:(unsigned long)windowId;
 
 @end
 
@@ -82,5 +85,9 @@ typedef NS_ENUM(NSInteger, MenuProtocolType) {
 
 // Cleanup
 - (void)cleanup;
+
+// Synchronously refresh item enabled/state for windowId from the owning client.
+// Forwards to the protocol handler that manages the given window.
+- (BOOL)refreshMenuStateForWindow:(unsigned long)windowId;
 
 @end

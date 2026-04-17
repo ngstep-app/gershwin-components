@@ -51,6 +51,12 @@
 @property (nonatomic, strong) NSTimer *activeWindowReconcileTimer; // Short delayed follow-up after focus notifications
 @property (nonatomic, assign) unsigned long pendingReconcileWindowId;
 @property (nonatomic, assign) NSUInteger activeWindowReconcileRetryCount;
+#if MENU_PROFILING
+@property (nonatomic, strong) NSTimer *cpuUsageLogTimer;
+@property (nonatomic, assign) NSTimeInterval lastCpuUsageSampleWallTime;
+@property (nonatomic, assign) NSTimeInterval lastCpuUsageSampleUserTime;
+@property (nonatomic, assign) NSTimeInterval lastCpuUsageSampleSystemTime;
+#endif
 
 // Track the last-cleared window id and timestamp so we can throttle repeated clears
 @property (nonatomic, assign) unsigned long lastClearedWindowId;
@@ -58,6 +64,9 @@
 
 // Throttle window clear operations globally - when set prevents repeated clears for a short interval
 @property (nonatomic, assign) NSTimeInterval lastClearSuppressUntil;
+
+// Track if the last window state was zero (used to detect modal dialog recovery)
+@property (nonatomic, assign) BOOL lastWindowStateWasZero;
 
 - (id)init;
 - (NSColor *)backgroundColor;
@@ -78,5 +87,10 @@
 - (void)screenParametersChanged:(NSNotification *)notification;
 - (void)createTimeMenu;
 - (void)updateTimeMenu;
+#if MENU_PROFILING
+- (void)startCPUUsageLogging;
+- (void)stopCPUUsageLogging;
+- (void)logCPUUsageSample:(NSTimer *)timer;
+#endif
 
 @end

@@ -27,6 +27,9 @@
 #import <X11/Xatom.h>
 #import <X11/Xutil.h>
 #import <sys/select.h>
+#if MENU_PROFILING
+#import <sys/resource.h>
+#endif
 #import <errno.h>
 #import <unistd.h>
 #import <dispatch/dispatch.h>
@@ -59,6 +62,13 @@
 @end
 
 @implementation MenuController
+
+#if MENU_PROFILING
+static NSTimeInterval MenuControllerTimevalToSeconds(struct timeval value)
+{
+    return (NSTimeInterval)value.tv_sec + ((NSTimeInterval)value.tv_usec / 1000000.0);
+}
+#endif
 
 // DBus file descriptor monitoring using NSFileHandle
 // Minimum interval (seconds) between consecutive DBus fd notifications to prevent CPU spin
@@ -499,6 +509,9 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     [self setupWindowMonitoring];
     
     NSDebugLLog(@"gwcomp", @"MenuController: Application setup complete");
+#if MENU_PROFILING
+    [self startCPUUsageLogging];
+#endif
     
     // Register D-Bus service immediately - run loop is active
     NSDebugLLog(@"gwcomp", @"MenuController: Registering D-Bus service now...");
@@ -508,6 +521,82 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     
     MENU_PROFILE_END(applicationDidFinishLaunching);
 }
+
+#if MENU_PROFILING
+- (void)startCPUUsageLogging
+{
+    struct rusage usage;
+
+    if (getrusage(RUSAGE_SELF, &usage) != 0) {
+        NSDebugLLog(@"gwcomp", @"MenuController: Failed to initialize CPU usage logging");
+        return;
+    }
+
+        [self stopCPUUsageLogging];
+    self.lastCpuUsageSampleWallTime = [NSDate timeIntervalSinceReferenceDate];
+    self.lastCpuUsageSampleUserTime = MenuControllerTimevalToSeconds(usage.ru_utime);
+    self.lastCpuUsageSampleSystemTime = MenuControllerTimevalToSeconds(usage.ru_stime);
+        self.cpuUsageLogTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
+                                                                                                                         target:self
+                                                                                                                     selector:@selector(logCPUUsageSample:)
+                                                                                                                     userInfo:nil
+                                                                                                                        repeats:YES];
+        [[NSRunLoop mainRunLoop] addTimer:self.cpuUsageLogTimer forMode:NSRunLoopCommonModes];
+}
+
+- (void)stopCPUUsageLogging
+{
+    if (self.cpuUsageLogTimer) {
+        [self.cpuUsageLogTimer invalidate];
+        self.cpuUsageLogTimer = nil;
+    }
+}
+
+- (void)logCPUUsageSample:(NSTimer *)timer
+{
+    (void)timer;
+
+    struct rusage usage;
+    if (getrusage(RUSAGE_SELF, &usage) != 0) {
+        return;
+    }
+
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    NSTimeInterval userTime = MenuControllerTimevalToSeconds(usage.ru_utime);
+    NSTimeInterval systemTime = MenuControllerTimevalToSeconds(usage.ru_stime);
+    NSTimeInterval wallDelta = now - self.lastCpuUsageSampleWallTime;
+    NSTimeInterval userDelta = userTime - self.lastCpuUsageSampleUserTime;
+    NSTimeInterval systemDelta = systemTime - self.lastCpuUsageSampleSystemTime;
+    NSTimeInterval cpuDelta = userDelta + systemDelta;
+
+    if (wallDelta > 0) {
+        double cpuPercent = (cpuDelta / wallDelta) * 100.0;
+        unsigned long activeWindowId = [[WindowMonitor sharedMonitor] getActiveWindow];
+        unsigned long shownWindowId = self.appMenuWidget ? self.appMenuWidget.currentWindowId : 0UL;
+        if (wallDelta > 1.5) {
+            NSLog(@"[CPU] delayed sample last %.2fs total=%.2f%% user=%.2fms sys=%.2fms active=0x%lx shown=0x%lx",
+                  wallDelta,
+                  cpuPercent,
+                  userDelta * 1000.0,
+                  systemDelta * 1000.0,
+                  activeWindowId,
+                  shownWindowId);
+        } else {
+            NSLog(@"[CPU] last %.2fs total=%.2f%% user=%.2fms sys=%.2fms active=0x%lx shown=0x%lx",
+                  wallDelta,
+                  cpuPercent,
+                  userDelta * 1000.0,
+                  systemDelta * 1000.0,
+                  activeWindowId,
+                  shownWindowId);
+        }
+    }
+
+    self.lastCpuUsageSampleWallTime = now;
+    self.lastCpuUsageSampleUserTime = userTime;
+    self.lastCpuUsageSampleSystemTime = systemTime;
+}
+#endif
 
 - (void)registerDBusServiceWhenReady
 {
@@ -539,6 +628,9 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 - (void)applicationWillTerminate:(NSNotification *)notification
 {
     NSDebugLLog(@"gwcomp", @"MenuController: Application will terminate");
+#if MENU_PROFILING
+    [self stopCPUUsageLogging];
+#endif
     
     // Unload status items first
     if (self.statusItemManager) {
@@ -908,15 +1000,14 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     MENU_PROFILE_BEGIN(activeWindowChangedNotification);
 
     NSNumber *lostIdNum = notification.userInfo[@"lostWindowId"];
-    if (lostIdNum) {
-        MENU_PROFILE_BEGIN(activeWindowChangedNotificationLostWindow);
-        unsigned long lostId = [lostIdNum unsignedLongValue];
-        if (self.appMenuWidget && self.appMenuWidget.currentWindowId == lostId) {
-            NSDebugLLog(@"gwcomp", @"MenuController: Currently shown window 0x%lx was explicitly lost (destroyed/unmapped) - clearing menu", lostId);
-            [self.appMenuWidget clearMenuAndHideView];
-        }
-        MENU_PROFILE_END(activeWindowChangedNotificationLostWindow);
-    }
+    // When a window is lost, don't directly clear the menu.
+    // Instead, route through the normal updateForActiveWindowId: path which has:
+    // - Grace period logic (preserves menu while new window registers)
+    // - Reconcile scheduling (validates focus state at settle time)
+    // - Pending state tracking (coherent async update model)
+    // The notification will typically also contain the new active windowId,
+    // which the normal path will process correctly.
+    // See: https://github.com/gershwin-components/gershwin-components/issues/XXX
 
     // NOTE: We no longer check isWindowMapped here for the currently shown window.
     // The windowValidationTick watchdog (every 2s) handles stale-window cleanup with
@@ -928,6 +1019,36 @@ static NSUInteger _rapidDbusNotificationCount = 0;
 
     NSNumber *windowIdNum = notification.userInfo[@"windowId"];
     unsigned long windowId = windowIdNum ? [windowIdNum unsignedLongValue] : 0;
+
+    // Fast-path dedup: if we already processed this exact window and still show a valid
+    // menu for it, avoid re-running the full update path.
+    // EXCEPTION: If we just came from a "no window" state (modal dialog closed), we must
+    // invalidate the cached menu to avoid showing stale state. This handles:
+    // - Opening "About This Computer" in Workspace then closing it (goes to no-window,
+    //   then back to same window ID)
+    // - Other modal/transient window scenarios
+    //
+    // Track: if windowId is 0, set lastWindowStateWasZero = true
+    if (windowId == 0) {
+        self.lastWindowStateWasZero = YES;
+    }
+    
+    // Skip dedup if we just transitioned from zero to non-zero (modal recovery)
+    BOOL justRecoveredFromModal = self.lastWindowStateWasZero && windowId != 0;
+    if (justRecoveredFromModal) {
+        NSLog(@"[RECOVER-FROM-MODAL] transitioning from no-window to 0x%lx - invalidating dedup cache", windowId);
+        self.lastWindowStateWasZero = NO;  // Reset for next time
+    }
+    
+    if (windowId != 0 && !justRecoveredFromModal && !lostIdNum && windowId == self.lastProcessedWindowId && 
+        self.appMenuWidget && self.appMenuWidget.currentWindowId == windowId && 
+        self.appMenuWidget.currentMenu != nil && self.appMenuWidget.menuView != nil &&
+        ![self.appMenuWidget.menuView isHidden] &&
+        [self.appMenuWidget.menuView menu] == self.appMenuWidget.currentMenu) {
+        NSLog(@"[DEDUP-SKIP] win=0x%lx same window & menu OK — no update", windowId);
+        MENU_PROFILE_END(activeWindowChangedNotification);
+        return;
+    }
     
     // Check if the focus changed to the Menu application itself.
     // If so, we ignore the change to keep the previous application's menu visible.
@@ -943,14 +1064,7 @@ static NSUInteger _rapidDbusNotificationCount = 0;
         return;
     }
 
-    if (windowId != 0 && self.appMenuWidget && self.appMenuWidget.currentWindowId != 0 && windowId != self.appMenuWidget.currentWindowId) {
-        MENU_PROFILE_BEGIN(activeWindowChangedNotificationPidCheck);
-        pid_t oldPid = [MenuUtils getWindowPID:self.appMenuWidget.currentWindowId];
-        pid_t newPid = [MenuUtils getWindowPID:windowId];
-        (void)oldPid;
-        (void)newPid;
-        MENU_PROFILE_END(activeWindowChangedNotificationPidCheck);
-    }
+    // Removed probe-only PID lookup block: expensive and not used for behavior.
 
     self.lastProcessedWindowId = windowId;
     self.lastProcessedTime = [[NSDate date] timeIntervalSince1970];
@@ -962,10 +1076,17 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     if (self.appMenuWidget) {
         MENU_PROFILE_BEGIN(activeWindowChangedNotificationWidgetUpdate);
         [self.appMenuWidget updateForActiveWindowId:windowId];
-        // Schedule a short delayed X11 re-read to catch any transient settle races.
-        // The immediate updateForActiveWindow read has been removed; the notification's
-        // windowId is authoritative and the reconcile timer handles edge cases.
-        [self scheduleDelayedActiveWindowReconcileForWindowId:windowId];
+        // Schedule delayed reconcile only when needed. If the notification already produced
+        // a correct non-empty shown state, extra reconcile passes just burn CPU.
+        BOOL preservingExistingMenuOnZero = (windowId == 0 &&
+                                             self.appMenuWidget.currentMenu != nil &&
+                                             self.appMenuWidget.currentWindowId != 0);
+        BOOL needsReconcile = (!preservingExistingMenuOnZero && windowId == 0) ||
+                              (self.appMenuWidget.currentWindowId != windowId) ||
+                              (self.appMenuWidget.currentMenu == nil);
+        if (needsReconcile) {
+            [self scheduleDelayedActiveWindowReconcileForWindowId:windowId];
+        }
         MENU_PROFILE_END(activeWindowChangedNotificationWidgetUpdate);
     }
 
@@ -1005,6 +1126,11 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     }
 
     unsigned long expectedWindowId = self.pendingReconcileWindowId;
+    if (expectedWindowId == 0 && self.appMenuWidget.currentWindowId == 0) {
+        MENU_PROFILE_END(performDelayedActiveWindowReconcile);
+        return;
+    }
+
     unsigned long monitorWindowId = 0;
     @try {
         monitorWindowId = [[WindowMonitor sharedMonitor] getActiveWindow];
@@ -1023,10 +1149,55 @@ static NSUInteger _rapidDbusNotificationCount = 0;
     // menu replacements when a stale X11 read at settle time disagreed with correct state
     // already set by a more recent notification.
     unsigned long shownWindowId = self.appMenuWidget.currentWindowId;
+
+    // If we are stuck on system-only menubar while monitor has a real active window,
+    // force a direct menu load attempt for that window before generic mismatch logic.
+    BOOL showingSystemOnly = NO;
+    NSMenu *shownMenu = self.appMenuWidget.currentMenu;
+    if (shownWindowId == 0 && shownMenu != nil) {
+        NSArray *shownItems = [shownMenu itemArray];
+        if ([shownItems count] == 1) {
+            NSMenuItem *onlyItem = [shownItems objectAtIndex:0];
+            if ([[onlyItem title] isEqualToString:@"⌘"]) {
+                showingSystemOnly = YES;
+            }
+        }
+    }
+    if (monitorWindowId != 0 && shownWindowId == 0 && showingSystemOnly) {
+        NSLog(@"[RECONCILE] System-only shown with active monitor=0x%lx - forcing direct menu load", monitorWindowId);
+        self.appMenuWidget.lastLoadedMenuWindowId = 0;
+        [self.appMenuWidget displayMenuForWindow:monitorWindowId];
+        shownWindowId = self.appMenuWidget.currentWindowId;
+    }
+
     if (monitorWindowId != 0 && monitorWindowId != shownWindowId) {
-        NSLog(@"[RECONCILE] Mismatch: shown=0x%lx monitor=0x%lx expected=0x%lx — correcting",
-              shownWindowId, monitorWindowId, expectedWindowId);
-        [self.appMenuWidget updateForActiveWindowId:monitorWindowId];
+        BOOL skipCorrection = NO;
+
+        // Treat frame/client ID churn as equivalent when both map to the same PID.
+        // This prevents repeated reconcile corrections that only oscillate XIDs.
+        pid_t shownPid = (shownWindowId != 0) ? [MenuUtils getWindowPID:shownWindowId] : 0;
+        pid_t monitorPid = [MenuUtils getWindowPID:monitorWindowId];
+        if (shownPid != 0 && monitorPid != 0 && shownPid == monitorPid) {
+            NSLog(@"[RECONCILE] Equivalent windows by PID: shown=0x%lx monitor=0x%lx pid=%d - skipping correction",
+                  shownWindowId,
+                  monitorWindowId,
+                  (int)shownPid);
+            skipCorrection = YES;
+        }
+
+        // Dialog monitors often point to transient XIDs while the owner app menu is correct.
+        if (!skipCorrection && [MenuUtils isDialogWindow:monitorWindowId] && shownWindowId != 0 && self.appMenuWidget.currentMenu != nil) {
+            NSLog(@"[RECONCILE] Monitor window 0x%lx is dialog/transient; preserving shown=0x%lx",
+                  monitorWindowId,
+                  shownWindowId);
+            skipCorrection = YES;
+        }
+
+        if (!skipCorrection) {
+            NSLog(@"[RECONCILE] Mismatch: shown=0x%lx monitor=0x%lx expected=0x%lx - correcting",
+                  shownWindowId, monitorWindowId, expectedWindowId);
+            [self.appMenuWidget updateForActiveWindowId:monitorWindowId];
+        }
     } else if (monitorWindowId != 0 && monitorWindowId == shownWindowId
                && self.appMenuWidget.currentMenu == nil) {
         NSLog(@"[RECONCILE] Correct win=0x%lx but no menu yet — retrying load", monitorWindowId);

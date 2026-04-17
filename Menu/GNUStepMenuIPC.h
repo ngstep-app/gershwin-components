@@ -12,6 +12,11 @@
                         clientName:(NSString *)clientName;
 - (oneway void)unregisterWindow:(NSNumber *)windowId
                        clientName:(NSString *)clientName;
+// Lightweight: patches only enabled/state on the existing NSMenu without
+// rebuilding it.  Bypasses all throttling so state changes land immediately.
+- (oneway void)updateMenuEnabledStatesForWindow:(NSNumber *)windowId
+                                       menuData:(NSDictionary *)menuData
+                                     clientName:(NSString *)clientName;
 @end
 
 @protocol GSGNUstepMenuClient
@@ -23,4 +28,10 @@
 // (for example the Desktop) by asking the client to send its menu via
 // updateMenuForWindow:menuData:clientName:.
 - (oneway void)requestMenuUpdateForWindow:(NSNumber *)windowId;
+
+// Synchronous: validate and return fresh menu data (including enabled/state).
+// Menu.app calls this right before opening a submenu so that item states
+// (enabled/disabled, checkmarks) are up-to-date before the user sees them.
+// Must respond promptly (< 300 ms).
+- (bycopy NSDictionary *)validateMenuStateForWindow:(NSNumber *)windowId;
 @end

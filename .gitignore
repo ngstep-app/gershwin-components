@@ -50,3 +50,4 @@ Processes/tools/safe_proc_scan
 *.so.*
 *.pid
 network-helper
+core.*

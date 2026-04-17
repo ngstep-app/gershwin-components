@@ -230,8 +230,9 @@ static const void *kWindowMonitorQueueKey = &kWindowMonitorQueueKey;
         XWindowAttributes attrs;
         BOOL canGetAttrs = XGetWindowAttributes(_display, (Window)newActiveWindow, &attrs);
         
-        if (canGetAttrs && attrs.map_state == IsUnmapped) {
-            NSDebugLLog(@"gwcomp", @"WindowMonitor: Initial active window %lu is unmapped", newActiveWindow);
+        if (canGetAttrs && attrs.map_state != IsViewable) {
+            // Require IsViewable: reject both IsUnmapped and IsUnviewable (mapped but ancestor unmapped).
+            NSDebugLLog(@"gwcomp", @"WindowMonitor: Initial active window %lu is not viewable (map_state %d)", newActiveWindow, attrs.map_state);
             newActiveWindow = 0;
         } else if (!canGetAttrs) {
             NSDebugLLog(@"gwcomp", @"WindowMonitor: Cannot get attributes for initial window %lu - trusting WM", newActiveWindow);
@@ -286,9 +287,10 @@ static const void *kWindowMonitorQueueKey = &kWindowMonitorQueueKey;
         // The window manager set this as active, so trust it
         BOOL canGetAttrs = XGetWindowAttributes(_display, (Window)newActiveWindow, &attrs);
         
-        if (canGetAttrs && attrs.map_state == IsUnmapped) {
-            // Window is explicitly unmapped - this is a valid "no window" state
-            NSDebugLLog(@"gwcomp", @"WindowMonitor: Active window %lu is unmapped - treating as no active window", newActiveWindow);
+        if (canGetAttrs && attrs.map_state != IsViewable) {
+            // Require IsViewable: reject both IsUnmapped (minimized/hidden) and
+            // IsUnviewable (mapped but an ancestor is not). Neither can have focus.
+            NSDebugLLog(@"gwcomp", @"WindowMonitor: Active window %lu is not viewable (map_state %d) - treating as no active window", newActiveWindow, attrs.map_state);
             newActiveWindow = 0;
         } else if (!canGetAttrs) {
             // Can't get attributes - might be during WM operation

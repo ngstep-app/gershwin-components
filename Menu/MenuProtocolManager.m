@@ -478,6 +478,35 @@
     }
 }
 
+- (BOOL)refreshMenuStateForWindow:(unsigned long)windowId
+{
+    // Find the handler responsible for this window.
+    NSNumber *windowKey = [NSNumber numberWithUnsignedLong:windowId];
+    NSNumber *protocolTypeNum = [self.windowToProtocolMap objectForKey:windowKey];
+    id<MenuProtocolHandler> handler = nil;
+
+    if (protocolTypeNum) {
+        handler = [self handlerForType:(MenuProtocolType)[protocolTypeNum integerValue]];
+    }
+
+    if (!handler) {
+        // Scan to find any handler that knows about this window.
+        for (id h in self.protocolHandlers) {
+            if (![h isKindOfClass:[NSNull class]] &&
+                [h respondsToSelector:@selector(hasMenuForWindow:)] &&
+                [h hasMenuForWindow:windowId]) {
+                handler = h;
+                break;
+            }
+        }
+    }
+
+    if (handler && [handler respondsToSelector:@selector(refreshMenuStateForWindow:)]) {
+        return [handler refreshMenuStateForWindow:windowId];
+    }
+    return NO;
+}
+
 #pragma mark - Cleanup
 
 - (void)cleanup

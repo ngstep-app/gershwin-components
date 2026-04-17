@@ -63,6 +63,7 @@
 // Debug methods
 - (void)debugLogCurrentMenuState;
 - (void)menuItemClicked:(NSMenuItem *)sender;
+- (void)flashTopLevelMenuItemContaining:(NSMenuItem *)item;
 
 // Window validation methods
 + (BOOL)isWindowStillValid:(Window)windowId;

@@ -236,9 +236,11 @@ static dispatch_once_t _sharedDisplayOnce;
     XWindowAttributes attrs;
     BOOL mapped = NO;
     if (XGetWindowAttributes(display, (Window)windowId, &attrs) == Success) {
-        mapped = (attrs.map_state != IsUnmapped);
+        // Require IsViewable: window AND all ancestors must be mapped.
+        // IsUnviewable (window mapped but an ancestor is not) is treated as not visible.
+        mapped = (attrs.map_state == IsViewable);
         if (!mapped) {
-            NSDebugLLog(@"gwcomp", @"MenuUtils: Window 0x%lx is unmapped (state %d)", windowId, attrs.map_state);
+            NSDebugLLog(@"gwcomp", @"MenuUtils: Window 0x%lx is not viewable (map_state %d)", windowId, attrs.map_state);
         }
     } else {
         // XGetWindowAttributes failure does NOT mean the window is unmapped.
@@ -290,6 +292,118 @@ static dispatch_once_t _sharedDisplayOnce;
     
     [self closeDisplay:display];
     return isDesktop;
+}
+
++ (BOOL)isDialogWindow:(unsigned long)windowId
+{
+    // Detects dialog/transient windows where the app menu should stay on the owner app.
+    if (windowId == 0) {
+        return NO;
+    }
+
+    // Use a dedicated display connection for this probe to avoid contention with
+    // other X11 users of the shared display (WindowMonitor, render path, etc.).
+    Display *display = XOpenDisplay(NULL);
+    if (!display) {
+        return NO;
+    }
+    
+    Atom actualType;
+    int actualFormat;
+    unsigned long nitems, bytesAfter;
+    unsigned char *prop = NULL;
+    BOOL isDialog = NO;
+    
+    // Dialog/transient window type atoms
+    Atom dialogTypeAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DIALOG", False);
+    Atom utilityTypeAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_UTILITY", False);
+    Atom splashTypeAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_SPLASH", False);
+    Atom toolbarTypeAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_TOOLBAR", False);
+    Atom menuTypeAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE_MENU", False);
+    Atom windowTypeAtom = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
+    Atom transientForAtom = XInternAtom(display, "WM_TRANSIENT_FOR", False);
+    Atom netWmStateAtom = XInternAtom(display, "_NET_WM_STATE", False);
+    Atom netWmStateModalAtom = XInternAtom(display, "_NET_WM_STATE_MODAL", False);
+    
+    // Check _NET_WM_WINDOW_TYPE for known transient/dialog classes.
+    if (XGetWindowProperty(display, (Window)windowId, windowTypeAtom,
+                          0, (~0L), False, XA_ATOM,
+                          &actualType, &actualFormat, &nitems, &bytesAfter,
+                          &prop) == Success && prop) {
+        Atom *types = (Atom *)prop;
+        for (unsigned long i = 0; i < nitems; i++) {
+            if (types[i] == dialogTypeAtom ||
+                types[i] == utilityTypeAtom ||
+                types[i] == splashTypeAtom ||
+                types[i] == toolbarTypeAtom ||
+                types[i] == menuTypeAtom) {
+                isDialog = YES;
+                break;
+            }
+        }
+        XFree(prop);
+    }
+
+    // WM_TRANSIENT_FOR is a strong signal for dialogs/help/about windows.
+    if (!isDialog) {
+        Window transientOwner = 0;
+        if (XGetWindowProperty(display, (Window)windowId, transientForAtom,
+                               0, 1, False, XA_WINDOW,
+                               &actualType, &actualFormat, &nitems, &bytesAfter,
+                               &prop) == Success && prop) {
+            if (nitems >= 1) {
+                transientOwner = *((Window *)prop);
+            }
+            XFree(prop);
+            if (transientOwner != 0) {
+                isDialog = YES;
+            }
+        }
+    }
+
+    // Some WMs annotate modal state via _NET_WM_STATE_MODAL.
+    if (!isDialog) {
+        if (XGetWindowProperty(display, (Window)windowId, netWmStateAtom,
+                               0, (~0L), False, XA_ATOM,
+                               &actualType, &actualFormat, &nitems, &bytesAfter,
+                               &prop) == Success && prop) {
+            Atom *states = (Atom *)prop;
+            for (unsigned long i = 0; i < nitems; i++) {
+                if (states[i] == netWmStateModalAtom) {
+                    isDialog = YES;
+                    break;
+                }
+            }
+            XFree(prop);
+        }
+    }
+    
+    // Fallback heuristic using WM_CLASS for help/about/preferences style windows.
+    if (!isDialog) {
+        Atom wmClassAtom = XInternAtom(display, "WM_CLASS", False);
+        if (XGetWindowProperty(display, (Window)windowId, wmClassAtom,
+                              0, 256, False, XA_STRING,
+                              &actualType, &actualFormat, &nitems, &bytesAfter,
+                              &prop) == Success && prop) {
+            NSString *classText = [[NSString alloc] initWithBytes:prop
+                                                            length:nitems
+                                                          encoding:NSISOLatin1StringEncoding];
+            NSString *lowerClass = [classText lowercaseString];
+            if ([lowerClass rangeOfString:@"dialog"].location != NSNotFound ||
+                [lowerClass rangeOfString:@"about"].location != NSNotFound ||
+                [lowerClass rangeOfString:@"help"].location != NSNotFound ||
+                [lowerClass rangeOfString:@"preferences"].location != NSNotFound ||
+                [lowerClass rangeOfString:@"settings"].location != NSNotFound ||
+                [lowerClass rangeOfString:@"warning"].location != NSNotFound ||
+                [lowerClass rangeOfString:@"error"].location != NSNotFound) {
+                isDialog = YES;
+            }
+            XFree(prop);
+        }
+    }
+    
+    XCloseDisplay(display);
+    return isDialog;
 }
 
 + (NSArray *)getAllWindows

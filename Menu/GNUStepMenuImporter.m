@@ -542,16 +542,20 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
     if (startupTime == 0) {
         startupTime = now;
     }
-    if ((now - startupTime) < 15.0 && [self.lastMenuDataByWindow objectForKey:windowId]) {
-        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Suppressing repeated menu updates during startup for window %@", windowId);
-        return;
-    }
+    // NOTE: startup suppression and rate-limiting are disabled because they
+    // block legitimate post-action enabled-state updates (e.g., Copy enabled
+    // after Select All).  Re-enable only if Menu.app stability requires it.
+    // if ((now - startupTime) < 15.0 && [self.lastMenuDataByWindow objectForKey:windowId]) {
+    //     NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Suppressing repeated menu updates during startup for window %@", windowId);
+    //     return;
+    // }
 
     NSNumber *lastTime = [self.lastMenuUpdateTimeByWindow objectForKey:windowId];
-    if (lastTime && (now - [lastTime doubleValue]) < 1.0) {
-        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Throttling rapid menu update for window %@", windowId);
-        return;
-    }
+    // if (lastTime && (now - [lastTime doubleValue]) < 1.0) {
+    //     NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: Throttling rapid menu update for window %@", windowId);
+    //     return;
+    // }
+    (void)now; (void)startupTime; (void)lastTime;
 
     NSDictionary *lastMenuData = [self.lastMenuDataByWindow objectForKey:windowId];
     if (lastMenuData && [lastMenuData isEqual:menuData]) {
@@ -642,6 +646,179 @@ static NSString *const kGershwinMenuServerName = @"org.gnustep.Gershwin.MenuServ
         NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: This is likely a distributed objects issue with corrupted proxies");
         // Don't re-throw - just log and return to prevent crashes
     }
+}
+
+#pragma mark - Menu State Refresh
+
+// Walk a serialized menu data tree and apply fresh enabled/state values to the
+// corresponding items in an existing NSMenu.  Items are matched by title so that
+// Menu.app-only items (e.g. the ⌘ system item inserted by setupMenuViewWithMenu:)
+// are simply skipped — they are absent from the fresh serialized data.
+// This modifies items in-place and does NOT rebuild the menu, preserving all
+// action/target/representedObject wiring.
+- (void)applyEnabledStatesFromData:(NSDictionary *)menuData
+                            toMenu:(NSMenu *)menu
+                             depth:(NSUInteger)depth
+{
+    if (!menuData || !menu || depth > 64) {
+        return;
+    }
+
+    NSArray *itemsData = [menuData objectForKey:@"items"];
+    if (![itemsData isKindOfClass:[NSArray class]]) {
+        return;
+    }
+
+    NSArray *existingItems = [menu itemArray];
+
+    for (id rawItemData in itemsData) {
+        if (![rawItemData isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
+        NSDictionary *itemData = (NSDictionary *)rawItemData;
+
+        // Separators carry no enabled/state information.
+        NSNumber *isSeparatorData = [itemData objectForKey:@"isSeparator"];
+        if ([isSeparatorData boolValue]) {
+            continue;
+        }
+
+        NSString *dataTitle = [itemData objectForKey:@"title"];
+        if (![dataTitle isKindOfClass:[NSString class]] || [dataTitle length] == 0) {
+            continue;
+        }
+
+        // Find the matching NSMenuItem by title.  Menu.app-only items (⌘, etc.)
+        // are not present in the serialized data and will simply not be matched.
+        NSMenuItem *matchedItem = nil;
+        for (NSMenuItem *candidate in existingItems) {
+            if (!candidate || [candidate isSeparatorItem]) {
+                continue;
+            }
+            if ([[candidate title] isEqualToString:dataTitle]) {
+                matchedItem = candidate;
+                break;
+            }
+        }
+
+        if (!matchedItem) {
+            continue;
+        }
+
+        // Apply enabled and state.
+        NSNumber *enabled = [itemData objectForKey:@"enabled"];
+        if ([enabled isKindOfClass:[NSNumber class]]) {
+            [matchedItem setEnabled:[enabled boolValue]];
+        }
+        NSNumber *state = [itemData objectForKey:@"state"];
+        if ([state isKindOfClass:[NSNumber class]]) {
+            [matchedItem setState:[state integerValue]];
+        }
+
+        // Recurse into submenus.
+        NSDictionary *submenuData = [itemData objectForKey:@"submenu"];
+        if ([submenuData isKindOfClass:[NSDictionary class]] && [matchedItem hasSubmenu]) {
+            [self applyEnabledStatesFromData:submenuData
+                                      toMenu:[matchedItem submenu]
+                                       depth:depth + 1];
+        }
+    }
+}
+
+- (BOOL)refreshMenuStateForWindow:(unsigned long)windowId
+{
+    NSNumber *key = @(windowId);
+    NSString *clientName = [self.clientNamesByWindow objectForKey:key];
+    if (!clientName) {
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: refreshMenuStateForWindow: no client for window %lu", windowId);
+        return NO;
+    }
+
+    NSMenu *menu = [self.menusByWindow objectForKey:key];
+    if (!menu) {
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: refreshMenuStateForWindow: no menu for window %lu", windowId);
+        return NO;
+    }
+
+    // Reuse the cached connection kept by GNUStepMenuActionHandler.
+    NSConnection *connection = [GNUStepMenuActionHandler cachedConnectionForClient:clientName];
+    if (!connection || ![connection isValid]) {
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: refreshMenuStateForWindow: no valid connection for %@", clientName);
+        return NO;
+    }
+
+    // Set a short timeout so a slow/hung client does not stall the menu bar.
+    [connection setRequestTimeout:0.3];
+
+    id proxy = [connection rootProxy];
+    if (!proxy) {
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: refreshMenuStateForWindow: no proxy for %@", clientName);
+        return NO;
+    }
+
+    [proxy setProtocolForProxy:@protocol(GSGNUstepMenuClient)];
+
+    NSDictionary *freshData = nil;
+    @try {
+        freshData = [(id<GSGNUstepMenuClient>)proxy validateMenuStateForWindow:@(windowId)];
+    } @catch (NSException *e) {
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: validateMenuStateForWindow: raised %@: %@",
+                    [e name], [e reason]);
+        return NO;
+    }
+
+    if (![freshData isKindOfClass:[NSDictionary class]]) {
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: refreshMenuStateForWindow: invalid response for window %lu", windowId);
+        return NO;
+    }
+
+    [self applyEnabledStatesFromData:freshData toMenu:menu depth:0];
+    NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: refreshMenuStateForWindow: applied fresh states for window %lu", windowId);
+    return YES;
+}
+
+// Lightweight oneway push from Eau: applies only enabled/state in-place on the
+// existing NSMenu without rebuilding it and without any throttling.
+// This is the fast path called immediately after every menu action fires in Eau.
+- (oneway void)updateMenuEnabledStatesForWindow:(NSNumber *)windowId
+                                       menuData:(NSDictionary *)menuData
+                                     clientName:(NSString *)clientName
+{
+    (void)clientName;
+    // Validate parameters — we're on a background DO thread.
+    if (![windowId isKindOfClass:[NSNumber class]] ||
+        ![menuData isKindOfClass:[NSDictionary class]]) {
+        return;
+    }
+
+    NSNumber *safeId = [windowId copy];
+    NSDictionary *safeData = nil;
+    @try {
+        NSError *err = nil;
+        NSData *plist = [NSPropertyListSerialization dataWithPropertyList:menuData
+                                                                   format:NSPropertyListBinaryFormat_v1_0
+                                                                  options:0
+                                                                    error:&err];
+        if (plist && !err) {
+            safeData = [NSPropertyListSerialization propertyListWithData:plist
+                                                                  options:NSPropertyListImmutable
+                                                                   format:nil
+                                                                    error:&err];
+        }
+        if (!safeData) safeData = [menuData copy];
+    } @catch (NSException *e) {
+        safeData = [menuData copy];
+    }
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSMenu *menu = [self.menusByWindow objectForKey:safeId];
+        if (!menu) {
+            NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: updateMenuEnabledStatesForWindow: no menu for window %@", safeId);
+            return;
+        }
+        [self applyEnabledStatesFromData:safeData toMenu:menu depth:0];
+        NSDebugLLog(@"gwcomp", @"GNUStepMenuImporter: updateMenuEnabledStatesForWindow: applied states for window %@", safeId);
+    });
 }
 
 #pragma mark - Menu Construction

@@ -41,7 +41,6 @@ $(SUBDIRS):
 # Clean every subdir (non-fatal)
 clean:
 	@for d in $(SUBDIRS); do \
-		# If Makefile.in exists but Makefile does not (or is older), try to run configure first
 		if [ -f "$${d}/Makefile.in" ] && ( [ ! -f "$${d}/Makefile" ] || [ "$${d}/Makefile.in" -nt "$${d}/Makefile" ] ); then \
 			echo "Preparing $$d (running configure)"; \
 			( cd $$d && if command -v confiture >/dev/null 2>&1; then confiture || true; elif [ -x configure ]; then ./configure || true; elif [ -f configure ]; then sh configure || true; elif command -v autoreconf >/dev/null 2>&1; then autoreconf -i && ./configure || true; else echo "No configure tool found in $$d; skipping configure"; fi ); \
