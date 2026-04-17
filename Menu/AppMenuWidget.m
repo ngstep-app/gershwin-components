@@ -933,6 +933,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
         // Ensure we don't duplicate the "Command" system menu item
         MENU_PROFILE_BEGIN(setupMenuViewWithMenuSystemMenuPrep);
+        MENU_PROFILE_BEGIN(setupMenuViewWithMenuCommandDedup);
         NSMutableIndexSet *commandItemIndexes = [NSMutableIndexSet indexSet];
         NSArray *menuItems = [menu itemArray];
         for (NSUInteger i = 0; i < [menuItems count]; i++) {
@@ -949,8 +950,10 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             }];
             NSDebugLLog(@"gwcomp", @"AppMenuWidget: Removed %lu duplicate Command menu item(s)", (unsigned long)[commandItemIndexes count]);
         }
+        MENU_PROFILE_END(setupMenuViewWithMenuCommandDedup);
 
         // Add the "Command" system menu item at the beginning
+        MENU_PROFILE_BEGIN(setupMenuViewWithMenuBuildSystemMenuShell);
         NSMenuItem *systemItem = [[NSMenuItem alloc] initWithTitle:@"⌘" action:nil keyEquivalent:@""];
         NSMenu *systemMenu = [[NSMenu alloc] initWithTitle:@"System"];
         
@@ -978,9 +981,12 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // Listen for tracking begin so we can populate items reliably on open
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
         [nc addObserver:self selector:@selector(systemMenuDidBeginTracking:) name:NSMenuDidBeginTrackingNotification object:systemMenu];
+        MENU_PROFILE_END(setupMenuViewWithMenuBuildSystemMenuShell);
 
         // Populate once now so items show up immediately; we'll also repopulate when opened/tracked
+        MENU_PROFILE_BEGIN(setupMenuViewWithMenuPopulateSystemMenu);
         [self menuNeedsUpdate:systemMenu];
+        MENU_PROFILE_END(setupMenuViewWithMenuPopulateSystemMenu);
         // Log what we added for debugging
         NSArray *sysItems = [self.systemMenu itemArray];
         NSMutableArray *titles = [NSMutableArray array];
@@ -1191,13 +1197,16 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 // menuNeedsUpdate is called to allow menus to be repopulated before they open
 - (void)menuNeedsUpdate:(NSMenu *)menu
 {
+    MENU_PROFILE_BEGIN(menuNeedsUpdateTotal);
     if (menu != self.systemMenu) {
+        MENU_PROFILE_END(menuNeedsUpdateTotal);
         return;
     }
 
     // Prevent re-entrancy / repeated updates that can cause rapid loops
     if (self.isUpdatingSystemMenu) {
         // Already updating — silently skip to avoid log spam and re-entrancy
+        MENU_PROFILE_END(menuNeedsUpdateTotal);
         return;
     }
 
@@ -1205,6 +1214,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     NSTimeInterval now = [[NSDate date] timeIntervalSinceReferenceDate];
     if (now - self.lastSystemMenuUpdateTime < SYSTEM_MENU_UPDATE_MIN_INTERVAL) {
         // Too frequent - skip this update
+        MENU_PROFILE_END(menuNeedsUpdateTotal);
         return;
     }
     // Record this attempt's timestamp
@@ -1215,6 +1225,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
     @try {
 
+    MENU_PROFILE_BEGIN(menuNeedsUpdateFindInsertion);
 
     NSArray *items = [menu itemArray];
     NSInteger prefsIndex = NSNotFound;
@@ -1232,8 +1243,10 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     while ([menu numberOfItems] > startIndex) {
         [menu removeItemAtIndex:startIndex];
     }
+    MENU_PROFILE_END(menuNeedsUpdateFindInsertion);
 
     // Directories to search for .app bundles (make robust to both plural/singular and common locations)
+    MENU_PROFILE_BEGIN(menuNeedsUpdateScanApplications);
     NSArray *dirs = @[[NSHomeDirectory() stringByAppendingPathComponent:@"Applications"],
                       @"/Local/Applications", @"/Local/Application",
                       @"/Network/Applications", @"/Network/Application",
@@ -1295,17 +1308,21 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             }
         }
     }
+    MENU_PROFILE_END(menuNeedsUpdateScanApplications);
 
     NSDebugLog(@"AppMenuWidget: Found %lu application bundles after dedupe", (unsigned long)[appsByKey count]);
 
     // Sort by display name
+    MENU_PROFILE_BEGIN(menuNeedsUpdateSortApplications);
     NSArray *sortedApps = [[appsByKey allValues] sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
         NSString *na = [[a[@"title"] lowercaseString] copy];
         NSString *nb = [[b[@"title"] lowercaseString] copy];
         return [na compare:nb];
     }];
+    MENU_PROFILE_END(menuNeedsUpdateSortApplications);
 
     // Find or create an "Applications" submenu item at startIndex
+    MENU_PROFILE_BEGIN(menuNeedsUpdateRebuildSubmenu);
     NSMenuItem *appsItem = nil;
     if ([menu numberOfItems] > startIndex && [[menu itemAtIndex:startIndex] isKindOfClass:[NSMenuItem class]] && [[[menu itemAtIndex:startIndex] title] isEqualToString:@"Applications"]) {
         appsItem = [menu itemAtIndex:startIndex];
@@ -1335,10 +1352,12 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         [noneItem setEnabled:NO];
         [appsSubmenu addItem:noneItem];
     }
+    MENU_PROFILE_END(menuNeedsUpdateRebuildSubmenu);
     }
     @finally {
         // Always clear the updating flag so further updates can occur later
         self.isUpdatingSystemMenu = NO;
+        MENU_PROFILE_END(menuNeedsUpdateTotal);
     }
 }
 
