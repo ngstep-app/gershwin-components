@@ -1,7 +1,8 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 include $(GNUSTEP_MAKEFILES)/common.make
-GNUSTEP_APPS = $(GNUSTEP_SYSTEM_SERVICES)
 
 PACKAGE_NAME = Menu
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 VERSION = 1.0
 APP_NAME = Menu
 
@@ -18,10 +19,12 @@ Menu_OBJC_FILES = \
 	main.m \
 	MenuApplication.m \
 	MenuController.m \
+	MenuProfiler.m \
 	MenuBarView.m \
 	CustomMenuPanel.m \
 	AppMenuWidget.m \
 	MenuProtocolManager.m \
+	CrashHandler.m \
 	GNUStepMenuImporter.m \
 	DBusMenuImporter.m \
 	GTKMenuImporter.m \
@@ -50,10 +53,12 @@ Menu_OBJC_FILES = \
 Menu_HEADER_FILES = \
 	MenuApplication.h \
 	MenuController.h \
+	MenuProfiler.h \
 	MenuBarView.h \
 	CustomMenuPanel.h \
 	AppMenuWidget.h \
 	MenuProtocolManager.h \
+	CrashHandler.h \
 	GNUStepMenuIPC.h \
 	GNUStepMenuImporter.h \
 	DBusMenuImporter.h \
@@ -100,6 +105,12 @@ endif
 ifeq ($(UNAME_S),FreeBSD)
 	ADDITIONAL_OBJCFLAGS = -Wall -Wextra -O2 -fobjc-runtime=gnustep-2.0 -fobjc-arc -Wno-unused-parameter -D_BSD_SOURCE
 	ADDITIONAL_CPPFLAGS = @DBUS_CFLAGS@
+endif
+
+# Profiling: build with  make PROFILE=1  to enable CPU instrumentation.
+# When enabled, a summary is printed every 10s and on SIGUSR1.
+ifeq ($(PROFILE),1)
+ADDITIONAL_OBJCFLAGS += -DMENU_PROFILING=1
 endif
 
 # Canonical install location for Menu.app
