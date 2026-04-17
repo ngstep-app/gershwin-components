@@ -105,6 +105,7 @@ endif
 ifeq ($(UNAME_S),FreeBSD)
 	ADDITIONAL_OBJCFLAGS = -Wall -Wextra -O2 -fobjc-runtime=gnustep-2.0 -fobjc-arc -Wno-unused-parameter -D_BSD_SOURCE
 	ADDITIONAL_CPPFLAGS = @DBUS_CFLAGS@
+	Menu_TOOL_LIBS += -lexecinfo
 endif
 
 # Profiling: build with  make PROFILE=1  to enable CPU instrumentation.
