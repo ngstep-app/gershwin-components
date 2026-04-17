@@ -111,6 +111,14 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 
 @implementation AppMenuView
 
+- (void)dealloc
+{
+    // Safety net: GNUstep's NSNotificationCenter keeps unsafe (non-retaining) observer
+    // pointers.  Remove all registrations now so no dangling pointer is left behind
+    // to crash the next time any NSMenu posts NSMenuDidAddItemNotification.
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
 - (void)drawRect:(NSRect)dirtyRect
 {
     // Use transparent background to allow MenuBarView gradient to show through
@@ -131,6 +139,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
 @property (nonatomic, assign) NSTimeInterval lastWindowSwitchTime;
 @property (nonatomic, strong) NSTimer *noMenuGracePeriodTimer;
 @property (nonatomic, assign) unsigned long pendingClearWindowId;
+@property (nonatomic, assign) unsigned long pendingWindowId;
+@property (nonatomic, strong) NSString *pendingApplicationName;
 
 - (unsigned long)findDesktopWindowId;
 - (BOOL)windowLikelyWillRegisterMenuSoon:(unsigned long)windowId;
@@ -185,6 +195,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         self.currentApplicationName = nil;
         self.currentWindowId = 0;
         self.currentMenu = nil;
+        self.pendingWindowId = 0;
+        self.pendingApplicationName = nil;
         self.fallbackTimers = [NSMutableDictionary dictionary];
         self.cachedIsWaitingForMenu = NO;
         self.cachedHasMenu = NO;
@@ -313,14 +325,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         return;
     }
 
-    // TIGHT-LOOP GUARD: Rate-limit calls to max once per 50ms for the same window
-    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
-    if (windowId == self.lastUpdateForActiveWindowId &&
-        (now - self.lastUpdateForActiveWindowTime) < 0.05) {
-        MENU_PROFILE_END(updateForActiveWindowId);
-        return; // Too frequent for the same window - silently skip
-    }
-    self.lastUpdateForActiveWindowTime = now;
+    self.lastUpdateForActiveWindowTime = [NSDate timeIntervalSinceReferenceDate];
     self.lastUpdateForActiveWindowId = windowId;
 
     NSDebugLog(@"AppMenuWidget: updateForActiveWindowId called with 0x%lx", windowId);
@@ -341,25 +346,22 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         return;
     }
 
-    // Similarly, ignore and preserve if the process that launched the old and new menu have the same PID.
-    // This avoids flickering or clearing menus when switching between windows of the same application.
+    // Keep probe coverage, but always continue with active-window updates.
     if (activeWindow != 0 && self.currentWindowId != 0 && activeWindow != self.currentWindowId) {
         MENU_PROFILE_BEGIN(updateForActiveWindowIdPidCheck);
         pid_t oldPid = [MenuUtils getWindowPID:self.currentWindowId];
         pid_t newPid = [MenuUtils getWindowPID:activeWindow];
-        if (oldPid != 0 && oldPid == newPid) {
-            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Focus changed within same PID %d (0x%lx -> 0x%lx) - preserving current menu", (int)newPid, self.currentWindowId, activeWindow);
-            self.currentWindowId = activeWindow;
-            MENU_PROFILE_END(updateForActiveWindowIdPidCheck);
-            MENU_PROFILE_END(updateForActiveWindowId);
-            return;
-        }
+        (void)oldPid;
+        (void)newPid;
         MENU_PROFILE_END(updateForActiveWindowIdPidCheck);
     }
 
     // New anti-flicker mechanism: If no active window (0), check if within 0.2s we might switch 
     // to a window of the same PID. If so, don't clear the menu yet.
     if (activeWindow == 0) {
+        self.pendingWindowId = 0;
+        self.pendingApplicationName = nil;
+
         NSTimeInterval currentTime = [NSDate timeIntervalSinceReferenceDate];
         NSTimeInterval timeSinceLastSwitch = currentTime - self.lastWindowSwitchTime;
         
@@ -395,11 +397,21 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     }
 
     BOOL shouldUpdate = (activeWindow != self.currentWindowId);
+    if (shouldUpdate && activeWindow != 0 && activeWindow == self.pendingWindowId &&
+        self.currentWindowId != activeWindow &&
+        self.pendingClearWindowId == activeWindow && self.noMenuGracePeriodTimer != nil) {
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window 0x%lx is already pending during grace period - waiting for registration", activeWindow);
+        MENU_PROFILE_END(updateForActiveWindowId);
+        return;
+    }
+
     if (!shouldUpdate && activeWindow != 0) {
         // Force a refresh if menu is missing or we don't have a current menu
         if (!self.currentMenu || ![self.protocolManager hasMenuForWindow:activeWindow]) {
             NSDebugLLog(@"gwcomp", @"AppMenuWidget: Active window unchanged (%lu) but menu missing - forcing refresh", activeWindow);
             shouldUpdate = YES;
+        } else {
+            NSLog(@"[MENUBAR SKIP] win=0x%lx same window & menu OK — no update", activeWindow);
         }
     }
 
@@ -447,10 +459,16 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             lastDetectedWindowId = activeWindow;
         }
 
+        NSLog(@"[WINDOW SWITCH] target=0x%lx app=%@ shown=0x%lx shownApp=%@",
+              activeWindow,
+              (newAppName && [newAppName length] > 0) ? newAppName : @"Unknown",
+              self.currentWindowId,
+              self.currentApplicationName ?: @"nil");
+
         BOOL isDifferentApp = !self.currentApplicationName ||
                              ![self.currentApplicationName isEqualToString:newAppName];
-
-        self.currentWindowId = activeWindow;
+        self.pendingWindowId = activeWindow;
+        self.pendingApplicationName = newAppName;
         
         // Reset grace period start time for new window focus
         self.gracePeriodStartTime = 0;
@@ -494,9 +512,9 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     self.pendingClearWindowId = 0;
 
     // CRITICAL: Ignore the timer if we have already moved on to a different window.
-    if (self.currentWindowId != windowId) {
-        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window changed to %lu - discarding stale grace-period timer for %lu",
-              self.currentWindowId, windowId);
+    if (self.pendingWindowId != windowId) {
+        NSDebugLLog(@"gwcomp", @"AppMenuWidget: Pending window changed to %lu - discarding stale grace-period timer for %lu",
+              self.pendingWindowId, windowId);
         self.gracePeriodStartTime = 0;
         return;
     }
@@ -619,6 +637,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     self.needsRedraw = YES;
     // Always keep the system ⌘ menu visible even when there is no application menu.
     [self displaySystemOnlyMenu];
+
+    NSLog(@"[MENUBAR CLEARED → system-only]");
 }
 
 - (void)clearMenu
@@ -637,8 +657,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     NSDebugLLog(@"gwcomp", @"AppMenuWidget: Clearing menu state");
     
     self.currentApplicationName = nil;
-    
-    // Remove observer and clear any cached reference to the system submenu
     if (self.systemMenu) {
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
         [nc removeObserver:self name:NSMenuDidBeginTrackingNotification object:self.systemMenu];
@@ -678,17 +696,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     self.isInsideDisplayMenuForWindow = YES;
 
     @try { // @finally guarantees isInsideDisplayMenuForWindow is cleared on ALL exit paths
-
-    // OPTIMIZATION: If we already have a valid menu for this exact window, skip the expensive re-import.
-    // GTK menus (e.g., GIMP with 600+ items) take seconds to parse via D-Bus, and brief window
-    // focus changes (windowA -> transientWindow -> windowA) would trigger unnecessary full re-imports.
-    // NOTE: We check lastLoadedMenuWindowId (not currentWindowId) because currentWindowId is set
-    // by the caller (updateForActiveWindowId) BEFORE calling us.
-    if (windowId != 0 && windowId == self.lastLoadedMenuWindowId && self.currentMenu != nil) {
-        NSDebugLog(@"AppMenuWidget: Already showing menu for window %lu - skipping re-import", windowId);
-        MENU_PROFILE_END(displayMenuForWindow);
-        return;
-    }
 
     // Defensive check: ensure we're initialized
     if (!self.protocolManager) {
@@ -732,25 +739,12 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         appName = nil;
     }
 
-    // Verify the application still has at least one visible window before showing its menu
+    // Record the application name. Window validity is already checked above and closed-window
+    // cleanup is handled by WindowMonitor notifications and the windowValidationTick watchdog.
     if (appName && [appName length] > 0) {
-        BOOL appHasWindows = NO;
-        NSDictionary *windowApps = [MenuUtils getAllVisibleWindowApplications];
-        for (NSString *visibleApp in [windowApps allValues]) {
-            if ([visibleApp isEqualToString:appName]) {
-                appHasWindows = YES;
-                break;
-            }
+        if (self.pendingWindowId == windowId) {
+            self.pendingApplicationName = appName;
         }
-
-        if (!appHasWindows) {
-            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Application %@ has no visible windows - not displaying its menu", appName);
-            [self clearMenuAndHideView];
-            MENU_PROFILE_END(displayMenuForWindow);
-            return;
-        }
-
-        self.currentApplicationName = appName;
         NSDebugLLog(@"gwcomp", @"AppMenuWidget: Window %lu belongs to application: %@", windowId, appName);
     }
     
@@ -916,24 +910,25 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     
     @try {
         MENU_PROFILE_BEGIN(setupMenuViewWithMenuRemoveExistingView);
-        // Remove any existing menu view to prevent crashes when adding new one
+        // Correctness over micro-optimization: NSMenuView can retain stale cell state when
+        // hot-swapped repeatedly. Recreate it on each menu setup to guarantee a clean cell tree.
         if (self.menuView) {
+            // CRITICAL: Disconnect from the menu BEFORE releasing the view.
+            // GNUstep's NSNotificationCenter keeps unsafe (non-retaining) observer pointers.
+            // NSMenuView registers globally (object:nil) for NSMenuDidAddItemNotification and
+            // similar. If we just nil the view, its pointer becomes dangling in the notification
+            // center and any subsequent addItem: call on ANY menu will crash via objc_msgSend.
+            [[NSNotificationCenter defaultCenter] removeObserver:self.menuView];
+            [self.menuView setMenu:nil];
             [self.menuView removeFromSuperview];
             self.menuView = nil;
-            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Removed existing menu view before creating new one");
         }
         MENU_PROFILE_END(setupMenuViewWithMenuRemoveExistingView);
-
-        // Calculate text width for positioning
-        CGFloat textWidth = 0;
-        if (self.currentApplicationName && [self.currentApplicationName length] > 0) {
-            // We no longer draw the text, so textWidth is 0
-            textWidth = 0;
-        }
 
         // Ensure we don't duplicate the "Command" system menu item
         MENU_PROFILE_BEGIN(setupMenuViewWithMenuSystemMenuPrep);
         MENU_PROFILE_BEGIN(setupMenuViewWithMenuCommandDedup);
+
         NSMutableIndexSet *commandItemIndexes = [NSMutableIndexSet indexSet];
         NSArray *menuItems = [menu itemArray];
         for (NSUInteger i = 0; i < [menuItems count]; i++) {
@@ -955,17 +950,22 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         // Add the "Command" system menu item at the beginning
         MENU_PROFILE_BEGIN(setupMenuViewWithMenuBuildSystemMenuShell);
         NSMenuItem *systemItem = [[NSMenuItem alloc] initWithTitle:@"⌘" action:nil keyEquivalent:@""];
+        if (self.systemMenu) {
+            NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+            [nc removeObserver:self name:NSMenuDidBeginTrackingNotification object:self.systemMenu];
+            // Clear the delegate so the old systemMenu doesn't dispatch callbacks into us
+            // after we've replaced it.
+            [self.systemMenu setDelegate:nil];
+        }
+
         NSMenu *systemMenu = [[NSMenu alloc] initWithTitle:@"System"];
-        
+
         // Add "Search..." item to the system menu
-        NSMenuItem *searchItem = [[NSMenuItem alloc] initWithTitle:@"Search..." 
-                                                            action:@selector(toggleSearch:) 
+        NSMenuItem *searchItem = [[NSMenuItem alloc] initWithTitle:@"Search..."
+                                                            action:@selector(toggleSearch:)
                                                      keyEquivalent:@" "]; // Space
         [searchItem setKeyEquivalentModifierMask:NSCommandKeyMask];
         [searchItem setTarget:[ActionSearchController sharedController]];
-        // Ensure ActionSearchController knows about our AppMenuWidget so it can collect items
-        [[ActionSearchController sharedController] setAppMenuWidget:self];
-        
         [systemMenu addItem:searchItem];
         [systemMenu addItem:[NSMenuItem separatorItem]];
 
@@ -975,27 +975,24 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         [systemMenu addItem:prefsItem];
         [systemMenu addItem:[NSMenuItem separatorItem]];
 
-        // Keep a reference to this system submenu so we can populate it dynamically
+        // Keep a reference to this system submenu so we can populate it dynamically.
         self.systemMenu = systemMenu;
         [systemMenu setDelegate:self];
-        // Listen for tracking begin so we can populate items reliably on open
+
+        // Listen for tracking begin so we can populate items reliably on open.
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
         [nc addObserver:self selector:@selector(systemMenuDidBeginTracking:) name:NSMenuDidBeginTrackingNotification object:systemMenu];
+
+        // Ensure ActionSearchController knows about our AppMenuWidget so it can collect items
+        [[ActionSearchController sharedController] setAppMenuWidget:self];
         MENU_PROFILE_END(setupMenuViewWithMenuBuildSystemMenuShell);
 
-        // Populate once now so items show up immediately; we'll also repopulate when opened/tracked
+        // Defer System app list population to submenu open tracking to avoid
+        // expensive app-switch path work on every active-window change.
         MENU_PROFILE_BEGIN(setupMenuViewWithMenuPopulateSystemMenu);
-        [self menuNeedsUpdate:systemMenu];
         MENU_PROFILE_END(setupMenuViewWithMenuPopulateSystemMenu);
-        // Log what we added for debugging
-        NSArray *sysItems = [self.systemMenu itemArray];
-        NSMutableArray *titles = [NSMutableArray array];
-        for (NSMenuItem *mi in sysItems) {
-            [titles addObject:[mi title]];
-        }
-        NSDebugLog(@"AppMenuWidget: System submenu initially has %lu items", (unsigned long)[sysItems count]);
+        NSDebugLog(@"AppMenuWidget: System submenu initially has %lu items", (unsigned long)[[self.systemMenu itemArray] count]);
 
-        
         [systemItem setSubmenu:systemMenu];
         
         // Insert at the beginning of the menu
@@ -1003,25 +1000,21 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         MENU_PROFILE_END(setupMenuViewWithMenuSystemMenuPrep);
 
         MENU_PROFILE_BEGIN(setupMenuViewWithMenuCreateView);
-        // Create a new horizontal menu view that fits within our widget frame, starting after the text
-        NSRect menuViewFrame = NSMakeRect(textWidth, 0, [self bounds].size.width - textWidth, [self bounds].size.height);
-        self.menuView = [[AppMenuView alloc] initWithFrame:menuViewFrame];
-
-        if (!self.menuView) {
-            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Failed to create menu view - aborting setup");
+        NSRect menuViewFrame = NSMakeRect(0, 0, [self bounds].size.width, [self bounds].size.height);
+        AppMenuView *newMenuView = [[AppMenuView alloc] initWithFrame:menuViewFrame];
+        if (!newMenuView) {
+            NSDebugLLog(@"gwcomp", @"AppMenuWidget: Failed to create menu view");
             MENU_PROFILE_END(setupMenuViewWithMenuCreateView);
             MENU_PROFILE_END(setupMenuViewWithMenu);
             return;
         }
-
-        // Configure the menu view for horizontal display (like a menu bar)
-        [self.menuView setHorizontal:YES];
-        [self.menuView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-
-        // Set the menu for the menu view
-        [self.menuView setMenu:menu];
+        [newMenuView setHorizontal:YES];
+        [newMenuView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+        [newMenuView setMenu:menu];
+        [newMenuView setHidden:NO];
+        [self addSubview:newMenuView];
+        self.menuView = newMenuView;
         
-        // Set ourselves as the delegate of the main menu to catch AboutToShow events
         [menu setDelegate:self];
         NSDebugLLog(@"gwcomp", @"AppMenuWidget: Set AppMenuWidget as delegate for main menu: %@", [menu title]);
         MENU_PROFILE_END(setupMenuViewWithMenuCreateView);
@@ -1048,7 +1041,6 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             }
         }
         
-        // Add comprehensive logging to each menu item
         // DON'T override target/action for items that already have proper actions set
         for (NSUInteger i = 0; i < [items count]; i++) {
             NSMenuItem *item = [items objectAtIndex:i];
@@ -1056,44 +1048,42 @@ static int handleX11Error(Display *display, XErrorEvent *event)
                   i, [item title], [item hasSubmenu] ? @"YES" : @"NO",
                   [item target], NSStringFromSelector([item action]));
             
-            // Skip items that already have a target (they have proper action handlers)
-            // Skip items with submenus (NSMenuView handles their display)
-            // Only set placeholder actions for items without handlers
             if (!isGNUStepMenu && ![item hasSubmenu]) {
                 if (![item target]) {
-                    // This item doesn't have an action - set our placeholder
-                    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Item '%@' has NO target - setting placeholder action", [item title]);
                     [item setTarget:self];
                     [item setAction:@selector(menuItemClicked:)];
                     NSDebugLLog(@"gwcomp", @"AppMenuWidget: Set placeholder action for item without handler: '%@'", [item title]);
-                } else {
-                    // Item already has a target - preserve it
-                    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Item '%@' already has target '%@' with action '%@' - PRESERVING", 
-                          [item title], [item target], NSStringFromSelector([item action]));
                 }
             }
         }
         
-        // Add the menu view to our widget (this makes it visible)
-        [self addSubview:self.menuView];
-        
         [self setNeedsDisplay:YES];
-          MENU_PROFILE_END(setupMenuViewWithMenuWireItems);
+        MENU_PROFILE_END(setupMenuViewWithMenuWireItems);
         
         NSDebugLLog(@"gwcomp", @"AppMenuWidget: Menu view setup complete with %lu menu items", 
               (unsigned long)[[menu itemArray] count]);
+
+        // Diagnostic: emit one NSLog line after every menu-bar state change so window switches
+        // can be correlated with exact menu contents in /tmp/Gershwin.log.
+        {
+            NSArray *_fi = [menu itemArray];
+            NSMutableString *_d = [NSMutableString stringWithFormat:
+                @"[MENUBAR win=0x%lx app=%@] ",
+                self.currentWindowId,
+                self.currentApplicationName ?: @"nil"];
+            for (NSUInteger _i = 0; _i < [_fi count]; _i++) {
+                if (_i > 0) [_d appendString:@" | "];
+                NSMenuItem *_it = [_fi objectAtIndex:_i];
+                [_d appendFormat:@"'%@'%@", [_it title], [_it hasSubmenu] ? @"\u25b6" : @""];
+            }
+            NSLog(@"%@", _d);
+        }
     }
     @finally {
         // Re-enable window drawing and flush all pending updates
         if (window) {
             [window enableFlushWindow];
             [window flushWindow];
-            // Ensure overlay views (e.g., RoundedCornersView) are redrawn after
-            // a menu update.  RoundedCornersView is a sibling of MenuBarView in
-            // the window's contentView, so AppMenuWidget's setNeedsDisplay does
-            // not propagate to it.  Marking the contentView ensures all siblings
-            // (including the rounded-corners overlay) are included in the next
-            // display pass.
             [[window contentView] setNeedsDisplay:YES];
         }
         MENU_PROFILE_END(setupMenuViewWithMenu);
@@ -1171,7 +1161,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
             // Reset the optimisation guard so the new menu is loaded even if we
             // previously attempted (and failed/skipped) this window.
             self.lastLoadedMenuWindowId = 0;
-            self.currentWindowId = windowId;
+            self.pendingWindowId = windowId;
+            self.pendingApplicationName = [MenuUtils getApplicationNameForWindow:windowId];
             // Call displayMenuForWindow: directly instead of updateForActiveWindowId:
             // to bypass the 50ms rate-limit guard — this is a one-shot event triggered
             // by a real menu registration and must not be throttled.
@@ -1672,19 +1663,32 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     MENU_PROFILE_END(loadMenuForWindowCancelFallback);
 
     NSDebugLLog(@"gwcomp", @"AppMenuWidget: Loading menu for window %lu", windowId);
+
+    // Copy before mutation so we never modify protocol-handler cached menu objects in place.
+    NSMenu *displayMenu = [menu copy];
+    if (!displayMenu) {
+        displayMenu = menu;
+    }
+
+    unsigned long previousWindowId = self.currentWindowId;
     
     // Clear the waiting flag - we have a new menu
     self.isWaitingForMenu = NO;
-    self.currentMenu = menu;
+    self.currentWindowId = windowId;
+    if (self.pendingWindowId == windowId && [self.pendingApplicationName length] > 0) {
+        self.currentApplicationName = self.pendingApplicationName;
+    } else {
+        self.currentApplicationName = [MenuUtils getApplicationNameForWindow:windowId];
+    }
     self.lastLoadedMenuWindowId = windowId;  // Track which window we loaded for (used by same-window guard)
     self.needsRedraw = YES;  // Mark that we need to redraw with new menu
     
     NSDebugLLog(@"gwcomp", @"AppMenuWidget: ===== MENU LOADED, SETTING UP VIEW =====");
-    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Menu has %lu top-level items", (unsigned long)[[menu itemArray] count]);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Menu has %lu top-level items", (unsigned long)[[displayMenu itemArray] count]);
     
     // Log each top-level menu item and whether it has submenus
     MENU_PROFILE_BEGIN(loadMenuForWindowLogItems);
-    NSArray *items = [menu itemArray];
+    NSArray *items = [displayMenu itemArray];
     for (NSUInteger i = 0; i < [items count]; i++) {
         NSMenuItem *item = [items objectAtIndex:i];
         NSDebugLog(@"AppMenuWidget: Top-level item %lu: '%@' (has submenu: %@, submenu items: %lu)", 
@@ -1696,8 +1700,8 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     // ANTI-FLICKER: Clear shortcuts ONLY if switching to a different application
     // This must happen before setupMenuViewWithMenu to avoid conflicts
     MENU_PROFILE_BEGIN(loadMenuForWindowShortcutTransition);
-    if (self.currentWindowId != windowId) {
-        pid_t oldPid = (self.currentWindowId != 0) ? [MenuUtils getWindowPID:self.currentWindowId] : 0;
+    if (previousWindowId != windowId) {
+        pid_t oldPid = (previousWindowId != 0) ? [MenuUtils getWindowPID:previousWindowId] : 0;
         pid_t newPid = [MenuUtils getWindowPID:windowId];
         BOOL switchingToDifferentApp = (oldPid == 0 || newPid == 0 || oldPid != newPid);
         
@@ -1713,7 +1717,7 @@ static int handleX11Error(Display *display, XErrorEvent *event)
     
     MENU_PROFILE_BEGIN(loadMenuForWindowSetupMenuView);
     @try {
-        [self setupMenuViewWithMenu:menu];
+        [self setupMenuViewWithMenu:displayMenu];
         MENU_PROFILE_END(loadMenuForWindowSetupMenuView);
         NSDebugLLog(@"gwcomp", @"AppMenuWidget: setupMenuViewWithMenu completed successfully");
     }
@@ -1721,14 +1725,16 @@ static int handleX11Error(Display *display, XErrorEvent *event)
         MENU_PROFILE_END(loadMenuForWindowSetupMenuView);
         NSDebugLLog(@"gwcomp", @"AppMenuWidget: EXCEPTION in setupMenuViewWithMenu: %@", exception);
         NSDebugLLog(@"gwcomp", @"AppMenuWidget: Exception details - name: %@, reason: %@", [exception name], [exception reason]);
+        // Hard safety guarantee: never leave the menubar empty.
+        [self clearMenuAndHideView];
     }
     
     // Re-register shortcuts for this menu since we may have cleared them above
     MENU_PROFILE_BEGIN(loadMenuForWindowReregisterShortcuts);
-    [self reregisterShortcutsForMenu:menu];
+    [self reregisterShortcutsForMenu:displayMenu];
     MENU_PROFILE_END(loadMenuForWindowReregisterShortcuts);
     
-    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Successfully loaded fallback menu with %lu items", (unsigned long)[[menu itemArray] count]);
+    NSDebugLLog(@"gwcomp", @"AppMenuWidget: Successfully loaded fallback menu with %lu items", (unsigned long)[[displayMenu itemArray] count]);
     MENU_PROFILE_END(loadMenuForWindow);
 } 
 

@@ -31,6 +31,7 @@
 @implementation WindowMonitor
 
 NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorActiveWindowChangedNotification";
+static const void *kWindowMonitorQueueKey = &kWindowMonitorQueueKey;
 
 - (void)_postWindowNotification:(NSDictionary *)userInfo
 {
@@ -64,6 +65,7 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
         
         // Create serial queue for X11 operations
         _x11Queue = dispatch_queue_create("org.gnustep.menu.windowmonitor", DISPATCH_QUEUE_SERIAL);
+        dispatch_queue_set_specific(_x11Queue, kWindowMonitorQueueKey, (void *)kWindowMonitorQueueKey, NULL);
         
         NSDebugLLog(@"gwcomp", @"WindowMonitor: Initialized");
     }
@@ -320,15 +322,25 @@ NSString * const WindowMonitorActiveWindowChangedNotification = @"WindowMonitorA
 - (void)stopMonitoring
 {
     if (!_monitoring) return;
-    
-    if (_x11EventSource) {
-        dispatch_source_cancel(_x11EventSource);
-        _x11EventSource = NULL;
-    }
-    
-    if (_display) {
-        XCloseDisplay(_display);
-        _display = NULL;
+
+    void (^cleanupBlock)(void) = ^{
+        if (_x11EventSource) {
+            dispatch_source_cancel(_x11EventSource);
+            _x11EventSource = NULL;
+        }
+
+        if (_display) {
+            XCloseDisplay(_display);
+            _display = NULL;
+        }
+    };
+
+    if (dispatch_get_specific(kWindowMonitorQueueKey) != NULL) {
+        cleanupBlock();
+    } else if (_x11Queue) {
+        dispatch_sync(_x11Queue, cleanupBlock);
+    } else {
+        cleanupBlock();
     }
     
     _monitoring = NO;

@@ -10,6 +10,7 @@
 #import "MenuApplication.h"
 #import "MenuController.h"
 #import "MenuProfiler.h"
+#import "CrashHandler.h"
 #import <signal.h>
 #import <sys/types.h>
 #import <unistd.h>
@@ -27,6 +28,22 @@ static NSString *resolveSymlink(NSString *linkPath) {
     return nil;
 }
 
+// Resolve an executable path to its canonical absolute path when possible.
+static NSString *canonicalPathForExecutable(NSString *path)
+{
+    char resolved[PATH_MAX];
+
+    if (!path) {
+        return nil;
+    }
+
+    if (realpath([path fileSystemRepresentation], resolved) != NULL) {
+        return [NSString stringWithUTF8String:resolved];
+    }
+
+    return path;
+}
+
 // Function to kill any other instances of this application
 static void killOtherInstances(void) {
     // Get the path to the current executable
@@ -39,9 +56,7 @@ static void killOtherInstances(void) {
     pid_t currentPID = getpid();
     
     // Resolve the current executable path to its real path
-    NSString *currentRealPath = realpath([currentPath fileSystemRepresentation], NULL) ?
-        [NSString stringWithUTF8String:realpath([currentPath fileSystemRepresentation], NULL)] :
-        currentPath;
+    NSString *currentRealPath = canonicalPathForExecutable(currentPath);
     
     NSDebugLLog(@"gwcomp", @"Menu.app: Current executable: %@ (real: %@)", currentPath, currentRealPath);
     
@@ -79,9 +94,7 @@ static void killOtherInstances(void) {
         }
         
         // Resolve the found process's executable to real path for comparison
-        NSString *otherRealPath = realpath([linkedPath fileSystemRepresentation], NULL) ?
-            [NSString stringWithUTF8String:realpath([linkedPath fileSystemRepresentation], NULL)] :
-            linkedPath;
+        NSString *otherRealPath = canonicalPathForExecutable(linkedPath);
         
         // Compare the executable paths
         if ([otherRealPath isEqualToString:currentRealPath]) {
@@ -99,6 +112,8 @@ static void killOtherInstances(void) {
 
 int main(int __attribute__((unused)) argc, const char * __attribute__((unused)) argv[])
 {
+    MenuInstallCrashHandlers();
+
     // Initialize X11 threading support
     if (!XInitThreads()) {
         fprintf(stderr, "Menu.app: Failed to initialize X11 threading support\n");

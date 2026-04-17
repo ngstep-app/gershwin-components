@@ -954,18 +954,14 @@
 
 - (void)showDBusErrorAndExit
 {
-    NSDebugLog(@"DBusMenuImporter: Showing error alert...");
-    
-    NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText:NSLocalizedString(@"DBus Connection Error", @"DBus error dialog title")];
-    [alert setInformativeText:NSLocalizedString(@"Failed to connect to DBus session bus. The global menu service cannot function without DBus.", @"DBus error dialog message")];
-    [alert addButtonWithTitle:NSLocalizedString(@"OK", @"OK button")];
-    [alert setAlertStyle:NSCriticalAlertStyle];
-    
-    NSDebugLog(@"DBusMenuImporter: Running modal alert...");
-    [alert runModal];
-    NSDebugLog(@"DBusMenuImporter: Alert dismissed, exiting application...");
-    exit(1);
+    static BOOL logged = NO;
+    if (logged) {
+        return;
+    }
+    logged = YES;
+
+    NSDebugLLog(@"gwcomp", @"DBusMenuImporter: DBus session bus unavailable; continuing without DBus and waiting for environment recovery");
+    NSDebugLLog(@"gwcomp", @"DBusMenuImporter: This is non-fatal to avoid supervisor restart loops");
 }
 
 - (void)reregisterShortcutsForMenu:(NSMenu *)menu windowId:(unsigned long)windowId

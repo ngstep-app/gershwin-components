@@ -21,6 +21,8 @@
 // Global reference for cleanup in signal handlers
 static MenuController *g_controller = nil;
 static volatile sig_atomic_t cleanup_in_progress = 0;
+static BOOL terminationSignalHandled = NO;
+static BOOL existingInstanceHandled = NO;
 
 // Global accessor to retrieve the MenuController instance from other modules
 MenuController *MenuControllerGlobal(void) { return g_controller; }
@@ -42,45 +44,15 @@ static void cleanup_on_exit(void)
 }
 
 // Signal handler for graceful shutdown
-static void signalHandler(int sig)
-{
-    if (cleanup_in_progress) return;
-    cleanup_in_progress = 1;
-
-    // SIGUSR1 is used as a non-fatal probe; log and continue
-    if (sig == SIGUSR1) {
-        NSDebugLLog(@"gwcomp", @"Menu.app: USR1 signal handled, continuing operation...");
-        cleanup_in_progress = 0; // reset flag since we aren't exiting
-        return;
-    }
-
-    const char *signame = "UNKNOWN";
-    switch(sig) {
-        case SIGTERM: signame = "SIGTERM"; break;
-        case SIGINT:  signame = "SIGINT"; break;
-        case SIGHUP:  signame = "SIGHUP"; break;
-    }
-
-    NSDebugLLog(@"gwcomp", @"Menu.app: Received signal %d (%s), performing cleanup...", sig, signame);
-
-    @try {
-        // Clean up global shortcuts
-        [[X11ShortcutManager sharedManager] cleanup];
-        [DBusMenuParser cleanup];
-    } @catch (NSException *exception) {
-        NSDebugLLog(@"gwcomp", @"Menu.app: Exception during signal cleanup: %@", exception);
-    }
-
-    // Reset signal handlers to default to avoid infinite loops
-    signal(sig, SIG_DFL);
-
-    // Exit gracefully
-    NSDebugLLog(@"gwcomp", @"Menu.app: Cleanup complete, exiting...");
-    exit(0);
-}
-
 // Forward declare our custom drawRect function
 id menu_drawRectWithoutBottomLine(id self, SEL _cmd, NSRect dirtyRect);
+
+@interface MenuApplication ()
+@property (nonatomic, strong) NSMutableArray *terminationSignalSources;
+- (void)installGracefulTerminationSignals;
+- (void)installTerminationSourceForSignal:(int)sig name:(NSString *)name;
+- (void)handleTerminationSignal:(int)sig;
+@end
 
 @implementation MenuApplication
 
@@ -201,10 +173,13 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
         
         if (serviceExists) {
             NSDebugLLog(@"gwcomp", @"MenuApplication: Found existing AppMenu.Registrar service - another menu application is running");
-            
-            // Show NSAlert to inform user on main thread
+
+            // Under auto-relaunch supervision, avoid modal alert loops. Terminate quietly by default.
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self showMenuConflictAlert];
+                if (!existingInstanceHandled) {
+                    existingInstanceHandled = YES;
+                    [self showMenuConflictAlert];
+                }
             });
         } else {
             NSDebugLLog(@"gwcomp", @"MenuApplication: No conflicting menu applications found");
@@ -214,6 +189,15 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
 
 - (void)showMenuConflictAlert
 {
+    NSString *interactiveConflict = [[[NSProcessInfo processInfo] environment] objectForKey:@"MENU_SHOW_CONFLICT_ALERT"];
+    BOOL shouldShowAlert = (interactiveConflict != nil && [interactiveConflict length] > 0);
+
+    if (!shouldShowAlert) {
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Existing Menu service detected; terminating this instance quietly");
+        [self terminate:nil];
+        return;
+    }
+
     NSAlert *alert = [[NSAlert alloc] init];
     [alert setMessageText:NSLocalizedString(@"Menu Application Already Running", @"Menu app conflict dialog title")];
     [alert setInformativeText:NSLocalizedString(@"Another menu application is already running. Only one menu application can run at a time.", @"Menu app conflict dialog message")];
@@ -222,9 +206,9 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     
     NSDebugLLog(@"gwcomp", @"MenuApplication: Showing conflict alert...");
     [alert runModal];
-    
-    NSDebugLLog(@"gwcomp", @"MenuApplication: Exiting due to service conflict");
-    exit(1);
+
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Conflict alert dismissed, terminating this instance");
+    [self terminate:nil];
 }
 
 + (MenuApplication *)sharedApplication
@@ -282,8 +266,8 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
 
     NSDebugLLog(@"gwcomp", @"MenuApplication: Created MenuController");
     
-    // Set up signal handlers for graceful shutdown
-    NSDebugLLog(@"gwcomp", @"MenuApplication: Setting up signal handlers...");
+    // Set up graceful signal delivery on the main queue.
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Setting up signal handling...");
     
     // CRITICAL: Ignore SIGPIPE to prevent crashes when stdout/stderr is unavailable
     // This happens when running in background without output redirection
@@ -293,29 +277,7 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
         NSDebugLLog(@"gwcomp", @"MenuApplication: SIGPIPE handler set to ignore (prevents crashes on write to closed stdout/stderr)");
     }
     
-    if (signal(SIGTERM, signalHandler) == SIG_ERR) {
-        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: Failed to set SIGTERM handler");
-    } else {
-        NSDebugLLog(@"gwcomp", @"MenuApplication: SIGTERM handler registered");
-    }
-    
-    if (signal(SIGINT, signalHandler) == SIG_ERR) {
-        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: Failed to set SIGINT handler");
-    } else {
-        NSDebugLLog(@"gwcomp", @"MenuApplication: SIGINT handler registered (Ctrl-C will trigger cleanup)");
-    }
-    
-    if (signal(SIGHUP, signalHandler) == SIG_ERR) {
-        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: Failed to set SIGHUP handler");
-    } else {
-        NSDebugLLog(@"gwcomp", @"MenuApplication: SIGHUP handler registered");
-    }
-    
-    if (signal(SIGUSR1, signalHandler) == SIG_ERR) {
-        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: Failed to set SIGUSR1 handler");
-    } else {
-        NSDebugLLog(@"gwcomp", @"MenuApplication: SIGUSR1 handler registered");
-    }
+    [self installGracefulTerminationSignals];
     
     // Set up atexit handler as additional safety
     if (atexit(cleanup_on_exit) != 0) {
@@ -351,6 +313,62 @@ id menu_drawRectWithoutBottomLine(id self, SEL cmd __attribute__((unused)), NSRe
     [self activateIgnoringOtherApps:YES];
     
     NSDebugLLog(@"gwcomp", @"MenuApplication: Initialization complete - Menu will appear immediately");
+}
+
+- (void)installGracefulTerminationSignals
+{
+    self.terminationSignalSources = [NSMutableArray array];
+    [self installTerminationSourceForSignal:SIGTERM name:@"SIGTERM"];
+    [self installTerminationSourceForSignal:SIGINT name:@"SIGINT"];
+    [self installTerminationSourceForSignal:SIGHUP name:@"SIGHUP"];
+}
+
+- (void)installTerminationSourceForSignal:(int)sig name:(NSString *)name
+{
+    if (signal(sig, SIG_IGN) == SIG_ERR) {
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: failed to ignore %@ for dispatch source", name);
+        return;
+    }
+
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL,
+                                                      (uintptr_t)sig,
+                                                      0,
+                                                      dispatch_get_main_queue());
+    if (!source) {
+        NSDebugLLog(@"gwcomp", @"MenuApplication: Warning: failed to create dispatch source for %@", name);
+        return;
+    }
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_source_set_event_handler(source, ^{
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) {
+            return;
+        }
+        [strongSelf handleTerminationSignal:sig];
+    });
+    dispatch_resume(source);
+    [self.terminationSignalSources addObject:(__bridge id)source];
+
+    NSDebugLLog(@"gwcomp", @"MenuApplication: %@ dispatch source registered", name);
+}
+
+- (void)handleTerminationSignal:(int)sig
+{
+    if (terminationSignalHandled) {
+        return;
+    }
+    terminationSignalHandled = YES;
+
+    const char *name = "UNKNOWN";
+    switch (sig) {
+        case SIGTERM: name = "SIGTERM"; break;
+        case SIGINT: name = "SIGINT"; break;
+        case SIGHUP: name = "SIGHUP"; break;
+    }
+
+    NSDebugLLog(@"gwcomp", @"MenuApplication: Received %s, terminating via main queue", name);
+    [self terminate:nil];
 }
 
 - (void)sendEvent:(NSEvent *)event
