@@ -75,8 +75,7 @@
     NSMutableDictionary *_filePositions;  // filename -> NSNumber (position)
     NSMutableDictionary *_handleToFile;  // NSFileHandle -> filename
     NSTimer *_scanTimer;
-    NSMutableDictionary *_fifoDescriptors;  // filename -> NSNumber(fd) for blocking reads
-    NSThread *_fifoReaderThread;  // Background thread for FIFO reading
+    unsigned long long _lastDirectoryMTime;
 }
 - (id)initWithLogDirectory:(NSString *)directory;
 - (void)handleFileData:(NSNotification *)notification;

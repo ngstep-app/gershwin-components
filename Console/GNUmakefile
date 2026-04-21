@@ -29,7 +29,7 @@ Console_MAIN_MODEL_FILE = Console.gorm
 Console_APPLICATION_ICON = Console.png
 
 Console_OBJCFLAGS = -Wall -O2
-Console_LDFLAGS = -lgnustep-base -lgnustep-gui -Wl,-rpath,/System/Library/Libraries
+Console_LDFLAGS = -lgnustep-base -lgnustep-gui -Wl,--disable-new-dtags -Wl,-rpath,/System/Library/Libraries -Wl,-rpath,/Local/Library/Libraries
 
 ADDITIONAL_OBJCFLAGS += -Wno-import
 

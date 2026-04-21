@@ -8,29 +8,7 @@
 #import <stdarg.h>
 #import <sys/stat.h>
 
-static void ConsoleDebugLog(NSString *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    NSString *msg = [[[NSString alloc] initWithFormat:format arguments:args] autorelease];
-    va_end(args);
-
-    NSString *line = [NSString stringWithFormat:@"%@ %@\n", [NSDate date], msg];
-    NSData *data = [line dataUsingEncoding:NSUTF8StringEncoding];
-
-    NSString *path = @"/tmp/Console-debug.log";
-    NSFileManager *fm = [NSFileManager defaultManager];
-    if (![fm fileExistsAtPath:path]) {
-        [fm createFileAtPath:path contents:nil attributes:nil];
-    }
-
-    NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
-    if (fh) {
-        [fh seekToEndOfFile];
-        [fh writeData:data];
-        [fh closeFile];
-    }
-}
+#define ConsoleDebugLog(...) ((void)0)
 
 static ConsoleController *sharedInstance = nil;
 
@@ -680,14 +658,8 @@ static ConsoleController *sharedInstance = nil;
             if ([fm fileExistsAtPath:path isDirectory:&isDir] && !isDir && [fm isReadableFileAtPath:path]) {
                 // Check if it's a log file or FIFO
                 NSString *ext = [[name pathExtension] lowercaseString];
-                if ([ext isEqualToString:@"log"] || [ext isEqualToString:@"txt"] || [name hasSuffix:@".log.fifo"] || [name hasSuffix:@".fifo"]) {
+                if ([ext isEqualToString:@"log"] || [ext isEqualToString:@"txt"]) {
                     [files addObject:path];
-                } else {
-                    // Check if it's a FIFO
-                    struct stat st;
-                    if (stat([path UTF8String], &st) == 0 && S_ISFIFO(st.st_mode)) {
-                        [files addObject:path];
-                    }
                 }
             }
         }

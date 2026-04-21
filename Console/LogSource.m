@@ -51,29 +51,7 @@ static void callDelegateEntriesOnMainThread(id delegate, LogSource *source, NSAr
     }
 }
 
-static void ConsoleDebugLog(NSString *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    NSString *msg = [[[NSString alloc] initWithFormat:format arguments:args] autorelease];
-    va_end(args);
-
-    NSString *line = [NSString stringWithFormat:@"%@ %@\n", [NSDate date], msg];
-    NSData *data = [line dataUsingEncoding:NSUTF8StringEncoding];
-
-    NSString *path = @"/tmp/Console-debug.log";
-    NSFileManager *fm = [NSFileManager defaultManager];
-    if (![fm fileExistsAtPath:path]) {
-        [fm createFileAtPath:path contents:nil attributes:nil];
-    }
-
-    NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
-    if (fh) {
-        [fh seekToEndOfFile];
-        [fh writeData:data];
-        [fh closeFile];
-    }
-}
+#define ConsoleDebugLog(...) ((void)0)
 
 static NSString *FindExecutable(NSString *name)
 {
@@ -95,37 +73,10 @@ static NSString *FindExecutable(NSString *name)
     return nil;
 }
 
-static BOOL IsLogFileOrFifo(NSString *filename, NSString *fullPath)
+static BOOL IsLogFile(NSString *filename)
 {
-    // Check for .log extension
-    if ([[filename pathExtension] isEqualToString:@"log"]) {
-        return YES;
-    }
-    
-    // Check for .log.fifo extension
-    if ([filename hasSuffix:@".log.fifo"]) {
-        return YES;
-    }
-    
-    // Check if it's a FIFO
-    struct stat st;
-    if (stat([fullPath UTF8String], &st) == 0) {
-        if (S_ISFIFO(st.st_mode)) {
-            ConsoleDebugLog(@"Detected FIFO: %@", fullPath);
-            return YES;
-        }
-    }
-    
-    return NO;
-}
-
-static BOOL IsFifo(NSString *fullPath)
-{
-    struct stat st;
-    if (stat([fullPath UTF8String], &st) == 0) {
-        return S_ISFIFO(st.st_mode);
-    }
-    return NO;
+    NSString *ext = [[filename pathExtension] lowercaseString];
+    return ([ext isEqualToString:@"log"] || [ext isEqualToString:@"txt"]);
 }
 
 static NSArray *TailLines(NSString *path, NSUInteger maxLines)
@@ -778,8 +729,7 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
         _filePositions = [[NSMutableDictionary alloc] init];
         _handleToFile = [[NSMutableDictionary alloc] init];
         _scanTimer = nil;
-        _fifoDescriptors = [[NSMutableDictionary alloc] init];
-        _fifoReaderThread = nil;
+        _lastDirectoryMTime = 0;
     }
     return self;
 }
@@ -791,7 +741,6 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
     [_fileHandles release];
     [_filePositions release];
     [_handleToFile release];
-    [_fifoDescriptors release];
     [super dealloc];
 }
 
@@ -809,12 +758,6 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
         _scanTimer = nil;
     }
     
-    // Stop FIFO reader thread
-    if (_fifoReaderThread) {
-        [self performSelector:@selector(stopFifoReader) onThread:_fifoReaderThread withObject:nil waitUntilDone:YES];
-        _fifoReaderThread = nil;
-    }
-    
     [[NSNotificationCenter defaultCenter] removeObserver:self
                                                     name:NSFileHandleDataAvailableNotification
                                                   object:nil];
@@ -826,12 +769,6 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
     [_fileHandles removeAllObjects];
     [_filePositions removeAllObjects];
     [_handleToFile removeAllObjects];
-    
-    // Close all FIFO descriptors
-    for (NSNumber *fdNum in [_fifoDescriptors allValues]) {
-        close([fdNum intValue]);
-    }
-    [_fifoDescriptors removeAllObjects];
 }
 
 - (void)readLogs
@@ -860,6 +797,15 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
     // First, poll existing log files for new content
     [self pollLogFiles];
     
+    // Skip directory rescanning if the directory contents have not changed.
+    struct stat dirStat;
+    if (stat([_logDirectory UTF8String], &dirStat) == 0) {
+        if (_lastDirectoryMTime != 0 && _lastDirectoryMTime == (unsigned long long)dirStat.st_mtime) {
+            return;
+        }
+        _lastDirectoryMTime = (unsigned long long)dirStat.st_mtime;
+    }
+
     NSMutableArray *files = [NSMutableArray array];
     
     // Use POSIX opendir/readdir to ensure we get FIFOs (NSFileManager may filter them)
@@ -879,140 +825,59 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
     for (NSString *filename in files) {
         NSString *fullPath = [_logDirectory stringByAppendingPathComponent:filename];
         
-        // Always log fifo-related files for debugging
-        if ([filename rangeOfString:@"fifo" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            ConsoleDebugLog(@"Checking FIFO candidate: %@ (full: %@)", filename, fullPath);
-        }
-        
-        BOOL isLogOrFifo = IsLogFileOrFifo(filename, fullPath);
-        if (!isLogOrFifo) continue;
+        if (!IsLogFile(filename)) continue;
         if (![fm isReadableFileAtPath:fullPath]) {
             ConsoleDebugLog(@"File '%@' is not readable", fullPath);
             continue;
         }
 
-        ConsoleDebugLog(@"Found log file/FIFO: %@", fullPath);
-
         NSFileHandle *handle = [_fileHandles objectForKey:filename];
-        if (!handle && ![_fifoDescriptors objectForKey:filename]) {
-            BOOL isFifo = IsFifo(fullPath);
-            if (isFifo) {
-                ConsoleDebugLog(@"Opening FIFO: %@", fullPath);
-                // Open FIFO with O_RDWR to avoid blocking when there's no writer
-                // We read from it in a background thread anyway
-                int fd = open([fullPath UTF8String], O_RDWR | O_NONBLOCK);
-                if (fd >= 0) {
-                    ConsoleDebugLog(@"FIFO opened successfully: %@", fullPath);
-                    [_fifoDescriptors setObject:[NSNumber numberWithInt:fd] forKey:filename];
-                    // Start FIFO reader thread if not already running
-                    if (!_fifoReaderThread) {
-                        ConsoleDebugLog(@"Starting FIFO reader thread");
-                        _fifoReaderThread = [[NSThread alloc] initWithTarget:self selector:@selector(fifoReaderLoop) object:nil];
-                        [_fifoReaderThread start];
-                    }
-                } else {
-                    ConsoleDebugLog(@"Failed to open FIFO %@: %s (errno=%d)", fullPath, strerror(errno), errno);
-                }
-            } else {
-                handle = [NSFileHandle fileHandleForReadingAtPath:fullPath];
-                if (handle) {
-                    [_fileHandles setObject:handle forKey:filename];
-                    [_handleToFile setObject:filename forKey:[NSValue valueWithNonretainedObject:handle]];
-
-                    // Emit initial tail
-                    NSArray *tailLines = TailLines(fullPath, 200);
-                    NSMutableArray *entries = [NSMutableArray arrayWithCapacity:[tailLines count]];
-                    for (NSString *line in tailLines) {
-                        if ([line length] == 0) continue;
-                        LogEntry *entry = [[LogEntry alloc] initWithTimestamp:[NSDate date]
-                                                                       process:[filename stringByDeletingPathExtension]
-                                                                       message:line
-                                                                      priority:LogPriorityInfo];
-                        [entries addObject:entry];
-                        [entry release];
-                    }
-                    if ([entries count] > 0) {
-                        NSString *sourceName = [NSString stringWithFormat:@"%@/%@", _logDirectory, filename];
-                        for (LogEntry *entry in entries) {
-                            [entry setSourceName:sourceName];
-                        }
-                        callDelegateEntriesOnMainThread(_delegate, self, entries);
-                        ConsoleDebugLog(@"App log initial load (%@/%@): %lu entries", _logDirectory, filename, (unsigned long)[entries count]);
-                    }
-
-                    unsigned long long endPos = [handle seekToEndOfFile];
-                    [_filePositions setObject:[NSNumber numberWithUnsignedLongLong:endPos]
-                                       forKey:filename];
-                }
-            }
-            
-            if (handle) {
-                ConsoleDebugLog(@"Setting up file handle for: %@", filename);
-                [[NSNotificationCenter defaultCenter] addObserver:self
-                                                         selector:@selector(handleFileData:)
-                                                             name:NSFileHandleDataAvailableNotification
-                                                           object:handle];
-                // Don't use waitForDataInBackgroundAndNotify - it causes notification spam
-                // Instead we'll poll periodically via _scanTimer
-            }
+        if (handle) {
+            continue;
         }
-    }
-}
 
-- (void)fifoReaderLoop
-{
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
-    while (_active) {
-        // Check each FIFO descriptor and read blocking
-        for (NSString *filename in [_fifoDescriptors copy]) {
-            NSNumber *fdNum = [_fifoDescriptors objectForKey:filename];
-            if (!fdNum) continue;
-            
-            int fd = [fdNum intValue];
-            char buffer[4096];
-            ssize_t bytesRead = read(fd, buffer, sizeof(buffer) - 1);
-            
-            if (bytesRead > 0) {
-                buffer[bytesRead] = '\0';
-                NSString *content = [NSString stringWithUTF8String:buffer];
-                NSArray *lines = [content componentsSeparatedByString:@"\n"];
-                NSMutableArray *entries = [NSMutableArray array];
-                
-                for (NSString *line in lines) {
-                    if ([line length] == 0) continue;
-                    LogEntry *entry = [[LogEntry alloc] initWithTimestamp:[NSDate date]
-                                                                   process:[filename stringByDeletingPathExtension]
-                                                                   message:line
-                                                                  priority:LogPriorityInfo];
-                    [entries addObject:entry];
-                    [entry release];
-                }
-                
-                if ([entries count] > 0) {
-                    NSString *sourceName = [NSString stringWithFormat:@"%@/%@", _logDirectory, filename];
-                    for (LogEntry *entry in entries) {
-                        [entry setSourceName:sourceName];
-                    }
-                    callDelegateEntriesOnMainThread(_delegate, self, entries);
-                    ConsoleDebugLog(@"FIFO read (%@): %lu entries", filename, (unsigned long)[entries count]);
-                }
-            } else if (bytesRead < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-                ConsoleDebugLog(@"FIFO read error on %@: %s", filename, strerror(errno));
-            }
-            // EAGAIN/EWOULDBLOCK is normal for non-blocking reads, just continue
+        ConsoleDebugLog(@"Found log file: %@", fullPath);
+
+        handle = [NSFileHandle fileHandleForReadingAtPath:fullPath];
+        if (!handle) {
+            continue;
         }
-        
-        // Small sleep to prevent CPU spinning
-        [NSThread sleepForTimeInterval:0.01];
-    }
-    
-    [pool drain];
-}
 
-- (void)stopFifoReader
-{
-    _active = NO;
+        [_fileHandles setObject:handle forKey:filename];
+        [_handleToFile setObject:filename forKey:[NSValue valueWithNonretainedObject:handle]];
+
+        // Emit initial tail
+        NSArray *tailLines = TailLines(fullPath, 200);
+        NSMutableArray *entries = [NSMutableArray arrayWithCapacity:[tailLines count]];
+        for (NSString *line in tailLines) {
+            if ([line length] == 0) continue;
+            LogEntry *entry = [[LogEntry alloc] initWithTimestamp:[NSDate date]
+                                                           process:[filename stringByDeletingPathExtension]
+                                                           message:line
+                                                          priority:LogPriorityInfo];
+            [entries addObject:entry];
+            [entry release];
+        }
+        if ([entries count] > 0) {
+            NSString *sourceName = [NSString stringWithFormat:@"%@/%@", _logDirectory, filename];
+            for (LogEntry *entry in entries) {
+                [entry setSourceName:sourceName];
+            }
+            callDelegateEntriesOnMainThread(_delegate, self, entries);
+        }
+
+        unsigned long long endPos = [handle seekToEndOfFile];
+        [_filePositions setObject:[NSNumber numberWithUnsignedLongLong:endPos]
+                           forKey:filename];
+
+        ConsoleDebugLog(@"Setting up file handle for: %@", filename);
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(handleFileData:)
+                                                     name:NSFileHandleDataAvailableNotification
+                                                   object:handle];
+        // Don't use waitForDataInBackgroundAndNotify - it causes notification spam
+        // Instead we'll poll periodically via _scanTimer
+    }
 }
 
 - (void)handleFileData:(NSNotification *)notification
@@ -1042,7 +907,6 @@ static NSArray *TailLines(NSString *path, NSUInteger maxLines)
         NSFileHandle *handle = [_fileHandles objectForKey:filename];
         if (!handle) continue;
         
-        NSString *filepath = [_logDirectory stringByAppendingPathComponent:filename];
         unsigned long long lastPos = [[_filePositions objectForKey:filename] unsignedLongLongValue];
         
         // Seek to last position and read new data
